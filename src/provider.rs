@@ -171,22 +171,26 @@ pub fn parse(value: &Value, duration_ms: u64) -> Result<Lyrics> {
         if line.text.is_empty() {
             line.text = entry["Text"].as_str().unwrap_or_default().into();
         }
-        line.opposite = entry["OppositeAligned"].as_bool().unwrap_or(false);
+        let opposite = entry["OppositeAligned"].as_bool().unwrap_or(false);
+        line.opposite = opposite;
         if !line.text.is_empty() {
-            lines.push(line);
+            lines.push((start, line));
         }
         if let Some(background) = entry["Background"].as_array() {
             for vocal in background {
                 let mut line = parse_line(vocal, start, end);
                 line.background = true;
+                line.opposite = opposite;
+                crate::lyrics::fit_to_words(&mut line);
+                crate::lyrics::strip_background_parentheses(&mut line);
                 if !line.text.is_empty() {
-                    lines.push(line);
+                    lines.push((start, line));
                 }
             }
         }
     }
     ensure!(!lines.is_empty(), "Provider returned empty lyrics");
-    lines.sort_by_key(|line| line.start_ms);
+    let lines = crate::lyrics::order_with_background(lines);
     Ok(Lyrics {
         lines,
         source: "Lyrics provider".into(),

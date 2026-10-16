@@ -74,7 +74,12 @@ pub struct Worker {
 pub enum LyricCommand {
     Fetch(Track, String),
     Import(Track, PathBuf),
-    Configure { host: String, consent: bool },
+    /// Drop lyrics imported for a track; a following fetch uses the provider.
+    Forget(Track),
+    Configure {
+        host: String,
+        consent: bool,
+    },
 }
 
 pub struct LyricEvent {
@@ -148,6 +153,10 @@ impl Worker {
                     LyricCommand::Import(track, path) => {
                         let result = lyrics::import_file(&path, &track);
                         (track, result)
+                    }
+                    LyricCommand::Forget(track) => {
+                        let _ = lyrics::forget_local(&track);
+                        continue;
                     }
                     LyricCommand::Configure { host, consent } => {
                         let result = crate::provider::configure(&host, consent)

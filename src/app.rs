@@ -1743,7 +1743,9 @@ impl SpotiFlex {
             return;
         };
         let response = ui.interact(rect, Id::new(("row", &self.view, index)), Sense::click());
-        let hovered = response.hovered();
+        // Geometric hover: child buttons on the row must not cancel its hover
+        // state, or they flicker away under the pointer.
+        let hovered = ui.rect_contains_pointer(rect);
         let selected = self.selected.contains(&index);
         let current = self.is_current(track);
         if selected || hovered {
@@ -3612,12 +3614,14 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str) -> egui::Response {
 }
 
 fn card(ui: &mut Ui, title: &str, contents: impl FnOnce(&mut Ui)) {
+    // Fix the inner width so long text wraps instead of widening one card.
+    let width = (ui.available_width() - 40.0).max(120.0);
     egui::Frame::new()
         .fill(ELEVATED)
         .corner_radius(12)
         .inner_margin(20)
         .show(ui, |ui| {
-            ui.set_width(ui.available_width());
+            ui.set_width(width);
             ui.label(RichText::new(title).font(theme::bold(17.0)).color(TEXT));
             ui.add_space(6.0);
             contents(ui);

@@ -83,6 +83,7 @@ export interface Settings {
   floating_lyrics?: boolean;
   ui_font?: string;
   lyric_font?: string;
+  volume_percent?: number;
   auto_download_updates: boolean;
   folders: Folder[];
 }

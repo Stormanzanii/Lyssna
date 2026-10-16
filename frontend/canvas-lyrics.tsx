@@ -6,14 +6,20 @@ export function LyricsCanvas({
   poster,
   playing,
   backdrop,
+  onActive,
 }: {
   url: string;
   poster?: string;
   playing: boolean;
   backdrop: RefObject<HTMLCanvasElement | null>;
+  onActive?: (active: boolean) => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+    onActive?.(false);
+  }, [url, onActive]);
   useEffect(() => {
     const element = video.current;
     if (!element) return;
@@ -50,14 +56,48 @@ export function LyricsCanvas({
     const draw = (now: number) => {
       if (now - last >= 100 && element.readyState >= 2 && !document.hidden) {
         last = now;
-        context.filter = "blur(8px) saturate(1.25) brightness(0.34)";
+        context.filter = "blur(8px) saturate(1.25) brightness(0.5)";
+        const bounds = root?.getBoundingClientRect(),
+          frame = cover.getBoundingClientRect(),
+          rootWidth = bounds?.width ?? 1,
+          rootHeight = bounds?.height ?? 1,
+          edge = (frame.width / rootWidth) * canvas.width,
+          top = ((frame.top - (bounds?.top ?? 0)) / rootHeight) * canvas.height,
+          height = (frame.height / rootHeight) * canvas.height;
+        const scale = Math.max(
+            frame.width / element.videoWidth,
+            frame.height / element.videoHeight,
+          ),
+          sourceWidth = frame.width / scale,
+          sourceHeight = frame.height / scale,
+          sourceX = (element.videoWidth - sourceWidth) / 2,
+          sourceY = (element.videoHeight - sourceHeight) / 2;
         context.drawImage(
           element,
-          -24,
-          -24,
-          canvas.width + 48,
-          canvas.height + 48,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          top,
+          edge,
+          height,
         );
+        context.save();
+        context.translate(edge * 2, 0);
+        context.scale(-1, 1);
+        context.drawImage(
+          element,
+          sourceX + sourceWidth * 0.8,
+          sourceY,
+          sourceWidth * 0.2,
+          sourceHeight,
+          edge * 2 - canvas.width - 24,
+          top,
+          canvas.width - edge + 24,
+          height,
+        );
+        context.restore();
       }
       if (element.isConnected && !element.paused && !element.ended)
         frame = requestAnimationFrame(draw);
@@ -87,6 +127,8 @@ export function LyricsCanvas({
       ) : (
         <video
           ref={video}
+          onPlaying={() => onActive?.(true)}
+          onPause={() => onActive?.(false)}
           src={url}
           poster={poster}
           muted
@@ -94,7 +136,11 @@ export function LyricsCanvas({
           playsInline
           preload="auto"
           autoPlay={playing}
-          onError={() => setFailed(true)}
+          onError={() => {
+            setFailed(true);
+            onActive?.(false);
+            if (backdrop.current) backdrop.current.style.display = "none";
+          }}
           aria-label="Spotify Canvas"
         />
       )}

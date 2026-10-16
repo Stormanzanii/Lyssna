@@ -1,4 +1,10 @@
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 import type { Contributor } from "./types";
 import { rpc } from "./bridge";
 const CreatorContext = createContext<(person: Contributor) => void>(() => {});
@@ -14,14 +20,30 @@ export function creatorEmbed(username: string) {
     : undefined;
 }
 export function CreatorProfiles({ children }: { children: ReactNode }) {
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(""), 7000);
+    return () => clearTimeout(timer);
+  }, [error]);
   const open = (person: Contributor) => {
     const url = creatorEmbed(person.username);
     if (url)
       void rpc("open_creator_profile", {
         username: person.username,
-      }).catch(() => rpc("open_link", { url }));
+        userId: person.id,
+      }).catch(() =>
+        setError("Creator profile unavailable. It may not be published yet."),
+      );
   };
   return (
-    <CreatorContext.Provider value={open}>{children}</CreatorContext.Provider>
+    <CreatorContext.Provider value={open}>
+      {children}
+      {error && (
+        <div className="toast error" role="alert" onClick={() => setError("")}>
+          {error}
+        </div>
+      )}
+    </CreatorContext.Provider>
   );
 }

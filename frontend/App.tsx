@@ -111,6 +111,8 @@ function App() {
     y: number;
   } | null>(null);
   const [immersive, setImmersive] = useState(false);
+  const restoreMaximized = useRef(false),
+    fullscreenBusy = useRef(false);
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
   const [songQuery, setSongQuery] = useState(""),
@@ -334,9 +336,21 @@ function App() {
     (album: Album) => {
       const id = album.id || album.uri?.split(":")[2];
       if (id) navigate(`album:${id}`);
-      else if (album.name) setQuery(album.name);
+      else {
+        const current = stateRef.current,
+          track = [current.playback.item, ...current.tracks].find(
+            (track) => track?.album === album,
+          );
+        if (track)
+          void call("resolve_album", { uri: track.uri }).then((value) => {
+            const resolved = value as Album | undefined;
+            const id = resolved?.id || resolved?.uri?.split(":")[2];
+            if (id) navigate(`album:${id}`);
+          });
+        else if (album.name) setQuery(album.name);
+      }
     },
-    [navigate],
+    [navigate, call],
   );
   const openArtist = useCallback(
     (artist: Artist) => {
@@ -436,20 +450,68 @@ function App() {
       navigate(key, false);
     }
   };
-  const fullscreen = async () => {
+  const fullscreen = async (force?: boolean) => {
+    if (fullscreenBusy.current) return;
+    fullscreenBusy.current = true;
     try {
-      const next = !(await windowHandle().isFullscreen());
+      const next = force ?? !(await windowHandle().isFullscreen());
+      if (next) restoreMaximized.current = await windowHandle().isMaximized();
       await windowHandle().setFullscreen(next);
+      if (!next && restoreMaximized.current) {
+        await windowHandle().unmaximize();
+        await windowHandle().maximize();
+      }
       setImmersive(next);
-      setCenter("lyrics");
+      if (next) setCenter("lyrics");
     } catch (error) {
       notify(String(error), true);
+    } finally {
+      fullscreenBusy.current = false;
     }
   };
+  useEffect(() => {
+    void windowHandle()
+      .isFullscreen()
+      .then((value) => setImmersive(!!value));
+  }, []);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "F11" || (event.key === "Escape" && immersive)) {
+        event.preventDefault();
+        void fullscreen(event.key === "Escape" ? false : undefined);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [immersive]);
   const playlist = state.playlists.find(
     (playlist) => state.route === `playlist:${playlist.id}`,
   );
-  const entity = state.browse_info;
+  const albumFallback = state.route.startsWith("album:")
+    ? state.tracks.find((track) => track.album.id === state.route.slice(6))
+        ?.album
+    : undefined;
+  const fallbackInfo: typeof state.browse_info = albumFallback
+    ? {
+        key: state.route,
+        title: albumFallback.name,
+        subtitle: "",
+        images: albumFallback.images,
+        album: albumFallback,
+        albums: [],
+      }
+    : undefined;
+  const entity: typeof state.browse_info = state.browse_info
+    ? {
+        ...fallbackInfo,
+        ...state.browse_info,
+        title: state.browse_info.title || fallbackInfo?.title || "",
+        images: state.browse_info.images?.length
+          ? state.browse_info.images
+          : (fallbackInfo?.images ?? []),
+        album: state.browse_info.album ?? fallbackInfo?.album,
+      }
+    : fallbackInfo;
   const artistBanner = useLoadedImage(entity?.overview?.header_image);
   const title =
     entity?.title ||
@@ -847,7 +909,10 @@ function App() {
                 <button
                   className="icon-button"
                   title="Close lyrics"
-                  onClick={() => setCenter("browse")}
+                  onClick={() => {
+                    if (immersive) void fullscreen(false);
+                    setCenter("browse");
+                  }}
                 >
                   <X size={18} />
                 </button>
@@ -1858,6 +1923,7 @@ function PlayerBar({
       setSeeking(null);
     }
   };
+  useEffect(() => setSeeking(null), [track?.uri]);
   return (
     <footer className="player-bar" inert={!state.profile}>
       <div className="player-song">
@@ -1975,8 +2041,14 @@ function PlayerBar({
               } as CSSProperties
             }
             onChange={(event) => setSeeking(Number(event.target.value))}
+            onPointerDown={(event) =>
+              event.currentTarget.setPointerCapture(event.pointerId)
+            }
             onPointerUp={seek}
             onKeyUp={seek}
+            onPointerCancel={() => setSeeking(null)}
+            onLostPointerCapture={() => setSeeking(null)}
+            onBlur={seek}
           />
           <time>{formatTime(track?.duration_ms || 0)}</time>
         </div>

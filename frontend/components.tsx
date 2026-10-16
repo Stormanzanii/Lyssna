@@ -34,7 +34,7 @@ import type { AppState } from "./state";
 import { activeLines, progress } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
-import { useCreatorProfile, creatorEmbed } from "./creator-profile";
+import { useCreatorProfile } from "./creator-profile";
 import {
   stepScroll,
   vocalGaps,
@@ -77,170 +77,8 @@ export function Cover({
     <div className={`cover ${className}`}>{inner}</div>
   );
 }
-const ambientCovers = new Map<string, Promise<string | undefined>>();
-function ambientCover(source: string): Promise<string | undefined> {
-  const cached = ambientCovers.get(source);
-  if (cached) return cached;
-  const result = new Promise<string | undefined>((resolve) => {
-    const cover = new Image();
-    cover.crossOrigin = "anonymous";
-    cover.referrerPolicy = "no-referrer";
-    cover.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 64;
-        canvas.height = 64;
-        const context = canvas.getContext("2d");
-        if (!context) {
-          resolve(undefined);
-          return;
-        }
-        context.filter = "blur(4px) saturate(1.6)";
-        context.drawImage(cover, -16, -16, 96, 96);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
-      } catch {
-        resolve(undefined);
-      }
-    };
-    cover.onerror = () => resolve(undefined);
-    cover.src = source;
-  });
-  if (ambientCovers.size >= 64) ambientCovers.clear();
-  ambientCovers.set(source, result);
-  return result;
-}
-
-export const Ambience = memo(function Ambience({
-  track,
-  reduceMotion = false,
-  animate = false,
-}: {
-  track?: Track;
-  reduceMotion?: boolean;
-  animate?: boolean;
-}) {
-  const source = imageOf(track?.album.images);
-  const [background, setBackground] = useState<{
-    source: string;
-    image?: string;
-  }>();
-  const surface = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (source)
-      void ambientCover(source).then((image) => {
-        if (!cancelled) setBackground({ source, image });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [source]);
-  useEffect(() => {
-    const canvas = surface.current;
-    if (
-      !canvas ||
-      !background ||
-      background.source !== source ||
-      !background.image
-    )
-      return;
-    const context = canvas.getContext("2d", { alpha: false });
-    if (!context) return;
-    const texture = new Image();
-    let timer: ReturnType<typeof setTimeout> | undefined,
-      cancelled = false,
-      visible = true,
-      phase = 0;
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-    const draw = () => {
-      // Spicy Lyrics' grading (saturate 2.5, dimmed) and heavy blur, applied
-      // on this tiny canvas instead of as full-screen CSS filters.
-      context.filter = "saturate(2.5) brightness(0.8) blur(9px)";
-      context.globalCompositeOperation = "source-over";
-      context.globalAlpha = 1;
-      context.drawImage(texture, -24, -24, 176, 176);
-      // Spicy Lyrics' layers: large copies of the artwork orbiting and
-      // rotating in opposite directions on a 45 second period.
-      for (const [x, y, size, direction] of [
-        [32, 40, 230, -1],
-        [100, 88, 180, 1],
-        [20, 108, 170, -0.8],
-      ]) {
-        context.save();
-        context.globalCompositeOperation = "source-over";
-        context.globalAlpha = 0.78;
-        context.translate(
-          x + Math.sin(phase + x) * 10,
-          y + Math.cos(phase * 0.8 + y) * 10,
-        );
-        context.rotate(phase * direction + x);
-        context.drawImage(texture, -size / 2, -size / 2, size, size);
-        context.restore();
-      }
-    };
-    const loop = () => {
-      timer = undefined;
-      if (
-        cancelled ||
-        !visible ||
-        document.hidden ||
-        !animate ||
-        reduceMotion ||
-        reduced.matches
-      )
-        return;
-      phase += (Math.PI * 2 * 0.05) / 45;
-      draw();
-      timer = setTimeout(loop, 50);
-    };
-    const resume = () => {
-      clearTimeout(timer);
-      timer = undefined;
-      if (texture.complete && texture.naturalWidth) {
-        draw();
-        loop();
-      }
-    };
-    const observer = new IntersectionObserver((entries) => {
-      visible = entries[0]?.isIntersecting ?? false;
-      resume();
-    });
-    observer.observe(canvas);
-    texture.onload = () => {
-      if (!cancelled) resume();
-    };
-    texture.src = background.image;
-    document.addEventListener("visibilitychange", resume);
-    reduced.addEventListener("change", resume);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", resume);
-      reduced.removeEventListener("change", resume);
-    };
-  }, [background, source, animate, reduceMotion]);
-  return (
-    <div
-      className={`ambience ${reduceMotion ? "still" : ""}`}
-      aria-hidden="true"
-    >
-      <canvas
-        width={512}
-        height={288}
-        ref={surface}
-        className="ambient-layer"
-        style={{
-          backgroundImage:
-            background && background.source === source && background.image
-              ? `url("${background.image}")`
-              : undefined,
-        }}
-      />
-      <div className="ambient-shade" />
-    </div>
-  );
-});
+import { Ambience } from "./ambience";
+export { Ambience };
 
 export function Marquee({
   children,
@@ -527,7 +365,7 @@ export function LyricsDisplay({
         ?.querySelector(".lyrics-album>.cover");
       const coverBox = cover?.getBoundingClientRect();
       const focus = compact
-        ? 8
+        ? 56
         : coverBox
           ? coverBox.top +
             coverBox.height / 2 -
@@ -720,11 +558,11 @@ const LyricCredits = memo(function LyricCredits({
             <span key={role}>
               {" "}
               · {label}{" "}
-              {creatorEmbed(person.username) || url ? (
+              {person.id || url ? (
                 <button
                   className="text-link"
                   onClick={() =>
-                    creatorEmbed(person.username)
+                    person.id
                       ? openCreator(person)
                       : void rpc("open_link", { url }).catch(() => {})
                   }
@@ -801,12 +639,10 @@ const LyricWords = memo(function LyricWords({
                       {
                         "--word-progress": `${progress(word.start_ms, word.end_ms, time) * 120 - 20}%`,
                         "--syllable-lift":
-                          split && !reduceMotion && !emphasis
-                            ? syllable.lift * 2.8
-                            : 0,
+                          split && !reduceMotion ? syllable.lift * 1.6 : 0,
                         "--syllable-scale":
-                          split && !reduceMotion && !emphasis
-                            ? 1 + (syllable.scale - 1) * 1.4
+                          split && !reduceMotion
+                            ? 1 + (syllable.scale - 1) * 0.8
                             : 1,
                         "--syllable-glow": reduceMotion ? 0 : motion.glow,
                       } as CSSProperties
@@ -827,8 +663,9 @@ const LyricWords = memo(function LyricWords({
                               className="lyric-letter"
                               style={
                                 {
-                                  "--letter-lift": motion.lift,
-                                  "--letter-scale": motion.scale,
+                                  "--letter-lift": motion.lift * 0.5,
+                                  "--letter-scale":
+                                    1 + (motion.scale - 1) * 0.5,
                                   "--letter-glow": motion.glow,
                                   "--word-progress": `${motion.fill * 120 - 20}%`,
                                 } as CSSProperties
@@ -890,6 +727,7 @@ export function LyricsPage({
   const current = usePosition(state) + state.settings.lyric_offset_ms,
     track = state.playback.item;
   const backdrop = useRef<HTMLCanvasElement>(null);
+  const [canvasPlaying, setCanvasPlaying] = useState(false);
   const motionAllowed =
     !state.settings.reduce_motion &&
     !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -908,11 +746,13 @@ export function LyricsPage({
     <section
       className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
     >
-      <Ambience
-        track={track}
-        reduceMotion={state.settings.reduce_motion}
-        animate={state.playback.is_playing}
-      />
+      {(!canvas || !canvasPlaying) && (
+        <Ambience
+          track={track}
+          reduceMotion={state.settings.reduce_motion}
+          animate={state.playback.is_playing}
+        />
+      )}
       {canvas && (
         <canvas
           className="lyrics-canvas-backdrop"
@@ -932,6 +772,7 @@ export function LyricsPage({
                 poster={imageOf(track.album.images)}
                 playing={state.playback.is_playing}
                 backdrop={backdrop}
+                onActive={setCanvasPlaying}
               />
             ) : (
               <Cover

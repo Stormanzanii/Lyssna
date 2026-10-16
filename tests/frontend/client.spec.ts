@@ -50,6 +50,12 @@ async function startClient(page: Page) {
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          if (command === "resolve_album")
+            return {
+              ...track.album,
+              id: "abcdefghijklmnopqrstuv",
+              uri: "spotify:album:abcdefghijklmnopqrstuv",
+            };
           if (command === "plugin:event|listen") {
             handlers.set(++serial, args.handler);
             return serial;
@@ -335,14 +341,14 @@ test("timed syllables lift independently and font choices apply separately", asy
           {
             text: "Hello",
             start_ms: 1000,
-            end_ms: 1800,
+            end_ms: 3300,
             translation: "",
             romanization: "",
             background: false,
             opposite: false,
             words: [
               { text: "Hel", start_ms: 1000, end_ms: 1300 },
-              { text: "lo", start_ms: 1300, end_ms: 1800 },
+              { text: "lo", start_ms: 1300, end_ms: 3300 },
             ],
           },
         ],
@@ -364,8 +370,27 @@ test("timed syllables lift independently and font choices apply separately", asy
         (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
       ),
     );
-  expect(transforms[0]).toBeLessThan(-2);
+  expect(transforms[0]).toBeLessThan(-1);
   expect(transforms[1]).toBe(0);
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 2100,
+        playing: false,
+        observed_at: Date.now(),
+      }),
+    track.uri,
+  );
+  expect(
+    await page
+      .locator(".lyrics-page .lyric-syllable")
+      .nth(1)
+      .evaluate(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+      ),
+  ).toBeLessThan(-1);
   await page.getByTitle("Settings", { exact: true }).click();
   await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
   await page
@@ -601,7 +626,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
           )?.args,
       ),
     )
-    .toEqual({ username: "Uploader" });
+    .toEqual({ username: "Uploader", userId: "123456789012345678" });
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page
@@ -721,4 +746,153 @@ test("lyrics wrap at narrow widths; countdown and unsung syllables follow song t
       .locator(".lyric-line.active")
       .evaluate((element) => getComputedStyle(element).transform),
   ).toBe("none");
+});
+
+test("seek drag released outside slider resumes the audio clock", async ({
+  page,
+}) => {
+  await startClient(page);
+  const slider = page.getByLabel("Seek position"),
+    box = await slider.boundingBox();
+  if (!box) throw Error("Missing seek slider");
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.65, box.y - 100);
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (call: any) =>
+              call.command === "player" && call.args.request.command === "seek",
+          ).length,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 62000,
+        playing: false,
+        observed_at: Date.now(),
+        seeked: true,
+      }),
+    track.uri,
+  );
+  await expect(slider).toHaveValue("62000");
+});
+test("fullscreen moves lyrics right and Escape restores normal layout", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "Test",
+          synced: true,
+          instrumental: false,
+          lines: [
+            {
+              text: "Main vocal",
+              start_ms: 0,
+              end_ms: 2000,
+              words: [],
+              background: false,
+              opposite: false,
+            },
+            {
+              text: "Duet vocal",
+              start_ms: 2000,
+              end_ms: 4000,
+              words: [],
+              background: false,
+              opposite: true,
+            },
+          ],
+        },
+      }),
+    track.uri,
+  );
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page .lyric-line.opposite")).toHaveCSS(
+    "text-align",
+    "right",
+  );
+  const flow = page.locator(".lyrics-page .lyric-scroll"),
+    before = (await flow.boundingBox())!.x;
+  await page
+    .getByTitle(/screen/i)
+    .first()
+    .click();
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect
+    .poll(() =>
+      flow.evaluate((element) => {
+        const root = element.closest(".lyrics-page")!.getBoundingClientRect();
+        return (element.getBoundingClientRect().left - root.left) / root.width;
+      }),
+    )
+    .toBeGreaterThan(0.5);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  await expect
+    .poll(async () => Math.abs((await flow.boundingBox())!.x - before))
+    .toBeLessThan(2);
+});
+
+test("song title resolves native album metadata before navigating", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate((track) => {
+    const item = {
+      ...track,
+      album: { ...track.album, id: undefined, uri: undefined },
+    };
+    (window as any).__clientTest.emit({
+      type: "playback",
+      playback: {
+        item,
+        is_playing: false,
+        progress_ms: 0,
+        shuffle_state: false,
+        repeat_state: "off",
+        device: { name: "SpotiFlex", is_active: true },
+      },
+      observed_at: Date.now(),
+      changed: true,
+    });
+  }, track);
+  await page
+    .locator("footer")
+    .getByRole("button", { name: track.name, exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.find(
+            (call: any) => call.command === "resolve_album",
+          )?.args.uri,
+      ),
+    )
+    .toBe(track.uri);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "browse" &&
+            call.args.key === "album:abcdefghijklmnopqrstuv",
+        ),
+      ),
+    )
+    .toBe(true);
 });

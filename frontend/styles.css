@@ -886,7 +886,7 @@ small {
   border-radius: 50%;
   background: var(--accent);
   color: #150d27;
-  padding-left: 3px;
+  padding: 0;
 }
 .primary-play:hover {
   transform: scale(1.05);
@@ -1532,7 +1532,7 @@ small {
   overflow: hidden;
   isolation: isolate;
   z-index: -1;
-  background: #34264d;
+  background: #141116;
   pointer-events: none;
 }
 .ambient-layer {
@@ -1542,19 +1542,18 @@ small {
   inset: 0;
   background-size: cover;
   background-position: center;
-  /* Blur and saturation are baked into the 128px canvas (cheap); the GPU
-     only scales it. CSS filters here repaint the whole panel every frame. */
+  /* Kawarp blurs a small source texture; avoid full-panel CSS filters. */
 }
 .ambient-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(#0002, transparent 35%, transparent 70%, #0003);
+  background: linear-gradient(#0004, #0005);
 }
 .now-playing .ambient-layer {
   opacity: 0.85;
 }
 .now-playing .ambient-shade {
-  background: linear-gradient(#0003, transparent 50%, #0002);
+  background: linear-gradient(#0004, #0005);
 }
 .lyrics-page {
   container-type: inline-size;
@@ -1730,7 +1729,7 @@ small {
   max-width: 100%;
   overflow-wrap: anywhere;
   transform: translateY(calc(var(--word-lift, 0) * 1em))
-    scale(var(--word-scale, 1));
+    scaleY(var(--word-scale, 1));
   transform-origin: center 70%;
   text-shadow: 0 0 14px rgb(245 234 255 / var(--word-glow, 0));
 }
@@ -1743,7 +1742,7 @@ small {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   transform: translateY(calc(var(--syllable-lift, 0) * 1em))
-    scale(var(--syllable-scale, 1));
+    scaleY(var(--syllable-scale, 1));
   transform-origin: center 75%;
   text-shadow: 0 0 14px rgb(245 234 255 / var(--syllable-glow, 0));
 }
@@ -1807,7 +1806,7 @@ small {
 .lyric-letter {
   display: inline-block;
   transform: translateY(calc(var(--letter-lift, 0) * 1em))
-    scale(var(--letter-scale, 1));
+    scaleY(var(--letter-scale, 1));
   transform-origin: center 70%;
   text-shadow: 0 0 14px rgb(245 234 255 / var(--letter-glow, 0));
 }
@@ -2503,9 +2502,9 @@ input[type="range"]:hover {
   display: none;
 }
 .immersive .lyrics-page {
-  padding: 0 9%;
-  grid-template-columns: minmax(250px, 0.75fr) minmax(350px, 1.25fr);
-  gap: 7%;
+  padding: 0 5%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4%;
 }
 .immersive .lyrics-album > .cover {
   max-width: 560px;
@@ -2796,21 +2795,29 @@ input[type="range"]:hover {
   padding-top: 0;
 }
 .canvas-lyrics .lyrics-album {
+  position: static;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.cover.lyrics-canvas-cover {
+.canvas-lyrics .lyrics-album > .cover.lyrics-canvas-cover {
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
-  width: auto;
-  height: 100%;
-  max-width: 58%;
+  top: -9%;
+  bottom: auto;
+  width: 47%;
+  height: 118%;
+  max-width: none;
   aspect-ratio: 9/16;
-  mask-image: linear-gradient(to right, #000 0%, #000 68%, transparent 100%);
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 72%,
+    #000e 82%,
+    #0007 93%,
+    transparent 100%
+  );
   z-index: -1;
   border-radius: 0;
   box-shadow: none;
@@ -2822,7 +2829,7 @@ input[type="range"]:hover {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   border-radius: inherit;
 }
 .lyrics-canvas-backdrop {
@@ -2832,11 +2839,7 @@ input[type="range"]:hover {
   width: 100%;
   height: 100%;
   z-index: -1;
-  mask-image: linear-gradient(
-    to right,
-    transparent calc(var(--canvas-sharp-edge, 40%) * 0.68),
-    #000 var(--canvas-sharp-edge, 40%)
-  );
+  mask-image: none;
 }
 .lyrics-canvas-cover::after {
   content: "";
@@ -2853,8 +2856,8 @@ input[type="range"]:hover {
   z-index: -1;
   background: linear-gradient(
     to right,
-    transparent 18%,
-    #0003 35%,
+    transparent 31%,
+    #0003 40%,
     #0005 45%,
     #0005
   );

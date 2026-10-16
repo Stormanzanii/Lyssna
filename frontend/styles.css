@@ -656,6 +656,19 @@ small {
   border-radius: 50%;
   flex-shrink: 0;
 }
+.liked-artist-image {
+  position: relative;
+  flex-shrink: 0;
+}
+.liked-heart {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  color: #1ed760;
+  background: #111117;
+  box-shadow: 0 0 0 4px #111117;
+  border-radius: 50%;
+}
 .artist-liked span {
   display: flex;
   flex-direction: column;
@@ -1436,7 +1449,7 @@ small {
   display: none;
 }
 .lyric-spacer {
-  height: 43%;
+  height: var(--lead-top, 40px);
 }
 .lyric-line {
   display: block;
@@ -1525,8 +1538,8 @@ small {
   justify-content: flex-start;
   gap: 16px;
   align-items: center;
-  height: 90px;
-  padding: 20px 8px;
+  height: 48px;
+  padding: 8px 2px;
 }
 .lyric-wait[aria-hidden="true"] {
   opacity: 0;
@@ -1687,7 +1700,15 @@ small {
   padding: 42px 17px 0;
 }
 .compact .lyric-spacer {
-  height: 38%;
+  height: 0;
+}
+.compact .lyric-wait {
+  height: 36px;
+  padding: 6px 0;
+  gap: 12px;
+}
+.compact .lyric-scroll {
+  padding-top: 0;
 }
 .compact .lyric-line {
   padding: 9px 0;

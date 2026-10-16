@@ -1095,9 +1095,20 @@ function App() {
                 </section>
                 {entity?.artist && (
                   <aside className="artist-liked">
-                    <h2>You liked</h2>
+                    <h2>You Liked</h2>
                     <div>
-                      <Cover images={entity.images} />
+                      <div className="liked-artist-image">
+                        <Cover images={entity.images} />
+                        {displayTracks.some(
+                          (track) => state.saved[track.uri],
+                        ) && (
+                          <Heart
+                            className="liked-heart"
+                            fill="currentColor"
+                            size={25}
+                          />
+                        )}
+                      </div>
                       <span>
                         {displayTracks.filter((track) => state.saved[track.uri])
                           .length > 0 ? (
@@ -1108,7 +1119,7 @@ function App() {
                                   (track) => state.saved[track.uri],
                                 ).length
                               }{" "}
-                              popular song
+                              song
                               {displayTracks.filter(
                                 (track) => state.saved[track.uri],
                               ).length === 1
@@ -1127,7 +1138,7 @@ function App() {
                                 )
                               }
                             >
-                              View saved songs
+                              By {entity.artist.name}
                             </button>
                           </>
                         ) : (

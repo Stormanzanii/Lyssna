@@ -106,39 +106,129 @@ function ambientCover(source: string): Promise<string | undefined> {
   return result;
 }
 
-export function Ambience({
+export const Ambience = memo(function Ambience({
   track,
-  reduceMotion,
+  reduceMotion = false,
+  animate = false,
 }: {
   track?: Track;
   reduceMotion?: boolean;
   animate?: boolean;
 }) {
   const source = imageOf(track?.album.images);
-  const [image, setImage] = useState<string>();
+  const [background, setBackground] = useState<{
+    source: string;
+    image?: string;
+  }>();
+  const surface = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let cancelled = false;
     if (source)
-      void ambientCover(source).then((value) => {
-        if (!cancelled) setImage(value);
+      void ambientCover(source).then((image) => {
+        if (!cancelled) setBackground({ source, image });
       });
     return () => {
       cancelled = true;
     };
   }, [source]);
+  useEffect(() => {
+    const canvas = surface.current;
+    if (
+      !canvas ||
+      !background ||
+      background.source !== source ||
+      !background.image
+    )
+      return;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) return;
+    const texture = new Image();
+    let timer: ReturnType<typeof setTimeout> | undefined,
+      cancelled = false,
+      visible = true,
+      phase = 0;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+    const draw = () => {
+      context.globalCompositeOperation = "source-over";
+      context.globalAlpha = 1;
+      context.drawImage(texture, 0, 0, 128, 128);
+      for (let layer = 0; layer < 2; layer++) {
+        context.save();
+        context.globalCompositeOperation = "source-over";
+        context.globalAlpha = 0.5;
+        context.translate(
+          64 + Math.sin(phase + layer * 2) * 15,
+          64 + Math.cos(phase * 0.7 + layer) * 12,
+        );
+        context.rotate(phase * (layer === 0 ? 1 : -0.7) + layer * 2);
+        context.drawImage(texture, -110, -110, 220, 220);
+        context.restore();
+      }
+    };
+    const loop = () => {
+      timer = undefined;
+      if (
+        cancelled ||
+        !visible ||
+        document.hidden ||
+        !animate ||
+        reduceMotion ||
+        reduced.matches
+      )
+        return;
+      phase += 0.0035;
+      draw();
+      timer = setTimeout(loop, 50);
+    };
+    const resume = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (texture.complete && texture.naturalWidth) {
+        draw();
+        loop();
+      }
+    };
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? false;
+      resume();
+    });
+    observer.observe(canvas);
+    texture.onload = () => {
+      if (!cancelled) resume();
+    };
+    texture.src = background.image;
+    document.addEventListener("visibilitychange", resume);
+    reduced.addEventListener("change", resume);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", resume);
+      reduced.removeEventListener("change", resume);
+    };
+  }, [background, source, animate, reduceMotion]);
   return (
     <div
       className={`ambience ${reduceMotion ? "still" : ""}`}
       aria-hidden="true"
     >
-      <div
+      <canvas
+        width={128}
+        height={128}
+        ref={surface}
         className="ambient-layer"
-        style={{ backgroundImage: image ? `url("${image}")` : undefined }}
+        style={{
+          backgroundImage:
+            background && background.source === source && background.image
+              ? `url("${background.image}")`
+              : undefined,
+        }}
       />
       <div className="ambient-shade" />
     </div>
   );
-}
+});
+
 export function Marquee({
   children,
   text,

@@ -235,6 +235,85 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
+test("Canvas and floating lyrics are opt-in, with sharp video left and metadata bottom-left", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await page.evaluate(async (uri) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#7547c2";
+    context.fillRect(0, 0, 64, 64);
+    const recorder = new MediaRecorder(canvas.captureStream(2));
+    const parts: BlobPart[] = [];
+    const url = await new Promise<string>((resolve) => {
+      recorder.ondataavailable = (event) => parts.push(event.data);
+      recorder.onstop = () =>
+        resolve(
+          URL.createObjectURL(new Blob(parts, { type: recorder.mimeType })),
+        );
+      recorder.start();
+      setTimeout(() => recorder.stop(), 300);
+    });
+    (window as any).__clientTest.emit({ type: "canvas", uri, url });
+    (window as any).__clientTest.emit({
+      type: "provider_configured",
+      kind: "spicy",
+    });
+  }, track.uri);
+  await page.getByTitle("Settings", { exact: true }).click();
+  await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
+  await expect(page.getByLabel("Canvas in lyrics")).not.toBeChecked();
+  await expect(page.getByLabel("Floating lyrics")).not.toBeChecked();
+  await page.getByLabel("Canvas in lyrics").check();
+  await page.getByLabel("Floating lyrics").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".canvas-lyrics video")).toBeVisible();
+  await expect(page.locator(".floating-stage")).toBeVisible();
+  expect(
+    await page
+      .locator(".lyrics-canvas-cover video")
+      .evaluate((element) => getComputedStyle(element).filter),
+  ).toBe("none");
+  expect(
+    await page
+      .locator(".lyrics-canvas-backdrop")
+      .evaluate((element) => (element as HTMLCanvasElement).width),
+  ).toBe(128);
+  const layout = await page.evaluate(() => {
+    const video = document
+        .querySelector(".lyrics-canvas-cover")!
+        .getBoundingClientRect(),
+      body = document.querySelector(".lyrics-body")!.getBoundingClientRect(),
+      title = document.querySelector(".lyrics-title")!.getBoundingClientRect(),
+      section = document.querySelector(".lyrics-page")!.getBoundingClientRect();
+    return {
+      videoLeft:
+        video.left <= section.left + 1 && video.width < section.width * 0.65,
+      titleLeft: title.left < section.left + section.width / 2,
+      titleBottom: title.top > section.top + section.height * 0.75,
+    };
+  });
+  expect(layout).toEqual({
+    videoLeft: true,
+    titleLeft: true,
+    titleBottom: true,
+  });
+  await page.getByTitle("Settings", { exact: true }).click();
+  await page.getByLabel("Reduce motion").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".floating-stage")).toHaveCount(0);
+  await expect(page.locator(".lyrics-canvas-cover")).toHaveCount(0);
+  await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
+});
+
 test("playlist search spans unloaded pages and play counts drive sorting", async ({
   page,
 }) => {

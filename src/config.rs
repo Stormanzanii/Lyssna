@@ -18,6 +18,8 @@ pub struct Settings {
     pub lyric_offset_ms: i64,
     pub romanized: bool,
     pub reduce_motion: bool,
+    pub canvas_lyrics: bool,
+    pub floating_lyrics: bool,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
 }
@@ -33,6 +35,8 @@ impl Default for Settings {
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,
+            canvas_lyrics: false,
+            floating_lyrics: false,
             auto_download_updates: true,
             folders: Vec::new(),
         }

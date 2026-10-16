@@ -86,6 +86,8 @@ export const emptyState: AppState = {
     lyric_offset_ms: 0,
     romanized: false,
     reduce_motion: false,
+    canvas_lyrics: false,
+    floating_lyrics: false,
     auto_download_updates: true,
     folders: [],
   },

@@ -2227,6 +2227,8 @@ function SettingsPage({
         {[
           ["romanized", "Show romanized lyrics"],
           ["reduce_motion", "Reduce motion"],
+          ["canvas_lyrics", "Canvas in lyrics"],
+          ["floating_lyrics", "Floating lyrics"],
           ["compact_library", "Compact library"],
         ].map(([key, label]) => (
           <label className="setting-row" key={key}>
@@ -2240,95 +2242,98 @@ function SettingsPage({
           </label>
         ))}
       </section>
-      <section>
-        <h2>Spicy Lyrics</h2>
-        {state.provider_builtin ? (
-          <p>
-            Spicy Lyrics is included and ready to use. It receives the current
-            track ID and your IP address; Spotify tokens stay on this computer.
-          </p>
-        ) : (
-          <>
+      {!state.provider_configured && (
+        <section>
+          <h2>Spicy Lyrics</h2>
+          {state.provider_builtin ? (
             <p>
-              Spicy Lyrics is built into SpotiFlex. Add your publishable API key
-              once to enable synced lyrics.
+              Spicy Lyrics is included and ready to use. It receives the current
+              track ID and your IP address; Spotify tokens stay on this
+              computer.
             </p>
-            <p>
-              {state.provider_kind === "spicy"
-                ? "Your Spicy Lyrics key is saved in Windows Credential Manager."
-                : state.provider_configured
-                  ? "A previous lyrics provider is configured. Save your Spicy Lyrics key below to switch."
-                  : "Create an application in the Spicy Lyrics dashboard. Enable Client access and No origin header for this desktop app."}
-            </p>
-            <button
-              className="text-link"
-              onClick={() =>
-                void onCall("open_link", {
-                  url: "https://developers.spicylyrics.org/dashboard",
-                })
-              }
-            >
-              Open Spicy Lyrics dashboard
-            </button>
-            <input
-              className="field"
-              aria-label="Lyrics API key"
-              type="password"
-              autoComplete="new-password"
-              spellCheck={false}
-              value={lyricsKey}
-              placeholder="sl_pk_…"
-              onChange={(event) => {
-                setLyricsKey(event.target.value);
-                setConsent(false);
-              }}
-            />
-            <p>
-              Spicy Lyrics receives the current track ID and your IP address.
-              Spotify tokens stay on this computer.
-            </p>
-            {state.lyric_error && state.provider_kind === "spicy" && (
-              <p className="source-error">{state.lyric_error}</p>
-            )}
-            <label className="consent-row">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
-              />
-              <span>
-                Allow SpotiFlex to request lyrics from Spicy Lyrics using this
-                key and the current Spotify track ID.
-              </span>
-            </label>
-            <button
-              className="pill"
-              disabled={
-                !lyricsKey.trim() ||
-                !consent ||
-                lyricsKey.trim().startsWith("sl_sk_")
-              }
-              onClick={() => {
-                void onCall("configure_spicy_lyrics", {
-                  key: lyricsKey.trim(),
-                  consent,
-                });
-                setLyricsKey("");
-                setConsent(false);
-                onNotice("Saving Spicy Lyrics key…");
-              }}
-            >
-              Save lyrics key
-            </button>
-            {lyricsKey.trim().startsWith("sl_sk_") && (
-              <p className="source-error">
-                Use a publishable sl_pk_ key. Secret sl_sk_ keys belong on your
-                server.
+          ) : (
+            <>
+              <p>
+                Spicy Lyrics is built into SpotiFlex. Add your publishable API
+                key once to enable synced lyrics.
               </p>
-            )}
-          </>
-        )}
-      </section>
+              <p>
+                {state.provider_kind === "spicy"
+                  ? "Your Spicy Lyrics key is saved in Windows Credential Manager."
+                  : state.provider_configured
+                    ? "A previous lyrics provider is configured. Save your Spicy Lyrics key below to switch."
+                    : "Create an application in the Spicy Lyrics dashboard. Enable Client access and No origin header for this desktop app."}
+              </p>
+              <button
+                className="text-link"
+                onClick={() =>
+                  void onCall("open_link", {
+                    url: "https://developers.spicylyrics.org/dashboard",
+                  })
+                }
+              >
+                Open Spicy Lyrics dashboard
+              </button>
+              <input
+                className="field"
+                aria-label="Lyrics API key"
+                type="password"
+                autoComplete="new-password"
+                spellCheck={false}
+                value={lyricsKey}
+                placeholder="sl_pk_…"
+                onChange={(event) => {
+                  setLyricsKey(event.target.value);
+                  setConsent(false);
+                }}
+              />
+              <p>
+                Spicy Lyrics receives the current track ID and your IP address.
+                Spotify tokens stay on this computer.
+              </p>
+              {state.lyric_error && state.provider_kind === "spicy" && (
+                <p className="source-error">{state.lyric_error}</p>
+              )}
+              <label className="consent-row">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(event) => setConsent(event.target.checked)}
+                />
+                <span>
+                  Allow SpotiFlex to request lyrics from Spicy Lyrics using this
+                  key and the current Spotify track ID.
+                </span>
+              </label>
+              <button
+                className="pill"
+                disabled={
+                  !lyricsKey.trim() ||
+                  !consent ||
+                  lyricsKey.trim().startsWith("sl_sk_")
+                }
+                onClick={() => {
+                  void onCall("configure_spicy_lyrics", {
+                    key: lyricsKey.trim(),
+                    consent,
+                  });
+                  setLyricsKey("");
+                  setConsent(false);
+                  onNotice("Saving Spicy Lyrics key…");
+                }}
+              >
+                Save lyrics key
+              </button>
+              {lyricsKey.trim().startsWith("sl_sk_") && (
+                <p className="source-error">
+                  Use a publishable sl_pk_ key. Secret sl_sk_ keys belong on
+                  your server.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
       <section>
         <h2>App updates</h2>
         <div className="setting-row">

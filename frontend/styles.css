@@ -1846,9 +1846,20 @@ small {
 .compact .lyric-source {
   position: relative;
   bottom: auto;
-  padding: 8px 10px;
+  padding: 0;
   font-size: 11px;
-  background: #171322;
+  background: transparent;
+}
+.compact .lyric-end-credits {
+  padding: 12px 0 16px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.compact .lyric-end-credits p {
+  margin-bottom: 6px;
+}
+.compact .lyric-source.expanded > span {
+  margin-top: 4px;
 }
 .lyrics-message {
   height: 100%;
@@ -2771,4 +2782,159 @@ input[type="range"]:hover {
   position: relative;
   z-index: 2;
   padding-top: 0;
+}
+.canvas-lyrics .lyrics-album {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cover.lyrics-canvas-cover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 58%;
+  height: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  mask-image: linear-gradient(to right, #000 0%, #000 68%, transparent 100%);
+  z-index: -1;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  background: transparent;
+}
+.lyrics-canvas-cover video,
+.lyrics-canvas-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.lyrics-canvas-backdrop {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 60%;
+  height: 100%;
+  z-index: -1;
+  mask-image: linear-gradient(to right, transparent, #000 18%);
+}
+.canvas-lyrics .lyrics-title {
+  position: absolute;
+  bottom: 68px;
+  left: 2%;
+  right: auto;
+  max-width: 36%;
+  margin: 0;
+  text-align: left;
+  z-index: 3;
+}
+.canvas-lyrics .lyrics-artists {
+  position: absolute;
+  bottom: 34px;
+  left: 2%;
+  right: auto;
+  max-width: 36%;
+  margin: 0;
+  text-align: left;
+  z-index: 3;
+}
+.canvas-lyrics .lyrics-title:not(.scrolling) .marquee-content,
+.canvas-lyrics .lyrics-artists:not(.scrolling) .marquee-content {
+  margin-inline: 0;
+}
+.canvas-lyrics .lyrics-body {
+  padding-bottom: 0;
+}
+.floating-lyrics {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.floating-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+.floating-word {
+  position: absolute;
+  max-width: 45%;
+  text-align: center;
+  font-size: clamp(21px, 2.5cqw, 42px);
+  font-weight: 750;
+  line-height: 1.2;
+  transform-origin: center;
+  overflow-wrap: anywhere;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    #fff var(--word-progress),
+    #c8c3d4 var(--word-progress)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  padding: 8px;
+  border: 0;
+  will-change: transform, opacity;
+}
+.floating-word.active {
+  text-shadow: 0 0 20px #fff3;
+  z-index: 2;
+}
+.floating-word:focus-visible {
+  outline: 2px solid #fff9;
+  border-radius: 6px;
+}
+.floating-wait {
+  position: absolute;
+  top: 45%;
+  left: 12px;
+  right: 12px;
+  pointer-events: none;
+}
+.floating-wait i {
+  opacity: 0.7;
+  animation: lyric-wait-pulse 1.8s ease-in-out infinite;
+}
+.floating-wait i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.floating-wait i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.floating-instrumental {
+  position: absolute;
+  top: 45%;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 28px;
+  color: #fff9;
+}
+.floating-credits {
+  flex-shrink: 0;
+  max-height: 135px;
+  overflow: auto;
+  padding: 12px 18px 18px;
+  color: #fff9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.floating-credits p {
+  margin: 0 0 4px;
+}
+.floating-credits .lyric-source {
+  position: static;
+  padding: 0;
+}
+.floating-wait {
+  top: var(--floating-focus, 45%);
+  transform: translateY(-50%);
 }

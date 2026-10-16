@@ -79,6 +79,8 @@ export interface Settings {
   lyric_offset_ms: number;
   romanized: boolean;
   reduce_motion: boolean;
+  canvas_lyrics?: boolean;
+  floating_lyrics?: boolean;
   auto_download_updates: boolean;
   folders: Folder[];
 }

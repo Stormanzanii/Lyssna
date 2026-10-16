@@ -9,6 +9,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { LyricsCanvas } from "./canvas-lyrics";
+import { FloatingLyrics } from "./floating-lyrics";
 import {
   Music2,
   Plus,
@@ -758,6 +760,12 @@ const LyricWords = memo(function LyricWords({
     <>
       {groups.map((group, index) => {
         const whitespace = group[0].text.match(/^\s+/u)?.[0] ?? "";
+        const motion = wordMotion(
+          group[0].start_ms,
+          group.at(-1)!.end_ms,
+          time,
+        );
+        const held = group.some((word) => word.end_ms - word.start_ms >= 1000);
         return (
           <span key={index} className="lyric-word-group">
             {whitespace}
@@ -765,9 +773,11 @@ const LyricWords = memo(function LyricWords({
               className="lyric-word"
               style={
                 {
-                  "--word-lift": 0,
-                  "--word-scale": 1,
-                  "--word-glow": 0,
+                  "--word-lift": reduceMotion ? 0 : motion.lift,
+                  "--word-scale": reduceMotion
+                    ? 1
+                    : 1 + (motion.scale - 1) * (held ? 0.4 : 1),
+                  "--word-glow": reduceMotion ? 0 : motion.glow,
                 } as CSSProperties
               }
             >
@@ -775,11 +785,6 @@ const LyricWords = memo(function LyricWords({
                 const text =
                   part === 0 ? word.text.slice(whitespace.length) : word.text;
                 const letters = Array.from(text);
-                const syllableMotion = wordMotion(
-                  word.start_ms,
-                  word.end_ms,
-                  time,
-                );
                 const emphasis =
                   !reduceMotion &&
                   word.end_ms - word.start_ms >= 1000 &&
@@ -792,12 +797,9 @@ const LyricWords = memo(function LyricWords({
                     style={
                       {
                         "--word-progress": `${progress(word.start_ms, word.end_ms, time) * 120 - 20}%`,
-                        "--syllable-lift":
-                          reduceMotion || emphasis ? 0 : syllableMotion.lift,
-                        "--syllable-scale":
-                          reduceMotion || emphasis ? 1 : syllableMotion.scale,
-                        "--syllable-glow":
-                          reduceMotion || emphasis ? 0 : syllableMotion.glow,
+                        "--syllable-lift": 0,
+                        "--syllable-scale": 1,
+                        "--syllable-glow": reduceMotion ? 0 : motion.glow,
                       } as CSSProperties
                     }
                   >
@@ -878,22 +880,56 @@ export function LyricsPage({
 } & Links) {
   const current = usePosition(state) + state.settings.lyric_offset_ms,
     track = state.playback.item;
+  const backdrop = useRef<HTMLCanvasElement>(null);
+  const motionAllowed =
+    !state.settings.reduce_motion &&
+    !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canvas = !!(
+    track &&
+    state.canvas_url &&
+    state.settings.canvas_lyrics &&
+    motionAllowed
+  );
+  const floating = !!(
+    state.settings.floating_lyrics &&
+    state.lyrics?.synced &&
+    motionAllowed
+  );
   return (
     <section
-      className={`lyrics-page ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
     >
       <Ambience
         track={track}
         reduceMotion={state.settings.reduce_motion}
         animate={state.playback.is_playing}
       />
+      {canvas && (
+        <canvas
+          className="lyrics-canvas-backdrop"
+          ref={backdrop}
+          width={128}
+          height={128}
+          aria-hidden="true"
+        />
+      )}
       {track ? (
         <>
           <div className="lyrics-album">
-            <Cover
-              images={track.album.images}
-              onClick={() => onAlbum(track.album)}
-            />
+            {canvas ? (
+              <LyricsCanvas
+                key={track.uri}
+                url={state.canvas_url!}
+                poster={imageOf(track.album.images)}
+                playing={state.playback.is_playing}
+                backdrop={backdrop}
+              />
+            ) : (
+              <Cover
+                images={track.album.images}
+                onClick={() => onAlbum(track.album)}
+              />
+            )}
             <TrackTitle
               track={track}
               onAlbum={onAlbum}
@@ -912,7 +948,27 @@ export function LyricsPage({
             </Marquee>
           </div>
           <div className="lyrics-body">
-            {state.lyrics ? (
+            {state.lyrics && floating ? (
+              <FloatingLyrics
+                lyrics={state.lyrics}
+                time={current}
+                onSeek={(positionMs) =>
+                  onPlayer({ command: "seek", positionMs })
+                }
+                credits={
+                  <>
+                    <p>
+                      Written by:{" "}
+                      {(state.lyrics.songwriters?.length
+                        ? state.lyrics.songwriters
+                        : (track.songwriters ?? [])
+                      ).join(", ") || "Songwriter credits unavailable"}
+                    </p>
+                    <LyricCredits lyrics={state.lyrics} expanded />
+                  </>
+                }
+              />
+            ) : state.lyrics ? (
               <LyricsDisplay
                 lyrics={state.lyrics}
                 writers={state.playback.item?.songwriters}

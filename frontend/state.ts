@@ -4,6 +4,7 @@ import type {
   Device,
   Snapshot,
   Track,
+  TrackFacts,
   Word,
 } from "./types";
 /** A page as last loaded, shown instantly when revisited or prefetched. */
@@ -55,6 +56,7 @@ export function nextToggle(
   };
 }
 export interface AppState extends Snapshot {
+  facts: Record<string, TrackFacts>;
   booted: boolean;
   devices: Device[];
   saved: Record<string, boolean>;
@@ -65,6 +67,7 @@ export interface AppState extends Snapshot {
   pages: Record<string, CachedPage>;
 }
 export const emptyState: AppState = {
+  facts: {},
   booted: false,
   profile: undefined,
   playlists: [],
@@ -120,6 +123,10 @@ export type Action =
   | { type: "toast_clear" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "track_facts":
+      return state.profile
+        ? { ...state, facts: { ...state.facts, ...action.facts } }
+        : state;
     case "canvas_prefetch":
       return state;
     case "page_prefetch": {

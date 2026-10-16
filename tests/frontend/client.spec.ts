@@ -235,6 +235,37 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
+test("playlist search spans unloaded pages and play counts drive sorting", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  await page.getByLabel("Search songs in this playlist").fill("Song 125");
+  await expect(page.locator(".track-row")).toHaveCount(1);
+  await expect(page.locator(".track-row")).toContainText("Song 125");
+  await page.evaluate(() => {
+    (window as any).__clientTest.emit({
+      type: "track_facts",
+      facts: {
+        "spotify:track:item124": {
+          plays: 123456,
+          genres: ["rock"],
+          release_date: "2020-01-01",
+        },
+      },
+    });
+  });
+  await expect(page.locator(".track-streams")).toHaveText("123,456");
+  await page.getByLabel("Search songs in this playlist").clear();
+  await page.getByLabel("Sort songs").selectOption("popular");
+  await expect(page.locator(".track-row").first()).toContainText("Song 125");
+  await page.getByLabel("Genre", { exact: true }).selectOption("rock");
+  await expect(page.locator(".track-row")).toHaveCount(1);
+});
+
 test("near-bottom scrolling automatically loads one page per offset", async ({
   page,
 }) => {

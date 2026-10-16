@@ -85,6 +85,7 @@ import {
 } from "./components";
 import "./styles.css";
 import { VolumeControl } from "./volume-control";
+import { collectionTracks, genresFor } from "./collection";
 
 type Center = "browse" | "lyrics" | "settings";
 const windowHandle = () => getCurrentWindow();
@@ -111,6 +112,16 @@ function App() {
   const [immersive, setImmersive] = useState(false);
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
+  const [songQuery, setSongQuery] = useState(""),
+    [songGenre, setSongGenre] = useState(""),
+    [songAge, setSongAge] = useState(""),
+    [songSort, setSongSort] = useState("order");
+  useEffect(() => {
+    setSongQuery("");
+    setSongGenre("");
+    setSongAge("");
+    setSongSort("order");
+  }, [state.route]);
   const generation = useRef(0),
     bootRoute = useRef("home"),
     loadedAccount = useRef(""),
@@ -444,9 +455,28 @@ function App() {
           : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
+  const collection =
+    state.route === "liked" || state.route.startsWith("playlist:");
+  const filtering = !!(
+    songQuery.trim() ||
+    songGenre ||
+    songAge ||
+    songSort !== "order"
+  );
+
   const displayTracks = entity?.artist
     ? (entity.overview?.popular.map((item) => item.track) ?? [])
-    : state.tracks;
+    : collection
+      ? collectionTracks(state.tracks, state.facts, {
+          query: songQuery,
+          genre: songGenre,
+          age: songAge,
+          sort: songSort,
+        })
+      : state.tracks;
+  const songGenres = [
+    ...new Set(state.tracks.flatMap((track) => genresFor(track, state.facts))),
+  ].sort();
   const visibleLibrary = state.playlists
     .filter((playlist) =>
       playlist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
@@ -487,6 +517,16 @@ function App() {
   useEffect(() => {
     if (!state.loading) pendingPage.current = "";
   }, [state.loading, state.tracks.length, state.generation]);
+  useEffect(() => {
+    if (collection && filtering && state.more && !state.loading) loadMore();
+  }, [
+    collection,
+    filtering,
+    state.more,
+    state.loading,
+    state.tracks.length,
+    loadMore,
+  ]);
   useEffect(() => {
     const sentinel = pageSentinel.current,
       root = mainScroll.current;
@@ -999,155 +1039,233 @@ function App() {
                     </div>
                   )}
                   {(!entity?.artist || displayTracks.length > 0) && (
-                    <div className="track-table">
-                      <div className="track-table-head">
-                        <span>#</span>
-                        <span>Title</span>
-                        <span>
-                          {entity?.artist
-                            ? "Streams"
-                            : entity?.album
-                              ? "Plays"
-                              : "Album"}
-                        </span>
-                        <span>
-                          <Clock3 size={16} />
-                        </span>
-                      </div>
-                      {displayTracks.map((track, index) => {
-                        const current = track.uri === state.playback.item?.uri;
-                        return (
-                          <div
-                            className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""}`}
-                            key={`${track.uri}-${index}`}
-                            onClick={(event) =>
-                              select(
-                                track,
-                                event.ctrlKey ||
-                                  event.metaKey ||
-                                  event.shiftKey,
-                              )
+                    <>
+                      {collection && (
+                        <div className="song-filters">
+                          <label className="playlist-search">
+                            <Search size={17} />
+                            <input
+                              aria-label="Search songs in this playlist"
+                              placeholder="Search songs in this playlist"
+                              value={songQuery}
+                              onChange={(event) =>
+                                setSongQuery(event.target.value)
+                              }
+                            />
+                          </label>
+                          <select
+                            aria-label="Genre"
+                            value={songGenre}
+                            onChange={(event) =>
+                              setSongGenre(event.target.value)
                             }
-                            onDoubleClick={() => playTrack(track, index)}
-                            onMouseEnter={() => prefetchCanvas(track.uri)}
-                            onContextMenu={(event) => {
-                              event.preventDefault();
-                              setSongMenu({
-                                track,
-                                x: event.clientX,
-                                y: event.clientY,
-                              });
-                            }}
                           >
-                            <div className="track-number">
-                              <span>
-                                {current && state.playback.is_playing ? (
-                                  <span className="equalizer">
-                                    <i />
-                                    <i />
-                                    <i />
-                                  </span>
-                                ) : (
-                                  index + 1
-                                )}
-                              </span>
-                              <button
-                                className="row-play"
-                                title={
-                                  current && state.playback.is_playing
-                                    ? "Pause"
-                                    : "Play"
-                                }
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  if (current && state.playback.is_playing)
-                                    play({ command: "pause" });
-                                  else playTrack(track, index);
-                                }}
-                              >
-                                {current && state.playback.is_playing ? (
-                                  <Pause size={17} fill="currentColor" />
-                                ) : (
-                                  <Play size={17} fill="currentColor" />
-                                )}
-                              </button>
-                            </div>
-                            <div className="track-cell">
-                              <Cover
-                                images={
-                                  track.album.images.length
-                                    ? track.album.images
-                                    : entity?.album?.images
-                                }
-                              />
-                              <div>
+                            <option value="">All genres</option>
+                            {songGenres.map((genre) => (
+                              <option key={genre}>{genre}</option>
+                            ))}
+                            <option value="unknown">Unknown genre</option>
+                          </select>
+                          <select
+                            aria-label="Release age"
+                            value={songAge}
+                            onChange={(event) => setSongAge(event.target.value)}
+                          >
+                            <option value="">Any release age</option>
+                            <option value="year">Past year</option>
+                            <option value="five">1–5 years old</option>
+                            <option value="ten">5–10 years old</option>
+                            <option value="older">10+ years old</option>
+                          </select>
+                          <select
+                            aria-label="Sort songs"
+                            value={songSort}
+                            onChange={(event) =>
+                              setSongSort(event.target.value)
+                            }
+                          >
+                            <option value="order">Playlist order</option>
+                            <option value="recent">Recently added</option>
+                            <option value="newest">Newest releases</option>
+                            <option value="oldest">Oldest releases</option>
+                            <option value="popular">Most played</option>
+                          </select>
+                          <small aria-live="polite">
+                            {displayTracks.length} songs
+                            {filtering && state.more
+                              ? " · Loading remaining songs…"
+                              : ""}
+                          </small>
+                        </div>
+                      )}
+                      <div
+                        className={`track-table ${collection ? "collection-table" : ""}`}
+                      >
+                        <div className="track-table-head">
+                          <span>#</span>
+                          <span>Title</span>
+                          <span>
+                            {entity?.artist
+                              ? "Streams"
+                              : entity?.album
+                                ? "Plays"
+                                : "Album"}
+                          </span>
+                          {collection && <span>Plays</span>}
+                          <span>
+                            <Clock3 size={16} />
+                          </span>
+                        </div>
+                        {displayTracks.map((track, index) => {
+                          const current =
+                            track.uri === state.playback.item?.uri;
+                          return (
+                            <div
+                              className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""}`}
+                              key={`${track.uri}-${index}`}
+                              onClick={(event) =>
+                                select(
+                                  track,
+                                  event.ctrlKey ||
+                                    event.metaKey ||
+                                    event.shiftKey,
+                                )
+                              }
+                              onDoubleClick={() => playTrack(track, index)}
+                              onMouseEnter={() => prefetchCanvas(track.uri)}
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                setSongMenu({
+                                  track,
+                                  x: event.clientX,
+                                  y: event.clientY,
+                                });
+                              }}
+                            >
+                              <div className="track-number">
+                                <span>
+                                  {current && state.playback.is_playing ? (
+                                    <span className="equalizer">
+                                      <i />
+                                      <i />
+                                      <i />
+                                    </span>
+                                  ) : (
+                                    index + 1
+                                  )}
+                                </span>
                                 <button
-                                  className="text-link track-name"
+                                  className="row-play"
+                                  title={
+                                    current && state.playback.is_playing
+                                      ? "Pause"
+                                      : "Play"
+                                  }
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    playTrack(track, index);
+                                    if (current && state.playback.is_playing)
+                                      play({ command: "pause" });
+                                    else playTrack(track, index);
                                   }}
                                 >
-                                  {track.name}
+                                  {current && state.playback.is_playing ? (
+                                    <Pause size={17} fill="currentColor" />
+                                  ) : (
+                                    <Play size={17} fill="currentColor" />
+                                  )}
                                 </button>
-                                <div className="track-artists">
-                                  <ExplicitBadge track={track} />
-                                  <ArtistLinks
-                                    artists={track.artists}
-                                    onArtist={openArtist}
-                                  />
+                              </div>
+                              <div className="track-cell">
+                                <Cover
+                                  images={
+                                    track.album.images.length
+                                      ? track.album.images
+                                      : entity?.album?.images
+                                  }
+                                />
+                                <div>
+                                  <button
+                                    className="text-link track-name"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      playTrack(track, index);
+                                    }}
+                                  >
+                                    {track.name}
+                                  </button>
+                                  <div className="track-artists">
+                                    <ExplicitBadge track={track} />
+                                    <ArtistLinks
+                                      artists={track.artists}
+                                      onArtist={openArtist}
+                                    />
+                                  </div>
                                 </div>
                               </div>
+                              {entity?.album ? (
+                                <span
+                                  className="track-streams"
+                                  title="Spotify play count"
+                                >
+                                  {entity.album_details?.streams[
+                                    track.uri
+                                  ]?.toLocaleString() ?? "—"}
+                                </span>
+                              ) : (
+                                <button
+                                  className="text-link album-link"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openAlbum(entity?.album || track.album);
+                                  }}
+                                >
+                                  {entity?.artist
+                                    ? entity.overview?.popular[
+                                        index
+                                      ].streams?.toLocaleString()
+                                    : track.album.name || entity?.album?.name}
+                                </button>
+                              )}
+                              {collection && (
+                                <span
+                                  className="track-streams"
+                                  title={
+                                    state.facts[track.uri]?.plays == null
+                                      ? "Spotify play count unavailable"
+                                      : "Spotify play count"
+                                  }
+                                >
+                                  {state.facts[
+                                    track.uri
+                                  ]?.plays?.toLocaleString() ?? "—"}
+                                </span>
+                              )}
+                              <div className="row-end">
+                                <span>
+                                  {track.duration_ms > 0
+                                    ? formatTime(track.duration_ms)
+                                    : ""}
+                                </span>
+                                <button
+                                  className="icon-button"
+                                  title="Song options"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSongMenu({
+                                      track,
+                                      x: event.clientX - 160,
+                                      y: event.clientY,
+                                    });
+                                  }}
+                                >
+                                  <MoreHorizontal size={19} />
+                                </button>
+                              </div>
                             </div>
-                            {entity?.album ? (
-                              <span
-                                className="track-streams"
-                                title="Spotify play count"
-                              >
-                                {entity.album_details?.streams[
-                                  track.uri
-                                ]?.toLocaleString() ?? "—"}
-                              </span>
-                            ) : (
-                              <button
-                                className="text-link album-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openAlbum(entity?.album || track.album);
-                                }}
-                              >
-                                {entity?.artist
-                                  ? entity.overview?.popular[
-                                      index
-                                    ].streams?.toLocaleString()
-                                  : track.album.name || entity?.album?.name}
-                              </button>
-                            )}
-                            <div className="row-end">
-                              <span>
-                                {track.duration_ms > 0
-                                  ? formatTime(track.duration_ms)
-                                  : ""}
-                              </span>
-                              <button
-                                className="icon-button"
-                                title="Song options"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSongMenu({
-                                    track,
-                                    x: event.clientX - 160,
-                                    y: event.clientY,
-                                  });
-                                }}
-                              >
-                                <MoreHorizontal size={19} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </section>
                 {entity?.artist && (

@@ -23,6 +23,7 @@ export interface Album {
   total_tracks?: number;
 }
 export interface Track {
+  added_at?: string;
   explicit?: boolean;
   songwriters?: string[];
   id?: string;
@@ -38,6 +39,11 @@ export interface Device {
   name: string;
   is_active: boolean;
   volume_percent?: number;
+}
+export interface TrackFacts {
+  plays?: number;
+  genres: string[];
+  release_date: string;
 }
 export interface Playback {
   item?: Track;
@@ -177,6 +183,7 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "track_facts"; facts: Record<string, TrackFacts> }
   | { type: "canvas"; uri: string; url?: string }
   | { type: "canvas_prefetch"; url: string }
   | { type: "page_prefetch"; key: string; tracks: Track[]; more: boolean }

@@ -24,6 +24,11 @@ pub enum NativeEvent {
     Error(String),
 }
 
+pub struct NativeMessage {
+    pub generation: u64,
+    pub event: NativeEvent,
+}
+
 pub struct NativePlayer {
     stop: Option<oneshot::Sender<()>>,
 }
@@ -32,13 +37,14 @@ impl NativePlayer {
     pub fn start(
         client_id: String,
         access_token: String,
-        events: mpsc::Sender<NativeEvent>,
+        generation: u64,
+        events: mpsc::Sender<NativeMessage>,
         repaint: eframe::egui::Context,
     ) -> Self {
         let (stop, mut stopped) = oneshot::channel();
         thread::spawn(move || {
             let emit = |event| {
-                let _ = events.send(event);
+                let _ = events.send(NativeMessage { generation, event });
                 repaint.request_repaint();
             };
             let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()

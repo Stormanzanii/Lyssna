@@ -38,6 +38,7 @@ pub struct SpotiFlex {
     devices: Vec<Device>,
     selected_device: Option<String>,
     native_id: Option<String>,
+    native_generation: u64,
     native_status: String,
     lyrics: Option<Lyrics>,
     lyric_error: String,
@@ -135,6 +136,7 @@ impl SpotiFlex {
             devices: Vec::new(),
             selected_device: None,
             native_id: None,
+            native_generation: 0,
             native_status: "Waiting for sign-in".into(),
             lyrics: None,
             lyric_error: String::new(),
@@ -232,6 +234,14 @@ impl SpotiFlex {
                     self.lyric_loading = false;
                 }
                 Event::LoginFinished => self.login_pending = false,
+                Event::NativeStarting(generation) => {
+                    self.native_generation = generation;
+                    if self.selected_device == self.native_id {
+                        self.selected_device = None;
+                    }
+                    self.native_id = None;
+                    self.native_status = "Connecting…".into();
+                }
                 Event::Library(playlists) => self.playlists = playlists,
                 Event::Tracks {
                     key,
@@ -279,11 +289,11 @@ impl SpotiFlex {
                 }
             }
         }
-        while let Ok(event) = self.worker.native_events.try_recv() {
-            if self.profile.is_none() {
+        while let Ok(message) = self.worker.native_events.try_recv() {
+            if self.profile.is_none() || message.generation != self.native_generation {
                 continue;
             }
-            match event {
+            match message.event {
                 NativeEvent::Ready(id) => {
                     self.native_id = Some(id);
                     self.native_status = "Ready · this computer".into();

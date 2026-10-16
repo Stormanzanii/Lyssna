@@ -13,7 +13,7 @@ use crate::{
     auth::{self, Tokens},
     lyrics::{self, Lyrics},
     model::{Device, Playback, Playlist, Profile, Track},
-    native::{NativeEvent, NativePlayer},
+    native::{NativeMessage, NativePlayer},
 };
 
 pub enum Command {
@@ -45,6 +45,7 @@ pub enum Event {
     Session(Profile),
     SignedOut,
     LoginFinished,
+    NativeStarting(u64),
     Library(Vec<Playlist>),
     Tracks {
         key: String,
@@ -65,7 +66,7 @@ pub enum Event {
 pub struct Worker {
     pub commands: mpsc::Sender<Command>,
     pub events: mpsc::Receiver<Event>,
-    pub native_events: mpsc::Receiver<NativeEvent>,
+    pub native_events: mpsc::Receiver<NativeMessage>,
     pub lyrics: mpsc::Sender<LyricCommand>,
     pub lyric_events: mpsc::Receiver<LyricEvent>,
 }
@@ -102,6 +103,7 @@ impl Worker {
             let mut backend = Backend {
                 spotify: None,
                 native: None,
+                native_generation: 0,
                 client_id: String::new(),
                 profile: Profile::default(),
                 client,
@@ -185,11 +187,12 @@ impl Drop for Worker {
 struct Backend {
     spotify: Option<Spotify>,
     native: Option<NativePlayer>,
+    native_generation: u64,
     client_id: String,
     profile: Profile,
     client: reqwest::blocking::Client,
     events: mpsc::Sender<Event>,
-    native_events: mpsc::Sender<NativeEvent>,
+    native_events: mpsc::Sender<NativeMessage>,
     lyrics: mpsc::Sender<LyricCommand>,
     context: egui::Context,
 }
@@ -225,12 +228,15 @@ impl Backend {
 
     fn start_audio(&mut self) -> Result<()> {
         self.native.take();
+        self.native_generation = self.native_generation.wrapping_add(1);
+        self.emit(Event::NativeStarting(self.native_generation));
         let api = self.api()?;
         api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
         let token = api.tokens.access_token.clone();
         self.native = Some(NativePlayer::start(
             self.client_id.clone(),
             token,
+            self.native_generation,
             self.native_events.clone(),
             self.context.clone(),
         ));

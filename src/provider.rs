@@ -96,7 +96,6 @@ pub fn configured() -> bool {
 pub fn builtin_configured() -> bool {
     option_env!("SPOTIFLEX_SPICY_LYRICS_KEY").is_some_and(|key| validate_public_key(key).is_ok())
 }
-
 pub fn kind() -> Option<String> {
     load().ok().map(|provider| {
         if provider.spicy_api {
@@ -136,7 +135,7 @@ pub fn cache_namespace() -> Result<String> {
     let provider = load()?;
     Ok(format!(
         "{:x}",
-        Sha256::digest(format!("v3:{}:{}", provider.spicy_api, provider.host).as_bytes())
+        Sha256::digest(format!("v4:{}:{}", provider.spicy_api, provider.host).as_bytes())
     ))
 }
 
@@ -331,6 +330,18 @@ pub fn parse(value: &Value, duration_ms: u64) -> Result<Lyrics> {
             .and_then(|value| serde_json::from_value(value.clone()).ok()),
         synced,
         instrumental: false,
+        songwriters: ["SongWriters", "Songwriters", "songwriters", "Writers"]
+            .iter()
+            .find_map(|key| value[*key].as_array())
+            .map(|writers| {
+                writers
+                    .iter()
+                    .take(100)
+                    .filter_map(|writer| writer.as_str().or_else(|| writer["name"].as_str()))
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
 }
 

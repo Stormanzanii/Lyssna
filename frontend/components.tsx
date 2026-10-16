@@ -357,12 +357,14 @@ export function LyricsDisplay({
   settings,
   onSeek,
   compact = false,
+  writers = [],
 }: {
   lyrics: Lyrics;
   positionMs: number;
   settings: Settings;
   onSeek: (ms: number) => void;
   compact?: boolean;
+  writers?: string[];
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
@@ -544,7 +546,15 @@ export function LyricsDisplay({
             </Fragment>
           );
         })}
-        <div className="lyric-spacer" />
+        <div className="lyric-end-credits">
+          <p>
+            Written by:{" "}
+            {(lyrics.songwriters?.length ? lyrics.songwriters : writers).join(
+              ", ",
+            ) || "Songwriter credits unavailable"}
+          </p>
+          <LyricCredits lyrics={lyrics} expanded />
+        </div>
       </div>
       {!following && (
         <button
@@ -732,6 +742,7 @@ function TimedLyricsPreview({
   return state.lyrics ? (
     <LyricsDisplay
       lyrics={state.lyrics}
+      writers={state.playback.item?.songwriters}
       positionMs={current}
       settings={state.settings}
       compact
@@ -796,6 +807,7 @@ export function LyricsPage({
             {state.lyrics ? (
               <LyricsDisplay
                 lyrics={state.lyrics}
+                writers={state.playback.item?.songwriters}
                 positionMs={current}
                 settings={state.settings}
                 onSeek={(ms) => onPlayer({ command: "seek", positionMs: ms })}

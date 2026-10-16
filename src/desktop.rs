@@ -172,6 +172,14 @@ impl Desktop {
                                 .is_some_and(|current| current.uri == uri)
                             {
                                 track.uri = uri;
+                                if track.songwriters.is_empty() {
+                                    track.songwriters = snapshot
+                                        .playback
+                                        .item
+                                        .as_ref()
+                                        .map(|item| item.songwriters.clone())
+                                        .unwrap_or_default();
+                                }
                                 snapshot.playback.item = Some(*track);
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
@@ -420,6 +428,9 @@ impl Desktop {
                                 .filter(|current| current.uri == track.uri)
                             {
                                 current.duration_ms = track.duration_ms;
+                                if !track.songwriters.is_empty() {
+                                    current.songwriters = track.songwriters.clone();
+                                }
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
                                 );

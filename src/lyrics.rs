@@ -15,6 +15,8 @@ pub struct Lyrics {
     pub synced: bool,
     #[serde(default)]
     pub attribution: Option<Attribution>,
+    #[serde(default)]
+    pub songwriters: Vec<String>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -423,6 +425,17 @@ pub fn parse_ttml(source: &str, duration_ms: u64) -> Result<Lyrics> {
     Ok(Lyrics {
         lines,
         source: "Local TTML".into(),
+        songwriters: document
+            .descendants()
+            .filter(|node| {
+                node.is_element() && node.tag_name().name().eq_ignore_ascii_case("songwriter")
+            })
+            .filter_map(|node| node.text())
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .take(100)
+            .map(str::to_owned)
+            .collect(),
         synced: true,
         ..Lyrics::default()
     })
@@ -533,6 +546,18 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ttml_songwriters_survive_cache_serialization() {
+        let lyrics=parse_ttml(r#"<tt><head><songwriters><songwriter>Credit Writer</songwriter></songwriters></head><body><div><p begin="1s" end="2s">you</p></div></body></tt>"#,2000).unwrap();
+        let restored: Lyrics =
+            serde_json::from_slice(&serde_json::to_vec(&lyrics).unwrap()).unwrap();
+        assert_eq!(restored.songwriters, vec!["Credit Writer"]);
+        let legacy: Lyrics = serde_json::from_value(
+            serde_json::json!({"lines":[],"source":"cache","instrumental":false,"synced":true}),
+        )
+        .unwrap();
+        assert!(legacy.songwriters.is_empty());
+    }
 
     #[test]
     fn overlapping_background_does_not_replace_active_lead() {

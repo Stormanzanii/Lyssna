@@ -147,6 +147,10 @@ pub fn parse(value: &Value, duration_ms: u64) -> Result<Lyrics> {
     let kind = value["Type"]
         .as_str()
         .context("Unknown provider lyrics format")?;
+    ensure!(
+        ["Static", "Line", "Syllable"].contains(&kind),
+        "Unsupported provider lyrics format"
+    );
     let synced = kind != "Static";
     let content = value[if synced { "Content" } else { "Lines" }]
         .as_array()
@@ -249,6 +253,7 @@ pub fn unpack(value: &Value) -> Result<Value> {
         stream,
         cursor: 0,
         budget: 200_000,
+        bytes_remaining: 4_000_000,
     };
     let result = decoder.value(0)?;
     ensure!(
@@ -263,6 +268,7 @@ struct Decoder<'a> {
     stream: &'a [Value],
     cursor: usize,
     budget: usize,
+    bytes_remaining: usize,
 }
 
 impl Decoder<'_> {
@@ -296,6 +302,11 @@ impl Decoder<'_> {
                 !["__proto__", "constructor", "prototype"].contains(&key),
                 "Rejected packed object key"
             );
+            ensure!(
+                key.len() <= self.bytes_remaining,
+                "Packed lyrics expansion limit exceeded"
+            );
+            self.bytes_remaining -= key.len();
             keys.push(key.to_owned());
         }
         Ok(keys)
@@ -304,6 +315,11 @@ impl Decoder<'_> {
     fn object(&mut self, keys: &[String], depth: usize) -> Result<Value> {
         let mut object = Map::new();
         for key in keys {
+            ensure!(
+                key.len() <= self.bytes_remaining,
+                "Packed lyrics expansion limit exceeded"
+            );
+            self.bytes_remaining -= key.len();
             object.insert(key.clone(), self.value(depth + 1)?);
         }
         Ok(Value::Object(object))
@@ -317,11 +333,19 @@ impl Decoder<'_> {
         self.budget -= 1;
         let instruction = self.integer()?;
         match instruction {
-            0.. => Ok(self
-                .values
-                .get(instruction as usize)
-                .context("Invalid packed dictionary pointer")?
-                .clone()),
+            0.. => {
+                let value = self
+                    .values
+                    .get(instruction as usize)
+                    .context("Invalid packed dictionary pointer")?;
+                let size = value.as_str().map_or(16, str::len);
+                ensure!(
+                    size <= self.bytes_remaining,
+                    "Packed lyrics expansion limit exceeded"
+                );
+                self.bytes_remaining -= size;
+                Ok(value.clone())
+            }
             -1 => {
                 let count = self.count()?;
                 let keys = self.keys(count)?;
@@ -360,6 +384,19 @@ impl Decoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn packed_strings_cannot_expand_past_memory_budget() {
+        let mut stream = vec![json!(-2), json!(100)];
+        stream.extend(std::iter::repeat_n(json!(0), 100));
+        let packed = json!([["x".repeat(64_000)], stream]);
+        assert!(
+            unpack(&packed)
+                .unwrap_err()
+                .to_string()
+                .contains("expansion limit")
+        );
+    }
 
     #[test]
     fn host_rejects_plaintext_credentials_paths_and_redirect_parameters() {

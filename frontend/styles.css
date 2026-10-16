@@ -1754,6 +1754,9 @@ small {
   height: 0;
   padding-block: 0;
 }
+.lyric-wait.opposite {
+  justify-content: flex-end;
+}
 .lyric-wait i {
   display: block;
   width: 14px;

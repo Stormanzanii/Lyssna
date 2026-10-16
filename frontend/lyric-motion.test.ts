@@ -7,6 +7,23 @@ import {
   letterMotion,
 } from "./lyric-motion";
 import type { Line } from "./types";
+it("puts interlude dots on the side of the upcoming singer", () => {
+  const lines = [
+    { start_ms: 0, end_ms: 1000, words: [] },
+    { start_ms: 6000, end_ms: 7000, words: [], opposite: true },
+    { start_ms: 12000, end_ms: 13000, words: [], opposite: false },
+  ].map((line) => ({
+    opposite: false,
+    text: "Line",
+    translation: "",
+    romanization: "",
+    background: false,
+    ...line,
+  })) satisfies Line[];
+  expect(vocalGap(lines, 3000)?.opposite).toBe(true);
+  expect(vocalGaps(lines)[0].opposite).toBe(true);
+  expect(vocalGap(lines, 9000)?.opposite).toBe(false);
+});
 it("keeps countdown layout after every overlapping vocal in the preceding section", () => {
   const lines = [
     { start_ms: 5000, end_ms: 6000 },

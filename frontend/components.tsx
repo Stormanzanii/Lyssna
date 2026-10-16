@@ -455,7 +455,7 @@ export function LyricsDisplay({
         key={item.start}
         ref={visible ? waiting : undefined}
         aria-hidden={!visible}
-        className="lyric-wait"
+        className={`lyric-wait ${item.opposite ? "opposite" : ""}`}
         role="status"
         aria-label="Instrumental break"
       >

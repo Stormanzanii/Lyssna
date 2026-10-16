@@ -5,6 +5,7 @@ export function vocalEnd(line: Line) {
     : line.end_ms;
 }
 export interface VocalGap {
+  opposite?: boolean;
   start: number;
   end: number;
   after: number;
@@ -22,7 +23,12 @@ export function vocalGaps(lines: Line[]): VocalGap[] {
     after = -1;
   for (const interval of intervals) {
     if (interval.start - end >= 2500)
-      gaps.push({ start: end, end: interval.start, after });
+      gaps.push({
+        start: end,
+        end: interval.start,
+        after,
+        opposite: lines[interval.index].opposite,
+      });
     if (interval.start > end) {
       end = interval.end;
       after = interval.index;
@@ -35,6 +41,7 @@ export function vocalGaps(lines: Line[]): VocalGap[] {
 }
 
 export function vocalGap(lines: Line[], time: number) {
+  let opposite: boolean | undefined;
   let start = 0,
     end = Infinity,
     after = -1;
@@ -46,10 +53,13 @@ export function vocalGap(lines: Line[], time: number) {
       start = endMs;
       after = index;
     }
-    if (line.start_ms > time) end = Math.min(end, line.start_ms);
+    if (line.start_ms > time && line.start_ms < end) {
+      end = line.start_ms;
+      opposite = line.opposite;
+    }
   }
   return Number.isFinite(end) && end - start >= 2500
-    ? { start, end, after }
+    ? { start, end, after, opposite }
     : undefined;
 }
 

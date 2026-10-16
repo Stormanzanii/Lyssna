@@ -34,6 +34,7 @@ url = "2"
 webbrowser = "1"
 ttf-parser = "0.25.1"
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+librespot-protocol = "0.8"
 
 [build-dependencies]
 winresource = "0.1"

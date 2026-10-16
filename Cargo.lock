@@ -4176,6 +4176,7 @@ dependencies = [
  "librespot-connect",
  "librespot-core",
  "librespot-playback",
+ "librespot-protocol",
  "reqwest",
  "roxmltree",
  "self-replace",

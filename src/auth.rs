@@ -15,6 +15,36 @@ use url::Url;
 
 use crate::config::{REDIRECT_URI, valid_client_id};
 
+/// Match librespot's public audio OAuth client and its registered loopback.
+/// This is separate from the developer app's Web API login and uses PKCE.
+pub(crate) const AUDIO_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
+const AUDIO_REDIRECT_URI: &str = "http://127.0.0.1:8898/login";
+const AUDIO_SCOPES: &str = "streaming";
+
+/// One OAuth authorization-code-with-PKCE configuration.
+struct Flow<'a> {
+    client_id: &'a str,
+    redirect_uri: &'a str,
+    path: &'a str,
+    scopes: &'a str,
+}
+
+fn app_flow(client_id: &str) -> Flow<'_> {
+    Flow {
+        client_id,
+        redirect_uri: REDIRECT_URI,
+        path: "/callback",
+        scopes: SCOPES,
+    }
+}
+
+const AUDIO_FLOW: Flow<'static> = Flow {
+    client_id: AUDIO_CLIENT_ID,
+    redirect_uri: AUDIO_REDIRECT_URI,
+    path: "/login",
+    scopes: AUDIO_SCOPES,
+};
+
 const SCOPES: &str = "streaming user-read-private user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-library-read user-library-modify user-read-recently-played";
 
 // Intentionally no Debug implementation: these values must never enter logs.
@@ -59,17 +89,22 @@ fn challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
+#[cfg(test)]
 fn authorization_url(client_id: &str, verifier: &str, state: &str) -> Result<Url> {
+    authorization_url_for(&app_flow(client_id), verifier, state)
+}
+
+fn authorization_url_for(flow: &Flow<'_>, verifier: &str, state: &str) -> Result<Url> {
     ensure!(
-        valid_client_id(client_id),
+        valid_client_id(flow.client_id),
         "Client ID must contain 32 hexadecimal characters"
     );
     let mut url = Url::parse("https://accounts.spotify.com/authorize")?;
     url.query_pairs_mut().extend_pairs([
-        ("client_id", client_id),
+        ("client_id", flow.client_id),
         ("response_type", "code"),
-        ("redirect_uri", REDIRECT_URI),
-        ("scope", SCOPES),
+        ("redirect_uri", flow.redirect_uri),
+        ("scope", flow.scopes),
         ("code_challenge_method", "S256"),
         ("code_challenge", &challenge(verifier)),
         ("state", state),
@@ -78,9 +113,21 @@ fn authorization_url(client_id: &str, verifier: &str, state: &str) -> Result<Url
 }
 
 /// Reject duplicate fields and validate state before trusting either code or error.
+#[cfg(test)]
 fn callback_code(target: &str, expected_state: &str) -> Result<String> {
-    ensure!(target.starts_with("/callback?"), "Unexpected callback path");
-    let url = Url::parse(&format!("{REDIRECT_URI}{}", &target["/callback".len()..]))?;
+    callback_code_for(target, expected_state, &app_flow(""))
+}
+
+fn callback_code_for(target: &str, expected_state: &str, flow: &Flow<'_>) -> Result<String> {
+    ensure!(
+        target.starts_with(flow.path) && target[flow.path.len()..].starts_with('?'),
+        "Unexpected callback path"
+    );
+    let url = Url::parse(&format!(
+        "{}{}",
+        flow.redirect_uri,
+        &target[flow.path.len()..]
+    ))?;
     let parameters: Vec<_> = url.query_pairs().collect();
     let field = |name: &str| -> Result<Option<String>> {
         let values: Vec<_> = parameters.iter().filter(|(key, _)| key == name).collect();
@@ -136,7 +183,12 @@ fn reply(stream: &mut TcpStream, status: &str, message: &str) {
     );
 }
 
-fn wait_for_code(listener: &TcpListener, state: &str, cancelled: &AtomicBool) -> Result<String> {
+fn wait_for_code(
+    listener: &TcpListener,
+    state: &str,
+    cancelled: &AtomicBool,
+    flow: &Flow<'_>,
+) -> Result<String> {
     listener.set_nonblocking(true)?;
     let deadline = Instant::now() + Duration::from_secs(180);
     while Instant::now() < deadline {
@@ -147,11 +199,11 @@ fn wait_for_code(listener: &TcpListener, state: &str, cancelled: &AtomicBool) ->
                     reply(&mut stream, "400 Bad Request", "Invalid callback request.");
                     continue;
                 };
-                if !target.starts_with("/callback?") {
+                if !target.starts_with(&format!("{}?", flow.path)) {
                     reply(&mut stream, "404 Not Found", "Page not found.");
                     continue;
                 }
-                match callback_code(&target, state) {
+                match callback_code_for(&target, state, flow) {
                     Ok(code) => {
                         reply(
                             &mut stream,
@@ -195,21 +247,40 @@ fn callback_has_valid_denial(target: &str, state: &str) -> bool {
 }
 
 pub fn login(client: &Client, client_id: &str, cancelled: &AtomicBool) -> Result<Tokens> {
+    authorize(client, &app_flow(client_id), "127.0.0.1:43821", cancelled)
+}
+
+/// One-time browser authorization for native audio. Returns a short-lived
+/// access token for librespot; its refresh token is discarded because
+/// librespot's own reusable credentials are stored instead.
+pub fn authorize_audio(client: &Client, cancelled: &AtomicBool) -> Result<String> {
+    Ok(authorize(client, &AUDIO_FLOW, "127.0.0.1:8898", cancelled)?.access_token)
+}
+
+fn authorize(
+    client: &Client,
+    flow: &Flow<'_>,
+    address: &str,
+    cancelled: &AtomicBool,
+) -> Result<Tokens> {
+    ensure!(!cancelled.load(Ordering::Relaxed), "Sign-in cancelled");
     let verifier = random_string()?;
     let state = random_string()?;
-    let url = authorization_url(client_id, &verifier, &state)?;
-    let listener = TcpListener::bind("127.0.0.1:43821")
-        .context("Login port 43821 is busy. Close the other SpotiFlex instance and retry.")?;
+    let url = authorization_url_for(flow, &verifier, &state)?;
+    let listener = TcpListener::bind(address).with_context(|| {
+        format!("Login port {address} is busy. Close other SpotiFlex or librespot apps and retry.")
+    })?;
+    ensure!(!cancelled.load(Ordering::Relaxed), "Sign-in cancelled");
     webbrowser::open(url.as_str()).context("Cannot open default browser for Spotify sign-in")?;
-    let code = wait_for_code(&listener, &state, cancelled)?;
+    let code = wait_for_code(&listener, &state, cancelled, flow)?;
     ensure!(!cancelled.load(Ordering::Relaxed), "Sign-in cancelled");
     exchange(
         client,
         &[
             ("grant_type", "authorization_code"),
-            ("client_id", client_id),
+            ("client_id", flow.client_id),
             ("code", &code),
-            ("redirect_uri", REDIRECT_URI),
+            ("redirect_uri", flow.redirect_uri),
             ("code_verifier", &verifier),
         ],
         None,
@@ -339,6 +410,40 @@ mod tests {
     }
 
     #[test]
+    fn audio_flow_uses_librespot_loopback_with_pkce_and_state() {
+        let url = authorization_url_for(&AUDIO_FLOW, "verifier", "state").unwrap();
+        let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(query["redirect_uri"], "http://127.0.0.1:8898/login");
+        assert_eq!(query["scope"], "streaming");
+        assert_eq!(query["code_challenge_method"], "S256");
+        assert!(!query.contains_key("client_secret"));
+        assert_eq!(
+            callback_code_for("/login?code=abc&state=state", "state", &AUDIO_FLOW).unwrap(),
+            "abc"
+        );
+        assert!(callback_code_for("/login?code=abc&state=other", "state", &AUDIO_FLOW).is_err());
+        assert!(callback_code_for("/callback?code=abc&state=state", "state", &AUDIO_FLOW).is_err());
+        assert_eq!(
+            librespot_core::SessionConfig::default().client_id,
+            AUDIO_CLIENT_ID
+        );
+    }
+
+    #[test]
+    fn cancelled_audio_login_stops_before_binding_or_opening_a_browser() {
+        let client = http_client().unwrap();
+        let error = authorize(
+            &client,
+            &AUDIO_FLOW,
+            "invalid-listener-address",
+            &AtomicBool::new(true),
+        )
+        .err()
+        .expect("cancelled login must fail");
+        assert_eq!(error.to_string(), "Sign-in cancelled");
+    }
+
+    #[test]
     fn local_callback_server_accepts_valid_request() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
@@ -351,7 +456,13 @@ mod tests {
             assert!(!response.contains("test-code"));
         });
         assert_eq!(
-            wait_for_code(&listener, "expected", &AtomicBool::new(false)).unwrap(),
+            wait_for_code(
+                &listener,
+                "expected",
+                &AtomicBool::new(false),
+                &app_flow("")
+            )
+            .unwrap(),
             "test-code"
         );
         sender.join().unwrap();

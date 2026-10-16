@@ -32,6 +32,8 @@ The developer app owner needs Premium. Additional users must meet Spotify's deve
 
 The app uses [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow). No client secret is needed. Access and refresh tokens stay in the operating system credential store. The optional `SPOTIFY_CLIENT_ID` environment variable can supply the Client ID; `.env.example` contains the template.
 
+Native audio has a separate, one-time browser sign-in using librespot's public audio client. Use the same Spotify account as the developer-app sign-in. SpotiFlex stores the resulting reusable audio credentials in Windows Credential Manager; later launches use them silently. Network timeouts preserve the saved login. An explicit credential rejection triggers one fresh authorization attempt. **Settings > Reconnect native audio** retries the connection.
+
 ## Lyrics
 
 Configure a private HTTPS provider in **Settings > Lyrics provider**. The host is masked in the editor and stored in the operating system credential store, outside the repository. Provider requests require explicit consent to share the Spotify access token. Refresh tokens and client secrets are never sent to the provider. HTTPS certificate validation stays enabled; redirects are disabled.
@@ -56,7 +58,7 @@ cargo clippy --locked --all-targets -- -D warnings
 
 `Cargo.lock` pins `vergen` to 9.0.6 because librespot 0.8's build script is incompatible with the `vergen-lib` dependency split in vergen 9.1.0. Keep the lockfile when updating dependencies.
 
-Current validation: 18 Rust tests, 3 update-service tests, Clippy, formatting, build, and Windows startup smoke check pass. Live Spotify login, native streaming, and private-provider responses still need account-based verification after developer setup. See [architecture](docs/ARCHITECTURE.md) and [attribution](NOTICE.md).
+Current validation: 48 Rust tests, Clippy, formatting, and build pass. Live Web API session restore, browser audio authorization, silent reuse of saved audio credentials, and Web API visibility of the native device have been verified. Audible playback and private-provider responses still need manual verification. The update service has 3 tests. See [architecture](docs/ARCHITECTURE.md) and [attribution](NOTICE.md).
 
 ## App updates
 

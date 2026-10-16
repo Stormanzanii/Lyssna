@@ -110,6 +110,39 @@ pub struct Playback {
     pub device: Device,
 }
 
+/// Pick the Web API device to play on: the requested ID when Spotify lists
+/// it, else this computer's SpotiFlex player (matched by name). With no
+/// requested device, fall back to the active device.
+pub fn resolve_device(
+    devices: &[Device],
+    requested: Option<&str>,
+    own_name: &str,
+) -> Option<String> {
+    let listed = |id: &str| {
+        devices
+            .iter()
+            .any(|device| device.id.as_deref() == Some(id))
+    };
+    requested
+        .filter(|id| listed(id))
+        .map(str::to_owned)
+        .or_else(|| {
+            devices
+                .iter()
+                .find(|device| device.name == own_name)
+                .and_then(|device| device.id.clone())
+        })
+        .or_else(|| {
+            if requested.is_some() {
+                return None;
+            }
+            devices
+                .iter()
+                .find(|device| device.is_active)
+                .and_then(|device| device.id.clone())
+        })
+}
+
 /// Preserve selection order, remove existing tracks and duplicates in the selection.
 pub fn unique_additions(existing: &HashSet<String>, selected: &[Track]) -> Vec<String> {
     let mut seen = existing.clone();
@@ -176,6 +209,52 @@ mod tests {
                 ]
             ),
             vec!["spotify:track:two", "spotify:track:three"]
+        );
+    }
+
+    #[test]
+    fn device_resolution_prefers_listed_request_then_own_player() {
+        let device = |id: &str, name: &str, active: bool| Device {
+            id: Some(id.into()),
+            name: name.into(),
+            is_active: active,
+            volume_percent: None,
+        };
+        let devices = vec![
+            device("phone", "Phone", true),
+            device("web-id", "SpotiFlex (PC)", false),
+        ];
+        assert_eq!(
+            resolve_device(&devices, Some("phone"), "SpotiFlex (PC)").as_deref(),
+            Some("phone")
+        );
+        // librespot's own ID is not what the Web API lists: match by name.
+        assert_eq!(
+            resolve_device(&devices, Some("librespot-id"), "SpotiFlex (PC)").as_deref(),
+            Some("web-id")
+        );
+        assert_eq!(
+            resolve_device(&devices, None, "SpotiFlex (PC)").as_deref(),
+            Some("web-id")
+        );
+        assert_eq!(
+            resolve_device(&devices[..1], None, "SpotiFlex (PC)").as_deref(),
+            Some("phone")
+        );
+        assert_eq!(resolve_device(&[], None, "SpotiFlex (PC)"), None);
+    }
+
+    #[test]
+    fn waiting_for_native_device_does_not_transfer_playback_to_another_device() {
+        let devices = vec![Device {
+            id: Some("phone".into()),
+            name: "Phone".into(),
+            is_active: true,
+            volume_percent: None,
+        }];
+        assert_eq!(
+            resolve_device(&devices, Some("not-yet-listed-native-id"), "SpotiFlex (PC)"),
+            None
         );
     }
 

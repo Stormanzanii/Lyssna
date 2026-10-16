@@ -239,18 +239,46 @@ impl Backend {
         self.native.take();
         self.native_generation = self.native_generation.wrapping_add(1);
         self.emit(Event::NativeStarting(self.native_generation));
-        let api = self.api()?;
-        api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
-        let token = api.tokens.access_token.clone();
         self.native = Some(NativePlayer::start(
-            self.client_id.clone(),
-            token,
+            self.profile.id.clone(),
             self.native_generation,
             self.native_events.clone(),
             self.context.clone(),
         ));
         self.emit(Event::Notice("Connecting native audio…".into()));
         Ok(())
+    }
+
+    /// Send a player command, resolving the device through Spotify's device
+    /// list. This computer's player can take a few seconds to appear there
+    /// after it connects, so look again briefly before giving up.
+    fn player(&mut self, action: PlayerAction, device: Option<String>) -> Result<()> {
+        let own = crate::native::device_name();
+        let requested = match &action {
+            PlayerAction::Transfer(id) => Some(id.clone()),
+            _ => device,
+        };
+        for attempt in 0..4 {
+            let devices = self.api()?.devices()?;
+            let _ = self.events.send(Event::Devices(devices.clone()));
+            if let Some(id) = crate::model::resolve_device(&devices, requested.as_deref(), &own) {
+                return match action {
+                    PlayerAction::Transfer(_) => {
+                        self.api()?.player_action(PlayerAction::Transfer(id), None)
+                    }
+                    action => self.api()?.player_action(action, Some(&id)),
+                };
+            }
+            if self.native.is_none() || attempt == 3 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(1200));
+        }
+        anyhow::bail!(if self.native.is_some() {
+            "This computer is not ready for playback yet. Wait a moment, or reconnect native audio in Settings."
+        } else {
+            "No playback device. Reconnect native audio in Settings, or open Spotify on another device."
+        })
     }
 
     fn poll(&mut self) -> Result<()> {
@@ -278,9 +306,11 @@ impl Backend {
             }
             Command::Logout => {
                 self.native.take();
+                let audio_deleted = crate::native::forget_credentials(&self.profile.id);
                 self.spotify.take();
                 let deleted = Tokens::delete(&self.client_id);
                 self.emit(Event::SignedOut);
+                audio_deleted?;
                 deleted?;
             }
             Command::Refresh => {
@@ -312,7 +342,7 @@ impl Backend {
                 }
             }
             Command::Player { action, device } => {
-                self.api()?.player_action(action, device.as_deref())?;
+                self.player(action, device)?;
                 self.poll()?;
             }
             Command::Add { playlist, tracks } => {

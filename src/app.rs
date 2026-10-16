@@ -491,12 +491,30 @@ impl SpotiFlex {
                 continue;
             }
             match message.event {
+                NativeEvent::Authorizing => {
+                    self.native_status =
+                        "Authorize audio playback in your browser (one-time)…".into();
+                    self.show_notice(
+                        "One-time step: authorize audio playback in the browser tab that just opened.".into(),
+                        false,
+                    );
+                }
                 NativeEvent::Ready(id) => {
-                    self.native_id = Some(id);
+                    self.native_id = Some(id.clone());
                     self.native_status = "Ready · this computer".into();
+                    // Make this PC the playback device unless something else
+                    // is already playing.
+                    if self.playback.device.id.is_none() || !self.playback.is_playing {
+                        self.selected_device = None;
+                        self.send(Command::Player {
+                            action: PlayerAction::Transfer(id),
+                            device: None,
+                        });
+                    }
                 }
                 NativeEvent::Error(message) => {
                     self.native_id = None;
+                    self.show_notice(message.clone(), true);
                     self.native_status = message;
                 }
                 NativeEvent::Position {
@@ -2972,7 +2990,7 @@ impl SpotiFlex {
                     SUBDUED
                 };
                 ui.label(RichText::new("●").color(color));
-                ui.label(&self.native_status);
+                ui.add(egui::Label::new(&self.native_status).wrap());
             });
             if self.profile.is_some() && ui.button("Reconnect native audio").clicked() {
                 self.native_id = None;

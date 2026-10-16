@@ -18,6 +18,10 @@
 
 Spotify commands execute in order on a background worker. View changes carry a generation number so old results and errors cannot overwrite a newer search or playlist. Native audio runs on its own runtime; connection generations discard messages from retired players. Lyric results are applied only to the matching current track URI.
 
+Audio authorization is separate from the developer app's Web API authorization. Both use PKCE with state-checked loopback callbacks. The audio flow matches librespot's public client and uses `http://127.0.0.1:8898/login`; no developer-dashboard change is needed for that redirect. After connecting, the session account must match the Web API profile. Reusable audio credentials are saved per account under `SpotiFlex/SpotifyAudio` in the OS credential store. Network failures preserve them; explicit rejection permits one browser reauthorization. Sign-out cancels pending audio authorization and removes both logins. Credential writes and deletion are serialized to prevent a retiring player from restoring a signed-out login.
+
+Player commands resolve the Web API device ID from Spotify's device list. A native session ID can differ from the listed device ID, so the local player is also matched by its computer-specific name. An explicitly requested native device that is not listed yet cannot silently transfer playback to an unrelated active device.
+
 The provider receives only the current Spotify access token, only after consent, through an HTTPS header. Spotify tokens are never included in query URLs. Refresh tokens remain in the credential store. Provider URLs, response bodies, and request headers are excluded from user-facing network errors. No log sink is configured for third-party libraries.
 
 Application settings, lyric imports, and cache live under the platform's SpotiFlex configuration directory. On Windows, secrets use Windows Credential Manager. The existing Spotify installation is read-only and is not used as a token source or playback dependency.

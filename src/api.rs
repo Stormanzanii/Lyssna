@@ -349,6 +349,7 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
     Ok(tracks)
 }
 
+#[derive(Clone)]
 pub enum PlayerAction {
     Play(Option<String>),
     /// Start a playlist or album context, optionally at a track URI.

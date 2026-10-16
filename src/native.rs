@@ -642,13 +642,71 @@ impl Drop for NativePlayer {
     }
 }
 
+fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Track> {
+    use crate::model::{Album, Artist, Artwork, Track};
+    let artists = |items: &librespot_metadata::artist::Artists| {
+        items
+            .iter()
+            .filter_map(|artist| {
+                let uri = artist.id.to_uri().ok()?;
+                Some(Artist {
+                    id: uri.rsplit(':').next().map(str::to_owned),
+                    uri,
+                    name: artist.name.clone(),
+                    ..Artist::default()
+                })
+            })
+            .collect()
+    };
+    let uri = item.id.to_uri().ok()?;
+    let album_uri = item.album.id.to_uri().ok()?;
+    let mut images: Vec<_> = item
+        .album
+        .cover_group
+        .iter()
+        .chain(item.album.covers.iter())
+        .map(|image| Artwork {
+            url: format!("https://i.scdn.co/image/{}", image.id),
+            width: u32::try_from(image.width).ok(),
+        })
+        .collect();
+    images.sort_by_key(|image| std::cmp::Reverse(image.width));
+    images.dedup_by(|a, b| a.url == b.url);
+    Some(Track {
+        id: uri.rsplit(':').next().map(str::to_owned),
+        uri,
+        name: item.name.clone(),
+        duration_ms: item.duration.max(0) as u64,
+        artists: artists(&item.artists),
+        songwriters: item
+            .artists_with_role
+            .iter()
+            .filter(|artist| {
+                artist.role == librespot_metadata::artist::ArtistRole::ARTIST_ROLE_COMPOSER
+            })
+            .map(|artist| artist.name.clone())
+            .collect(),
+        album: Album {
+            id: album_uri.rsplit(':').next().map(str::to_owned),
+            uri: album_uri,
+            name: item.album.name.clone(),
+            artists: artists(&item.album.artists),
+            images,
+            release_date: item.album.date.0.date().to_string(),
+            album_type: item.album.type_str.clone(),
+            ..Album::default()
+        },
+        ..Track::default()
+    })
+}
+
 async fn read_playlist(
     session: &Session,
     id: &str,
     offset: usize,
 ) -> Result<Vec<crate::model::Track>> {
     use librespot_core::SpotifyUri;
-    use librespot_metadata::{Metadata, audio::item::AudioItem, playlist::Playlist};
+    use librespot_metadata::{Metadata, playlist::Playlist};
     let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
     let playlist = Playlist::get(session, &uri).await.map_err(|_| {
         anyhow::anyhow!("Spotify cannot open this playlist for the signed-in account")
@@ -670,10 +728,10 @@ async fn read_playlist(
                     is_local: true,
                     ..crate::model::Track::default()
                 };
-                let track = AudioItem::get_file(&session, uri)
+                let track = librespot_metadata::Track::get(&session, &uri)
                     .await
                     .ok()
-                    .and_then(|item| public_track(&item))
+                    .and_then(|item| metadata_track(&item))
                     .unwrap_or(fallback);
                 (index, track)
             });

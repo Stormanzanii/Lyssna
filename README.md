@@ -49,7 +49,7 @@ Existing self-hosted deployments can still provision their protected HTTPS host 
 Read-Host 'HTTPS lyrics host' | .\target\debug\spotiflex.exe --set-lyrics-host --allow-spotify-access-token
 ```
 
-The host is deployment configuration. Keeping it outside source prevents committing it; desktop DNS and network traffic still reveal the destination. A different machine must configure its own provider.
+Self-hosted deployments provision their host on each machine. The credential store keeps it outside source; desktop DNS and network traffic still reveal the destination.
 
 Import `.lrc`, `.ttml`, or `.xml` from the lyrics panel to associate a local lyric file with the current track. Local imports take priority. Remote lyrics cache for three days, separately for each provider.
 

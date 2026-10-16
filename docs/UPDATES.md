@@ -1,0 +1,44 @@
+# Signed releases on R2
+
+Release objects live in the dedicated `spotiflex-releases` bucket in the Cloudflare account that owns ClypDat. The `spotiflex-updates` Worker serves `https://updates.clypdat.xyz`. The bucket itself remains private. The Worker exposes only release executables, corresponding source archives, and stable channel manifests. Publishing requires a separate credential.
+
+The desktop checks on startup and every 30 minutes. It downloads new releases automatically by default; this preference is under **Settings > App updates**. **Install update and restart** applies the verified executable. Restart requires that explicit button. Checks and downloads run outside the UI thread.
+
+Every channel manifest is an envelope containing a base64 JSON payload and an Ed25519 signature. The public key is compiled into the app from `config/update-public-key.base64`. The signed payload fixes the version, Windows x86_64 target, relative artifact path, byte count, SHA-256 digest, and release notes. Redirects are disabled. Downloads have signed size limits; verification runs again immediately before replacement. Older versions and other platforms are rejected.
+
+The updater backs up the running executable to SpotiFlex's application data `updates/previous-spotiflex.exe`, replaces only its own executable using `self-replace`, and starts the new version. The application must be in a directory the user can write to. Automatic installation currently targets Windows x86_64.
+
+## Publish a version
+
+The GitHub Actions secrets for signing and upload have been configured. Neither secret is committed or bundled into the client. Local copies are in the operating system credential store under `SpotiFlex/Release`.
+
+1. Update `version` in `Cargo.toml`, run checks, commit, and push.
+2. Push a matching `vMAJOR.MINOR.PATCH` tag, or run **Publish signed release to R2** from GitHub Actions with the matching version and release notes.
+3. The workflow builds and tests the client, signs the manifest, uploads the immutable executable and source archive, then activates the stable channel last.
+
+Source archives use `git archive HEAD`, excluding ignored credentials and local project instructions. Published executable versions cannot be overwritten. Keep a copy of the release signing credential in an appropriate external secret backup; replacing the public key later requires a migration for already-installed clients.
+
+For a local prepared release without uploading:
+
+```powershell
+cargo build --release --locked --bin spotiflex --bin spotiflex-release
+.\target\release\spotiflex-release.exe prepare 0.1.0 .\target\release\spotiflex.exe .\release-notes.txt
+```
+
+Use `publish` in place of `prepare` to upload. `setup-keys` is for initial maintainer provisioning; it preserves existing credentials. `sync-github` sends those credentials directly to the repository's Actions secret store.
+
+## Service checks
+
+```powershell
+cd infra/updates
+npm ci
+npm test
+npm run check
+npm run dry-run
+```
+
+Wrangler generates binding types from `wrangler.jsonc`. The Worker streams executable bodies from R2. Logs and traces are enabled. The publish token is a Worker secret; the signing private key is never deployed to Cloudflare.
+
+The deployed service responds at `/health`. The stable manifest returns 404 until a real signed version is published. An absent channel means no update is available. No initial application release has been published yet.
+
+The fork's periodic version checks and explicit update prompt informed this flow. Its browser reload mechanism is replaced by verified native executable replacement.

@@ -12,6 +12,9 @@
 | `provider.rs` | Credential-store host configuration, HTTPS validation, query protocol, bounded packed-data decoding |
 | `worker.rs` | Spotify command worker and separate lyric worker; no HTTP or audio work on the UI thread |
 | `config.rs` | Nonsecret appearance, Client ID, local folders, and view settings |
+| `updater.rs` | Independent signed update checks, bounded download, hash validation, native replacement, and restart |
+
+`src/bin/spotiflex-release.rs` is a maintainer tool for signing and publishing versioned artifacts. It uses separate credentials from Spotify. `infra/updates` contains the R2 download and authenticated publishing Worker. See [update operations](UPDATES.md).
 
 Spotify commands execute in order on a background worker. View changes carry a generation number so old results and errors cannot overwrite a newer search or playlist. Native audio runs on its own runtime; connection generations discard messages from retired players. Lyric results are applied only to the matching current track URI.
 

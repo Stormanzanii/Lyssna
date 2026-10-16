@@ -56,4 +56,8 @@ cargo clippy --locked --all-targets -- -D warnings
 
 `Cargo.lock` pins `vergen` to 9.0.6 because librespot 0.8's build script is incompatible with the `vergen-lib` dependency split in vergen 9.1.0. Keep the lockfile when updating dependencies.
 
-Current validation: 16 local tests, Clippy, formatting, build, and Windows startup smoke check pass. Live Spotify login, native streaming, and private-provider responses still need account-based verification after developer setup. See [architecture](docs/ARCHITECTURE.md) and [attribution](NOTICE.md).
+Current validation: 18 Rust tests, 3 update-service tests, Clippy, formatting, build, and Windows startup smoke check pass. Live Spotify login, native streaming, and private-provider responses still need account-based verification after developer setup. See [architecture](docs/ARCHITECTURE.md) and [attribution](NOTICE.md).
+
+## App updates
+
+Native signed updates use R2 through `updates.clypdat.xyz`. New versions download automatically; **Settings > App updates > Install update and restart** applies them. Ed25519 signatures and SHA-256 hashes are verified before installation. The release workflow and maintainer instructions are in [UPDATES.md](docs/UPDATES.md).

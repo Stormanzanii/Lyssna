@@ -2,11 +2,17 @@
 name = "spotiflex"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.98"
 description = "Native Rust Spotify client with synchronized lyrics and playlist tools"
 license = "AGPL-3.0-only"
 publish = false
 default-run = "spotiflex"
+
+[features]
+default = ["legacy-ui"]
+custom-protocol = ["tauri/custom-protocol"]
+desktop = ["dep:tauri", "dep:tauri-plugin-window-state"]
+legacy-ui = ["dep:eframe", "dep:egui_extras", "dep:ttf-parser", "dep:tiny-skia"]
 
 [dependencies]
 anyhow = "1"
@@ -14,16 +20,20 @@ base64 = "0.22"
 directories = "6"
 dotenvy = "0.15"
 ed25519-dalek = "2.2"
-eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
-egui_extras = { version = "0.33", features = ["image", "http"] }
+eframe = { version = "0.33", optional = true, default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+egui_extras = { version = "0.33", optional = true, features = ["image", "http"] }
+tauri = { version = "2", optional = true, features = ["image-ico"] }
+tauri-plugin-window-state = { version = "2", optional = true }
 getrandom = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 keyring = { version = "3.6", features = ["windows-native", "apple-native", "sync-secret-service"] }
 librespot-connect = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
+librespot-metadata = { version = "0.8", default-features = false }
 librespot-playback = { version = "0.8", default-features = false, features = ["rodio-backend", "rustls-tls-native-roots"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
 roxmltree = "0.21"
+rodio = { version = "0.21", default-features = false, features = ["playback"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 self-replace = "1.5"
@@ -32,12 +42,13 @@ sha2 = "0.10"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 url = "2"
 webbrowser = "1"
-ttf-parser = "0.25.1"
-tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+ttf-parser = { version = "0.25.1", optional = true }
+tiny-skia = { version = "0.11", optional = true, default-features = false, features = ["std", "simd"] }
 librespot-protocol = "0.8"
 
 [build-dependencies]
 winresource = "0.1"
+tauri-build = { version = "2", features = [] }
 
 [profile.dev]
 debug = 1

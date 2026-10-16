@@ -9,7 +9,7 @@ publish = false
 default-run = "spotiflex"
 
 [features]
-default = ["legacy-ui"]
+default = ["desktop", "custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 desktop = ["dep:tauri", "dep:tauri-plugin-window-state"]
 legacy-ui = ["dep:eframe", "dep:egui_extras", "dep:ttf-parser", "dep:tiny-skia"]

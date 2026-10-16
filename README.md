@@ -1,20 +1,23 @@
 # SpotiFlex
 
-Standalone Rust Spotify client. Native UI uses eframe/egui; native audio uses librespot and Rodio. Spicetify and the installed Spotify desktop client are not dependencies.
+Standalone Rust Spotify client with a Tauri desktop interface and native librespot/Rodio audio. Spicetify and the installed Spotify desktop client are not dependencies.
 
 This is an initial implementation of the core client. Full parity with both reference extensions is still in progress. UI is functional and intentionally leaves visual polish for a later pass. See [feature status](docs/FEATURES.md).
 
 ## Run
 
-On Windows, install Rust and the Visual Studio C++ build tools, then run:
+On Windows, install Rust, Node.js 24, WebView2, and the Visual Studio C++ build tools, then run:
 
 ```powershell
+npm ci
+npm run build
 cargo run --locked
 ```
 
 For an optimized executable:
 
 ```powershell
+npm run build
 cargo build --release --locked
 .\target\release\spotiflex.exe
 ```
@@ -51,10 +54,15 @@ Import `.lrc`, `.ttml`, or `.xml` from the lyrics panel to associate a local lyr
 ## Development
 
 ```powershell
+npm run build
+npm test
+npm run test:e2e
 cargo fmt --check
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
+
+The previous egui interface remains available with `cargo run --locked --no-default-features --features legacy-ui`.
 
 `Cargo.lock` pins `vergen` to 9.0.6 because librespot 0.8's build script is incompatible with the `vergen-lib` dependency split in vergen 9.1.0. Keep the lockfile when updating dependencies.
 

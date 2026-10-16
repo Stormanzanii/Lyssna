@@ -2,6 +2,9 @@
 /CLAUDE.md
 /target/
 /dist/
+/gen/
+/test-results/
+/playwright-report/
 /.references/
 .env
 .env.*

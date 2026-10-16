@@ -11,6 +11,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let _ = dotenvy::from_filename(".env");
+    #[cfg(feature = "desktop")]
+    spotiflex::desktop::run()?;
+    #[cfg(all(not(feature = "desktop"), feature = "legacy-ui"))]
+    run_legacy()?;
+    Ok(())
+}
+
+#[cfg(all(not(feature = "desktop"), feature = "legacy-ui"))]
+fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("SpotiFlex")

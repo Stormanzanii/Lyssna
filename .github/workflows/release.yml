@@ -31,10 +31,18 @@ jobs:
           persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
       - run: cargo fmt --check
       - run: cargo test --locked
       - run: cargo clippy --locked --all-targets -- -D warnings
       - name: Build release
+        env:
+          SPOTIFLEX_SPICY_LYRICS_KEY: ${{ vars.SPOTIFLEX_SPICY_LYRICS_KEY }}
         run: cargo build --release --locked --bin spotiflex --bin spotiflex-release
       - name: Sign and publish
         env:

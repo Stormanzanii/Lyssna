@@ -74,6 +74,8 @@ export type Action =
   | { type: "toast_clear" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "canvas_prefetch":
+      return state;
     case "canvas":
       return state.playback.item?.uri === action.uri
         ? { ...state, canvas_url: action.url }

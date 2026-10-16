@@ -18,7 +18,6 @@ import {
   RotateCw,
   Mic2,
   ArrowUpRight,
-  ChevronUp,
 } from "lucide-react";
 import type {
   Album,
@@ -94,7 +93,7 @@ function ambientCover(source: string): Promise<string | undefined> {
           resolve(undefined);
           return;
         }
-        context.filter = "blur(8px) saturate(1.3)";
+        context.filter = "blur(4px) saturate(1.6)";
         context.drawImage(cover, -16, -16, 96, 96);
         resolve(canvas.toDataURL("image/jpeg", 0.8));
       } catch {
@@ -152,19 +151,28 @@ export const Ambience = memo(function Ambience({
       phase = 0;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
     const draw = () => {
+      // Spicy Lyrics' grading (saturate 2.5, dimmed) and heavy blur, applied
+      // on this tiny canvas instead of as full-screen CSS filters.
+      context.filter = "saturate(2.5) brightness(0.8) blur(9px)";
       context.globalCompositeOperation = "source-over";
       context.globalAlpha = 1;
-      context.drawImage(texture, 0, 0, 128, 128);
-      for (let layer = 0; layer < 2; layer++) {
+      context.drawImage(texture, -24, -24, 176, 176);
+      // Spicy Lyrics' layers: large copies of the artwork orbiting and
+      // rotating in opposite directions on a 45 second period.
+      for (const [x, y, size, direction] of [
+        [32, 40, 230, -1],
+        [100, 88, 180, 1],
+        [20, 108, 170, -0.8],
+      ]) {
         context.save();
         context.globalCompositeOperation = "source-over";
-        context.globalAlpha = 0.5;
+        context.globalAlpha = 0.78;
         context.translate(
-          64 + Math.sin(phase + layer * 2) * 15,
-          64 + Math.cos(phase * 0.7 + layer) * 12,
+          x + Math.sin(phase + x) * 10,
+          y + Math.cos(phase * 0.8 + y) * 10,
         );
-        context.rotate(phase * (layer === 0 ? 1 : -0.7) + layer * 2);
-        context.drawImage(texture, -110, -110, 220, 220);
+        context.rotate(phase * direction + x);
+        context.drawImage(texture, -size / 2, -size / 2, size, size);
         context.restore();
       }
     };
@@ -179,7 +187,7 @@ export const Ambience = memo(function Ambience({
         reduced.matches
       )
         return;
-      phase += 0.0035;
+      phase += (Math.PI * 2 * 0.05) / 45;
       draw();
       timer = setTimeout(loop, 50);
     };
@@ -371,7 +379,14 @@ export function LyricsDisplay({
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
-  const [centered, setCentered] = useState(false);
+  const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Browsing pauses follow mode; it resumes on its own once scrolling stops.
+  const browse = () => {
+    setFollowing(false);
+    clearTimeout(resume.current);
+    resume.current = setTimeout(() => setFollowing(true), 3000);
+  };
+  useEffect(() => () => clearTimeout(resume.current), []);
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
   const spring = useRef<ScrollSpring>({ position: 0, velocity: 0, target: 0 });
   const waiting = useRef<HTMLDivElement>(null);
@@ -425,7 +440,6 @@ export function LyricsDisplay({
     );
   useEffect(() => {
     setFollowing(true);
-    setCentered(false);
   }, [lyrics]);
   useLayoutEffect(() => {
     const container = scroll.current,
@@ -453,25 +467,15 @@ export function LyricsDisplay({
       else container.scrollTop = motion.target;
     };
     const retarget = () => {
-      const cover = container
-        .closest(".lyrics-page")
-        ?.querySelector(".lyrics-album>.cover");
-      const anchor = centered
-        ? container.clientHeight * 0.46
-        : compact
-          ? 0
-          : Math.max(
-              8,
-              (cover?.getBoundingClientRect().top ??
-                container.getBoundingClientRect().top + 40) -
-                container.getBoundingClientRect().top,
-            );
-      container.style.setProperty("--lead-top", `${anchor}px`);
+      // Full page: the active line sits in the vertical centre. Compact
+      // card: a little above centre so the next lines stay visible.
+      const focus = container.clientHeight * (compact ? 0.3 : 0.5);
+      container.style.setProperty("--lead-top", `${focus}px`);
       spring.current.target = Math.max(
         0,
         Math.min(
           container.scrollHeight - container.clientHeight,
-          line.offsetTop - anchor,
+          line.offsetTop + line.offsetHeight / 2 - focus,
         ),
       );
       if (settings.reduce_motion) {
@@ -506,7 +510,6 @@ export function LyricsDisplay({
     settings.lyric_size,
     settings.romanized,
     gap?.start,
-    centered,
   ]);
   if (lyrics.instrumental)
     return (
@@ -524,8 +527,8 @@ export function LyricsDisplay({
       <div
         className="lyric-scroll"
         ref={scroll}
-        onWheel={() => setFollowing(false)}
-        onTouchStart={() => setFollowing(false)}
+        onWheel={browse}
+        onTouchStart={browse}
         style={
           {
             "--lyric-size": `${compact ? 28 : Math.round(settings.lyric_size * 1.6)}px`,
@@ -547,7 +550,6 @@ export function LyricsDisplay({
                 className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${index < primary ? "past" : ""}`}
                 style={{ "--distance": Math.min(5, distance) } as CSSProperties}
                 onClick={() => {
-                  setCentered(true);
                   if (lyrics.synced) {
                     onSeek(line.words[0]?.start_ms ?? line.start_ms);
                     setFollowing(true);
@@ -591,16 +593,6 @@ export function LyricsDisplay({
           <LyricCredits lyrics={lyrics} expanded />
         </div>
       </div>
-      {!following && (
-        <button
-          className="follow-lyrics icon-button"
-          title="Resume following"
-          aria-label="Resume following"
-          onClick={() => setFollowing(true)}
-        >
-          <ChevronUp size={23} />
-        </button>
-      )}
     </div>
   );
 }
@@ -891,6 +883,33 @@ export function LyricsPage({
   );
 }
 
+// Videos warmed before playback so a Canvas starts at once instead of
+// showing its still poster while it downloads.
+const warmCanvases = new Map<string, HTMLVideoElement>();
+export function preloadCanvas(url: string) {
+  if (!url.startsWith("https://") || warmCanvases.has(url)) return;
+  if (warmCanvases.size >= 6) {
+    const [oldest, video] = warmCanvases.entries().next().value!;
+    video.removeAttribute("src");
+    video.load();
+    warmCanvases.delete(oldest);
+  }
+  const video = document.createElement("video");
+  video.muted = true;
+  video.preload = "auto";
+  video.src = url;
+  video.load();
+  warmCanvases.set(url, video);
+}
+const canvasRequests = new Set<string>();
+export function prefetchCanvas(uri: string) {
+  if (canvasRequests.has(uri)) return;
+  canvasRequests.add(uri);
+  void rpc("prefetch_canvas", { uris: [uri] }).catch(() =>
+    canvasRequests.delete(uri),
+  );
+}
+
 function CanvasArtwork({
   track,
   url,
@@ -944,7 +963,8 @@ function CanvasArtwork({
         muted
         loop
         playsInline
-        preload="metadata"
+        autoPlay={playing && !reduceMotion}
+        preload="auto"
         poster={imageOf(track.album.images)}
         onError={() => setFailed(true)}
       />
@@ -975,31 +995,48 @@ export function NowPlaying({
   const artist = state.details.artists[0] ?? track?.artists[0],
     next = state.details.queue[0];
   const saved = track && state.saved[track.uri];
+  // Spotify's Canvas layout: the video fills the panel top edge to edge with
+  // the header and title laid over it.
+  const canvas = !!track && !!state.canvas_url && !state.settings.reduce_motion;
+  const heading = (
+    <div className={`section-heading ${canvas ? "canvas-hero-head" : ""}`}>
+      <h2>{canvas && track ? track.name : "Now playing"}</h2>
+      <button className="icon-button" onClick={onLyrics} title="Open lyrics">
+        <Maximize2 size={17} />
+      </button>
+    </div>
+  );
   return (
-    <aside className="now-playing">
+    <aside className={`now-playing ${canvas ? "has-canvas" : ""}`}>
       <Ambience track={track} reduceMotion={state.settings.reduce_motion} />
       <div className="now-playing-scroll">
-        <div className="section-heading">
-          <h2>Now playing</h2>
-          <button
-            className="icon-button"
-            onClick={onLyrics}
-            title="Open lyrics"
-          >
-            <Maximize2 size={17} />
-          </button>
-        </div>
+        {!canvas && heading}
         {track ? (
           <>
-            <CanvasArtwork
-              key={track.uri}
-              track={track}
-              url={state.canvas_url}
-              playing={state.playback.is_playing}
-              reduceMotion={state.settings.reduce_motion}
-              onOpen={() => onAlbum(track.album)}
-            />
-            <div className="now-track">
+            {canvas ? (
+              <div className="canvas-hero">
+                <CanvasArtwork
+                  key={track.uri}
+                  track={track}
+                  url={state.canvas_url}
+                  playing={state.playback.is_playing}
+                  reduceMotion={state.settings.reduce_motion}
+                  onOpen={() => onAlbum(track.album)}
+                />
+                <div className="canvas-hero-shade" />
+                {heading}
+              </div>
+            ) : (
+              <CanvasArtwork
+                key={track.uri}
+                track={track}
+                url={state.canvas_url}
+                playing={state.playback.is_playing}
+                reduceMotion={state.settings.reduce_motion}
+                onOpen={() => onAlbum(track.album)}
+              />
+            )}
+            <div className={`now-track ${canvas ? "canvas-hero-track" : ""}`}>
               <div className="now-track-text">
                 <TrackTitle
                   track={track}

@@ -74,6 +74,8 @@ import {
   TrackTitle,
   artistNames,
   imageOf,
+  preloadCanvas,
+  prefetchCanvas,
   usePosition,
 } from "./components";
 import "./styles.css";
@@ -165,7 +167,8 @@ function App() {
     void (async () => {
       try {
         unlisten = await subscribe((event) => {
-          if (!disposed) dispatch(event);
+          if (event.type === "canvas_prefetch") preloadCanvas(event.url);
+          else if (!disposed) dispatch(event);
         });
         const snapshot = await rpc<Snapshot>("bootstrap");
         if (!disposed) {
@@ -994,6 +997,7 @@ function App() {
                               )
                             }
                             onDoubleClick={() => playTrack(track, index)}
+                            onMouseEnter={() => prefetchCanvas(track.uri)}
                             onContextMenu={(event) => {
                               event.preventDefault();
                               setSongMenu({

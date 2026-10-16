@@ -58,9 +58,11 @@ export interface ScrollSpring {
   velocity: number;
   target: number;
 }
-/** Analytic critical damping preserves velocity when the active line changes. */
+/** Analytic critical damping preserves velocity when the active line changes.
+ * A softer frequency (Spicy Lyrics uses 1 Hz, about 6.3 rad/s) glides between
+ * lines instead of snapping. */
 export function stepScroll(spring: ScrollSpring, seconds: number): number {
-  const frequency = 12,
+  const frequency = 7,
     offset = spring.position - spring.target;
   const combined = spring.velocity + frequency * offset;
   const decay = Math.exp(-frequency * seconds);
@@ -69,15 +71,17 @@ export function stepScroll(spring: ScrollSpring, seconds: number): number {
   return spring.position;
 }
 export function wordMotion(start: number, end: number, time: number) {
+  // A longer rise and release keeps neighbouring syllables overlapping, so
+  // motion flows across a line instead of pulsing word by word.
   const phase = Math.max(
     0,
-    Math.min(1, (time - start + 100) / (Math.max(120, end - start) + 400)),
+    Math.min(1, (time - start + 150) / (Math.max(160, end - start) + 750)),
   );
   const envelope = Math.sin(phase * Math.PI) ** 2;
   return {
-    lift: -0.085 * envelope,
-    scale: 1 + 0.09 * envelope,
-    glow: 0.6 * envelope,
+    lift: -0.035 * envelope,
+    scale: 1 + 0.065 * envelope,
+    glow: 0.45 * envelope,
   };
 }
 export function letterMotion(

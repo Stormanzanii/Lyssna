@@ -34,9 +34,9 @@ it("keeps scrolling stable through retargets and different display refresh rates
   expect(Math.max(...results) - Math.min(...results)).toBeLessThan(0.001);
 });
 it("eases word lift continuously into and out of held syllables", () => {
-  expect(wordMotion(1000, 2000, 899)).toEqual({ lift: -0, scale: 1, glow: 0 });
-  expect(wordMotion(1000, 2000, 1600).scale).toBeCloseTo(1.09);
-  expect(wordMotion(1000, 2000, 2401).lift).toBeCloseTo(0);
+  expect(wordMotion(1000, 2000, 849)).toEqual({ lift: -0, scale: 1, glow: 0 });
+  expect(wordMotion(1000, 2000, 1725).scale).toBeCloseTo(1.065);
+  expect(wordMotion(1000, 2000, 2601).lift).toBeCloseTo(0);
 });
 it("shows waiting dots only in long gaps with no main or background vocals", () => {
   const line = (start_ms: number, end_ms: number, background = false) =>

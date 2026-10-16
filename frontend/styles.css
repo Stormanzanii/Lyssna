@@ -822,9 +822,12 @@ small {
   display: block;
   margin: 0;
 }
+/* A triangle's visual centre sits left of its box; nudge right so play
+   glyphs look centred in their circles. */
 .primary-play .lucide-play,
-.play-toggle .lucide-play {
-  transform: translateX(-1px);
+.play-toggle .lucide-play,
+.row-play .lucide-play {
+  transform: translateX(7%);
   left: 0 !important;
 }
 .follow-lyrics:hover {
@@ -832,7 +835,8 @@ small {
   transform: none;
 }
 .lyric-end-credits {
-  padding: 24px 2px 12px;
+  /* Leave room below so credits can scroll clear of the bottom fade. */
+  padding: 24px 2px 45%;
   color: #ddd6e8a6;
   font-size: 15px;
   line-height: 1.6;
@@ -1419,18 +1423,19 @@ small {
   inset: 0;
   background-size: cover;
   background-position: center;
-  opacity: 0.85;
+  /* Blur and saturation are baked into the 128px canvas (cheap); the GPU
+     only scales it. CSS filters here repaint the whole panel every frame. */
 }
 .ambient-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(#0003, #120d1940 40%, #0005);
+  background: linear-gradient(#0002, transparent 35%, transparent 70%, #0003);
 }
 .now-playing .ambient-layer {
-  opacity: 0.6;
+  opacity: 0.85;
 }
 .now-playing .ambient-shade {
-  background: linear-gradient(#0004, #120c2240 60%, #090b2230);
+  background: linear-gradient(#0003, transparent 50%, #0002);
 }
 .lyrics-page {
   container-type: inline-size;
@@ -1508,7 +1513,8 @@ small {
   overscroll-behavior: contain;
   overflow-anchor: none;
   scrollbar-width: none;
-  mask-image: linear-gradient(transparent, #000 12%, #000 84%, transparent);
+  padding-inline: calc(var(--lyric-size) * 0.35);
+  mask-image: linear-gradient(transparent, #000 10%, #000 88%, transparent);
 }
 .lyric-scroll::-webkit-scrollbar {
   display: none;
@@ -1522,10 +1528,10 @@ small {
   text-align: left;
   font-size: var(--lyric-size);
   font-weight: 780;
-  line-height: 1.24;
+  line-height: 1.18;
   letter-spacing: -1.1px;
-  padding: 12px 2px;
-  margin: 4px 0;
+  padding: 0.16em 0;
+  margin: 0;
   transform: none;
   transform-origin: left center;
   color: #f0eafc80;
@@ -1542,6 +1548,14 @@ small {
 }
 .lyrics-page .lyric-line.background-vocal {
   font-size: clamp(18px, 2.1cqw, calc(var(--lyric-size) * 0.58));
+}
+.lyric-line:focus {
+  outline: none;
+}
+.lyric-line:focus-visible {
+  outline: 2px solid #ffffff55;
+  outline-offset: 2px;
+  border-radius: 10px;
 }
 .lyric-line:hover {
   opacity: 1 !important;
@@ -1571,10 +1585,10 @@ small {
 .lyric-line.background-vocal {
   font-size: calc(var(--lyric-size) * 0.58);
   font-weight: 600;
-  padding-top: 3px;
-  padding-bottom: 7px;
+  padding-top: 0;
+  padding-bottom: 0.2em;
   letter-spacing: -0.2px;
-  margin-top: -4px;
+  margin-top: -0.1em;
 }
 .lyric-word {
   display: inline-block;
@@ -1786,9 +1800,10 @@ small {
 }
 .compact .lyric-scroll {
   padding-top: 0;
+  padding-inline: 10px;
 }
 .compact .lyric-line {
-  padding: 9px 0;
+  padding: 3px 0;
   font-size: var(--lyric-size);
   letter-spacing: -0.5px;
   filter: none;
@@ -2574,4 +2589,60 @@ input[type="range"]:hover {
   .lyrics-toolbar {
     top: 14px;
   }
+}
+/* Spotify-style Canvas: video bleeds to the panel edges behind the header,
+   and the title overlaps its faded bottom. */
+.canvas-hero {
+  position: relative;
+  margin: -17px -18px -104px;
+  aspect-ratio: 9 / 16;
+  max-height: 82vh;
+  overflow: hidden;
+}
+.canvas-hero > .canvas-artwork,
+.canvas-hero > .now-artwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+.canvas-hero > .now-artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.canvas-hero-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    #000b 0%,
+    #0000 20%,
+    #0000 55%,
+    #000a 82%,
+    #000d 100%
+  );
+}
+.now-playing .canvas-hero-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 17px 18px;
+  z-index: 2;
+}
+.canvas-hero-head h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.now-track.canvas-hero-track {
+  position: relative;
+  z-index: 2;
+  padding-top: 0;
 }

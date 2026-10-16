@@ -486,6 +486,9 @@ export function LyricsDisplay({
     const observer = new ResizeObserver(retarget);
     observer.observe(container);
     observer.observe(line);
+    container
+      .querySelectorAll(".lyric-wait")
+      .forEach((row) => observer.observe(row));
     const album = container
       .closest(".lyrics-layout")
       ?.querySelector(".lyrics-album");
@@ -597,7 +600,6 @@ export function LyricsDisplay({
           <ChevronUp size={23} />
         </button>
       )}
-      <LyricCredits lyrics={lyrics} />
     </div>
   );
 }
@@ -719,6 +721,8 @@ const LyricWords = memo(function LyricWords({
                         "--word-progress": `${progress(word.start_ms, word.end_ms, time) * 120 - 20}%`,
                         "--syllable-lift":
                           reduceMotion || emphasis ? 0 : syllableMotion.lift,
+                        "--syllable-scale":
+                          reduceMotion || emphasis ? 1 : syllableMotion.scale,
                         "--syllable-glow":
                           reduceMotion || emphasis ? 0 : syllableMotion.glow,
                       } as CSSProperties

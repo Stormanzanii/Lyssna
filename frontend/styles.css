@@ -780,8 +780,7 @@ small {
   transform: none;
 }
 .lyric-end-credits {
-  min-height: 43%;
-  padding: 24px 8px 50px;
+  padding: 24px 2px 12px;
   color: #ddd6e8a6;
   font-size: 15px;
   line-height: 1.6;
@@ -1530,11 +1529,17 @@ small {
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  transform: translateY(calc(var(--syllable-lift, 0) * 1em));
+  transform: translateY(calc(var(--syllable-lift, 0) * 1em))
+    scale(var(--syllable-scale, 1));
+  transform-origin: center 75%;
   text-shadow: 0 0 14px rgb(245 234 255 / var(--syllable-glow, 0));
 }
 .lyric-wait {
-  transition: opacity 0.2s ease;
+  transition:
+    opacity 0.3s ease,
+    height 0.45s cubic-bezier(0.2, 0.7, 0.25, 1),
+    padding 0.45s cubic-bezier(0.2, 0.7, 0.25, 1);
+  overflow: hidden;
   display: flex;
   justify-content: flex-start;
   gap: 16px;
@@ -1545,6 +1550,8 @@ small {
 .lyric-wait[aria-hidden="true"] {
   opacity: 0;
   pointer-events: none;
+  height: 0;
+  padding-block: 0;
 }
 .lyric-wait i {
   display: block;
@@ -1707,6 +1714,10 @@ small {
   height: 36px;
   padding: 6px 0;
   gap: 12px;
+}
+.compact .lyric-wait[aria-hidden="true"] {
+  height: 0;
+  padding-block: 0;
 }
 .compact .lyric-scroll {
   padding-top: 0;

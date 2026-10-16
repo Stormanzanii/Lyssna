@@ -8,8 +8,9 @@ use std::{
     time::Duration,
 };
 
+use crate::api::PlayerAction;
 use anyhow::{Context, Result};
-use librespot_connect::{ConnectConfig, Spirc};
+use librespot_connect::{ConnectConfig, LoadRequest, LoadRequestOptions, PlayingTrack, Spirc};
 use librespot_core::error::ErrorKind;
 use librespot_core::{Session, authentication::Credentials, config::SessionConfig};
 use librespot_playback::{
@@ -19,6 +20,7 @@ use librespot_playback::{
     player::{Player, PlayerEvent},
 };
 use librespot_protocol::authentication::AuthenticationType;
+use tokio::sync::mpsc as async_channel;
 use tokio::sync::oneshot;
 
 const CREDENTIAL_SERVICE: &str = "SpotiFlex/SpotifyAudio";
@@ -34,6 +36,93 @@ pub enum NativeEvent {
         playing: Option<bool>,
     },
     Error(String),
+    ControlError(String),
+}
+
+struct ControlConnection {
+    sender: async_channel::UnboundedSender<PlayerAction>,
+    ready: Arc<AtomicBool>,
+}
+
+/// Local transport commands never wait for the browsing/Web API worker.
+#[derive(Clone, Default)]
+pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
+
+impl NativeControls {
+    pub fn send(&self, action: PlayerAction) -> std::result::Result<(), PlayerAction> {
+        if matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
+            return Err(action);
+        }
+        let Ok(connection) = self.0.lock() else {
+            return Err(action);
+        };
+        let Some(connection) = connection
+            .as_ref()
+            .filter(|connection| connection.ready.load(Ordering::Acquire))
+        else {
+            return Err(action);
+        };
+        connection.sender.send(action).map_err(|error| error.0)
+    }
+}
+
+fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
+    if !*active
+        && matches!(
+            action,
+            PlayerAction::Play(_)
+                | PlayerAction::PlayContext { .. }
+                | PlayerAction::PlayUris { .. }
+        )
+    {
+        spirc.activate()?;
+        *active = true;
+    }
+    let options = |playing_track| LoadRequestOptions {
+        start_playing: true,
+        playing_track,
+        ..LoadRequestOptions::default()
+    };
+    match action {
+        PlayerAction::Play(None) => {
+            spirc.play()?;
+        }
+        PlayerAction::Play(Some(uri)) => {
+            spirc.load(LoadRequest::from_tracks(vec![uri], options(None)))?;
+        }
+        PlayerAction::PlayContext { context, offset } => {
+            spirc.load(LoadRequest::from_context_uri(
+                context,
+                options(offset.map(PlayingTrack::Uri)),
+            ))?;
+        }
+        PlayerAction::PlayUris { uris, offset } => {
+            spirc.load(LoadRequest::from_tracks(
+                uris,
+                options(Some(PlayingTrack::Index(
+                    offset.min(u32::MAX as usize) as u32
+                ))),
+            ))?;
+        }
+        PlayerAction::Pause => spirc.pause()?,
+        PlayerAction::Next => spirc.next()?,
+        PlayerAction::Previous => spirc.prev()?,
+        PlayerAction::Seek(position) => {
+            spirc.set_position_ms(position.min(u32::MAX as u64) as u32)?
+        }
+        PlayerAction::Volume(volume) => {
+            spirc.set_volume((u32::from(volume.min(100)) * u32::from(u16::MAX) / 100) as u16)?
+        }
+        PlayerAction::Shuffle(enabled) => spirc.shuffle(enabled)?,
+        PlayerAction::Repeat(state) => {
+            spirc.repeat(state == "context")?;
+            spirc.repeat_track(state == "track")?;
+        }
+        PlayerAction::Transfer(_) | PlayerAction::Enqueue(_) => {
+            anyhow::bail!("This command requires Spotify's Web API")
+        }
+    }
+    Ok(())
 }
 
 pub struct NativeMessage {
@@ -209,6 +298,7 @@ fn connect_with_credentials(
 pub struct NativePlayer {
     stop: Option<oneshot::Sender<()>>,
     cancelled: Arc<AtomicBool>,
+    ready: Arc<AtomicBool>,
 }
 
 impl NativePlayer {
@@ -217,10 +307,20 @@ impl NativePlayer {
         generation: u64,
         events: mpsc::Sender<NativeMessage>,
         repaint: eframe::egui::Context,
+        controls: NativeControls,
     ) -> Self {
         let (stop, mut stopped) = oneshot::channel();
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel = cancelled.clone();
+        let ready = Arc::new(AtomicBool::new(false));
+        let thread_ready = ready.clone();
+        let (sender, mut commands) = async_channel::unbounded_channel();
+        if let Ok(mut connection) = controls.0.lock() {
+            *connection = Some(ControlConnection {
+                sender,
+                ready: ready.clone(),
+            });
+        }
         thread::spawn(move || {
             let emit = |event| {
                 let _ = events.send(NativeMessage { generation, event });
@@ -253,10 +353,19 @@ impl NativePlayer {
                         .map(Credentials::with_access_token)
                 },
                 |credentials| {
-                    runtime.block_on(run(credentials, &account, &cancel, &mut stopped, &emit))
+                    runtime.block_on(run(
+                        credentials,
+                        &account,
+                        &cancel,
+                        &mut stopped,
+                        &mut commands,
+                        &thread_ready,
+                        &emit,
+                    ))
                 },
                 || forget_credentials(&account),
             );
+            thread_ready.store(false, Ordering::Release);
             if let Outcome::Failed(failure) = outcome
                 && !cancel.load(Ordering::Relaxed)
             {
@@ -269,6 +378,7 @@ impl NativePlayer {
         Self {
             stop: Some(stop),
             cancelled,
+            ready,
         }
     }
 }
@@ -278,6 +388,8 @@ async fn run(
     account: &str,
     cancelled: &AtomicBool,
     stopped: &mut oneshot::Receiver<()>,
+    commands: &mut async_channel::UnboundedReceiver<PlayerAction>,
+    ready: &AtomicBool,
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
     // Default session config uses the desktop client ID that issued the token.
@@ -345,8 +457,10 @@ async fn run(
         session.shutdown();
         return Outcome::Stopped;
     }
+    ready.store(true, Ordering::Release);
     emit(NativeEvent::Ready(session.device_id().to_owned()));
     tokio::pin!(task);
+    let mut active = false;
     loop {
         tokio::select! {
             _ = &mut *stopped => {
@@ -355,8 +469,13 @@ async fn run(
                 break;
             }
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
+            Some(action) = commands.recv() => {
+                if apply_control(&spirc, action, &mut active).is_err() { emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }
+            }
             event = player_events.recv() => {
                 match event {
+                    Some(PlayerEvent::SessionConnected { .. }) => active = true,
+                    Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true) }),
                     Some(PlayerEvent::Paused { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false) }),
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::Seeked { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: None }),
@@ -374,6 +493,7 @@ async fn run(
 impl Drop for NativePlayer {
     fn drop(&mut self) {
         self.cancelled.store(true, Ordering::Relaxed);
+        self.ready.store(false, Ordering::Release);
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
@@ -384,6 +504,38 @@ impl Drop for NativePlayer {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn local_pause_bypasses_browsing_worker_and_retired_sessions() {
+        let controls = NativeControls::default();
+        let (sender, mut receiver) = async_channel::unbounded_channel();
+        let ready = Arc::new(AtomicBool::new(true));
+        *controls.0.lock().unwrap() = Some(ControlConnection {
+            sender,
+            ready: ready.clone(),
+        });
+        assert!(controls.send(PlayerAction::Pause).is_ok());
+        assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Pause));
+        ready.store(false, Ordering::Release);
+        assert!(matches!(
+            controls.send(PlayerAction::Pause),
+            Err(PlayerAction::Pause)
+        ));
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn remote_only_commands_keep_their_web_api_route() {
+        let controls = NativeControls::default();
+        assert!(matches!(
+            controls.send(PlayerAction::Transfer("remote".into())),
+            Err(PlayerAction::Transfer(_))
+        ));
+        assert!(matches!(
+            controls.send(PlayerAction::Enqueue("spotify:track:example".into())),
+            Err(PlayerAction::Enqueue(_))
+        ));
+    }
 
     fn stored_credentials() -> Credentials {
         Credentials {

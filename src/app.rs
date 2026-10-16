@@ -92,6 +92,7 @@ pub struct SpotiFlex {
     native_id: Option<String>,
     native_generation: u64,
     native_status: String,
+    native_observed: Option<Instant>,
     lyrics: Option<Lyrics>,
     lyric_error: String,
     lyric_loading: bool,
@@ -172,6 +173,7 @@ impl SpotiFlex {
             native_id: None,
             native_generation: 0,
             native_status: "Waiting for sign-in".into(),
+            native_observed: None,
             lyrics: None,
             lyric_error: String::new(),
             lyric_loading: false,
@@ -465,6 +467,9 @@ impl SpotiFlex {
                     }
                 }
                 Event::Playback(playback, observed) => {
+                    if self.native_observed.is_some_and(|native| observed < native) {
+                        continue;
+                    }
                     let changed = self.playback.item.as_ref().map(|track| &track.uri)
                         != playback.item.as_ref().map(|track| &track.uri);
                     self.playback = *playback;
@@ -517,23 +522,22 @@ impl SpotiFlex {
                     self.show_notice(message.clone(), true);
                     self.native_status = message;
                 }
+                NativeEvent::ControlError(message) => self.show_notice(message, true),
                 NativeEvent::Position {
                     uri,
                     position_ms,
                     playing,
                 } => {
-                    if self
-                        .playback
-                        .item
-                        .as_ref()
-                        .is_some_and(|track| track.uri == uri)
-                        && self.playback.device.id == self.native_id
-                    {
-                        self.playback.progress_ms = Some(position_ms);
-                        self.observed = Instant::now();
-                        if let Some(playing) = playing {
-                            self.playback.is_playing = playing;
-                        }
+                    if self.playback.apply_native_position(
+                        self.native_id.as_deref(),
+                        &crate::native::device_name(),
+                        &uri,
+                        position_ms,
+                        playing,
+                    ) {
+                        let now = Instant::now();
+                        self.native_observed = Some(now);
+                        self.observed = now;
                     }
                 }
             }
@@ -602,6 +606,25 @@ impl SpotiFlex {
     }
 
     fn action(&self, action: PlayerAction) {
+        let own_name = crate::native::device_name();
+        let local = self.native_id.is_some()
+            && match self.selected_device.as_deref() {
+                Some(id) => {
+                    self.native_id.as_deref() == Some(id)
+                        || self.devices.iter().any(|device| {
+                            device.id.as_deref() == Some(id) && device.name == own_name
+                        })
+                }
+                None => self.playback.device.id.is_none() || self.playback.device.name == own_name,
+            };
+        let action = if local {
+            match self.worker.native_controls.send(action) {
+                Ok(()) => return,
+                Err(action) => action,
+            }
+        } else {
+            action
+        };
         let device = self
             .selected_device
             .clone()

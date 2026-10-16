@@ -110,6 +110,30 @@ pub struct Playback {
     pub device: Device,
 }
 
+impl Playback {
+    /// Apply a local player event only to the matching track and device.
+    pub fn apply_native_position(
+        &mut self,
+        native_id: Option<&str>,
+        own_name: &str,
+        uri: &str,
+        position_ms: u64,
+        playing: Option<bool>,
+    ) -> bool {
+        if native_id.is_none()
+            || !self.item.as_ref().is_some_and(|track| track.uri == uri)
+            || (self.device.id.as_deref() != native_id && self.device.name != own_name)
+        {
+            return false;
+        }
+        self.progress_ms = Some(position_ms);
+        if let Some(playing) = playing {
+            self.is_playing = playing;
+        }
+        true
+    }
+}
+
 /// Pick the Web API device to play on: the requested ID when Spotify lists
 /// it, else this computer's SpotiFlex player (matched by name). With no
 /// requested device, fall back to the active device.
@@ -183,6 +207,41 @@ pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pause_event_updates_web_api_device_alias_without_waiting_for_poll() {
+        let mut playback = Playback {
+            item: Some(Track {
+                uri: "spotify:track:current".into(),
+                ..Track::default()
+            }),
+            is_playing: true,
+            device: Device {
+                id: Some("web-api-id".into()),
+                name: "SpotiFlex (PC)".into(),
+                ..Device::default()
+            },
+            ..Playback::default()
+        };
+        assert!(playback.apply_native_position(
+            Some("session-id"),
+            "SpotiFlex (PC)",
+            "spotify:track:current",
+            1234,
+            Some(false)
+        ));
+        assert!(!playback.is_playing);
+        assert_eq!(playback.progress_ms, Some(1234));
+        playback.device.name = "Phone".into();
+        assert!(!playback.apply_native_position(
+            Some("session-id"),
+            "SpotiFlex (PC)",
+            "spotify:track:current",
+            9999,
+            Some(true)
+        ));
+        assert!(!playback.is_playing);
+    }
 
     fn track(id: &str) -> Track {
         Track {

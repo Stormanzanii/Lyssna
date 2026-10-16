@@ -13,7 +13,7 @@ use crate::{
     auth::{self, Tokens},
     lyrics::{self, Lyrics},
     model::{Device, Playback, Playlist, Profile, Track},
-    native::{NativeMessage, NativePlayer},
+    native::{NativeControls, NativeMessage, NativePlayer},
 };
 
 pub enum Command {
@@ -64,6 +64,7 @@ pub enum Event {
 }
 
 pub struct Worker {
+    pub native_controls: NativeControls,
     pub commands: mpsc::Sender<Command>,
     pub events: mpsc::Receiver<Event>,
     pub native_events: mpsc::Receiver<NativeMessage>,
@@ -89,6 +90,8 @@ pub struct LyricEvent {
 
 impl Worker {
     pub fn start(context: egui::Context) -> Self {
+        let native_controls = NativeControls::default();
+        let backend_controls = native_controls.clone();
         let (commands, receive_commands) = mpsc::channel();
         let (send_events, events) = mpsc::channel();
         let (send_native, native_events) = mpsc::channel();
@@ -108,6 +111,7 @@ impl Worker {
             let mut backend = Backend {
                 spotify: None,
                 native: None,
+                native_controls: backend_controls,
                 native_generation: 0,
                 client_id: String::new(),
                 profile: Profile::default(),
@@ -178,6 +182,7 @@ impl Worker {
             }
         });
         Self {
+            native_controls,
             commands,
             events,
             native_events,
@@ -194,6 +199,7 @@ impl Drop for Worker {
 }
 
 struct Backend {
+    native_controls: NativeControls,
     spotify: Option<Spotify>,
     native: Option<NativePlayer>,
     native_generation: u64,
@@ -244,6 +250,7 @@ impl Backend {
             self.native_generation,
             self.native_events.clone(),
             self.context.clone(),
+            self.native_controls.clone(),
         ));
         self.emit(Event::Notice("Connecting native audio…".into()));
         Ok(())
@@ -282,8 +289,9 @@ impl Backend {
     }
 
     fn poll(&mut self) -> Result<()> {
+        let observed = Instant::now();
         let playback = self.api()?.playback()?;
-        self.emit(Event::Playback(Box::new(playback), Instant::now()));
+        self.emit(Event::Playback(Box::new(playback), observed));
         Ok(())
     }
 

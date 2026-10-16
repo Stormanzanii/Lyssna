@@ -1,6 +1,9 @@
 pub mod api;
+pub mod app;
 pub mod auth;
 pub mod config;
 pub mod lyrics;
 pub mod model;
 pub mod native;
+pub mod provider;
+pub mod worker;

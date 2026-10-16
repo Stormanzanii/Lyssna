@@ -1,4 +1,4 @@
-use std::{fs, io::Read, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result, bail, ensure};
 use reqwest::blocking::Client;
@@ -285,93 +285,34 @@ pub fn import_file(path: &Path, track: &Track) -> Result<Lyrics> {
     Ok(lyrics)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LrclibResponse {
-    synced_lyrics: Option<String>,
-    plain_lyrics: Option<String>,
-    #[serde(default)]
-    instrumental: bool,
-}
-
-pub fn fetch(client: &Client, track: &Track) -> Result<Lyrics> {
+pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
     let root = data_dir()?.join("lyrics");
     let key = track_key(track);
-    for kind in ["local", "cache"] {
-        let file = root.join(kind).join(format!("{key}.json"));
-        if let Ok(bytes) = fs::read(file)
-            && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
-        {
-            return Ok(lyrics);
-        }
-    }
-    // Separate unauthenticated client request: Spotify credentials never reach LRCLIB.
-    let response = client
-        .get("https://lrclib.net/api/get")
-        .query(&[
-            ("track_name", track.name.clone()),
-            (
-                "artist_name",
-                track
-                    .artists
-                    .first()
-                    .map(|artist| artist.name.clone())
-                    .unwrap_or_default(),
-            ),
-            ("album_name", track.album.name.clone()),
-            ("duration", (track.duration_ms / 1000).to_string()),
-        ])
-        .send()
-        .map_err(|_| anyhow::anyhow!("Cannot reach LRCLIB. Import a local LRC or TTML file."))?;
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        bail!("No lyrics found. Import a local LRC or TTML file.");
-    }
-    ensure!(
-        response.status().is_success(),
-        "Lyrics service returned HTTP {}",
-        response.status().as_u16()
-    );
-    let mut bytes = Vec::new();
-    response.take(2_000_001).read_to_end(&mut bytes)?;
-    ensure!(bytes.len() <= 2_000_000, "Lyrics response exceeds 2 MB");
-    let response: LrclibResponse =
-        serde_json::from_slice(&bytes).context("Invalid LRCLIB response")?;
-    let mut lyrics = if let Some(synced) = response
-        .synced_lyrics
-        .filter(|value| !value.trim().is_empty())
+    let local = root.join("local").join(format!("{key}.json"));
+    if let Ok(bytes) = fs::read(local)
+        && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
     {
-        parse_lrc(&synced, track.duration_ms)?
-    } else {
-        Lyrics {
-            lines: response
-                .plain_lyrics
-                .unwrap_or_default()
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|text| Line {
-                    text: text.into(),
-                    ..Line::default()
-                })
-                .collect(),
-            instrumental: response.instrumental,
-            ..Lyrics::default()
-        }
-    };
-    ensure!(
-        lyrics.instrumental || !lyrics.lines.is_empty(),
-        "No lyrics available for this track"
-    );
-    lyrics.source = "LRCLIB".into();
-    let cache = root.join("cache");
+        return Ok(lyrics);
+    }
+    let cache = root.join("cache").join(crate::provider::cache_namespace()?);
+    let file = cache.join(format!("{key}.json"));
+    let fresh = fs::metadata(&file)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
+    if fresh
+        && let Ok(bytes) = fs::read(&file)
+        && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
+    {
+        return Ok(lyrics);
+    }
+    let lyrics = crate::provider::fetch(client, track, access_token)?;
     if fs::create_dir_all(&cache).is_ok() {
-        let _ = fs::write(
-            cache.join(format!("{key}.json")),
-            serde_json::to_vec(&lyrics)?,
-        );
+        let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
     }
     Ok(lyrics)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

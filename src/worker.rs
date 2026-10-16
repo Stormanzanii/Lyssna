@@ -1,0 +1,319 @@
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicBool, mpsc},
+    thread,
+    time::{Duration, Instant},
+};
+
+use anyhow::{Context, Result};
+use eframe::egui;
+
+use crate::{
+    api::{PlayerAction, Spotify},
+    auth::{self, Tokens},
+    lyrics::{self, Lyrics},
+    model::{Device, Playback, Playlist, Profile, Track},
+    native::{NativeEvent, NativePlayer},
+};
+
+pub enum Command {
+    Restore(String),
+    Login(String, Arc<AtomicBool>),
+    Logout,
+    Refresh,
+    Library,
+    Tracks {
+        key: String,
+        offset: usize,
+    },
+    Player {
+        action: PlayerAction,
+        device: Option<String>,
+    },
+    Add {
+        playlist: Playlist,
+        tracks: Vec<Track>,
+    },
+    SaveTrack(String),
+    FetchLyrics(Track),
+    RetryAudio,
+    Shutdown,
+}
+
+pub enum Event {
+    Session(Profile),
+    SignedOut,
+    LoginFinished,
+    Library(Vec<Playlist>),
+    Tracks {
+        key: String,
+        offset: usize,
+        tracks: Vec<Track>,
+    },
+    Playback(Box<Playback>, Instant),
+    Devices(Vec<Device>),
+    Notice(String),
+    Error(String),
+}
+
+pub struct Worker {
+    pub commands: mpsc::Sender<Command>,
+    pub events: mpsc::Receiver<Event>,
+    pub native_events: mpsc::Receiver<NativeEvent>,
+    pub lyrics: mpsc::Sender<LyricCommand>,
+    pub lyric_events: mpsc::Receiver<LyricEvent>,
+}
+
+pub enum LyricCommand {
+    Fetch(Track, String),
+    Import(Track, PathBuf),
+    Configure { host: String, consent: bool },
+}
+
+pub struct LyricEvent {
+    pub uri: String,
+    pub result: Result<Lyrics, String>,
+}
+
+impl Worker {
+    pub fn start(context: egui::Context) -> Self {
+        let (commands, receive_commands) = mpsc::channel();
+        let (send_events, events) = mpsc::channel();
+        let (send_native, native_events) = mpsc::channel();
+        let (lyrics, receive_lyrics) = mpsc::channel();
+        let (send_lyrics, lyric_events) = mpsc::channel();
+        let lyric_context = context.clone();
+        let backend_lyrics = lyrics.clone();
+        thread::spawn(move || {
+            let client = match auth::http_client() {
+                Ok(client) => client,
+                Err(error) => {
+                    let _ = send_events.send(Event::Error(error.to_string()));
+                    context.request_repaint();
+                    return;
+                }
+            };
+            let mut backend = Backend {
+                spotify: None,
+                native: None,
+                client_id: String::new(),
+                profile: Profile::default(),
+                client,
+                events: send_events,
+                native_events: send_native,
+                lyrics: backend_lyrics,
+                context,
+            };
+            let mut next_poll = Instant::now() + Duration::from_secs(4);
+            loop {
+                match receive_commands.recv_timeout(Duration::from_millis(250)) {
+                    Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    Ok(command) => {
+                        let login = matches!(command, Command::Login(..) | Command::Restore(..));
+                        if let Err(error) = backend.handle(command) {
+                            backend.emit(Event::Error(error.to_string()));
+                        }
+                        if login {
+                            backend.emit(Event::LoginFinished);
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+                if backend.spotify.is_some() && Instant::now() >= next_poll {
+                    if let Err(error) = backend.poll() {
+                        backend.emit(Event::Error(error.to_string()));
+                    }
+                    next_poll = Instant::now() + Duration::from_secs(4);
+                }
+            }
+        });
+        thread::spawn(move || {
+            let Ok(client) = auth::http_client() else {
+                return;
+            };
+            while let Ok(command) = receive_lyrics.recv() {
+                let (track, result) = match command {
+                    LyricCommand::Fetch(track, token) => {
+                        let result = lyrics::fetch(&client, &track, &token);
+                        (track, result)
+                    }
+                    LyricCommand::Import(track, path) => {
+                        let result = lyrics::import_file(&path, &track);
+                        (track, result)
+                    }
+                    LyricCommand::Configure { host, consent } => {
+                        let result = crate::provider::configure(&host, consent)
+                            .map(|_| Lyrics::default())
+                            .map_err(|error| error.to_string());
+                        let _ = send_lyrics.send(LyricEvent {
+                            uri: String::new(),
+                            result,
+                        });
+                        lyric_context.request_repaint();
+                        continue;
+                    }
+                };
+                let _ = send_lyrics.send(LyricEvent {
+                    uri: track.uri,
+                    result: result.map_err(|error| error.to_string()),
+                });
+                lyric_context.request_repaint();
+            }
+        });
+        Self {
+            commands,
+            events,
+            native_events,
+            lyrics,
+            lyric_events,
+        }
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        let _ = self.commands.send(Command::Shutdown);
+    }
+}
+
+struct Backend {
+    spotify: Option<Spotify>,
+    native: Option<NativePlayer>,
+    client_id: String,
+    profile: Profile,
+    client: reqwest::blocking::Client,
+    events: mpsc::Sender<Event>,
+    native_events: mpsc::Sender<NativeEvent>,
+    lyrics: mpsc::Sender<LyricCommand>,
+    context: egui::Context,
+}
+
+impl Backend {
+    fn emit(&self, event: Event) {
+        let _ = self.events.send(event);
+        self.context.request_repaint();
+    }
+
+    fn establish(&mut self, mut tokens: Tokens, client_id: String) -> Result<()> {
+        tokens.refresh_if_needed(&self.client, &client_id)?;
+        let mut spotify = Spotify::new(self.client.clone(), client_id.clone(), tokens);
+        self.profile = spotify.profile()?;
+        spotify.tokens.save(&client_id)?;
+        self.client_id = client_id;
+        self.spotify = Some(spotify);
+        self.emit(Event::Session(self.profile.clone()));
+        self.start_audio()?;
+        let playlists = self.api()?.playlists();
+        match playlists {
+            Ok(playlists) => self.emit(Event::Library(playlists)),
+            Err(error) => self.emit(Event::Error(error.to_string())),
+        }
+        self.poll()
+    }
+
+    fn api(&mut self) -> Result<&mut Spotify> {
+        self.spotify.as_mut().context("Sign in to Spotify first")
+    }
+
+    fn start_audio(&mut self) -> Result<()> {
+        self.native.take();
+        let api = self.api()?;
+        api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
+        let token = api.tokens.access_token.clone();
+        self.native = Some(NativePlayer::start(
+            self.client_id.clone(),
+            token,
+            self.native_events.clone(),
+            self.context.clone(),
+        ));
+        self.emit(Event::Notice("Connecting native audio…".into()));
+        Ok(())
+    }
+
+    fn poll(&mut self) -> Result<()> {
+        let playback = self.api()?.playback()?;
+        self.emit(Event::Playback(Box::new(playback), Instant::now()));
+        Ok(())
+    }
+
+    fn handle(&mut self, command: Command) -> Result<()> {
+        match command {
+            Command::Restore(client_id) => {
+                self.client_id = client_id.clone();
+                if let Some(tokens) = Tokens::load(&client_id)? {
+                    self.establish(tokens, client_id)?;
+                } else {
+                    self.emit(Event::SignedOut);
+                }
+            }
+            Command::Login(client_id, cancelled) => {
+                self.client_id = client_id.clone();
+                let tokens = auth::login(&self.client, &client_id, &cancelled)?;
+                if !cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                    self.establish(tokens, client_id)?;
+                }
+            }
+            Command::Logout => {
+                self.native.take();
+                self.spotify.take();
+                Tokens::delete(&self.client_id)?;
+                self.emit(Event::SignedOut);
+            }
+            Command::Refresh => {
+                self.poll()?;
+                let devices = self.api()?.devices()?;
+                self.emit(Event::Devices(devices));
+            }
+            Command::Library => {
+                let playlists = self.api()?.playlists()?;
+                self.emit(Event::Library(playlists));
+            }
+            Command::Tracks { key, offset } => {
+                let tracks = if let Some(query) = key.strip_prefix("search:") {
+                    self.api()?.search(query)?
+                } else if let Some(id) = key.strip_prefix("playlist:") {
+                    self.api()?.playlist_tracks(id, offset)?
+                } else {
+                    match key.as_str() {
+                        "liked" => self.api()?.saved_tracks(offset)?,
+                        "queue" => self.api()?.queue()?,
+                        _ => self.api()?.recent()?,
+                    }
+                };
+                self.emit(Event::Tracks {
+                    key,
+                    offset,
+                    tracks,
+                });
+            }
+            Command::Player { action, device } => {
+                self.api()?.player_action(action, device.as_deref())?;
+                self.poll()?;
+            }
+            Command::Add { playlist, tracks } => {
+                anyhow::ensure!(
+                    playlist.editable_by(&self.profile.id),
+                    "This playlist cannot be edited by your account"
+                );
+                let count = self.api()?.add_to_playlist(&playlist.id, &tracks)?;
+                self.emit(Event::Notice(format!(
+                    "Added {count} tracks to {}. Existing tracks skipped.",
+                    playlist.name
+                )));
+            }
+            Command::SaveTrack(uri) => {
+                self.api()?.save_track(&uri)?;
+                self.emit(Event::Notice("Saved to Liked Songs".into()));
+            }
+            Command::FetchLyrics(track) => {
+                let api = self.api()?;
+                api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
+                let token = api.tokens.access_token.clone();
+                let _ = self.lyrics.send(LyricCommand::Fetch(track, token));
+            }
+            Command::RetryAudio => self.start_audio()?,
+            Command::Shutdown => {}
+        }
+        Ok(())
+    }
+}

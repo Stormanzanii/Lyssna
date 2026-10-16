@@ -14,8 +14,7 @@ use librespot_connect::{ConnectConfig, LoadRequest, LoadRequestOptions, PlayingT
 use librespot_core::error::ErrorKind;
 use librespot_core::{Session, authentication::Credentials, config::SessionConfig};
 use librespot_playback::{
-    audio_backend,
-    config::{AudioFormat, PlayerConfig},
+    config::PlayerConfig,
     mixer::{Mixer, MixerConfig, softmixer::SoftMixer},
     player::{Player, PlayerEvent},
 };
@@ -30,10 +29,17 @@ pub enum NativeEvent {
     /// Waiting for the one-time browser authorization for audio.
     Authorizing,
     Ready(String),
+    Track(Box<crate::model::Track>),
+    Transport {
+        shuffle: Option<bool>,
+        repeat: Option<String>,
+        volume: Option<u8>,
+    },
     Position {
         uri: String,
         position_ms: u64,
         playing: Option<bool>,
+        seeked: bool,
     },
     Error(String),
     ControlError(String),
@@ -42,6 +48,12 @@ pub enum NativeEvent {
 struct ControlConnection {
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
+    playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
+}
+struct PlaylistRead {
+    id: String,
+    offset: usize,
+    reply: mpsc::Sender<std::result::Result<Vec<crate::model::Track>, String>>,
 }
 
 /// Local transport commands never wait for the browsing/Web API worker.
@@ -49,6 +61,35 @@ struct ControlConnection {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn playlist_tracks(&self, id: &str, offset: usize) -> Result<Vec<crate::model::Track>> {
+        anyhow::ensure!(
+            id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+            "Invalid playlist ID"
+        );
+        let (reply, receive) = mpsc::channel();
+        {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native Spotify connection unavailable"))?;
+            let sender = connection
+                .as_ref()
+                .filter(|connection| connection.ready.load(Ordering::Acquire))
+                .and_then(|connection| connection.playlists.as_ref())
+                .context("Connect native audio to read this playlist")?;
+            sender
+                .send(PlaylistRead {
+                    id: id.into(),
+                    offset,
+                    reply,
+                })
+                .map_err(|_| anyhow::anyhow!("Native Spotify connection unavailable"))?;
+        }
+        receive
+            .recv_timeout(Duration::from_secs(25))
+            .context("Spotify playlist request timed out")?
+            .map_err(anyhow::Error::msg)
+    }
     pub fn send(&self, action: PlayerAction) -> std::result::Result<(), PlayerAction> {
         if matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
             return Err(action);
@@ -67,14 +108,10 @@ impl NativeControls {
 }
 
 fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
-    if !*active
-        && matches!(
-            action,
-            PlayerAction::Play(_)
-                | PlayerAction::PlayContext { .. }
-                | PlayerAction::PlayUris { .. }
-        )
-    {
+    if matches!(
+        action,
+        PlayerAction::Play(_) | PlayerAction::PlayContext { .. } | PlayerAction::PlayUris { .. }
+    ) {
         spirc.activate()?;
         *active = true;
     }
@@ -88,7 +125,10 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
             spirc.play()?;
         }
         PlayerAction::Play(Some(uri)) => {
-            spirc.load(LoadRequest::from_tracks(vec![uri], options(None)))?;
+            spirc.load(LoadRequest::from_tracks(
+                vec![uri],
+                options(Some(PlayingTrack::Index(0))),
+            ))?;
         }
         PlayerAction::PlayContext { context, offset } => {
             spirc.load(LoadRequest::from_context_uri(
@@ -123,6 +163,57 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
         }
     }
     Ok(())
+}
+
+fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<crate::model::Track> {
+    use crate::model::{Album, Artist, Artwork, Track};
+    use librespot_metadata::{artist::ArtistRole, audio::item::UniqueFields};
+    let UniqueFields::Track { artists, album, .. } = &item.unique_fields else {
+        return None;
+    };
+    let uri = item.track_id.to_uri().ok()?;
+    let mut images: Vec<Artwork> = item
+        .covers
+        .iter()
+        .map(|image| Artwork {
+            url: image.url.clone(),
+            width: u32::try_from(image.width).ok(),
+        })
+        .collect();
+    images.sort_by_key(|image| std::cmp::Reverse(image.width));
+    Some(Track {
+        id: uri.rsplit(':').next().map(str::to_owned),
+        uri,
+        name: item.name.clone(),
+        duration_ms: item.duration_ms.into(),
+        songwriters:artists.iter().filter(|artist|artist.role==ArtistRole::ARTIST_ROLE_COMPOSER).map(|artist|artist.name.clone()).collect(),
+        artists: artists
+            .iter()
+            .filter(|artist| {
+                !matches!(
+                    artist.role,
+                    ArtistRole::ARTIST_ROLE_COMPOSER | ArtistRole::ARTIST_ROLE_CONDUCTOR
+                )
+            })
+            .map(|artist| {
+                let uri = artist.id.to_uri().ok();
+                Artist {
+                    id: uri
+                        .as_ref()
+                        .and_then(|uri| uri.rsplit(':').next().map(str::to_owned)),
+                    uri: uri.unwrap_or_default(),
+                    name: artist.name.clone(),
+                    ..Artist::default()
+                }
+            })
+            .collect(),
+        album: Album {
+            name: album.clone(),
+            images,
+            ..Album::default()
+        },
+        ..Track::default()
+    })
 }
 
 pub struct NativeMessage {
@@ -306,7 +397,7 @@ impl NativePlayer {
         account: String,
         generation: u64,
         events: mpsc::Sender<NativeMessage>,
-        repaint: eframe::egui::Context,
+        repaint: crate::notify::Notifier,
         controls: NativeControls,
     ) -> Self {
         let (stop, mut stopped) = oneshot::channel();
@@ -315,10 +406,12 @@ impl NativePlayer {
         let ready = Arc::new(AtomicBool::new(false));
         let thread_ready = ready.clone();
         let (sender, mut commands) = async_channel::unbounded_channel();
+        let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
                 sender,
                 ready: ready.clone(),
+                playlists: Some(playlist_sender),
             });
         }
         thread::spawn(move || {
@@ -358,7 +451,7 @@ impl NativePlayer {
                         &account,
                         &cancel,
                         &mut stopped,
-                        &mut commands,
+                        (&mut commands, &mut playlists),
                         &thread_ready,
                         &emit,
                     ))
@@ -388,10 +481,14 @@ async fn run(
     account: &str,
     cancelled: &AtomicBool,
     stopped: &mut oneshot::Receiver<()>,
-    commands: &mut async_channel::UnboundedReceiver<PlayerAction>,
+    channels: (
+        &mut async_channel::UnboundedReceiver<PlayerAction>,
+        &mut async_channel::UnboundedReceiver<PlaylistRead>,
+    ),
     ready: &AtomicBool,
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
+    let (commands, playlists) = channels;
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
@@ -404,14 +501,22 @@ async fn run(
         Ok(mixer) => Arc::new(mixer),
         Err(_) => return Outcome::Failed(Failure::other("Cannot initialize audio mixer")),
     };
-    let Some(backend) = audio_backend::find(Some("rodio".into())) else {
-        return Outcome::Failed(Failure::other("Native audio backend missing"));
-    };
+    let flush_audio = Arc::new(AtomicBool::new(false));
+    let sink_flush = flush_audio.clone();
+    let (seek_ready, mut audible_seeks) = async_channel::unbounded_channel();
     let player = Player::new(
-        PlayerConfig::default(),
+        PlayerConfig {
+            position_update_interval: Some(Duration::from_millis(250)),
+            ..PlayerConfig::default()
+        },
         session.clone(),
         mixer.get_soft_volume(),
-        move || backend(None, AudioFormat::F32),
+        move || {
+            Box::new(crate::audio::AudioSink::new(
+                sink_flush.clone(),
+                seek_ready.clone(),
+            ))
+        },
     );
     let mut player_events = player.get_player_event_channel();
     let config = ConnectConfig {
@@ -420,7 +525,7 @@ async fn run(
     };
     let connection = tokio::select! {
         _ = &mut *stopped => { session.shutdown(); return Outcome::Stopped; }
-        result = tokio::time::timeout(Duration::from_secs(40), Spirc::new(config, session.clone(), credentials, player, mixer)) => result,
+        result = tokio::time::timeout(Duration::from_secs(40), Spirc::new(config, session.clone(), credentials, player, mixer.clone())) => result,
     };
     let (spirc, task) = match connection {
         Ok(Ok(connection)) => connection,
@@ -461,8 +566,18 @@ async fn run(
     emit(NativeEvent::Ready(session.device_id().to_owned()));
     tokio::pin!(task);
     let mut active = false;
+    let mut audio_playing = false;
+    let mut pending_seek: Option<(String, u64)> = None;
     loop {
         tokio::select! {
+            Some(())=audible_seeks.recv()=>{if let Some((uri,position_ms))=pending_seek.take(){emit(NativeEvent::Position{uri,position_ms,playing:Some(audio_playing),seeked:true});}}
+            Some(request)=playlists.recv()=>{
+                let session=session.clone();
+                tokio::spawn(async move{
+                    let result=tokio::time::timeout(Duration::from_secs(22),read_playlist(&session,&request.id,request.offset)).await.map_err(|_|"Spotify playlist request timed out".to_owned()).and_then(|result|result.map_err(|error|error.to_string()));
+                    let _=request.reply.send(result);
+                });
+            }
             _ = &mut *stopped => {
                 let _ = spirc.shutdown();
                 let _ = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
@@ -470,15 +585,21 @@ async fn run(
             }
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
+                if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() { emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }
             }
             event = player_events.recv() => {
                 match event {
+                    Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
+                    Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
+                    Some(PlayerEvent::VolumeChanged{volume})=>emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8)}),
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
-                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true) }),
-                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false) }),
-                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::Seeked { track_id, position_ms, .. }) => emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: None }),
+                    Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) { emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
+                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
+                    Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri().unwrap_or_default();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
+                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){audio_playing=true;emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });}},
                     Some(PlayerEvent::Unavailable { .. }) => emit(NativeEvent::Error("Spotify could not load this track for native playback".into())),
                     None => break,
                     _ => {}
@@ -500,6 +621,52 @@ impl Drop for NativePlayer {
     }
 }
 
+async fn read_playlist(
+    session: &Session,
+    id: &str,
+    offset: usize,
+) -> Result<Vec<crate::model::Track>> {
+    use librespot_core::SpotifyUri;
+    use librespot_metadata::{Metadata, audio::item::AudioItem, playlist::Playlist};
+    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    let playlist = Playlist::get(session, &uri).await.map_err(|_| {
+        anyhow::anyhow!("Spotify cannot open this playlist for the signed-in account")
+    })?;
+    anyhow::ensure!(
+        playlist.contents.position == 0 && !playlist.contents.is_truncated,
+        "Spotify returned an incomplete playlist"
+    );
+    let items: Vec<_> = playlist.tracks().skip(offset).take(50).cloned().collect();
+    let mut tracks = Vec::with_capacity(items.len());
+    for batch in items.chunks(10) {
+        let mut requests = tokio::task::JoinSet::new();
+        for (index, uri) in batch.iter().cloned().enumerate() {
+            let session = session.clone();
+            requests.spawn(async move {
+                let fallback = crate::model::Track {
+                    uri: uri.to_uri().unwrap_or_default(),
+                    name: "Unavailable track".into(),
+                    is_local: true,
+                    ..crate::model::Track::default()
+                };
+                let track = AudioItem::get_file(&session, uri)
+                    .await
+                    .ok()
+                    .and_then(|item| public_track(&item))
+                    .unwrap_or(fallback);
+                (index, track)
+            });
+        }
+        let mut ordered = Vec::new();
+        while let Some(result) = requests.join_next().await {
+            ordered.push(result.context("Playlist metadata request interrupted")?);
+        }
+        ordered.sort_by_key(|(index, _)| *index);
+        tracks.extend(ordered.into_iter().map(|(_, track)| track));
+    }
+    Ok(tracks)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,6 +680,7 @@ mod tests {
         *controls.0.lock().unwrap() = Some(ControlConnection {
             sender,
             ready: ready.clone(),
+            playlists: None,
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
         assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Pause));

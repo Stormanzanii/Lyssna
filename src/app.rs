@@ -128,7 +128,11 @@ impl SpotiFlex {
             Ok(settings) => (settings, String::new(), false),
             Err(error) => (Settings::default(), error.to_string(), true),
         };
-        let worker = Worker::start(context.egui_ctx.clone());
+        let notifier = {
+            let context = context.egui_ctx.clone();
+            crate::notify::Notifier::new(move || context.request_repaint())
+        };
+        let worker = Worker::start(notifier.clone());
         let login_pending = config::valid_client_id(&settings.client_id);
         if login_pending {
             let _ = worker
@@ -141,7 +145,7 @@ impl SpotiFlex {
             .unwrap_or_default()
             .to_owned();
         Self {
-            updater: Updater::start(context.egui_ctx.clone()),
+            updater: Updater::start(notifier),
             available_update: None,
             ready_update: None,
             update_status: "Checking for updates…".into(),
@@ -409,6 +413,10 @@ impl SpotiFlex {
         }
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
+                Event::BrowseInfo { .. }
+                | Event::PlayingDetails { .. }
+                | Event::Saved { .. }
+                | Event::TrackInfo { .. } => {}
                 Event::Session(profile) => {
                     self.profile = Some(profile);
                     self.native_status = "Connecting…".into();
@@ -517,6 +525,22 @@ impl SpotiFlex {
                         });
                     }
                 }
+                NativeEvent::Track(_) => {}
+                NativeEvent::Transport {
+                    shuffle,
+                    repeat,
+                    volume,
+                } => {
+                    if let Some(shuffle) = shuffle {
+                        self.playback.shuffle_state = shuffle;
+                    }
+                    if let Some(repeat) = repeat {
+                        self.playback.repeat_state = repeat;
+                    }
+                    if let Some(volume) = volume {
+                        self.playback.device.volume_percent = Some(volume);
+                    }
+                }
                 NativeEvent::Error(message) => {
                     self.native_id = None;
                     self.show_notice(message.clone(), true);
@@ -527,6 +551,7 @@ impl SpotiFlex {
                     uri,
                     position_ms,
                     playing,
+                    ..
                 } => {
                     if self.playback.apply_native_position(
                         self.native_id.as_deref(),

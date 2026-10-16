@@ -3,8 +3,21 @@ use std::collections::HashSet;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Artist {
+    pub id: Option<String>,
+    #[serde(default)]
+    pub uri: String,
     #[serde(default)]
     pub name: String,
+    #[serde(default)]
+    pub images: Vec<Artwork>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    pub followers: Option<Followers>,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct Followers {
+    pub total: u64,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -16,14 +29,27 @@ pub struct Artwork {
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Album {
+    pub id: Option<String>,
+    #[serde(default)]
+    pub uri: String,
     #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub images: Vec<Artwork>,
+    #[serde(default)]
+    pub artists: Vec<Artist>,
+    #[serde(default)]
+    pub release_date: String,
+    #[serde(default)]
+    pub album_type: String,
+    #[serde(default)]
+    pub total_tracks: u64,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Track {
+    #[serde(default)]
+    pub songwriters:Vec<String>,
     pub id: Option<String>,
     #[serde(default)]
     pub uri: String,
@@ -53,13 +79,13 @@ impl Track {
     }
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Profile {
     pub id: String,
     pub display_name: Option<String>,
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Owner {
     #[serde(default)]
     pub id: String,
@@ -67,7 +93,7 @@ pub struct Owner {
     pub display_name: Option<String>,
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Playlist {
     pub id: String,
     pub name: String,
@@ -85,7 +111,7 @@ impl Playlist {
     }
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Device {
     pub id: Option<String>,
     #[serde(default)]
@@ -96,7 +122,7 @@ pub struct Device {
     pub volume_percent: Option<u8>,
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Playback {
     pub item: Option<Track>,
     #[serde(default)]
@@ -108,6 +134,24 @@ pub struct Playback {
     pub repeat_state: String,
     #[serde(default)]
     pub device: Device,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub struct BrowseInfo {
+    pub key: String,
+    pub title: String,
+    pub subtitle: String,
+    pub images: Vec<Artwork>,
+    pub artist: Option<Artist>,
+    pub album: Option<Album>,
+    pub albums: Vec<Album>,
+    pub overview: Option<crate::artist::ArtistOverview>,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub struct PlayingDetails {
+    pub artists: Vec<Artist>,
+    pub queue: Vec<Track>,
 }
 
 impl Playback {

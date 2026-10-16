@@ -45,7 +45,7 @@ const AUDIO_FLOW: Flow<'static> = Flow {
     scopes: AUDIO_SCOPES,
 };
 
-const SCOPES: &str = "streaming user-read-private user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-library-read user-library-modify user-read-recently-played";
+const SCOPES: &str = "streaming user-read-private user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-library-read user-library-modify user-read-recently-played user-follow-read user-follow-modify";
 
 // Intentionally no Debug implementation: these values must never enter logs.
 #[derive(Clone, Serialize, Deserialize)]
@@ -53,6 +53,8 @@ pub struct Tokens {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_at: u64,
+    #[serde(default)]
+    pub scopes: String,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +62,7 @@ struct TokenResponse {
     access_token: String,
     refresh_token: Option<String>,
     expires_in: u64,
+    scope: Option<String>,
 }
 
 fn now() -> u64 {
@@ -317,13 +320,14 @@ fn exchange(
         access_token: result.access_token,
         refresh_token,
         expires_at: now() + result.expires_in,
+        scopes: result.scope.unwrap_or_default(),
     })
 }
 
 impl Tokens {
     pub fn refresh_if_needed(&mut self, client: &Client, client_id: &str) -> Result<()> {
         if self.expires_at <= now() + 60 {
-            *self = exchange(
+            let mut refreshed = exchange(
                 client,
                 &[
                     ("grant_type", "refresh_token"),
@@ -332,6 +336,10 @@ impl Tokens {
                 ],
                 Some(&self.refresh_token),
             )?;
+            if refreshed.scopes.is_empty() {
+                refreshed.scopes = self.scopes.clone();
+            }
+            *self = refreshed;
             self.save(client_id)?;
         }
         Ok(())

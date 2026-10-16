@@ -7,10 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::notify::Notifier;
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ed25519_dalek::{Signature, VerifyingKey};
-use eframe::egui;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -282,7 +282,7 @@ fn install(update: ReadyUpdate) -> Result<()> {
 }
 
 impl Updater {
-    pub fn start(context: egui::Context) -> Self {
+    pub fn start(context: Notifier) -> Self {
         let (commands, receiver) = mpsc::channel();
         let (sender, events) = mpsc::channel();
         thread::spawn(move || {

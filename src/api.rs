@@ -11,7 +11,9 @@ use url::Url;
 
 use crate::{
     auth::Tokens,
-    model::{Device, Playback, Playlist, Profile, Track, unique_additions},
+    model::{
+        Album, Artist, BrowseInfo, Device, Playback, Playlist, Profile, Track, unique_additions,
+    },
 };
 
 pub struct Spotify {
@@ -68,6 +70,8 @@ impl Spotify {
                 .bearer_auth(&self.tokens.access_token);
             if let Some(body) = &body {
                 request = request.json(body);
+            } else if matches!(method, Method::PUT | Method::POST | Method::DELETE) {
+                request = request.header(reqwest::header::CONTENT_LENGTH, "0");
             }
             let response = request
                 .send()
@@ -191,6 +195,122 @@ impl Spotify {
             }
         }
         Ok(tracks)
+    }
+
+    pub fn artist(&mut self, id: &str) -> Result<Artist> {
+        ensure!(valid_id(id), "Invalid artist ID");
+        self.get(&format!("artists/{id}"), &[])
+    }
+
+    pub fn track(&mut self, uri: &str) -> Result<Track> {
+        let id = uri
+            .strip_prefix("spotify:track:")
+            .context("Invalid track URI")?;
+        ensure!(valid_id(id), "Invalid track ID");
+        self.get(&format!("tracks/{id}"), &[])
+    }
+
+    pub fn browse_info(&mut self, key: &str) -> Result<BrowseInfo> {
+        if let Some(id) = key.strip_prefix("album:") {
+            ensure!(valid_id(id), "Invalid album ID");
+            let album: Album = self.get(&format!("albums/{id}"), &[])?;
+            Ok(BrowseInfo {
+                key: key.into(),
+                title: album.name.clone(),
+                subtitle: album
+                    .artists
+                    .iter()
+                    .map(|artist| artist.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                images: album.images.clone(),
+                album: Some(album),
+                ..BrowseInfo::default()
+            })
+        } else if let Some(id) = key.strip_prefix("artist:") {
+            let artist = self.artist(id)?;
+            let response = self.request(
+                Method::GET,
+                &format!("artists/{id}/albums"),
+                &[
+                    ("limit", "50".into()),
+                    ("include_groups", "album,single".into()),
+                ],
+                None,
+            )?;
+            let mut albums: Vec<crate::model::Album> =
+                serde_json::from_value(response["items"].clone())
+                    .context("Cannot read artist albums")?;
+            let mut next = response["next"].as_str().map(str::to_owned);
+            let mut visited = HashSet::new();
+            while let Some(path) = next {
+                ensure!(
+                    visited.insert(path.clone()),
+                    "Spotify repeated an artist album page"
+                );
+                let response = self.request(Method::GET, &path, &[], None)?;
+                let page: Vec<crate::model::Album> =
+                    serde_json::from_value(response["items"].clone())
+                        .context("Cannot read artist albums")?;
+                albums.extend(page);
+                next = response["next"].as_str().map(str::to_owned);
+            }
+            Ok(BrowseInfo {
+                key: key.into(),
+                title: artist.name.clone(),
+                subtitle: "Artist".into(),
+                images: artist.images.clone(),
+                artist: Some(artist),
+                albums,
+                ..BrowseInfo::default()
+            })
+        } else {
+            anyhow::bail!("Unknown album or artist page")
+        }
+    }
+
+    pub fn album_tracks(&mut self, id: &str, offset: usize) -> Result<Vec<Track>> {
+        ensure!(valid_id(id), "Invalid album ID");
+        let response = self.request(
+            Method::GET,
+            &format!("albums/{id}/tracks"),
+            &[("limit", "10".into()), ("offset", offset.to_string())],
+            None,
+        )?;
+        Ok(serde_json::from_value(response["items"].clone())?)
+    }
+
+    pub fn saved_item(&mut self, uri: &str) -> Result<bool> {
+        let response = self.request(
+            Method::GET,
+            "me/library/contains",
+            &[("uris", uri.into())],
+            None,
+        )?;
+        response
+            .get(0)
+            .and_then(Value::as_bool)
+            .context("Cannot read library status")
+    }
+
+    pub fn set_saved_item(&mut self, uri: &str, saved: bool) -> Result<()> {
+        self.request(
+            if saved { Method::PUT } else { Method::DELETE },
+            "me/library",
+            &[("uris", uri.into())],
+            None,
+        )?;
+        Ok(())
+    }
+    pub fn saved_items(&mut self, uris: &[String]) -> Result<Vec<bool>> {
+        ensure!(uris.len() <= 50, "Too many library items");
+        let response = self.request(
+            Method::GET,
+            "me/library/contains",
+            &[("uris", uris.join(","))],
+            None,
+        )?;
+        serde_json::from_value(response).context("Cannot read saved songs")
     }
 
     pub fn player_action(&mut self, action: PlayerAction, device: Option<&str>) -> Result<()> {

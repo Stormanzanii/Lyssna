@@ -5,14 +5,14 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::notify::Notifier;
 use anyhow::{Context, Result};
-use eframe::egui;
 
 use crate::{
     api::{PlayerAction, Spotify},
     auth::{self, Tokens},
     lyrics::{self, Lyrics},
-    model::{Device, Playback, Playlist, Profile, Track},
+    model::{BrowseInfo, Device, Playback, PlayingDetails, Playlist, Profile, Track},
     native::{NativeControls, NativeMessage, NativePlayer},
 };
 
@@ -38,10 +38,40 @@ pub enum Command {
     SaveTrack(String),
     FetchLyrics(Track),
     RetryAudio,
+    BrowseInfo {
+        key: String,
+        generation: u64,
+    },
+    PlayingDetails(Track),
+    ArtistTracks {
+        generation: u64,
+        info: Box<BrowseInfo>,
+    },
+    TrackInfo(String),
+    SetSaved {
+        uri: String,
+        saved: bool,
+    },
     Shutdown,
 }
 
 pub enum Event {
+    TrackInfo {
+        uri: String,
+        track: Box<Track>,
+    },
+    BrowseInfo {
+        generation: u64,
+        info: Box<BrowseInfo>,
+    },
+    PlayingDetails {
+        uri: String,
+        details: Box<PlayingDetails>,
+    },
+    Saved {
+        uri: String,
+        saved: bool,
+    },
     Session(Profile),
     SignedOut,
     LoginFinished,
@@ -73,12 +103,21 @@ pub struct Worker {
 }
 
 pub enum LyricCommand {
+    ImportText {
+        track: Track,
+        filename: String,
+        contents: String,
+    },
     Fetch(Track, String),
     Import(Track, PathBuf),
     /// Drop lyrics imported for a track; a following fetch uses the provider.
     Forget(Track),
     Configure {
         host: String,
+        consent: bool,
+    },
+    ConfigureSpicy {
+        key: String,
         consent: bool,
     },
 }
@@ -89,7 +128,7 @@ pub struct LyricEvent {
 }
 
 impl Worker {
-    pub fn start(context: egui::Context) -> Self {
+    pub fn start(context: Notifier) -> Self {
         let native_controls = NativeControls::default();
         let backend_controls = native_controls.clone();
         let (commands, receive_commands) = mpsc::channel();
@@ -150,6 +189,14 @@ impl Worker {
             };
             while let Ok(command) = receive_lyrics.recv() {
                 let (track, result) = match command {
+                    LyricCommand::ImportText {
+                        track,
+                        filename,
+                        contents,
+                    } => {
+                        let result = lyrics::import_text(&filename, &contents, &track);
+                        (track, result)
+                    }
                     LyricCommand::Fetch(track, token) => {
                         let result = lyrics::fetch(&client, &track, &token);
                         (track, result)
@@ -164,6 +211,17 @@ impl Worker {
                     }
                     LyricCommand::Configure { host, consent } => {
                         let result = crate::provider::configure(&host, consent)
+                            .map(|_| Lyrics::default())
+                            .map_err(|error| error.to_string());
+                        let _ = send_lyrics.send(LyricEvent {
+                            uri: String::new(),
+                            result,
+                        });
+                        lyric_context.request_repaint();
+                        continue;
+                    }
+                    LyricCommand::ConfigureSpicy { key, consent } => {
+                        let result = crate::provider::configure_spicy(&key, consent)
                             .map(|_| Lyrics::default())
                             .map_err(|error| error.to_string());
                         let _ = send_lyrics.send(LyricEvent {
@@ -209,7 +267,7 @@ struct Backend {
     events: mpsc::Sender<Event>,
     native_events: mpsc::Sender<NativeMessage>,
     lyrics: mpsc::Sender<LyricCommand>,
-    context: egui::Context,
+    context: Notifier,
 }
 
 impl Backend {
@@ -326,6 +384,13 @@ impl Backend {
                 let devices = self.api()?.devices()?;
                 self.emit(Event::Devices(devices));
             }
+            Command::TrackInfo(uri) => {
+                let track = self.api()?.track(&uri)?;
+                self.emit(Event::TrackInfo {
+                    uri,
+                    track: Box::new(track),
+                });
+            }
             Command::Library => {
                 let playlists = self.api()?.playlists()?;
                 self.emit(Event::Library(playlists));
@@ -370,11 +435,89 @@ impl Backend {
             }
             Command::FetchLyrics(track) => {
                 let api = self.api()?;
-                api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
-                let token = api.tokens.access_token.clone();
+                let token = if crate::provider::requires_spotify_token() {
+                    api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
+                    api.tokens.access_token.clone()
+                } else {
+                    String::new()
+                };
                 let _ = self.lyrics.send(LyricCommand::Fetch(track, token));
             }
             Command::RetryAudio => self.start_audio()?,
+            Command::BrowseInfo { key, generation } => {
+                let info = self.api()?.browse_info(&key)?;
+                self.emit(Event::BrowseInfo {
+                    generation,
+                    info: Box::new(info.clone()),
+                });
+                if let Some(id) = key.strip_prefix("artist:") {
+                    let id = id.to_owned();
+                    let client = self.client.clone();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    thread::spawn(move || {
+                        if let Ok(overview) = crate::artist::fetch(&client, &id) {
+                            let mut info = info;
+                            info.overview = Some(overview);
+                            let _ = events.send(Event::BrowseInfo {
+                                generation,
+                                info: Box::new(info),
+                            });
+                            context.request_repaint();
+                        }
+                    });
+                }
+            }
+            Command::ArtistTracks {
+                generation,
+                mut info,
+            } => {
+                if let Some(overview) = info.overview.as_mut() {
+                    let mut statuses = Vec::new();
+                    {
+                        let api = self.api()?;
+                        for item in &mut overview.popular {
+                            if let Ok(track) = api.track(&item.track.uri) {
+                                item.track = track;
+                            }
+                        }
+                        let uris: Vec<_> = overview
+                            .popular
+                            .iter()
+                            .map(|item| item.track.uri.clone())
+                            .collect();
+                        if !uris.is_empty()
+                            && let Ok(saved) = api.saved_items(&uris)
+                        {
+                            statuses = uris.into_iter().zip(saved).collect();
+                        }
+                    }
+                    for (uri, saved) in statuses {
+                        self.emit(Event::Saved { uri, saved });
+                    }
+                    overview.details_loaded = true;
+                }
+                self.emit(Event::BrowseInfo { generation, info });
+            }
+            Command::PlayingDetails(track) => {
+                let mut artists = Vec::new();
+                for artist in &track.artists {
+                    if let Some(id) = &artist.id
+                        && let Ok(artist) = self.api()?.artist(id)
+                    {
+                        artists.push(artist);
+                    }
+                }
+                let queue = self.api()?.queue().unwrap_or_default();
+                self.emit(Event::PlayingDetails {
+                    uri: track.uri,
+                    details: Box::new(PlayingDetails { artists, queue }),
+                });
+            }
+            Command::SetSaved { uri, saved } => {
+                self.api()?.set_saved_item(&uri, saved)?;
+                self.emit(Event::Saved { uri, saved });
+            }
             Command::Shutdown => {}
         }
         Ok(())
@@ -385,7 +528,14 @@ impl Backend {
         if let Some(query) = key.strip_prefix("search:") {
             api.search(query)
         } else if let Some(id) = key.strip_prefix("playlist:") {
-            api.playlist_tracks(id, offset)
+            match api.playlist_tracks(id, offset) {
+                Ok(tracks) => Ok(tracks),
+                Err(_) => self.native_controls.playlist_tracks(id, offset),
+            }
+        } else if let Some(id) = key.strip_prefix("album:") {
+            api.album_tracks(id, offset)
+        } else if key.starts_with("artist:") {
+            Ok(Vec::new())
         } else {
             match key {
                 "liked" => api.saved_tracks(offset),

@@ -124,7 +124,7 @@ pub fn cache_namespace() -> Result<String> {
     let provider = load()?;
     Ok(format!(
         "{:x}",
-        Sha256::digest(format!("v2:{}:{}", provider.spicy_api, provider.host).as_bytes())
+        Sha256::digest(format!("v3:{}:{}", provider.spicy_api, provider.host).as_bytes())
     ))
 }
 
@@ -337,7 +337,11 @@ fn parse_line(value: &Value, start_ms: u64, end_ms: u64) -> Line {
     if let Some(syllables) = value["Syllables"].as_array() {
         for (index, syllable) in syllables.iter().enumerate() {
             let text = syllable["Text"].as_str().unwrap_or_default();
-            let prefix = if index > 0 && !syllable["IsPartOfWord"].as_bool().unwrap_or(false) {
+            let prefix = if index > 0
+                && !syllables[index - 1]["IsPartOfWord"]
+                    .as_bool()
+                    .unwrap_or(false)
+            {
                 " "
             } else {
                 ""
@@ -604,7 +608,7 @@ mod tests {
 
     #[test]
     fn provider_syllables_keep_spacing_timing_and_background() {
-        let data = json!({"Type":"Syllable","Content":[{"Type":"Vocal","StartTime":1.0,"EndTime":4.0,"Lead":{"Syllables":[{"Text":"Hel","StartTime":1.0,"EndTime":1.5},{"Text":"lo","IsPartOfWord":true,"StartTime":1.5,"EndTime":2.0},{"Text":"world","StartTime":2.0,"EndTime":3.0}]},"Background":[{"Text":"echo"}]}]});
+        let data = json!({"Type":"Syllable","Content":[{"Type":"Vocal","StartTime":1.0,"EndTime":4.0,"Lead":{"Syllables":[{"Text":"Hel","IsPartOfWord":true,"StartTime":1.0,"EndTime":1.5},{"Text":"lo","StartTime":1.5,"EndTime":2.0},{"Text":"world","StartTime":2.0,"EndTime":3.0}]},"Background":[{"Text":"echo"}]}]});
         let lyrics = parse(&data, 5000).unwrap();
         assert_eq!(lyrics.lines[0].text, "Hello world");
         assert_eq!(lyrics.lines[0].words[1].start_ms, 1500);

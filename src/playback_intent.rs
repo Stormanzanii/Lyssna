@@ -3,15 +3,18 @@ use std::time::{Duration, Instant};
 /// Keep the latest user choice while one native transition is outstanding.
 #[derive(Default)]
 pub(crate) struct PlaybackIntent {
+    continuing: bool,
     target: Option<String>,
     desired: Option<bool>,
     waiting: Option<(bool, Instant)>,
 }
 impl PlaybackIntent {
     pub fn request(&mut self, playing: bool) {
+        self.continuing = playing;
         self.desired = Some(playing);
     }
     pub fn loading(&mut self, now: Instant) {
+        self.continuing = true;
         self.target = None;
         self.desired = Some(true);
         self.waiting = Some((true, now));
@@ -25,7 +28,19 @@ impl PlaybackIntent {
             self.acknowledge(playing);
         }
     }
+    pub fn track_loading(&mut self, uri: String, now: Instant) {
+        if self.target.as_ref().is_some_and(|target| target != &uri)
+            || self.desired == Some(false)
+            || (!self.continuing && self.desired.is_none())
+        {
+            return;
+        }
+        self.loading_track(Some(uri), now);
+    }
     pub fn acknowledge(&mut self, playing: bool) {
+        if self.desired.is_none_or(|wanted| wanted == playing) {
+            self.continuing = playing;
+        }
         if self.waiting.is_some_and(|(wanted, _)| wanted == playing) {
             self.waiting = None;
             if self.desired == Some(playing) {
@@ -58,6 +73,27 @@ impl PlaybackIntent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn automatic_next_retries_a_paused_load_without_another_user_click() {
+        let now = Instant::now();
+        let mut intent = PlaybackIntent::default();
+        intent.acknowledge_track("finished", true);
+        intent.track_loading("next".into(), now);
+        intent.acknowledge_track("next", false);
+        assert_eq!(intent.next(false, now + Duration::from_secs(1)), Some(true));
+        intent.acknowledge_track("next", true);
+        assert_eq!(intent.next(true, now + Duration::from_secs(2)), None);
+    }
+    #[test]
+    fn automatic_recovery_respects_an_explicit_pause() {
+        let now = Instant::now();
+        let mut intent = PlaybackIntent::default();
+        intent.acknowledge_track("finished", true);
+        intent.request(false);
+        intent.acknowledge_track("finished", false);
+        intent.track_loading("next".into(), now);
+        assert_eq!(intent.next(false, now + Duration::from_secs(1)), None);
+    }
     #[test]
     fn previous_song_cannot_acknowledge_a_new_load() {
         let now = Instant::now();

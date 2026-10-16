@@ -720,11 +720,11 @@ const LyricCredits = memo(function LyricCredits({
             <span key={role}>
               {" "}
               · {label}{" "}
-              {creatorEmbed(person.id) || url ? (
+              {creatorEmbed(person.username) || url ? (
                 <button
                   className="text-link"
                   onClick={() =>
-                    creatorEmbed(person.id)
+                    creatorEmbed(person.username)
                       ? openCreator(person)
                       : void rpc("open_link", { url }).catch(() => {})
                   }

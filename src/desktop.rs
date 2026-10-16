@@ -1152,40 +1152,62 @@ fn add_tracks(
 #[tauri::command]
 async fn open_creator_profile(
     app: tauri::AppHandle,
-    id: String,
-    name: String,
+    username: String,
 ) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
-        ensure!(
-            (15..=22).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit()),
-            "Invalid creator ID"
+        use sha2::{Digest, Sha256};
+        let url = creator_profile_url(&username)?;
+        let digest = Sha256::digest(url.as_str());
+        let label = format!(
+            "creator-{}",
+            digest
+                .iter()
+                .take(12)
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
         );
-        let label = format!("creator-{id}");
         if let Some(window) = app.get_webview_window(&label) {
             window.set_focus()?;
             return Ok(());
         }
         let title = format!(
             "{} · Spicy Lyrics",
-            name.chars()
+            username
+                .chars()
                 .filter(|character| !character.is_control())
                 .take(80)
                 .collect::<String>()
         );
-        tauri::WebviewWindowBuilder::new(
-            &app,
-            label,
-            tauri::WebviewUrl::External(format!("https://spicylyrics.org/embed/{id}").parse()?),
-        )
-        .title(title)
-        .inner_size(1080., 800.)
-        .min_inner_size(480., 400.)
-        .center()
-        .on_navigation(|url| url.scheme() == "https" && url.host_str() == Some("spicylyrics.org"))
-        .build()?;
+        tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
+            .title(title)
+            .inner_size(1080., 800.)
+            .min_inner_size(480., 400.)
+            .center()
+            .on_navigation(|url| {
+                url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
+            })
+            .build()?;
         Ok(())
     };
     result().map_err(error)
+}
+fn creator_profile_url(username: &str) -> Result<url::Url> {
+    let name = username.trim().trim_start_matches('@');
+    ensure!(
+        !name.is_empty()
+            && name.chars().count() <= 80
+            && !name
+                .chars()
+                .any(|character| character.is_control() || character == '/' || character == '\\')
+            && !matches!(name, "." | ".."),
+        "Invalid creator username"
+    );
+    let mut url = url::Url::parse("https://spicylyrics.org/embed/")?;
+    url.path_segments_mut()
+        .map_err(|_| anyhow::anyhow!("Invalid profile path"))?
+        .pop_if_empty()
+        .push(name);
+    Ok(url)
 }
 #[tauri::command]
 fn open_link(url: String) -> std::result::Result<(), String> {
@@ -1279,6 +1301,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn creator_profiles_use_usernames_and_encode_path_characters() {
+        assert_eq!(
+            creator_profile_url("@Arashii").unwrap().as_str(),
+            "https://spicylyrics.org/embed/Arashii"
+        );
+        assert!(creator_profile_url("../other").is_err());
+        assert_eq!(
+            creator_profile_url("Name#1234").unwrap().as_str(),
+            "https://spicylyrics.org/embed/Name%231234"
+        );
+    }
     #[test]
     fn local_playlist_selection_uses_the_chosen_loaded_track() {
         let tracks: Vec<_> = (0..150)

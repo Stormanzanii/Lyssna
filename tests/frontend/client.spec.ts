@@ -531,7 +531,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
           )?.args,
       ),
     )
-    .toEqual({ id: "123456789012345678", name: "Uploader" });
+    .toEqual({ username: "Uploader" });
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page

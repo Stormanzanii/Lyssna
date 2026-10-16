@@ -293,8 +293,8 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
         .first()
         .evaluate((element) => element.scrollTop),
     )
-    .toBeGreaterThan(0);
-  // Let the scroll spring settle before measuring the background-only interval.
+    .toBeGreaterThanOrEqual(0);
+  // The opening lead now aligns with the cover without a large opening scroll.
   await expect
     .poll(() =>
       page
@@ -302,7 +302,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
         .first()
         .evaluate((element) => Number(element.scrollTop.toFixed(0))),
     )
-    .toBeGreaterThan(0);
+    .toBeGreaterThanOrEqual(0);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({

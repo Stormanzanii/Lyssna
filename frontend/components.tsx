@@ -450,13 +450,23 @@ export function LyricsDisplay({
       else container.scrollTop = motion.target;
     };
     const retarget = () => {
+      const cover = container
+        .closest(".lyrics-layout")
+        ?.querySelector(".lyrics-album>.cover");
+      const anchor = compact
+        ? 0
+        : Math.max(
+            8,
+            (cover?.getBoundingClientRect().top ??
+              container.getBoundingClientRect().top + 40) -
+              container.getBoundingClientRect().top,
+          );
+      container.style.setProperty("--lead-top", `${anchor}px`);
       spring.current.target = Math.max(
         0,
         Math.min(
           container.scrollHeight - container.clientHeight,
-          line.offsetTop +
-            line.offsetHeight / 2 -
-            container.clientHeight * 0.46,
+          line.offsetTop - anchor,
         ),
       );
       if (settings.reduce_motion) {
@@ -472,6 +482,10 @@ export function LyricsDisplay({
     const observer = new ResizeObserver(retarget);
     observer.observe(container);
     observer.observe(line);
+    const album = container
+      .closest(".lyrics-layout")
+      ?.querySelector(".lyrics-album");
+    if (album) observer.observe(album);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();

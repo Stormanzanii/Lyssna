@@ -1,0 +1,31 @@
+name: Rust checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      RUSTUP_TOOLCHAIN: 1.98.0
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Tests
+        run: cargo test --locked
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Build
+        run: cargo build --locked

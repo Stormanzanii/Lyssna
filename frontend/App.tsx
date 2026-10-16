@@ -886,6 +886,9 @@ function App() {
                       <small>
                         {entity.album.release_date.slice(0, 4)} ·{" "}
                         {entity.album.total_tracks} songs
+                        {entity.album_details?.complete_duration && (
+                          <> · {formatTime(entity.album_details.duration_ms)}</>
+                        )}
                       </small>
                     )}
                   </div>
@@ -965,7 +968,13 @@ function App() {
                       <div className="track-table-head">
                         <span>#</span>
                         <span>Title</span>
-                        <span>{entity?.artist ? "Streams" : "Album"}</span>
+                        <span>
+                          {entity?.artist
+                            ? "Streams"
+                            : entity?.album
+                              ? "Plays"
+                              : "Album"}
+                        </span>
                         <span>
                           <Clock3 size={16} />
                         </span>
@@ -1053,19 +1062,30 @@ function App() {
                                 </div>
                               </div>
                             </div>
-                            <button
-                              className="text-link album-link"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openAlbum(entity?.album || track.album);
-                              }}
-                            >
-                              {entity?.artist
-                                ? entity.overview?.popular[
-                                    index
-                                  ].streams?.toLocaleString()
-                                : track.album.name || entity?.album?.name}
-                            </button>
+                            {entity?.album ? (
+                              <span
+                                className="track-streams"
+                                title="Spotify play count"
+                              >
+                                {entity.album_details?.streams[
+                                  track.uri
+                                ]?.toLocaleString() ?? "—"}
+                              </span>
+                            ) : (
+                              <button
+                                className="text-link album-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openAlbum(entity?.album || track.album);
+                                }}
+                              >
+                                {entity?.artist
+                                  ? entity.overview?.popular[
+                                      index
+                                    ].streams?.toLocaleString()
+                                  : track.album.name || entity?.album?.name}
+                              </button>
+                            )}
                             <div className="row-end">
                               <span>
                                 {track.duration_ms > 0
@@ -1157,10 +1177,35 @@ function App() {
                   </aside>
                 )}
               </div>
-              {entity?.artist && (
+              {entity?.album && (
+                <section className="album-release-details">
+                  <p>
+                    {entity.album.release_date?.length === 10
+                      ? new Date(
+                          `${entity.album.release_date}T00:00:00`,
+                        ).toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                      : entity.album.release_date}
+                  </p>
+                  {(entity.album.copyrights?.length
+                    ? entity.album.copyrights
+                    : entity.album_details?.copyrights || []
+                  ).map((credit, index) => (
+                    <small key={index}>{credit.text}</small>
+                  ))}
+                </section>
+              )}
+              {(entity?.artist || !!entity?.album_details?.more?.length) && (
                 <>
                   <div className="browse-section-title">
-                    <h2>Discography</h2>
+                    <h2>
+                      {entity?.artist
+                        ? "Discography"
+                        : `More by ${entity?.album?.artists?.[0]?.name ?? "this artist"}`}
+                    </h2>
                     <button
                       className="text-link muted"
                       onClick={() => setAllAlbums(!allAlbums)}
@@ -1184,7 +1229,10 @@ function App() {
                     ))}
                   </div>
                   <div className="album-grid">
-                    {entity.albums
+                    {(entity?.artist
+                      ? entity.albums
+                      : entity?.album_details?.more || []
+                    )
                       .filter(
                         (album) =>
                           albumFilter === "all" ||

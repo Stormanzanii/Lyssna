@@ -191,6 +191,50 @@ test("imported lyrics keep artwork and ambience in place, without a duplicate pr
   await expect(cards.nth(1)).toHaveClass(/artist-card/);
 });
 
+test("album pages retain play counts, release date and licensing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.locator(".album-link").first().click();
+  await page.evaluate((track) => {
+    const host = (window as any).__clientTest;
+    const command = host.commands
+      .filter((call: any) => call.command === "browse")
+      .at(-1);
+    host.emit({
+      type: "browse_info",
+      generation: command.args.generation,
+      info: {
+        key: command.args.key,
+        title: "Test album",
+        subtitle: "Test artist",
+        images: track.album.images,
+        album: {
+          ...track.album,
+          artists: track.artists,
+          total_tracks: 50,
+          release_date: "2026-10-15",
+          copyrights: [{ text: "© 2026 Test Label", type: "C" }],
+        },
+        albums: [],
+        album_details: {
+          streams: { "spotify:track:item0": 2470 },
+          duration_ms: 180000,
+          complete_duration: true,
+          copyrights: [],
+          more: [],
+        },
+      },
+    });
+  }, track);
+  await expect(page.locator(".track-table-head")).toContainText("Plays");
+  await expect(page.locator(".track-streams").first()).toHaveText("2,470");
+  await expect(page.locator(".album-release-details")).toContainText(
+    "2026 Test Label",
+  );
+  await expect(page.locator(".album-release-details")).toContainText("2026");
+});
+
 test("near-bottom scrolling automatically loads one page per offset", async ({
   page,
 }) => {

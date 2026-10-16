@@ -67,6 +67,9 @@ pub fn fetch(client: &Client, id: &str) -> Result<ArtistOverview> {
 }
 
 fn parse_page(html: &str, id: &str) -> Result<ArtistOverview> {
+    parse_artist(&page_state(html)?, id)
+}
+fn page_state(html: &str) -> Result<Value> {
     let start = html
         .find("id=\"initialState\"")
         .context("Artist page data unavailable")?;
@@ -79,7 +82,32 @@ fn parse_page(html: &str, id: &str) -> Result<ArtistOverview> {
         .decode(html[start..end].trim())
         .context("Invalid artist page data")?;
     let data: Value = serde_json::from_slice(&bytes).context("Invalid artist page data")?;
-    parse_artist(&data, id)
+    Ok(data)
+}
+pub(crate) fn public_entity(client: &Client, kind: &str, id: &str) -> Result<Value> {
+    ensure!(
+        matches!(kind, "album" | "artist")
+            && id.len() == 22
+            && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid catalogue page"
+    );
+    let mut html = String::new();
+    client
+        .get(format!("https://open.spotify.com/{kind}/{id}"))
+        .header(reqwest::header::ACCEPT_LANGUAGE, "en-US")
+        .timeout(Duration::from_secs(8))
+        .send()?
+        .error_for_status()?
+        .take(2_000_001)
+        .read_to_string(&mut html)?;
+    ensure!(html.len() <= 2_000_000, "Catalogue page too large");
+    let mut state = page_state(&html)?;
+    let entity = state["entities"]["items"][format!("spotify:{kind}:{id}")].take();
+    ensure!(
+        entity["uri"].as_str() == Some(format!("spotify:{kind}:{id}").as_str()),
+        "Catalogue page does not match request"
+    );
+    Ok(entity)
 }
 
 fn parse_artist(data: &Value, id: &str) -> Result<ArtistOverview> {

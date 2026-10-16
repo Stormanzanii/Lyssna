@@ -31,6 +31,8 @@ pub struct Artwork {
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Album {
+    #[serde(default)]
+    pub copyrights: Vec<Copyright>,
     pub id: Option<String>,
     #[serde(default)]
     pub uri: String,
@@ -46,6 +48,12 @@ pub struct Album {
     pub album_type: String,
     #[serde(default)]
     pub total_tracks: u64,
+}
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub struct Copyright {
+    pub text: String,
+    #[serde(rename = "type")]
+    pub kind: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -140,6 +148,7 @@ pub struct Playback {
 
 #[derive(Clone, Default, Serialize)]
 pub struct BrowseInfo {
+    pub album_details: Option<crate::album::AlbumDetails>,
     pub key: String,
     pub title: String,
     pub subtitle: String,

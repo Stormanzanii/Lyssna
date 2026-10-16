@@ -1,3 +1,4 @@
+pub mod album;
 pub mod api;
 #[cfg(feature = "legacy-ui")]
 pub mod app;

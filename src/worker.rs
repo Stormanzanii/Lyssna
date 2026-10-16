@@ -512,6 +512,35 @@ impl Backend {
                             context.request_repaint();
                         }
                     });
+                } else if let Some(id) = key.strip_prefix("album:") {
+                    let id = id.to_owned();
+                    let client = self.client.clone();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    thread::spawn(move || {
+                        if let Ok(mut details) = crate::album::fetch(&client, &id) {
+                            if let Some(artist_id) = info
+                                .album
+                                .as_ref()
+                                .and_then(|album| album.artists.first())
+                                .and_then(|artist| artist.id.as_deref())
+                                && let Ok(artist) = crate::artist::fetch(&client, artist_id)
+                            {
+                                for popular in artist.popular {
+                                    if let Some(streams) = popular.streams {
+                                        details.streams.entry(popular.track.uri).or_insert(streams);
+                                    }
+                                }
+                            }
+                            let mut info = info;
+                            info.album_details = Some(details);
+                            let _ = events.send(Event::BrowseInfo {
+                                generation,
+                                info: Box::new(info),
+                            });
+                            context.request_repaint();
+                        }
+                    });
                 }
             }
             Command::ArtistTracks {

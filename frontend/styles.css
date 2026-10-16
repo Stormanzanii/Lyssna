@@ -1043,6 +1043,19 @@ small {
   gap: 12px;
   padding: 0 20px 30px;
 }
+.album-release-details {
+  padding: 16px 28px 28px;
+  color: #b4b0bd;
+  font-size: 13px;
+}
+.album-release-details p {
+  margin: 0 0 8px;
+}
+.album-release-details small {
+  display: block;
+  line-height: 1.5;
+  font-size: 11px;
+}
 .album-tile {
   padding: 12px;
   border-radius: 8px;

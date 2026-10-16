@@ -12,6 +12,7 @@ export interface Artist {
   followers?: { total: number };
 }
 export interface Album {
+  copyrights?: { text: string; type: string }[];
   id?: string;
   uri?: string;
   name: string;
@@ -108,6 +109,13 @@ export interface PlayingDetails {
   queue: Track[];
 }
 export interface BrowseInfo {
+  album_details?: {
+    streams: Record<string, number>;
+    duration_ms: number;
+    complete_duration: boolean;
+    copyrights: { text: string; type: string }[];
+    more: Album[];
+  };
   overview?: {
     header_image?: string;
     verified?: boolean;

@@ -186,7 +186,11 @@ fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<cra
         uri,
         name: item.name.clone(),
         duration_ms: item.duration_ms.into(),
-        songwriters:artists.iter().filter(|artist|artist.role==ArtistRole::ARTIST_ROLE_COMPOSER).map(|artist|artist.name.clone()).collect(),
+        songwriters: artists
+            .iter()
+            .filter(|artist| artist.role == ArtistRole::ARTIST_ROLE_COMPOSER)
+            .map(|artist| artist.name.clone())
+            .collect(),
         artists: artists
             .iter()
             .filter(|artist| {

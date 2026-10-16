@@ -49,7 +49,7 @@ pub struct Album {
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Track {
     #[serde(default)]
-    pub songwriters:Vec<String>,
+    pub songwriters: Vec<String>,
     pub id: Option<String>,
     #[serde(default)]
     pub uri: String,

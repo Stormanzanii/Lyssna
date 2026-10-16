@@ -166,6 +166,9 @@ impl Desktop {
                         return;
                     };
                     match event {
+                        Event::CanvasPrefetched { url } => {
+                            emit(json!({"type":"canvas_prefetch","url":url}));
+                        }
                         Event::Canvas { uri, url } => {
                             if snapshot
                                 .playback
@@ -682,6 +685,18 @@ fn sign_in(client_id: String, state: State<'_, Desktop>) -> std::result::Result<
     };
     result().map_err(error)
 }
+/// Resolve Canvas videos for tracks the user is about to play (hovered rows).
+#[tauri::command]
+fn prefetch_canvas(uris: Vec<String>, state: State<'_, Desktop>) {
+    let uris: Vec<String> = uris
+        .into_iter()
+        .filter(|uri| uri.starts_with("spotify:track:") && uri.len() < 64)
+        .take(8)
+        .collect();
+    if !uris.is_empty() {
+        let _ = state.0.commands.send(Command::PrefetchCanvas(uris));
+    }
+}
 #[tauri::command]
 fn cancel_sign_in(state: State<'_, Desktop>) {
     if let Ok(cancelled) = state.0.login_cancelled.lock() {
@@ -1060,6 +1075,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             bootstrap,
             sign_in,
             cancel_sign_in,
+            prefetch_canvas,
             sign_out,
             browse,
             player,

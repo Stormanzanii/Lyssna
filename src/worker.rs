@@ -48,6 +48,8 @@ pub enum Command {
         generation: u64,
     },
     PlayingDetails(Track),
+    /// Resolve Canvas videos ahead of playback (hovered rows, upcoming queue).
+    PrefetchCanvas(Vec<String>),
     ArtistTracks {
         generation: u64,
         info: Box<BrowseInfo>,
@@ -64,6 +66,9 @@ pub enum Event {
     Canvas {
         uri: String,
         url: Option<String>,
+    },
+    CanvasPrefetched {
+        url: String,
     },
     ArtistStats {
         uri: String,
@@ -611,23 +616,24 @@ impl Backend {
                 }
                 self.emit(Event::BrowseInfo { generation, info });
             }
+            Command::PrefetchCanvas(uris) => {
+                let native = self.native_controls.clone();
+                let events = self.events.clone();
+                thread::spawn(move || {
+                    for uri in uris.into_iter().take(8) {
+                        if let Some(url) = canvas_url(&native, &uri) {
+                            let _ = events.send(Event::CanvasPrefetched { url });
+                        }
+                    }
+                });
+            }
             Command::PlayingDetails(track) => {
                 let canvas_track = track.uri.clone();
                 let native = self.native_controls.clone();
                 let events = self.events.clone();
                 let context = self.context.clone();
                 thread::spawn(move || {
-                    let url = native
-                        .metadata(
-                            &canvas_track,
-                            librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1,
-                        )
-                        .ok()
-                        .and_then(|bytes| {
-                            crate::canvas::video_url(&bytes, &canvas_track)
-                                .ok()
-                                .flatten()
-                        });
+                    let url = canvas_url(&native, &canvas_track);
                     let _ = events.send(Event::Canvas {
                         uri: canvas_track,
                         url,
@@ -643,6 +649,23 @@ impl Backend {
                     }
                 }
                 let queue = self.api()?.queue().unwrap_or_default();
+                {
+                    // Warm the next tracks' Canvas so skipping shows video at once.
+                    let upcoming: Vec<String> = queue
+                        .iter()
+                        .take(3)
+                        .map(|track| track.uri.clone())
+                        .collect();
+                    let native = self.native_controls.clone();
+                    let events = self.events.clone();
+                    thread::spawn(move || {
+                        for uri in upcoming {
+                            if let Some(url) = canvas_url(&native, &uri) {
+                                let _ = events.send(Event::CanvasPrefetched { url });
+                            }
+                        }
+                    });
+                }
                 self.emit(Event::PlayingDetails {
                     uri: track.uri.clone(),
                     details: Box::new(PlayingDetails { artists, queue }),
@@ -697,4 +720,21 @@ impl Backend {
             }
         }
     }
+}
+
+/// Canvas video URL for a track, from the cache or the Spotify Connect
+/// metadata service.
+fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
+    if let Some(url) = crate::canvas::cached(uri) {
+        return url;
+    }
+    let bytes = native
+        .metadata(
+            uri,
+            librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1,
+        )
+        .ok()?;
+    let url = crate::canvas::video_url(&bytes, uri).ok().flatten();
+    crate::canvas::remember(uri, url.clone());
+    url
 }

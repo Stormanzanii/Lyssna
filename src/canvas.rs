@@ -1,5 +1,28 @@
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
+
 use anyhow::{Result, ensure};
 use protobuf::CodedInputStream;
+
+/// Canvas lookups per track URI, so replays and prefetched tracks resolve
+/// instantly. Failed lookups are not cached and will be retried.
+static CACHE: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn cached(uri: &str) -> Option<Option<String>> {
+    CACHE.lock().ok()?.get(uri).cloned()
+}
+
+pub fn remember(uri: &str, url: Option<String>) {
+    if let Ok(mut cache) = CACHE.lock() {
+        if cache.len() >= 512 {
+            cache.clear();
+        }
+        cache.insert(uri.to_owned(), url);
+    }
+}
 
 pub fn video_url(bytes: &[u8], uri: &str) -> Result<Option<String>> {
     ensure!(bytes.len() <= 1_000_000, "Canvas response too large");

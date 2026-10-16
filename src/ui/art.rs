@@ -135,14 +135,14 @@ impl ArtCache {
 
 fn process(bytes: &[u8]) -> Option<(ColorImage, [u8; 3])> {
     let image = image::load_from_memory(bytes).ok()?.to_rgb8();
-    let small = imageops::resize(&image, 12, 12, FilterType::Triangle);
+    let small = imageops::resize(&image, 24, 24, FilterType::Triangle);
     let accent = accent(small.pixels().map(|pixel| pixel.0));
     let large = imageops::resize(&small, BLUR_SIDE, BLUR_SIDE, FilterType::CatmullRom);
-    let blurred = imageops::blur(&large, 4.0);
+    let blurred = imageops::blur(&large, 3.0);
     let half = BLUR_SIDE as f32 / 2.0;
     let mut rgba = Vec::with_capacity((BLUR_SIDE * BLUR_SIDE * 4) as usize);
     for (x, y, pixel) in blurred.enumerate_pixels() {
-        let [r, g, b] = saturate(pixel.0, 1.45, 0.92);
+        let [r, g, b] = saturate(pixel.0, 2.5, 0.8);
         // Fade the edges so rotated layers blend without hard seams.
         let distance = Vec2::new(x as f32 + 0.5 - half, y as f32 + 0.5 - half).length() / half;
         let alpha = 1.0 - ((distance - 0.62) / 0.36).clamp(0.0, 1.0);
@@ -181,42 +181,57 @@ pub fn accent(pixels: impl Iterator<Item = [u8; 3]>) -> [u8; 3] {
     egui::ecolor::Hsva::new(best.1, saturation, 0.52, 1.0).to_srgb()
 }
 
-/// Spicy-Lyrics-style animated background: rotating, blurred copies of the
-/// artwork over its accent colour.
+/// Spicy-Lyrics-style animated background: three blurred, elliptical copies
+/// of the artwork rotating on a 45 second period (their "Front", "Back" and
+/// "BackCenter" layers), over the artwork's accent colour.
 pub fn paint_background(painter: &Painter, rect: Rect, art: Option<&Art>, time: f32) {
     let Some(art) = art else {
         painter.rect_filled(rect, 0.0, Color32::from_rgb(28, 28, 32));
         return;
     };
-    let base = super::theme::lerp_color(art.accent, Color32::BLACK, 0.45);
-    painter.rect_filled(rect, 0.0, base);
-    let diagonal = rect.size().length();
-    let center = rect.center();
+    painter.rect_filled(
+        rect,
+        0.0,
+        super::theme::lerp_color(art.accent, Color32::BLACK, 0.2),
+    );
+    let (width, height) = (rect.width(), rect.height());
+    let angle = time * std::f32::consts::TAU / 45.0;
+    // (centre relative to the top-left, half size, rotation direction), back to front.
     let layers = [
-        (Vec2::ZERO, 0.95, 0.035, 255),
-        (Vec2::new(0.32, -0.28), 0.6, -0.055, 220),
-        (Vec2::new(-0.3, 0.3), 0.55, 0.075, 200),
+        (
+            Vec2::new(0.0, 0.3 * height),
+            Vec2::new(1.5 * width, 0.5 * height),
+            -1.0,
+        ),
+        (
+            Vec2::new(width, 0.5 * height),
+            Vec2::new(width, 0.5 * height),
+            -1.0,
+        ),
+        (
+            Vec2::new(0.0, 0.5 * height),
+            Vec2::new(width, 0.5 * height),
+            1.0,
+        ),
     ];
-    for (offset, scale, speed, alpha) in layers {
-        let drift = Vec2::new((time * 0.07).sin(), (time * 0.05).cos()) * 0.04;
-        let layer_center = center + (offset + drift) * rect.size();
+    for (offset, half, direction) in layers {
+        // The textures fade at their edges, so oversize them to keep coverage.
         textured_quad(
             painter,
             &art.texture,
-            layer_center,
-            diagonal * scale,
-            time * speed + offset.x * 3.0,
-            Color32::from_white_alpha(alpha),
+            rect.min + offset,
+            half * 1.35,
+            angle * direction,
+            Color32::WHITE,
         );
     }
-    painter.rect_filled(rect, 0.0, Color32::from_black_alpha(70));
 }
 
 fn textured_quad(
     painter: &Painter,
     texture: &TextureHandle,
     center: Pos2,
-    half: f32,
+    half: Vec2,
     angle: f32,
     tint: Color32,
 ) {
@@ -224,7 +239,7 @@ fn textured_quad(
     let rotation = egui::emath::Rot2::from_angle(angle);
     for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
         mesh.vertices.push(Vertex {
-            pos: center + rotation * Vec2::new(x * half, y * half),
+            pos: center + rotation * Vec2::new(x * half.x, y * half.y),
             uv: Pos2::new((x + 1.0) / 2.0, (y + 1.0) / 2.0),
             color: tint,
         });

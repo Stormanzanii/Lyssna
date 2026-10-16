@@ -94,6 +94,16 @@ impl NativeControls {
     ) -> Result<Vec<u8>> {
         self.request_metadata(uri, kind, 0)
     }
+    pub fn track(&self, uri: &str) -> Result<crate::model::Track> {
+        use protobuf::Message;
+        let bytes = self.metadata(
+            uri,
+            librespot_protocol::extension_kind::ExtensionKind::TRACK_V4,
+        )?;
+        let message = librespot_protocol::metadata::Track::parse_from_bytes(&bytes)?;
+        let track = librespot_metadata::Track::try_from(&message)?;
+        metadata_track(&track).context("Track metadata unavailable")
+    }
     fn request_metadata(
         &self,
         uri: &str,
@@ -149,8 +159,17 @@ impl NativeControls {
     }
     pub fn playlist_tracks(&self, id: &str, offset: usize) -> Result<Vec<crate::model::Track>> {
         anyhow::ensure!(
-            id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
-            "Invalid playlist ID"
+            (id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+                || id == "liked"
+                || id
+                    .strip_prefix("search:")
+                    .is_some_and(|query| !query.trim().is_empty()
+                        && query.len() <= 600
+                        && !query.chars().any(char::is_control))
+                || id.strip_prefix("album:").is_some_and(
+                    |id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                ),
+            "Invalid browsing request"
         );
         let (reply, receive) = mpsc::channel();
         {
@@ -508,7 +527,10 @@ impl NativePlayer {
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
-        let latest_volume = Arc::new(AtomicU32::new(u32::MAX));
+        let volume = crate::config::Settings::load()
+            .map(|settings| settings.volume_percent.min(100))
+            .unwrap_or(100);
+        let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
                 volume: latest_volume.clone(),
@@ -628,6 +650,12 @@ async fn run(
     let local_player = player.clone();
     let config = ConnectConfig {
         name: device_name(),
+        initial_volume: crate::config::Settings::load()
+            .ok()
+            .map(|settings| {
+                (u32::from(settings.volume_percent.min(100)) * u32::from(u16::MAX) / 100) as u16
+            })
+            .unwrap_or(u16::MAX),
         ..ConnectConfig::default()
     };
     let connection = tokio::select! {
@@ -687,7 +715,7 @@ async fn run(
             Some(request)=playlists.recv()=>{
                 let session=session.clone();
                 tokio::spawn(async move{
-                    let result=tokio::time::timeout(Duration::from_secs(22),read_playlist(&session,&request.id,request.offset)).await.map_err(|_|"Spotify playlist request timed out".to_owned()).and_then(|result|result.map_err(|error|error.to_string()));
+                    let result=tokio::time::timeout(Duration::from_secs(22),crate::native_browse::read(&session,&request.id,request.offset)).await.map_err(|_|"Spotify browsing request timed out".to_owned()).and_then(|result|result.map_err(|error|error.to_string()));
                     let _=request.reply.send(result);
                 });
             }
@@ -711,7 +739,7 @@ async fn run(
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
-                    Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) { emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),true);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
                     Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),false);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri().unwrap_or_default();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
@@ -764,7 +792,7 @@ impl Drop for NativePlayer {
     }
 }
 
-fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Track> {
+pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Track> {
     use crate::model::{Album, Artist, Artwork, Track};
     let artists = |items: &librespot_metadata::artist::Artists| {
         items
@@ -823,56 +851,35 @@ fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Trac
     })
 }
 
-async fn read_playlist(
-    session: &Session,
-    id: &str,
-    offset: usize,
-) -> Result<Vec<crate::model::Track>> {
-    use librespot_core::SpotifyUri;
-    use librespot_metadata::{Metadata, playlist::Playlist};
-    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
-    let playlist = Playlist::get(session, &uri).await.map_err(|_| {
-        anyhow::anyhow!("Spotify cannot open this playlist for the signed-in account")
-    })?;
-    anyhow::ensure!(
-        playlist.contents.position == 0 && !playlist.contents.is_truncated,
-        "Spotify returned an incomplete playlist"
-    );
-    let items: Vec<_> = playlist.tracks().skip(offset).take(50).cloned().collect();
-    let mut tracks = Vec::with_capacity(items.len());
-    for batch in items.chunks(10) {
-        let mut requests = tokio::task::JoinSet::new();
-        for (index, uri) in batch.iter().cloned().enumerate() {
-            let session = session.clone();
-            requests.spawn(async move {
-                let fallback = crate::model::Track {
-                    uri: uri.to_uri().unwrap_or_default(),
-                    name: "Unavailable track".into(),
-                    is_local: true,
-                    ..crate::model::Track::default()
-                };
-                let track = librespot_metadata::Track::get(&session, &uri)
-                    .await
-                    .ok()
-                    .and_then(|item| metadata_track(&item))
-                    .unwrap_or(fallback);
-                (index, track)
-            });
-        }
-        let mut ordered = Vec::new();
-        while let Some(result) = requests.join_next().await {
-            ordered.push(result.context("Playlist metadata request interrupted")?);
-        }
-        ordered.sort_by_key(|(index, _)| *index);
-        tracks.extend(ordered.into_iter().map(|(_, track)| track));
-    }
-    Ok(tracks)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::Cell;
+    #[test]
+    fn extended_track_metadata_keeps_album_links() {
+        use librespot_protocol::metadata::{Album as WireAlbum, Date, Track as WireTrack};
+        let wire = WireTrack {
+            gid: Some(vec![1; 16]),
+            name: Some("Song".into()),
+            duration: Some(180000),
+            album: protobuf::MessageField::some(WireAlbum {
+                gid: Some(vec![2; 16]),
+                name: Some("Album".into()),
+                date: protobuf::MessageField::some(Date {
+                    year: Some(2025),
+                    month: Some(1),
+                    day: Some(1),
+                    ..Date::default()
+                }),
+                ..WireAlbum::default()
+            }),
+            ..WireTrack::default()
+        };
+        let track = metadata_track(&librespot_metadata::Track::try_from(&wire).unwrap()).unwrap();
+        assert!(track.album.id.is_some());
+        assert!(track.album.uri.starts_with("spotify:album:"));
+        assert_eq!(track.album.name, "Album");
+    }
 
     #[test]
     fn local_pause_bypasses_browsing_worker_and_retired_sessions() {

@@ -76,6 +76,7 @@ fn restore_playback(snapshot: &mut Snapshot, value: crate::resume::LastPlayed) {
     snapshot.playback.is_playing = false;
     snapshot.playback.device = Device {
         name: native::device_name(),
+        volume_percent: Some(snapshot.settings.volume_percent.min(100)),
         ..Device::default()
     };
     snapshot.observed_at = now_ms();
@@ -129,7 +130,13 @@ impl Desktop {
                 canvas_url: None,
                 profile: None,
                 playlists: Vec::new(),
-                playback: Playback::default(),
+                playback: Playback {
+                    device: Device {
+                        volume_percent: Some(settings.volume_percent.min(100)),
+                        ..Device::default()
+                    },
+                    ..Playback::default()
+                },
                 settings: settings.clone(),
                 native_ready: false,
                 local_device_name: native::device_name(),
@@ -341,10 +348,19 @@ impl Desktop {
                             );
                         }
                         Event::Library(playlists) => {
+                            if let Some(profile) = &snapshot.profile {
+                                crate::library_cache::save(&profile.id, &playlists);
+                            }
                             snapshot.playlists = playlists;
                             emit(json!({"type":"library","playlists":snapshot.playlists}));
                         }
                         Event::Playback(mut playback, _observed) => {
+                            if snapshot.native_ready
+                                && playback.device.name == native::device_name()
+                            {
+                                playback.device.volume_percent =
+                                    Some(snapshot.settings.volume_percent);
+                            }
                             if snapshot.playback.keep_native_when_empty(
                                 &playback,
                                 snapshot.native_ready,
@@ -518,6 +534,7 @@ impl Desktop {
                                     snapshot.playback.repeat_state = repeat;
                                 }
                                 if let Some(volume) = volume {
+                                    snapshot.settings.volume_percent = volume;
                                     snapshot.playback.device.volume_percent = Some(volume);
                                 }
                                 emit(
@@ -563,9 +580,6 @@ impl Desktop {
                             snapshot.canvas_url = None;
                             snapshot.lyric_error.clear();
                             snapshot.details = PlayingDetails::default();
-                            if let Ok(mut pending) = pump.pending_track.lock() {
-                                *pending = Some((track.uri.clone(), Instant::now()));
-                            }
                             let _ = pump.commands.send(Command::TrackInfo(track.uri.clone()));
                             let _ = pump.commands.send(Command::FetchLyrics(track.clone()));
                             let _ = pump.commands.send(Command::PlayingDetails(track));
@@ -736,6 +750,15 @@ impl Desktop {
         Ok(Self(inner))
     }
     fn stop(&self) {
+        if let Ok(mut snapshot) = self.0.snapshot.lock() {
+            snapshot.settings.volume_percent = snapshot
+                .playback
+                .device
+                .volume_percent
+                .unwrap_or(snapshot.settings.volume_percent)
+                .min(100);
+            let _ = snapshot.settings.save();
+        }
         if let Ok(snapshot) = self.0.snapshot.lock()
             && let Some(profile) = &snapshot.profile
             && self
@@ -989,13 +1012,30 @@ fn player(
             && lock(&state.0.last_native)?.is_none()
             && let Some(track) = snapshot.playback.item.as_ref()
         {
-            action = PlayerAction::Play(Some(track.uri.clone()));
+            let queue = snapshot
+                .profile
+                .as_ref()
+                .map(|profile| crate::resume::queue(&profile.id))
+                .filter(|queue| !queue.is_empty())
+                .unwrap_or_else(|| {
+                    snapshot
+                        .tracks
+                        .iter()
+                        .filter(|item| !item.is_local)
+                        .take(100)
+                        .map(|item| item.uri.clone())
+                        .collect()
+                });
+            action = crate::resume::restore_action(&track.uri, &queue);
             *lock(&state.0.resume_seek)? = Some((
                 track.uri.clone(),
                 snapshot.playback.progress_ms.unwrap_or_default(),
             ));
         }
         if local && !matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
+            if matches!(action, PlayerAction::Next | PlayerAction::Previous) {
+                *lock(&state.0.pending_track)? = None;
+            }
             action = local_load(action, &snapshot.tracks)?;
             ensure!(
                 snapshot.native_ready,
@@ -1004,6 +1044,9 @@ fn player(
             state.0.controls.send(action.clone()).map_err(|_| {
                 anyhow::anyhow!("Native audio disconnected. Reconnect native audio in Settings.")
             })?;
+            if let Some(profile) = snapshot.profile.as_ref() {
+                crate::resume::remember_queue(&profile.id, &action);
+            }
             if let Some(track) = request.track {
                 if let Ok(mut pending) = state.0.pending_track.lock() {
                     *pending = Some((track.uri.clone(), Instant::now()));
@@ -1153,10 +1196,21 @@ fn add_tracks(
 async fn open_creator_profile(
     app: tauri::AppHandle,
     username: String,
+    user_id: Option<String>,
 ) -> std::result::Result<(), String> {
+    let resolved = if let Some(id) = user_id.filter(|id| !id.is_empty()) {
+        Some(
+            tauri::async_runtime::spawn_blocking(move || crate::provider::creator_profile(&id))
+                .await
+                .map_err(error)?
+                .map_err(error)?,
+        )
+    } else {
+        None
+    };
     let result = || -> Result<()> {
         use sha2::{Digest, Sha256};
-        let url = creator_profile_url(&username)?;
+        let url = resolved.map_or_else(|| creator_profile_url(&username), Ok)?;
         let digest = Sha256::digest(url.as_str());
         let label = format!(
             "creator-{}",
@@ -1190,6 +1244,20 @@ async fn open_creator_profile(
         Ok(())
     };
     result().map_err(error)
+}
+#[tauri::command]
+async fn resolve_album(
+    state: State<'_, Desktop>,
+    uri: String,
+) -> std::result::Result<crate::model::Album, String> {
+    let controls = state.0.controls.clone();
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || controls.track(&uri).map(|track| track.album))
+        .await
+        .map_err(error)?
+        .map_err(|_| "Album metadata unavailable. Try again shortly.".to_owned())
 }
 fn creator_profile_url(username: &str) -> Result<url::Url> {
     let name = username.trim().trim_start_matches('@');
@@ -1285,6 +1353,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             add_tracks,
             open_link,
             open_creator_profile,
+            resolve_album,
             app_update
         ])
         .build(tauri::generate_context!())?;

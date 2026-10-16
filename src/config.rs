@@ -22,6 +22,7 @@ pub struct Settings {
     pub floating_lyrics: bool,
     pub ui_font: String,
     pub lyric_font: String,
+    pub volume_percent: u8,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
 }
@@ -41,6 +42,7 @@ impl Default for Settings {
             floating_lyrics: false,
             ui_font: String::new(),
             lyric_font: String::new(),
+            volume_percent: 100,
             auto_download_updates: true,
             folders: Vec::new(),
         }

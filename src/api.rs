@@ -4,7 +4,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, bail, ensure};
@@ -25,18 +24,19 @@ pub struct Spotify {
     pub client: Client,
     pub client_id: String,
     pub tokens: Tokens,
-    retry_after: Option<Instant>,
+    backoff: crate::api_backoff::Backoff,
     active: Arc<AtomicBool>,
     background: bool,
 }
 
 impl Spotify {
     pub fn new(client: Client, client_id: String, tokens: Tokens) -> Self {
+        let backoff = crate::api_backoff::Backoff::new(&client_id);
         Self {
             client,
             client_id,
             tokens,
-            retry_after: None,
+            backoff,
             active: Arc::new(AtomicBool::new(true)),
             background: false,
         }
@@ -46,6 +46,9 @@ impl Spotify {
         let mut snapshot = self.clone();
         snapshot.background = true;
         snapshot
+    }
+    pub fn cooling_down(&self) -> bool {
+        self.backoff.remaining() > 0
     }
     pub fn cancel_background(&self) {
         self.active.store(false, Ordering::Release);
@@ -61,12 +64,7 @@ impl Spotify {
             self.active.load(Ordering::Acquire),
             "Spotify session signed out"
         );
-        if let Some(until) = self.retry_after.filter(|until| *until > Instant::now()) {
-            bail!(
-                "Spotify rate limit: retry in {} seconds",
-                until.duration_since(Instant::now()).as_secs() + 1
-            );
-        }
+        self.backoff.check()?;
         if self.background {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
@@ -122,9 +120,9 @@ impl Spotify {
                         .and_then(|header| header.to_str().ok())
                         .and_then(|value| value.parse::<u64>().ok())
                         .unwrap_or(30)
-                        .clamp(1, 86_400);
-                    self.retry_after = Some(Instant::now() + Duration::from_secs(seconds));
-                    bail!("Spotify rate limit: retry in {seconds} seconds");
+                        .max(1);
+                    self.backoff.pause(seconds);
+                    return Err(crate::api_backoff::CoolingDown(seconds).into());
                 }
                 StatusCode::FORBIDDEN => bail!(
                     "Spotify denied this action. Check Premium, Developer Dashboard access, and playlist ownership."
@@ -227,6 +225,7 @@ impl Spotify {
         .unix_timestamp_nanos()
             / 1_000_000;
         Ok(Some(crate::resume::LastPlayed {
+            queue: Vec::new(),
             track,
             position_ms: 0,
             played_at: played_at.max(0) as u64,
@@ -579,6 +578,7 @@ mod tests {
             refresh_token: "test".into(),
             expires_at: 0,
             scopes: String::new(),
+            profile: None,
         };
         let spotify = Spotify::new(Client::new(), "test".into(), tokens);
         assert!(

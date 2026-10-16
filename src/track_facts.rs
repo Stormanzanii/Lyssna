@@ -55,6 +55,8 @@ impl Catalogue {
     ) -> HashMap<String, Facts> {
         let mut result = HashMap::new();
         let mut attempted = HashSet::new();
+        let mut artist_attempts = HashSet::new();
+        let mut genre_budget = 3;
         for track in tracks {
             let mut facts = Facts {
                 release_date: track.album.release_date.clone(),
@@ -96,13 +98,19 @@ impl Catalogue {
             for artist in &track.artists {
                 facts.genres.extend(artist.genres.clone());
                 if let Some(id) = artist.id.as_deref() {
-                    let genres = self.genres.entry(id.into()).or_insert_with(|| {
-                        spotify
-                            .artist(id)
-                            .map(|artist| artist.genres)
-                            .unwrap_or_default()
-                    });
-                    facts.genres.extend(genres.iter().cloned());
+                    if !self.genres.contains_key(id)
+                        && genre_budget > 0
+                        && !spotify.cooling_down()
+                        && artist_attempts.insert(id.to_owned())
+                    {
+                        genre_budget -= 1;
+                        if let Ok(artist) = spotify.artist(id) {
+                            self.genres.insert(id.into(), artist.genres);
+                        }
+                    }
+                    if let Some(genres) = self.genres.get(id) {
+                        facts.genres.extend(genres.iter().cloned());
+                    }
                 }
             }
             facts.genres.sort();

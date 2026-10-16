@@ -285,11 +285,17 @@ impl Worker {
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
-                if backend.spotify.is_some() && Instant::now() >= next_poll {
+                if backend
+                    .spotify
+                    .as_ref()
+                    .is_some_and(|api| !api.cooling_down())
+                    && Instant::now() >= next_poll
+                {
                     if let Err(error) = backend.poll() {
                         backend.emit(Event::Error(error.to_string()));
                     }
-                    next_poll = Instant::now() + Duration::from_secs(4);
+                    next_poll = Instant::now()
+                        + Duration::from_secs(if backend.native.is_some() { 60 } else { 12 });
                 }
             }
         });
@@ -382,6 +388,26 @@ struct Backend {
     context: Notifier,
 }
 
+fn profile_for_session(
+    remote: Result<Profile>,
+    cached: Option<Profile>,
+    restoring: bool,
+) -> Result<Profile> {
+    match remote {
+        Ok(profile) => Ok(profile),
+        Err(error) => {
+            if restoring
+                && error
+                    .downcast_ref::<crate::api_backoff::CoolingDown>()
+                    .is_some()
+                && let Some(profile) = cached
+            {
+                return Ok(profile);
+            }
+            Err(error)
+        }
+    }
+}
 impl Drop for Backend {
     fn drop(&mut self) {
         if let Some(spotify) = &self.spotify {
@@ -395,10 +421,12 @@ impl Backend {
         self.context.request_repaint();
     }
 
-    fn establish(&mut self, mut tokens: Tokens, client_id: String) -> Result<()> {
+    fn establish(&mut self, mut tokens: Tokens, client_id: String, restoring: bool) -> Result<()> {
         tokens.refresh_if_needed(&self.client, &client_id)?;
+        let cached = tokens.profile.clone();
         let mut spotify = Spotify::new(self.client.clone(), client_id.clone(), tokens);
-        self.profile = spotify.profile()?;
+        self.profile = profile_for_session(spotify.profile(), cached, restoring)?;
+        spotify.tokens.profile = Some(self.profile.clone());
         spotify.tokens.save(&client_id)?;
         self.client_id = client_id;
         if let Some(previous) = self.spotify.as_ref() {
@@ -406,6 +434,9 @@ impl Backend {
         }
         self.spotify = Some(spotify);
         self.emit(Event::Session(self.profile.clone()));
+        if let Some(playlists) = crate::library_cache::load(&self.profile.id) {
+            self.emit(Event::Library(playlists));
+        }
         if let Err(error) = self.start_audio() {
             self.emit(Event::Error(error.to_string()));
         }
@@ -496,7 +527,7 @@ impl Backend {
             Command::Restore(client_id) => {
                 self.client_id = client_id.clone();
                 if let Some(tokens) = Tokens::load(&client_id)? {
-                    self.establish(tokens, client_id)?;
+                    self.establish(tokens, client_id, true)?;
                 } else {
                     self.emit(Event::SignedOut);
                 }
@@ -511,7 +542,7 @@ impl Backend {
                 result,
             } => {
                 if !cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-                    self.establish(*result.map_err(anyhow::Error::msg)?, client_id)?;
+                    self.establish(*result.map_err(anyhow::Error::msg)?, client_id, false)?;
                 }
             }
             Command::Logout => {
@@ -531,11 +562,16 @@ impl Backend {
                 self.emit(Event::Devices(devices));
             }
             Command::TrackInfo(uri) => {
-                let track = self.api()?.track(&uri)?;
-                self.emit(Event::TrackInfo {
-                    uri,
-                    track: Box::new(track),
-                });
+                if let Ok(track) = self
+                    .native_controls
+                    .track(&uri)
+                    .or_else(|_| self.api()?.track(&uri))
+                {
+                    self.emit(Event::TrackInfo {
+                        uri,
+                        track: Box::new(track),
+                    });
+                }
             }
             Command::Library => {
                 let playlists = self.api()?.playlists()?;
@@ -606,7 +642,13 @@ impl Backend {
             }
             Command::RetryAudio => self.start_audio()?,
             Command::BrowseInfo { key, generation } => {
-                let info = self.api()?.browse_info(&key)?;
+                let mut info = self
+                    .api()?
+                    .browse_info(&key)
+                    .unwrap_or_else(|_| BrowseInfo {
+                        key: key.clone(),
+                        ..BrowseInfo::default()
+                    });
                 self.emit(Event::BrowseInfo {
                     generation,
                     info: Box::new(info.clone()),
@@ -620,7 +662,14 @@ impl Backend {
                     thread::spawn(move || {
                         if let Ok(overview) = native
                             .catalogue("artist", &id, 0)
-                            .and_then(|entity| crate::artist::from_entity(&entity, &id))
+                            .and_then(|entity| {
+                                if let Ok(base) =
+                                    crate::catalogue::base_info(&entity, "artist", &id)
+                                {
+                                    info = base;
+                                }
+                                crate::artist::from_entity(&entity, &id)
+                            })
                             .or_else(|_| crate::artist::fetch(&client, &id))
                         {
                             let mut info = info;
@@ -640,6 +689,9 @@ impl Backend {
                     let context = self.context.clone();
                     thread::spawn(move || {
                         let desktop = native.catalogue("album", &id, 0).map(|entity| {
+                            if let Ok(base) = crate::catalogue::base_info(&entity, "album", &id) {
+                                info = base;
+                            }
                             let mut details = crate::album::parse(&entity);
                             let total = entity["tracksV2"]["totalCount"]
                                 .as_u64()
@@ -831,20 +883,59 @@ fn fetch_tracks(
     key: &str,
     offset: usize,
 ) -> Result<Vec<Track>> {
+    let account = api
+        .tokens
+        .profile
+        .as_ref()
+        .map(|profile| profile.id.clone());
+    let result = fetch_live_tracks(api, native, key, offset);
+    match result {
+        Ok(tracks) => {
+            if let Some(account) = account {
+                crate::library_cache::save_tracks(&account, key, offset, &tracks);
+            }
+            Ok(tracks)
+        }
+        Err(error) => {
+            if let Some(account) = account
+                && let Some(tracks) = crate::library_cache::tracks(&account, key, offset)
+            {
+                return Ok(tracks);
+            }
+            Err(error)
+        }
+    }
+}
+fn fetch_live_tracks(
+    api: &mut Spotify,
+    native: &NativeControls,
+    key: &str,
+    offset: usize,
+) -> Result<Vec<Track>> {
     if let Some(query) = key.strip_prefix("search:") {
-        api.search(query)
+        native.playlist_tracks(key, offset).or_else(|_| {
+            if offset == 0 {
+                api.search(query)
+            } else {
+                Ok(Vec::new())
+            }
+        })
     } else if let Some(id) = key.strip_prefix("playlist:") {
-        match api.playlist_tracks(id, offset) {
+        match native.playlist_tracks(id, offset) {
             Ok(tracks) => Ok(tracks),
-            Err(_) => native.playlist_tracks(id, offset),
+            Err(_) => api.playlist_tracks(id, offset),
         }
     } else if let Some(id) = key.strip_prefix("album:") {
-        api.album_tracks(id, offset)
+        native
+            .playlist_tracks(key, offset)
+            .or_else(|_| api.album_tracks(id, offset))
     } else if key.starts_with("artist:") {
         Ok(Vec::new())
     } else {
         match key {
-            "liked" => api.saved_tracks(offset),
+            "liked" => native
+                .playlist_tracks("liked", offset)
+                .or_else(|_| api.saved_tracks(offset)),
             "queue" => api.queue(),
             _ => api.recent(),
         }
@@ -866,4 +957,37 @@ fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
     let url = crate::canvas::video_url(&bytes, uri).ok().flatten();
     crate::canvas::remember(uri, url.clone());
     url
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+    #[test]
+    fn cached_profiles_only_restore_the_same_session_during_cooldown() {
+        let cached = Profile {
+            id: "existing".into(),
+            ..Profile::default()
+        };
+        assert_eq!(
+            profile_for_session(
+                Err(crate::api_backoff::CoolingDown(60).into()),
+                Some(cached.clone()),
+                true
+            )
+            .unwrap()
+            .id,
+            "existing"
+        );
+        assert!(
+            profile_for_session(
+                Err(crate::api_backoff::CoolingDown(60).into()),
+                Some(cached.clone()),
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            profile_for_session(Err(anyhow::anyhow!("unauthorized")), Some(cached), true).is_err()
+        );
+    }
 }

@@ -178,7 +178,7 @@ impl Playback {
         native_ready: bool,
         native_name: &str,
     ) -> bool {
-        native_ready
+        (native_ready || !self.is_playing)
             && self.item.is_some()
             && self.device.name == native_name
             && incoming.item.is_none()

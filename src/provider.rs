@@ -204,6 +204,58 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
     parse(&data, track.duration_ms)
 }
 
+pub fn creator_profile(id: &str) -> Result<Url> {
+    ensure!(
+        !id.is_empty()
+            && id.len() <= 128
+            && id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')),
+        "Invalid creator identity"
+    );
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
+    let mut url = Url::parse("https://spicylyrics.org/uid/")?;
+    url.path_segments_mut()
+        .map_err(|_| anyhow::anyhow!("Invalid creator path"))?
+        .pop_if_empty()
+        .push(id);
+    let response = client
+        .get(url)
+        .send()
+        .map_err(|_| anyhow::anyhow!("Cannot resolve creator profile"))?;
+    ensure!(
+        response.status().is_redirection(),
+        "This creator has no published Spicy Lyrics profile"
+    );
+    creator_redirect(
+        response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|header| header.to_str().ok())
+            .context("Creator profile unavailable")?,
+    )
+}
+fn creator_redirect(location: &str) -> Result<Url> {
+    let mut url = Url::parse("https://spicylyrics.org/")?.join(location)?;
+    let path = url.path().trim_matches('/').to_owned();
+    ensure!(
+        url.scheme() == "https"
+            && url.host_str() == Some("spicylyrics.org")
+            && url.port_or_known_default() == Some(443)
+            && url.username().is_empty()
+            && url.password().is_none()
+            && !path.is_empty()
+            && !path.contains('/'),
+        "Invalid creator profile destination"
+    );
+    url.set_path(&format!("/embed/{path}"));
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url)
+}
 fn spicy_request(
     client: &Client,
     id: &str,
@@ -545,6 +597,21 @@ impl Decoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn creator_identity_uses_canonical_handle_and_rejects_other_origins() {
+        assert_eq!(
+            creator_redirect("/actual-handle").unwrap().as_str(),
+            "https://spicylyrics.org/embed/actual-handle"
+        );
+        for location in [
+            "https://untrusted.example/person",
+            "http://spicylyrics.org/person",
+            "https://user@spicylyrics.org/person",
+            "/unexpected/nested/path",
+        ] {
+            assert!(creator_redirect(location).is_err());
+        }
+    }
     #[test]
     fn lead_timing_excludes_a_background_tail() {
         let voice = json!({"Syllables":[{"Text":"Lead","StartTime":1.0,"EndTime":2.0}]});

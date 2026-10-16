@@ -3,6 +3,73 @@ use anyhow::{Context, Result, ensure};
 use librespot_core::Session;
 use serde_json::{Value, json};
 use std::time::Duration;
+pub fn base_info(entity: &Value, kind: &str, id: &str) -> Result<crate::model::BrowseInfo> {
+    use crate::model::{Album, Artist, BrowseInfo};
+    fn images(value: &Value) -> Vec<crate::model::Artwork> {
+        serde_json::from_value(value.clone()).unwrap_or_default()
+    }
+    fn artist(value: &Value) -> Artist {
+        let uri = value["uri"].as_str().unwrap_or_default();
+        Artist {
+            id: uri.strip_prefix("spotify:artist:").map(str::to_owned),
+            uri: uri.to_owned(),
+            name: value["profile"]["name"]
+                .as_str()
+                .or_else(|| value["name"].as_str())
+                .unwrap_or_default()
+                .to_owned(),
+            images: images(&value["visuals"]["avatarImage"]["sources"]),
+            ..Artist::default()
+        }
+    }
+    let mut info = BrowseInfo {
+        key: format!("{kind}:{id}"),
+        ..BrowseInfo::default()
+    };
+    if kind == "artist" {
+        let artist = artist(entity);
+        ensure!(!artist.name.is_empty(), "Artist name unavailable");
+        info.title = artist.name.clone();
+        info.images = artist.images.clone();
+        info.artist = Some(artist);
+    } else if kind == "album" {
+        let name = entity["name"].as_str().context("Album name unavailable")?;
+        let artists = entity["artists"]["items"]
+            .as_array()
+            .map(|items| items.iter().map(artist).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let album = Album {
+            id: Some(id.to_owned()),
+            uri: format!("spotify:album:{id}"),
+            name: name.to_owned(),
+            images: images(&entity["coverArt"]["sources"]),
+            artists,
+            release_date: entity["date"]["isoString"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(10)
+                .collect(),
+            album_type: entity["type"].as_str().unwrap_or_default().to_owned(),
+            total_tracks: entity["tracksV2"]["totalCount"]
+                .as_u64()
+                .unwrap_or_default(),
+            ..Album::default()
+        };
+        info.title = album.name.clone();
+        info.images = album.images.clone();
+        info.subtitle = album
+            .artists
+            .iter()
+            .map(|artist| artist.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        info.album = Some(album);
+    } else {
+        anyhow::bail!("Unsupported catalogue entity");
+    }
+    Ok(info)
+}
 
 pub async fn entity(session: &Session, kind: &str, id: &str) -> Result<Value> {
     page(session, kind, id, 0).await
@@ -49,4 +116,20 @@ pub async fn page(session: &Session, kind: &str, id: &str, offset: usize) -> Res
     );
     entity.as_object().context("Invalid catalogue data")?;
     Ok(entity)
+}
+#[cfg(test)]
+mod base_tests {
+    use super::*;
+    #[test]
+    fn native_album_supplies_header_without_public_api() {
+        let value = json!({"name":"Album title","coverArt":{"sources":[{"url":"https://artwork.example.test/cover","width":640,"height":640}]},"artists":{"items":[{"uri":"spotify:artist:artist","profile":{"name":"Album artist"}}]},"tracksV2":{"totalCount":13},"date":{"isoString":"2026-05-04T00:00:00Z"}});
+        let info = base_info(&value, "album", "album").unwrap();
+        assert_eq!(info.title, "Album title");
+        assert_eq!(info.images.len(), 1);
+        let album = info.album.unwrap();
+        assert_eq!(album.artists[0].name, "Album artist");
+        assert_eq!(album.total_tracks, 13);
+        assert_eq!(album.release_date, "2026-05-04");
+        assert!(info.album_details.is_none());
+    }
 }

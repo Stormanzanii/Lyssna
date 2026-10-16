@@ -55,6 +55,8 @@ pub struct Tokens {
     pub expires_at: u64,
     #[serde(default)]
     pub scopes: String,
+    #[serde(default)]
+    pub profile: Option<crate::model::Profile>,
 }
 
 #[derive(Deserialize)]
@@ -323,6 +325,7 @@ fn exchange(
         refresh_token,
         expires_at: now() + result.expires_in,
         scopes: result.scope.unwrap_or_default(),
+        profile: None,
     })
 }
 
@@ -341,6 +344,7 @@ impl Tokens {
             if refreshed.scopes.is_empty() {
                 refreshed.scopes = self.scopes.clone();
             }
+            refreshed.profile = self.profile.clone();
             *self = refreshed;
             self.save(client_id)?;
         }

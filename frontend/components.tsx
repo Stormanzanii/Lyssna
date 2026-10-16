@@ -226,8 +226,8 @@ export const Ambience = memo(function Ambience({
       aria-hidden="true"
     >
       <canvas
-        width={128}
-        height={128}
+        width={512}
+        height={288}
         ref={surface}
         className="ambient-layer"
         style={{
@@ -766,6 +766,7 @@ const LyricWords = memo(function LyricWords({
           time,
         );
         const held = group.some((word) => word.end_ms - word.start_ms >= 1000);
+        const split = group.length > 1;
         return (
           <span key={index} className="lyric-word-group">
             {whitespace}
@@ -773,10 +774,11 @@ const LyricWords = memo(function LyricWords({
               className="lyric-word"
               style={
                 {
-                  "--word-lift": reduceMotion ? 0 : motion.lift,
-                  "--word-scale": reduceMotion
-                    ? 1
-                    : 1 + (motion.scale - 1) * (held ? 0.4 : 1),
+                  "--word-lift": reduceMotion || split ? 0 : motion.lift,
+                  "--word-scale":
+                    reduceMotion || split
+                      ? 1
+                      : 1 + (motion.scale - 1) * (held ? 0.4 : 1),
                   "--word-glow": reduceMotion ? 0 : motion.glow,
                 } as CSSProperties
               }
@@ -785,6 +787,7 @@ const LyricWords = memo(function LyricWords({
                 const text =
                   part === 0 ? word.text.slice(whitespace.length) : word.text;
                 const letters = Array.from(text);
+                const syllable = wordMotion(word.start_ms, word.end_ms, time);
                 const emphasis =
                   !reduceMotion &&
                   word.end_ms - word.start_ms >= 1000 &&
@@ -797,8 +800,14 @@ const LyricWords = memo(function LyricWords({
                     style={
                       {
                         "--word-progress": `${progress(word.start_ms, word.end_ms, time) * 120 - 20}%`,
-                        "--syllable-lift": 0,
-                        "--syllable-scale": 1,
+                        "--syllable-lift":
+                          split && !reduceMotion && !emphasis
+                            ? syllable.lift * 2.8
+                            : 0,
+                        "--syllable-scale":
+                          split && !reduceMotion && !emphasis
+                            ? 1 + (syllable.scale - 1) * 1.4
+                            : 1,
                         "--syllable-glow": reduceMotion ? 0 : motion.glow,
                       } as CSSProperties
                     }

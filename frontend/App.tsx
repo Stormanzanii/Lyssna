@@ -85,6 +85,7 @@ import {
 } from "./components";
 import "./styles.css";
 import { VolumeControl } from "./volume-control";
+import { FontSettings, fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { collectionTracks, genresFor } from "./collection";
 
 type Center = "browse" | "lyrics" | "settings";
@@ -136,6 +137,12 @@ function App() {
     pendingPage = useRef<string>(""),
     targetChosen = useRef(false);
   stateRef.current = state;
+  useEffect(() => {
+    void loadSelectedFonts([
+      state.settings.ui_font,
+      state.settings.lyric_font,
+    ]).catch(() => {});
+  }, [state.settings.ui_font, state.settings.lyric_font]);
   routeRef.current = state.route;
   const notify = useCallback(
     (message: string, error = false) =>
@@ -564,6 +571,14 @@ function App() {
   return (
     <div
       className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""}`}
+      style={
+        {
+          fontFamily: fontFamily(state.settings.ui_font),
+          "--lyric-font":
+            fontFamily(state.settings.lyric_font || state.settings.ui_font) ||
+            "inherit",
+        } as CSSProperties
+      }
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -2225,6 +2240,11 @@ function SettingsPage({
             ms
           </span>
         </label>
+        <FontSettings
+          settings={state.settings}
+          onSettings={onSettings}
+          onNotice={onNotice}
+        />
         {[
           ["romanized", "Show romanized lyrics"],
           ["reduce_motion", "Reduce motion"],

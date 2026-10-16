@@ -235,7 +235,7 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
-test("Canvas and floating lyrics are opt-in, with sharp video left and metadata bottom-left", async ({
+test("Canvas defaults on, floating lyrics are optional, with sharp video left and metadata bottom-left", async ({
   page,
 }) => {
   await startClient(page);
@@ -270,7 +270,7 @@ test("Canvas and floating lyrics are opt-in, with sharp video left and metadata 
   }, track.uri);
   await page.getByTitle("Settings", { exact: true }).click();
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
-  await expect(page.getByLabel("Canvas in lyrics")).not.toBeChecked();
+  await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
   await expect(page.getByLabel("Floating lyrics")).not.toBeChecked();
   await page.getByLabel("Canvas in lyrics").check();
   await page.getByLabel("Floating lyrics").check();
@@ -286,7 +286,7 @@ test("Canvas and floating lyrics are opt-in, with sharp video left and metadata 
     await page
       .locator(".lyrics-canvas-backdrop")
       .evaluate((element) => (element as HTMLCanvasElement).width),
-  ).toBe(128);
+  ).toBe(512);
   const layout = await page.evaluate(() => {
     const video = document
         .querySelector(".lyrics-canvas-cover")!
@@ -312,6 +312,73 @@ test("Canvas and floating lyrics are opt-in, with sharp video left and metadata 
   await expect(page.locator(".floating-stage")).toHaveCount(0);
   await expect(page.locator(".lyrics-canvas-cover")).toHaveCount(0);
   await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
+});
+
+test("timed syllables lift independently and font choices apply separately", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "Hello",
+            start_ms: 1000,
+            end_ms: 1800,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "Hel", start_ms: 1000, end_ms: 1300 },
+              { text: "lo", start_ms: 1300, end_ms: 1800 },
+            ],
+          },
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1070,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  await expect(page.locator(".lyrics-page .lyric-syllable")).toHaveCount(2);
+  const transforms = await page
+    .locator(".lyrics-page .lyric-syllable")
+    .evaluateAll((elements) =>
+      elements.map(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+      ),
+    );
+  expect(transforms[0]).toBeLessThan(-2);
+  expect(transforms[1]).toBe(0);
+  await page.getByTitle("Settings", { exact: true }).click();
+  await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
+  await page
+    .getByLabel("Lyrics font", { exact: true })
+    .selectOption("Consolas");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  expect(
+    await page
+      .locator(".application")
+      .evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Georgia");
+  expect(
+    await page
+      .locator(".lyrics-page .lyric-line")
+      .evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Consolas");
 });
 
 test("playlist search spans unloaded pages and play counts drive sorting", async ({

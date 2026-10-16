@@ -81,6 +81,8 @@ export interface Settings {
   reduce_motion: boolean;
   canvas_lyrics?: boolean;
   floating_lyrics?: boolean;
+  ui_font?: string;
+  lyric_font?: string;
   auto_download_updates: boolean;
   folders: Folder[];
 }

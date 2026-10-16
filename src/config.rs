@@ -20,6 +20,8 @@ pub struct Settings {
     pub reduce_motion: bool,
     pub canvas_lyrics: bool,
     pub floating_lyrics: bool,
+    pub ui_font: String,
+    pub lyric_font: String,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
 }
@@ -35,8 +37,10 @@ impl Default for Settings {
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,
-            canvas_lyrics: false,
+            canvas_lyrics: true,
             floating_lyrics: false,
+            ui_font: String::new(),
+            lyric_font: String::new(),
             auto_download_updates: true,
             folders: Vec::new(),
         }

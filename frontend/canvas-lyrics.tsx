@@ -25,15 +25,41 @@ export function LyricsCanvas({
       canvas = backdrop.current,
       context = canvas?.getContext("2d", { alpha: false });
     if (!element || !canvas || !context) return;
+    const root = element.closest<HTMLElement>(".lyrics-page"),
+      cover = element.parentElement!;
+    const resize = () => {
+      if (element.videoWidth)
+        cover.style.aspectRatio = `${element.videoWidth}/${element.videoHeight}`;
+      const box = root?.getBoundingClientRect();
+      if (!box) return;
+      root!.style.setProperty(
+        "--canvas-sharp-edge",
+        `${cover.getBoundingClientRect().width}px`,
+      );
+      const height = Math.max(1, Math.round((512 * box.height) / box.width));
+      if (canvas.width !== 512) canvas.width = 512;
+      if (canvas.height !== height) canvas.height = height;
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    if (root) observer.observe(root);
+    observer.observe(cover);
+    element.addEventListener("loadedmetadata", resize);
     let frame = 0,
       last = 0;
     const draw = (now: number) => {
       if (now - last >= 100 && element.readyState >= 2 && !document.hidden) {
         last = now;
-        context.filter = "blur(9px) saturate(1.25) brightness(0.5)";
-        context.drawImage(element, -24, -24, 176, 176);
+        context.filter = "blur(8px) saturate(1.25) brightness(0.34)";
+        context.drawImage(
+          element,
+          -24,
+          -24,
+          canvas.width + 48,
+          canvas.height + 48,
+        );
       }
-      if (!element.paused && !element.ended)
+      if (element.isConnected && !element.paused && !element.ended)
         frame = requestAnimationFrame(draw);
     };
     const start = () => {
@@ -49,9 +75,11 @@ export function LyricsCanvas({
       element.removeEventListener("playing", start);
       element.removeEventListener("loadeddata", start);
       element.removeEventListener("seeked", start);
-      context.clearRect(0, 0, 128, 128);
+      element.removeEventListener("loadedmetadata", resize);
+      observer.disconnect();
+      context.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [url, backdrop]);
+  }, [url, backdrop, failed]);
   return (
     <div className="cover lyrics-canvas-cover">
       {failed ? (

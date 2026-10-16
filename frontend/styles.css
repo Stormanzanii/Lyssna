@@ -36,8 +36,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 0 1 320px;
   min-width: 180px;
+  max-width: 360px;
+}
+.song-filters select {
+  max-width: 200px;
 }
 .playlist-search input {
   background: transparent;
@@ -47,6 +51,13 @@
   font: inherit;
   min-width: 0;
   width: 100%;
+}
+.playlist-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.playlist-search:focus-within {
+  border-color: #ffffff35;
 }
 .song-filters small {
   color: #aca7b8;
@@ -1645,6 +1656,7 @@ small {
   height: var(--lead-top, 40px);
 }
 .lyric-line {
+  font-family: var(--lyric-font, inherit);
   display: block;
   width: 100%;
   text-align: left;
@@ -2794,10 +2806,10 @@ input[type="range"]:hover {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 58%;
+  width: auto;
   height: 100%;
-  max-width: none;
-  aspect-ratio: auto;
+  max-width: 58%;
+  aspect-ratio: 9/16;
   mask-image: linear-gradient(to right, #000 0%, #000 68%, transparent 100%);
   z-index: -1;
   border-radius: 0;
@@ -2810,17 +2822,42 @@ input[type="range"]:hover {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: inherit;
 }
 .lyrics-canvas-backdrop {
   position: absolute;
   right: 0;
   top: 0;
-  width: 60%;
+  width: 100%;
   height: 100%;
   z-index: -1;
-  mask-image: linear-gradient(to right, transparent, #000 18%);
+  mask-image: linear-gradient(
+    to right,
+    transparent calc(var(--canvas-sharp-edge, 40%) * 0.68),
+    #000 var(--canvas-sharp-edge, 40%)
+  );
+}
+.lyrics-canvas-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(transparent 65%, #0009);
+}
+.canvas-lyrics::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(
+    to right,
+    transparent 18%,
+    #0003 35%,
+    #0005 45%,
+    #0005
+  );
 }
 .canvas-lyrics .lyrics-title {
   position: absolute;
@@ -2864,6 +2901,7 @@ input[type="range"]:hover {
   isolation: isolate;
 }
 .floating-word {
+  font-family: var(--lyric-font, inherit);
   position: absolute;
   max-width: 45%;
   text-align: center;
@@ -2937,4 +2975,17 @@ input[type="range"]:hover {
 .floating-wait {
   top: var(--floating-focus, 45%);
   transform: translateY(-50%);
+}
+.font-select {
+  min-width: 180px;
+  max-width: 55%;
+  font: inherit;
+  background: #24212d;
+  color: #f7f6fb;
+  border: 1px solid #ffffff20;
+  border-radius: 7px;
+  padding: 8px 12px;
+}
+.font-settings > .pill {
+  margin: 10px 0 18px;
 }

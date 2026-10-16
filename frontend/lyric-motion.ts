@@ -81,6 +81,7 @@ export function stepScroll(spring: ScrollSpring, seconds: number): number {
   return spring.position;
 }
 export function wordMotion(start: number, end: number, time: number) {
+  if (time < 0) return { lift: -0, scale: 1, glow: 0 };
   // A longer rise and release keeps neighbouring syllables overlapping, so
   // motion flows across a line instead of pulsing word by word.
   const phase = Math.max(
@@ -101,6 +102,7 @@ export function letterMotion(
   index: number,
   count: number,
 ) {
+  if (time < 0) return { lift: 0, scale: 1, glow: 0, fill: 0 };
   const slot = Math.max(1, (end - start - 250) / Math.max(1, count));
   const letterStart = start + index * slot;
   const phase = Math.max(

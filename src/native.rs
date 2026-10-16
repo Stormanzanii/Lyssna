@@ -285,7 +285,7 @@ fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<cra
     let UniqueFields::Track { artists, album, .. } = &item.unique_fields else {
         return None;
     };
-    let uri = item.track_id.to_uri().ok()?;
+    let uri = item.track_id.to_uri();
     let mut images: Vec<Artwork> = item
         .covers
         .iter()
@@ -315,12 +315,10 @@ fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<cra
                 )
             })
             .map(|artist| {
-                let uri = artist.id.to_uri().ok();
+                let uri = artist.id.to_uri();
                 Artist {
-                    id: uri
-                        .as_ref()
-                        .and_then(|uri| uri.rsplit(':').next().map(str::to_owned)),
-                    uri: uri.unwrap_or_default(),
+                    id: uri.rsplit(':').next().map(str::to_owned),
+                    uri,
                     name: artist.name.clone(),
                     ..Artist::default()
                 }
@@ -709,7 +707,7 @@ async fn run(
     let mut pending_seek: Option<(String, u64)> = None;
     loop {
         tokio::select! {
-            Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri()?;let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
+            Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri();let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
             _=intent_tick.tick()=>{},
             Some(())=audible_seeks.recv()=>{if let Some((uri,position_ms))=pending_seek.take(){emit(NativeEvent::Position{uri,position_ms,playing:Some(audio_playing),seeked:true});}}
             Some(request)=playlists.recv()=>{
@@ -733,17 +731,17 @@ async fn run(
             }
             event = player_events.recv() => {
                 match event {
-                    Some(PlayerEvent::Loading{track_id,..})=>intent.track_loading(track_id.to_uri().unwrap_or_default(),std::time::Instant::now()),
+                    Some(PlayerEvent::Loading{track_id,..})=>intent.track_loading(track_id.to_uri(),std::time::Instant::now()),
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
                     Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
-                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),true);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
-                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),false);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
-                    Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri().unwrap_or_default();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
-                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: None, seeked: false });}},
+                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri(),true);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
+                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri(),false);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
+                    Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
+                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: None, seeked: false });}},
                     Some(PlayerEvent::Unavailable { .. }) => {intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
                     None => break,
                     _ => {}
@@ -797,19 +795,19 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
     let artists = |items: &librespot_metadata::artist::Artists| {
         items
             .iter()
-            .filter_map(|artist| {
-                let uri = artist.id.to_uri().ok()?;
-                Some(Artist {
+            .map(|artist| {
+                let uri = artist.id.to_uri();
+                Artist {
                     id: uri.rsplit(':').next().map(str::to_owned),
                     uri,
                     name: artist.name.clone(),
                     ..Artist::default()
-                })
+                }
             })
             .collect()
     };
-    let uri = item.id.to_uri().ok()?;
-    let album_uri = item.album.id.to_uri().ok()?;
+    let uri = item.id.to_uri();
+    let album_uri = item.album.id.to_uri();
     let mut images: Vec<_> = item
         .album
         .cover_group
@@ -855,6 +853,28 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
 mod tests {
     use super::*;
     use std::cell::Cell;
+    #[test]
+    fn mono_dj_mp3_decodes_into_both_output_channels() {
+        use librespot_playback::decoder::{AudioDecoder, AudioPacket, SymphoniaDecoder};
+        let mut decoder = SymphoniaDecoder::new(
+            std::io::Cursor::new(&include_bytes!("../tests/fixtures/dj-mono.mp3")[..]),
+            Default::default(),
+        )
+        .unwrap();
+        let mut frames = 0;
+        let mut audible = false;
+        while let Some((_, AudioPacket::Samples(samples))) = decoder.next_packet().unwrap() {
+            let (stereo, remainder) = samples.as_chunks::<2>();
+            assert!(remainder.is_empty());
+            for frame in stereo {
+                assert_eq!(frame[0], frame[1]);
+                audible |= frame[0].abs() > 0.0001;
+                frames += 1;
+            }
+        }
+        assert!(frames > 0);
+        assert!(audible);
+    }
     #[test]
     fn extended_track_metadata_keeps_album_links() {
         use librespot_protocol::metadata::{Album as WireAlbum, Date, Track as WireTrack};

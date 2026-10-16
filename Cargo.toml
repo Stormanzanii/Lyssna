@@ -52,6 +52,17 @@ protobuf = "3.7"
 winresource = "0.1"
 tauri-build = { version = "2", features = [] }
 
+# Experimental DJ session paging and narration; upstream PR #1797.
+# Pin the reviewed implementation so dependency resolution cannot follow branch changes.
+[patch.crates-io]
+librespot-audio = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-connect = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-core = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-metadata = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-oauth = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-playback = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-protocol = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+
 [profile.dev]
 debug = 1
 

@@ -12,10 +12,13 @@ export default defineConfig({
         this.emitFile({
           type: "asset",
           fileName: "THIRD_PARTY_NOTICES.txt",
-          source: readFileSync(
-            new URL("./THIRD_PARTY_NOTICES.md", import.meta.url),
-            "utf8",
-          ),
+          source:
+            readFileSync(
+              new URL("./THIRD_PARTY_NOTICES.md", import.meta.url),
+              "utf8",
+            ) +
+            "\n\n## SpotiFlex\n\nSource: https://github.com/Stormanzanii/SpotiFlex\n\n" +
+            readFileSync(new URL("./LICENSE", import.meta.url), "utf8"),
         });
       },
     },

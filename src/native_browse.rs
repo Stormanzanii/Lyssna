@@ -53,10 +53,7 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
                     playlist.contents.position == 0 && !playlist.contents.is_truncated,
                     "Spotify returned an incomplete playlist"
                 );
-                listing.uris = playlist
-                    .tracks()
-                    .filter_map(|uri| uri.to_uri().ok())
-                    .collect();
+                listing.uris = playlist.tracks().map(|uri| uri.to_uri()).collect();
             } else {
                 let uri = if key == "liked" {
                     format!("spotify:user:{identity}:collection")

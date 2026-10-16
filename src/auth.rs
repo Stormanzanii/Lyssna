@@ -234,7 +234,9 @@ fn wait_for_code(
             Err(error) => return Err(error.into()),
         }
     }
-    bail!("Sign-in timed out after three minutes. Try again.")
+    bail!(
+        "Spotify browser authorization timed out after three minutes. Retry sign-in in Settings; your existing session is unchanged."
+    )
 }
 
 fn callback_has_valid_denial(target: &str, state: &str) -> bool {

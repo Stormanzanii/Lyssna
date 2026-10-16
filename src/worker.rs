@@ -19,6 +19,11 @@ use crate::{
 pub enum Command {
     Restore(String),
     Login(String, Arc<AtomicBool>),
+    LoginResult {
+        client_id: String,
+        cancelled: Arc<AtomicBool>,
+        result: std::result::Result<Box<Tokens>, String>,
+    },
     Logout,
     Refresh,
     Library,
@@ -132,6 +137,7 @@ impl Worker {
         let native_controls = NativeControls::default();
         let backend_controls = native_controls.clone();
         let (commands, receive_commands) = mpsc::channel();
+        let login_results = commands.clone();
         let (send_events, events) = mpsc::channel();
         let (send_native, native_events) = mpsc::channel();
         let (lyrics, receive_lyrics) = mpsc::channel();
@@ -165,7 +171,28 @@ impl Worker {
                 match receive_commands.recv_timeout(Duration::from_millis(250)) {
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Ok(command) => {
-                        let login = matches!(command, Command::Login(..) | Command::Restore(..));
+                        if let Command::Login(client_id, cancelled) = command {
+                            let client = backend.client.clone();
+                            let reply = login_results.clone();
+                            thread::spawn(move || {
+                                let result = auth::login(&client, &client_id, &cancelled)
+                                    .map(Box::new)
+                                    .map_err(|error| error.to_string());
+                                let _ = reply.send(Command::LoginResult {
+                                    client_id,
+                                    cancelled,
+                                    result,
+                                });
+                            });
+                            continue;
+                        }
+                        if let Command::LoginResult { ref cancelled, .. } = command
+                            && cancelled.load(std::sync::atomic::Ordering::Relaxed)
+                        {
+                            continue;
+                        }
+                        let login =
+                            matches!(command, Command::LoginResult { .. } | Command::Restore(..));
                         if let Err(error) = backend.handle(command) {
                             backend.emit(Event::Error(error.to_string()));
                         }
@@ -364,10 +391,16 @@ impl Backend {
                 }
             }
             Command::Login(client_id, cancelled) => {
-                self.client_id = client_id.clone();
-                let tokens = auth::login(&self.client, &client_id, &cancelled)?;
+                let _ = (client_id, cancelled);
+                unreachable!("Login must run outside the API worker");
+            }
+            Command::LoginResult {
+                client_id,
+                cancelled,
+                result,
+            } => {
                 if !cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-                    self.establish(tokens, client_id)?;
+                    self.establish(*result.map_err(anyhow::Error::msg)?, client_id)?;
                 }
             }
             Command::Logout => {

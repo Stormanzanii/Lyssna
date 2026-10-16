@@ -80,6 +80,7 @@ import {
   prefetchPage,
   cancelPrefetch,
   useLoadedImage,
+  ExplicitBadge,
   usePosition,
 } from "./components";
 import "./styles.css";
@@ -442,6 +443,7 @@ function App() {
           ? `Results for “${state.route.slice(7)}”`
           : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
+  const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const displayTracks = entity?.artist
     ? (entity.overview?.popular.map((item) => item.track) ?? [])
     : state.tracks;
@@ -594,7 +596,11 @@ function App() {
             title={profileName}
             onClick={() => setCenter("settings")}
           >
-            {profileName.slice(0, 1).toUpperCase()}
+            {profileImage ? (
+              <img src={profileImage} alt="Your Spotify profile" />
+            ) : (
+              profileName.slice(0, 1).toUpperCase()
+            )}
           </button>
         </div>
         <div className="window-controls">
@@ -1085,6 +1091,7 @@ function App() {
                                   {track.name}
                                 </button>
                                 <div className="track-artists">
+                                  <ExplicitBadge track={track} />
                                   <ArtistLinks
                                     artists={track.artists}
                                     onArtist={openArtist}
@@ -1736,6 +1743,7 @@ function PlayerBar({
                 text={artistNames(track)}
                 reduceMotion={state.settings.reduce_motion}
               >
+                <ExplicitBadge track={track} />
                 <ArtistLinks artists={track.artists} onArtist={onArtist} />
               </Marquee>
             </div>

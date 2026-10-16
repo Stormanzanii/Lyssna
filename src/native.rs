@@ -277,6 +277,7 @@ fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<cra
         .collect();
     images.sort_by_key(|image| std::cmp::Reverse(image.width));
     Some(Track {
+        explicit: item.is_explicit,
         id: uri.rsplit(':').next().map(str::to_owned),
         uri,
         name: item.name.clone(),
@@ -793,6 +794,7 @@ fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Trac
     images.sort_by_key(|image| std::cmp::Reverse(image.width));
     images.dedup_by(|a, b| a.url == b.url);
     Some(Track {
+        explicit: item.is_explicit,
         id: uri.rsplit(':').next().map(str::to_owned),
         uri,
         name: item.name.clone(),

@@ -353,6 +353,13 @@ export function ArtistLinks({
     </>
   );
 }
+export function ExplicitBadge({ track }: { track: Track }) {
+  return track.explicit ? (
+    <span className="explicit-badge" aria-label="Explicit" title="Explicit">
+      E
+    </span>
+  ) : null;
+}
 export function TrackTitle({
   track,
   onAlbum,
@@ -1109,6 +1116,7 @@ export function NowPlaying({
                   reduceMotion={state.settings.reduce_motion}
                   className="now-artists"
                 >
+                  <ExplicitBadge track={track} />
                   <ArtistLinks artists={track.artists} onArtist={onArtist} />
                 </Marquee>
               </div>

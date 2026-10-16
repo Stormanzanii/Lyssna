@@ -23,6 +23,7 @@ export interface Album {
   total_tracks?: number;
 }
 export interface Track {
+  explicit?: boolean;
   songwriters?: string[];
   id?: string;
   uri: string;
@@ -47,6 +48,7 @@ export interface Playback {
   device: Device;
 }
 export interface Profile {
+  images?: Artwork[];
   id: string;
   display_name?: string;
 }

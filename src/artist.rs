@@ -204,6 +204,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
                         .unwrap_or_default();
                     Some(PopularTrack {
                         track: Track {
+                            explicit: value["contentRating"]["label"].as_str() == Some("EXPLICIT"),
                             id: Some(uri.into()),
                             uri: format!("spotify:track:{uri}"),
                             name: value["name"].as_str()?.into(),

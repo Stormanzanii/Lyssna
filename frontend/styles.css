@@ -10,6 +10,35 @@
   --line: #ffffff12;
   color-scheme: dark;
 }
+.explicit-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: baseline;
+  background: #c6c3cf;
+  color: #161419;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.track-name {
+  font-size: 15px;
+}
+.track-artists {
+  font-size: 13px;
+}
 .creator-dialog {
   border: 0;
   padding: 0;

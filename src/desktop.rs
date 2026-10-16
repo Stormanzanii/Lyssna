@@ -192,6 +192,8 @@ impl Desktop {
                                 .as_ref()
                                 .is_some_and(|profile| profile.id == account)
                                 && !snapshot.playback.is_playing
+                                && (snapshot.playback.item.is_none()
+                                    || snapshot.playback.device.name == native::device_name())
                                 && pump
                                     .last_native
                                     .lock()
@@ -967,6 +969,16 @@ fn player(
         let mut snapshot = lock(&state.0.snapshot)?;
         ensure!(snapshot.profile.is_some(), "Sign in first");
         let mut action = request.action()?;
+        if matches!(
+            action,
+            PlayerAction::Play(Some(_))
+                | PlayerAction::PlayUris { .. }
+                | PlayerAction::PlayContext { .. }
+                | PlayerAction::Next
+                | PlayerAction::Previous
+        ) {
+            *lock(&state.0.resume_seek)? = None;
+        }
         let local = targets_local_device(
             target.as_deref(),
             lock(&state.0.native_id)?.as_deref(),
@@ -1255,6 +1267,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .build(tauri::generate_context!())?;
     app.run(|app, event| {
+        if matches!(&event,tauri::RunEvent::WindowEvent{label,event:tauri::WindowEvent::Destroyed,..}if label=="main"){app.exit(0);}
         if matches!(event, tauri::RunEvent::Exit)
             && let Some(state) = app.try_state::<Desktop>()
         {

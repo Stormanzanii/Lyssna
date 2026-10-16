@@ -13,6 +13,26 @@ pub struct Lyrics {
     pub source: String,
     pub instrumental: bool,
     pub synced: bool,
+    #[serde(default)]
+    pub attribution: Option<Attribution>,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Attribution {
+    #[serde(alias = "Uploader")]
+    pub uploader: Option<Contributor>,
+    #[serde(alias = "Maker")]
+    pub maker: Option<Contributor>,
+}
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Contributor {
+    #[serde(default)]
+    pub id: String,
+    pub username: String,
+    pub url: Option<String>,
+    pub avatar: Option<String>,
+    #[serde(default, rename = "hasProfileBanner")]
+    pub has_profile_banner: bool,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -418,14 +438,26 @@ pub fn import_file(path: &Path, track: &Track) -> Result<Lyrics> {
         "Lyric file exceeds 2 MB"
     );
     let text = fs::read_to_string(path).context("Cannot read lyrics as UTF-8")?;
+    import_text(
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default(),
+        &text,
+        track,
+    )
+}
+
+pub fn import_text(filename: &str, text: &str, track: &Track) -> Result<Lyrics> {
+    ensure!(text.len() <= 2_000_000, "Lyric file exceeds 2 MB");
+    let path = Path::new(filename);
     let extension = path
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
     let (lyrics, kind) = match extension.as_str() {
-        "lrc" => (parse_lrc(&text, track.duration_ms)?, "lrc"),
-        "ttml" | "xml" => (parse_ttml(&text, track.duration_ms)?, "ttml"),
+        "lrc" => (parse_lrc(text, track.duration_ms)?, "lrc"),
+        "ttml" | "xml" => (parse_ttml(text, track.duration_ms)?, "ttml"),
         _ => bail!("Choose an .lrc, .ttml, or .xml lyric file"),
     };
     // Keep the original file per track (keyed by the Spotify URI) so it is

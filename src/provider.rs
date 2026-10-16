@@ -18,6 +18,10 @@ const SERVICE: &str = "SpotiFlex/Lyrics";
 struct Provider {
     host: String,
     share_access_token: bool,
+    #[serde(default)]
+    spicy_api: bool,
+    #[serde(default)]
+    api_key: String,
 }
 
 fn validate_host(host: &str) -> Result<Url> {
@@ -43,16 +47,62 @@ pub fn configure(host: &str, allow_access_token: bool) -> Result<()> {
     let configuration = Provider {
         host: host.as_str().to_owned(),
         share_access_token: allow_access_token,
+        spicy_api: false,
+        api_key: String::new(),
     };
     keyring::Entry::new(SERVICE, "provider")?
         .set_password(&serde_json::to_string(&configuration)?)
         .map_err(|_| anyhow::anyhow!("Cannot store protected lyrics configuration"))
 }
 
+fn validate_public_key(key: &str) -> Result<()> {
+    ensure!(
+        !key.starts_with("sl_sk_"),
+        "Use a publishable sl_pk_ key. Secret sl_sk_ keys cannot be stored in the desktop client."
+    );
+    ensure!(
+        key.starts_with("sl_pk_")
+            && (16..=512).contains(&key.len())
+            && key
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
+        "Enter a valid publishable sl_pk_ key"
+    );
+    Ok(())
+}
+
+pub fn configure_spicy(key: &str, consent: bool) -> Result<()> {
+    ensure!(consent, "Confirm consent for Spicy Lyrics in Settings");
+    let key = key.trim();
+    validate_public_key(key)?;
+    let configuration = Provider {
+        host: "https://api.spicylyrics.org/".into(),
+        share_access_token: false,
+        spicy_api: true,
+        api_key: key.to_owned(),
+    };
+    keyring::Entry::new(SERVICE, "provider")?
+        .set_password(&serde_json::to_string(&configuration)?)
+        .map_err(|_| anyhow::anyhow!("Cannot store protected lyrics configuration"))
+}
+
+pub fn requires_spotify_token() -> bool {
+    load().is_ok_and(|provider| !provider.spicy_api)
+}
+
 pub fn configured() -> bool {
     keyring::Entry::new(SERVICE, "provider")
         .and_then(|entry| entry.get_password())
         .is_ok()
+}
+pub fn kind() -> Option<String> {
+    load().ok().map(|provider| {
+        if provider.spicy_api {
+            "spicy".to_owned()
+        } else {
+            "legacy".to_owned()
+        }
+    })
 }
 
 fn load() -> Result<Provider> {
@@ -72,11 +122,17 @@ fn load() -> Result<Provider> {
 pub fn cache_namespace() -> Result<String> {
     use sha2::{Digest, Sha256};
     let provider = load()?;
-    Ok(format!("{:x}", Sha256::digest(provider.host.as_bytes())))
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(format!("v2:{}:{}", provider.spicy_api, provider.host).as_bytes())
+    ))
 }
 
 pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
     let provider = load()?;
+    if provider.spicy_api {
+        return fetch_spicy(client, track, &provider.api_key);
+    }
     ensure!(
         provider.share_access_token,
         "Lyrics provider requires an access token. Enable consent in Settings or use local lyrics."
@@ -137,6 +193,66 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
     parse(&data, track.duration_ms)
 }
 
+fn spicy_request(
+    client: &Client,
+    id: &str,
+    key: &str,
+) -> Result<reqwest::blocking::RequestBuilder> {
+    validate_public_key(key)?;
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Lyrics require a 22-character Spotify track ID"
+    );
+    Ok(client
+        .get(format!("https://api.spicylyrics.org/v1/lyrics/{id}"))
+        .bearer_auth(key))
+}
+
+fn fetch_spicy(client: &Client, track: &Track, key: &str) -> Result<Lyrics> {
+    let id = track
+        .id
+        .as_deref()
+        .context("Provider lyrics are unavailable for local files")?;
+    let response = spicy_request(client, id, key)?
+        .send()
+        .map_err(|_| anyhow::anyhow!("Cannot reach Spicy Lyrics"))?;
+    match response.status().as_u16() {
+        200 => {}
+        401 => bail!("Spicy Lyrics key is invalid or expired. Update it in Settings."),
+        403 => bail!(
+            "Spicy Lyrics denied client access. Enable Client access and No origin header in its developer dashboard."
+        ),
+        404 => bail!("Spicy Lyrics has no lyrics for this track"),
+        429 => bail!("Spicy Lyrics rate limit reached. Retry later."),
+        status => bail!("Spicy Lyrics request failed (HTTP {status})"),
+    }
+    let mut bytes = Vec::new();
+    response
+        .take(2_000_001)
+        .read_to_end(&mut bytes)
+        .map_err(|_| anyhow::anyhow!("Cannot read Spicy Lyrics response"))?;
+    ensure!(
+        bytes.len() <= 2_000_000,
+        "Lyrics provider response exceeds 2 MB"
+    );
+    let response: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| anyhow::anyhow!("Spicy Lyrics returned invalid JSON"))?;
+    parse_spicy_response(&response, track.duration_ms)
+}
+
+fn parse_spicy_response(response: &Value, duration_ms: u64) -> Result<Lyrics> {
+    ensure!(
+        response["Status"].as_u64() == Some(200),
+        "Spicy Lyrics did not return lyrics"
+    );
+    parse(
+        response
+            .get("Body")
+            .context("Spicy Lyrics response has no Body")?,
+        duration_ms,
+    )
+}
+
 fn seconds(value: &Value) -> Option<u64> {
     let value = value.as_f64()?;
     (value.is_finite() && (0.0..=604_800.0).contains(&value))
@@ -193,7 +309,14 @@ pub fn parse(value: &Value, duration_ms: u64) -> Result<Lyrics> {
     let lines = crate::lyrics::order_with_background(lines);
     Ok(Lyrics {
         lines,
-        source: "Lyrics provider".into(),
+        source: value["source"]
+            .as_str()
+            .unwrap_or("Lyrics provider")
+            .to_owned(),
+        attribution: value
+            .get("UploadAttribution")
+            .filter(|_| value["source"].as_str() == Some("spicy_lyrics"))
+            .and_then(|value| serde_json::from_value(value.clone()).ok()),
         synced,
         instrumental: false,
     })
@@ -388,6 +511,57 @@ impl Decoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn direct_requests_use_only_publishable_key_and_valid_track_id() {
+        let client = crate::auth::http_client().unwrap();
+        let request = spicy_request(
+            &client,
+            "0123456789abcdefghijkl",
+            "sl_pk_example_publishable_key",
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(request.method(), reqwest::Method::GET);
+        assert_eq!(request.url().path(), "/v1/lyrics/0123456789abcdefghijkl");
+        assert!(
+            request
+                .headers()
+                .get("authorization")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("Bearer sl_pk_")
+        );
+        assert!(!request.headers().contains_key("origin"));
+        assert!(!request.headers().contains_key("SpicyLyrics-WebAuth"));
+        assert!(
+            spicy_request(
+                &client,
+                "0123456789abcdefghijkl",
+                "sl_sk_example_secret_key"
+            )
+            .is_err()
+        );
+        assert!(spicy_request(&client, "../bad", "sl_pk_example_publishable_key").is_err());
+    }
+    #[test]
+    fn response_preserves_source_and_credits_through_cache_round_trip() {
+        let mut data = json!({"Status":200,"Body":{"Type":"Static","Lines":[{"Text":"Hello"}],"source":"spicy_lyrics","UploadAttribution":{"Uploader":{"id":"1","username":"Uploader","url":"https://spicylyrics.org/uid/1"},"Maker":{"id":"2","username":"Maker","url":"https://spicylyrics.org/uid/2"}}}});
+        let lyrics = parse_spicy_response(&data, 1000).unwrap();
+        let cached: Lyrics = serde_json::from_slice(&serde_json::to_vec(&lyrics).unwrap()).unwrap();
+        assert_eq!(cached.source, "spicy_lyrics");
+        assert_eq!(cached.attribution.unwrap().maker.unwrap().username, "Maker");
+        data["Body"]["source"] = json!("apple_music");
+        assert!(
+            parse_spicy_response(&data, 1000)
+                .unwrap()
+                .attribution
+                .is_none()
+        );
+        data["Status"] = json!(404);
+        assert!(parse_spicy_response(&data, 1000).is_err());
+    }
 
     #[test]
     fn packed_strings_cannot_expand_past_memory_budget() {

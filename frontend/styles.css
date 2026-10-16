@@ -660,7 +660,7 @@ small {
 .artist-hero {
   min-height: clamp(300px, 29vw, 470px);
   background-size: cover;
-  background-position: center 35%;
+  background-position: center;
   padding: 32px 28px;
 }
 .artist-hero .hero-wash,

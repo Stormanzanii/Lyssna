@@ -17,6 +17,7 @@ use crate::{
 };
 
 pub enum Command {
+    PrefetchPage(String),
     Restore(String),
     Login(String, Arc<AtomicBool>),
     LoginResult {
@@ -63,6 +64,12 @@ pub enum Command {
 }
 
 pub enum Event {
+    PagePrefetched {
+        account: String,
+        key: String,
+        tracks: Vec<Track>,
+        info: Option<Box<BrowseInfo>>,
+    },
     Canvas {
         uri: String,
         url: Option<String>,
@@ -156,6 +163,48 @@ impl Worker {
         let (send_native, native_events) = mpsc::channel();
         let (lyrics, receive_lyrics) = mpsc::channel();
         let (send_lyrics, lyric_events) = mpsc::channel();
+        let (prefetch, requests) = mpsc::sync_channel::<PrefetchRequest>(1);
+        let prefetch_events = send_events.clone();
+        let prefetch_context = context.clone();
+        thread::spawn(move || {
+            while let Ok(mut request) = requests.recv() {
+                let mut info =
+                    if request.key.starts_with("album:") || request.key.starts_with("artist:") {
+                        request.spotify.browse_info(&request.key).ok()
+                    } else {
+                        None
+                    };
+                if let Some(info) = info.as_mut() {
+                    if let Some(id) = request.key.strip_prefix("artist:") {
+                        info.overview = request
+                            .native
+                            .catalogue("artist", id, 0)
+                            .and_then(|entity| crate::artist::from_entity(&entity, id))
+                            .or_else(|_| crate::artist::fetch(&request.spotify.client, id))
+                            .ok();
+                    }
+                    if let Some(id) = request.key.strip_prefix("album:") {
+                        info.album_details = request
+                            .native
+                            .catalogue("album", id, 0)
+                            .map(|entity| crate::album::parse(&entity))
+                            .or_else(|_| crate::album::fetch(&request.spotify.client, id))
+                            .ok();
+                    }
+                }
+                if let Ok(tracks) =
+                    fetch_tracks(&mut request.spotify, &request.native, &request.key, 0)
+                {
+                    let _ = prefetch_events.send(Event::PagePrefetched {
+                        account: request.account,
+                        key: request.key,
+                        tracks,
+                        info: info.map(Box::new),
+                    });
+                    prefetch_context.request_repaint();
+                }
+            }
+        });
         let lyric_context = context.clone();
         let backend_lyrics = lyrics.clone();
         thread::spawn(move || {
@@ -168,6 +217,7 @@ impl Worker {
                 }
             };
             let mut backend = Backend {
+                prefetch,
                 spotify: None,
                 native: None,
                 native_controls: backend_controls,
@@ -298,6 +348,7 @@ impl Drop for Worker {
 }
 
 struct Backend {
+    prefetch: mpsc::SyncSender<PrefetchRequest>,
     native_controls: NativeControls,
     spotify: Option<Spotify>,
     native: Option<NativePlayer>,
@@ -396,6 +447,15 @@ impl Backend {
 
     fn handle(&mut self, command: Command) -> Result<()> {
         match command {
+            Command::PrefetchPage(key) => {
+                let request = PrefetchRequest {
+                    spotify: self.api()?.clone(),
+                    native: self.native_controls.clone(),
+                    account: self.profile.id.clone(),
+                    key,
+                };
+                let _ = self.prefetch.try_send(request);
+            }
             Command::Restore(client_id) => {
                 self.client_id = client_id.clone();
                 if let Some(tokens) = Tokens::load(&client_id)? {
@@ -700,24 +760,38 @@ impl Backend {
     }
 
     fn fetch_tracks(&mut self, key: &str, offset: usize) -> Result<Vec<Track>> {
-        let api = self.api()?;
-        if let Some(query) = key.strip_prefix("search:") {
-            api.search(query)
-        } else if let Some(id) = key.strip_prefix("playlist:") {
-            match api.playlist_tracks(id, offset) {
-                Ok(tracks) => Ok(tracks),
-                Err(_) => self.native_controls.playlist_tracks(id, offset),
-            }
-        } else if let Some(id) = key.strip_prefix("album:") {
-            api.album_tracks(id, offset)
-        } else if key.starts_with("artist:") {
-            Ok(Vec::new())
-        } else {
-            match key {
-                "liked" => api.saved_tracks(offset),
-                "queue" => api.queue(),
-                _ => api.recent(),
-            }
+        let native = self.native_controls.clone();
+        fetch_tracks(self.api()?, &native, key, offset)
+    }
+}
+struct PrefetchRequest {
+    spotify: Spotify,
+    native: NativeControls,
+    account: String,
+    key: String,
+}
+fn fetch_tracks(
+    api: &mut Spotify,
+    native: &NativeControls,
+    key: &str,
+    offset: usize,
+) -> Result<Vec<Track>> {
+    if let Some(query) = key.strip_prefix("search:") {
+        api.search(query)
+    } else if let Some(id) = key.strip_prefix("playlist:") {
+        match api.playlist_tracks(id, offset) {
+            Ok(tracks) => Ok(tracks),
+            Err(_) => native.playlist_tracks(id, offset),
+        }
+    } else if let Some(id) = key.strip_prefix("album:") {
+        api.album_tracks(id, offset)
+    } else if key.starts_with("artist:") {
+        Ok(Vec::new())
+    } else {
+        match key {
+            "liked" => api.saved_tracks(offset),
+            "queue" => api.queue(),
+            _ => api.recent(),
         }
     }
 }

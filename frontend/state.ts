@@ -1,4 +1,48 @@
-import type { AppEvent, Device, Snapshot, Track, Word } from "./types";
+import type {
+  AppEvent,
+  BrowseInfo,
+  Device,
+  Snapshot,
+  Track,
+  Word,
+} from "./types";
+/** A page as last loaded, shown instantly when revisited or prefetched. */
+export interface CachedPage {
+  tracks?: Track[];
+  more?: boolean;
+  info?: BrowseInfo;
+}
+const PAGE_LIMIT = 40;
+function mergeInfo(
+  previous: BrowseInfo | undefined,
+  incoming: BrowseInfo,
+): BrowseInfo {
+  return previous?.key === incoming.key
+    ? {
+        ...incoming,
+        overview: incoming.overview ?? previous.overview,
+        album_details: incoming.album_details ?? previous.album_details,
+      }
+    : incoming;
+}
+export function rememberPage(
+  pages: Record<string, CachedPage>,
+  key: string,
+  page: CachedPage,
+): Record<string, CachedPage> {
+  const { [key]: previous, ...rest } = pages;
+  const keys = Object.keys(rest);
+  for (const old of keys.slice(0, Math.max(0, keys.length - PAGE_LIMIT + 1)))
+    delete rest[old];
+  return {
+    ...rest,
+    [key]: {
+      ...previous,
+      ...page,
+      info: page.info ? mergeInfo(previous?.info, page.info) : previous?.info,
+    },
+  };
+}
 export type ToggleIntent = { wanted: boolean; at: number };
 export function nextToggle(
   current: boolean,
@@ -18,6 +62,7 @@ export interface AppState extends Snapshot {
   pending?: { uri: string; at: number };
   pageError: string;
   clock_revision: number;
+  pages: Record<string, CachedPage>;
 }
 export const emptyState: AppState = {
   booted: false,
@@ -62,6 +107,7 @@ export const emptyState: AppState = {
   saved: {},
   pageError: "",
   clock_revision: 0,
+  pages: {},
 };
 export type Action =
   | AppEvent
@@ -76,6 +122,29 @@ export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "canvas_prefetch":
       return state;
+    case "page_prefetch": {
+      if (!state.profile) return state;
+      const pages = rememberPage(state.pages, action.key, {
+        tracks: action.tracks,
+        more: action.more,
+      });
+      // Arrived while the page is open and still empty: show it now.
+      return action.key === state.route && !state.tracks.length
+        ? { ...state, pages, tracks: action.tracks, more: action.more }
+        : { ...state, pages };
+    }
+    case "info_prefetch":
+      if (!state.profile) return state;
+      return {
+        ...state,
+        pages: rememberPage(state.pages, action.info.key, {
+          info: action.info,
+        }),
+        browse_info:
+          action.info.key === state.route
+            ? mergeInfo(state.browse_info, action.info)
+            : state.browse_info,
+      };
     case "canvas":
       return state.playback.item?.uri === action.uri
         ? { ...state, canvas_url: action.url }
@@ -112,17 +181,20 @@ export function reducer(state: AppState, action: Action): AppState {
       return action.generation === state.generation
         ? { ...state, loading: true }
         : state;
-    case "navigate":
+    case "navigate": {
+      // Show the cached copy at once; fresh data replaces it when it lands.
+      const cached = state.pages[action.key];
       return {
         ...state,
         route: action.key,
         generation: action.generation,
-        tracks: [],
-        browse_info: undefined,
+        tracks: cached?.tracks ?? [],
+        browse_info: cached?.info,
         loading: true,
         more: false,
         pageError: "",
       };
+    }
     case "tracks":
       if (action.generation !== state.generation || action.key !== state.route)
         return state;
@@ -137,6 +209,13 @@ export function reducer(state: AppState, action: Action): AppState {
         loading: false,
         more: action.more,
         pageError: "",
+        pages:
+          action.offset === 0
+            ? rememberPage(state.pages, action.key, {
+                tracks: action.tracks,
+                more: action.more,
+              })
+            : state.pages,
       };
     case "tracks_failed":
       return action.generation === state.generation
@@ -144,7 +223,13 @@ export function reducer(state: AppState, action: Action): AppState {
         : state;
     case "browse_info":
       return action.generation === state.generation
-        ? { ...state, browse_info: action.info }
+        ? {
+            ...state,
+            browse_info: mergeInfo(state.browse_info, action.info),
+            pages: rememberPage(state.pages, action.info.key, {
+              info: action.info,
+            }),
+          }
         : state;
     case "play_requested":
       return {

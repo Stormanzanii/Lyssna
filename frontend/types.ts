@@ -177,6 +177,8 @@ export type PlayerRequest = {
 export type AppEvent =
   | { type: "canvas"; uri: string; url?: string }
   | { type: "canvas_prefetch"; url: string }
+  | { type: "page_prefetch"; key: string; tracks: Track[]; more: boolean }
+  | { type: "info_prefetch"; info: BrowseInfo }
   | { type: "session"; profile: Profile; can_follow: boolean }
   | { type: "signed_out" | "login_finished" }
   | { type: "provider_configured"; kind?: "spicy" | "legacy" }

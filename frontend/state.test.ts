@@ -19,6 +19,38 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("retains a warm banner during basic refresh and clears prefetch after sign-out", () => {
+    const info = {
+      key: "artist:test",
+      title: "Artist",
+      subtitle: "",
+      images: [],
+      albums: [],
+      overview: { header_image: "https://i.scdn.co/banner" },
+    } as any;
+    let state = reducer(
+      { ...emptyState, profile: { id: "account" } },
+      { type: "info_prefetch", info },
+    );
+    state = reducer(state, { type: "navigate", key: info.key, generation: 1 });
+    state = reducer(state, {
+      type: "browse_info",
+      generation: 1,
+      info: { ...info, overview: undefined },
+    });
+    expect(state.browse_info?.overview?.header_image).toBe(
+      "https://i.scdn.co/banner",
+    );
+    state = reducer(state, { type: "signed_out" });
+    expect(
+      reducer(state, {
+        type: "page_prefetch",
+        key: "liked",
+        tracks: [track],
+        more: false,
+      }).pages,
+    ).toEqual({});
+  });
   it("alternates rapid play and pause before native acknowledgments arrive", () => {
     let previous: ToggleIntent | undefined;
     const choices = [];

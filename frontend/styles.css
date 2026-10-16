@@ -1012,6 +1012,44 @@ small {
   flex-direction: row;
   font-size: 13px;
 }
+.skeleton-rows {
+  padding: 12px 28px;
+}
+.skeleton-row {
+  height: 64px;
+  display: grid;
+  grid-template-columns: 20px 42px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.skeleton-row i {
+  display: block;
+  height: 12px;
+  background: #ffffff0d;
+  border-radius: 4px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+.skeleton-row > i:nth-child(2) {
+  height: 42px;
+}
+.skeleton-row > div i:first-child {
+  width: 42%;
+  margin-bottom: 8px;
+}
+.skeleton-row > div i:last-child {
+  width: 26%;
+  height: 9px;
+}
+@keyframes skeleton-pulse {
+  to {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row i {
+    animation: none;
+  }
+}
 .empty-page h2 {
   color: #f7f6fb;
 }

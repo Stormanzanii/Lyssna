@@ -16,6 +16,7 @@ use crate::{
     },
 };
 
+#[derive(Clone)]
 pub struct Spotify {
     pub client: Client,
     pub client_id: String,

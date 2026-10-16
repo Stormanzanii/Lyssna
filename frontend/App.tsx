@@ -76,6 +76,9 @@ import {
   imageOf,
   preloadCanvas,
   prefetchCanvas,
+  prefetchPage,
+  cancelPrefetch,
+  useLoadedImage,
   usePosition,
 } from "./components";
 import "./styles.css";
@@ -290,6 +293,21 @@ function App() {
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   }, [toggle, call]);
+  const prefetchOn = useCallback(
+    (key: string) => ({
+      onMouseEnter: () => {
+        const current = stateRef.current;
+        if (
+          current.profile &&
+          key !== current.route &&
+          !current.pages[key]?.tracks
+        )
+          prefetchPage(key);
+      },
+      onMouseLeave: cancelPrefetch,
+    }),
+    [],
+  );
   const openAlbum = useCallback(
     (album: Album) => {
       const id = album.id || album.uri?.split(":")[2];
@@ -410,6 +428,7 @@ function App() {
     (playlist) => state.route === `playlist:${playlist.id}`,
   );
   const entity = state.browse_info;
+  const artistBanner = useLoadedImage(entity?.overview?.header_image);
   const title =
     entity?.title ||
     playlist?.name ||
@@ -665,6 +684,7 @@ function App() {
             <button
               className={`library-item ${state.route === "liked" ? "current" : ""}`}
               onClick={() => navigate("liked")}
+              {...prefetchOn("liked")}
             >
               <div className="liked-cover">
                 <Heart size={22} fill="currentColor" />
@@ -692,6 +712,7 @@ function App() {
                       className="library-item"
                       key={playlist.id}
                       onClick={() => navigate(`playlist:${playlist.id}`)}
+                      {...prefetchOn(`playlist:${playlist.id}`)}
                     >
                       <Cover images={playlist.images} />
                       <div>
@@ -707,6 +728,7 @@ function App() {
                 key={playlist.id}
                 className={`library-item ${state.route === `playlist:${playlist.id}` ? "current" : ""}`}
                 onClick={() => navigate(`playlist:${playlist.id}`)}
+                {...prefetchOn(`playlist:${playlist.id}`)}
               >
                 <Cover images={playlist.images} />
                 <div>
@@ -787,6 +809,7 @@ function App() {
                     <button
                       className="quick-tile"
                       onClick={() => navigate("liked")}
+                      {...prefetchOn("liked")}
                     >
                       <div className="liked-cover">
                         <Heart fill="currentColor" />
@@ -798,6 +821,7 @@ function App() {
                         className="quick-tile"
                         key={playlist.id}
                         onClick={() => navigate(`playlist:${playlist.id}`)}
+                        {...prefetchOn(`playlist:${playlist.id}`)}
                       >
                         <Cover images={playlist.images} />
                         <strong>{playlist.name}</strong>
@@ -818,9 +842,9 @@ function App() {
                 <section
                   className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
                   style={
-                    entity?.artist
+                    entity?.artist && artistBanner
                       ? {
-                          backgroundImage: `linear-gradient(0deg,#000b,#0001 70%),url("${entity.overview?.header_image || imageOf(entity.images)}")`,
+                          backgroundImage: `linear-gradient(0deg,#000b,#0001 70%),url("${artistBanner}")`,
                         }
                       : undefined
                   }
@@ -1248,6 +1272,7 @@ function App() {
                           key={album.id}
                           className="album-tile"
                           onClick={() => openAlbum(album)}
+                          {...prefetchOn(`album:${album.id}`)}
                         >
                           <Cover images={album.images} />
                           <strong>{album.name}</strong>
@@ -1299,14 +1324,26 @@ function App() {
                   </button>
                 </section>
               )}
-              {state.loading && (
-                <div className="loading-state">
-                  <LoaderCircle className="spin" size={24} />
-                  <span>
-                    {state.route.startsWith("search:")
-                      ? "Searching Spotify…"
-                      : "Loading your music…"}
-                  </span>
+              {state.loading && !state.tracks.length && (
+                <div
+                  className="skeleton-rows"
+                  role="status"
+                  aria-label={
+                    state.route.startsWith("search:")
+                      ? "Searching Spotify"
+                      : "Loading"
+                  }
+                >
+                  {Array.from({ length: 8 }, (_, index) => (
+                    <div className="skeleton-row" key={index}>
+                      <i />
+                      <i />
+                      <div>
+                        <i />
+                        <i />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {!state.loading && state.pageError && (

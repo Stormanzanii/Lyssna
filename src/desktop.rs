@@ -166,6 +166,25 @@ impl Desktop {
                         return;
                     };
                     match event {
+                        Event::PagePrefetched {
+                            account,
+                            key,
+                            tracks,
+                            info,
+                        } => {
+                            if snapshot
+                                .profile
+                                .as_ref()
+                                .is_some_and(|profile| profile.id == account)
+                            {
+                                emit(
+                                    json!({"type":"page_prefetch","key":key,"more":tracks.len()==50,"tracks":tracks}),
+                                );
+                                if let Some(info) = info {
+                                    emit(json!({"type":"info_prefetch","info":info}));
+                                }
+                            }
+                        }
                         Event::CanvasPrefetched { url } => {
                             emit(json!({"type":"canvas_prefetch","url":url}));
                         }
@@ -685,6 +704,19 @@ fn sign_in(client_id: String, state: State<'_, Desktop>) -> std::result::Result<
     };
     result().map_err(error)
 }
+/// Load a page the pointer is resting on, without navigating, so opening it
+/// is instant. Results go to the frontend page cache only.
+#[tauri::command]
+fn prefetch_page(key: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    let result = || -> Result<()> {
+        ensure!(valid_route(&key), "Unknown page");
+        ensure!(lock(&state.0.snapshot)?.profile.is_some(), "Sign in first");
+        state.0.commands.send(Command::PrefetchPage(key))?;
+        Ok(())
+    };
+    result().map_err(error)
+}
+
 /// Resolve Canvas videos for tracks the user is about to play (hovered rows).
 #[tauri::command]
 fn prefetch_canvas(uris: Vec<String>, state: State<'_, Desktop>) {
@@ -1076,6 +1108,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             sign_in,
             cancel_sign_in,
             prefetch_canvas,
+            prefetch_page,
             sign_out,
             browse,
             player,

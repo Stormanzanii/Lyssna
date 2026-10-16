@@ -417,6 +417,8 @@ impl SpotiFlex {
                 | Event::PlayingDetails { .. }
                 | Event::ArtistStats { .. }
                 | Event::Canvas { .. }
+                | Event::CanvasPrefetched { .. }
+                | Event::PagePrefetched { .. }
                 | Event::Saved { .. }
                 | Event::TrackInfo { .. } => {}
                 Event::Session(profile) => {

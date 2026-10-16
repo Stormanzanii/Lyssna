@@ -285,6 +285,47 @@ export function Marquee({
     </div>
   );
 }
+// Load a page while the pointer rests on its link so opening it is instant.
+// One background load at a time so it never delays a real click.
+let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+let lastPrefetch = 0;
+const prefetched = new Set<string>();
+export function prefetchPage(key: string) {
+  clearTimeout(hoverTimer);
+  if (prefetched.has(key)) return;
+  hoverTimer = setTimeout(() => {
+    if (Date.now() - lastPrefetch < 1200) return;
+    lastPrefetch = Date.now();
+    prefetched.add(key);
+    if (prefetched.size > 200) prefetched.clear();
+    void rpc("prefetch_page", { key }).catch(() => prefetched.delete(key));
+  }, 180);
+}
+export const cancelPrefetch = () => clearTimeout(hoverTimer);
+
+export function useLoadedImage(url?: string) {
+  const [loaded, setLoaded] = useState<string>();
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      void image
+        .decode()
+        .catch(() => {})
+        .then(() => {
+          if (!cancelled) setLoaded(url);
+        });
+    };
+    image.src = url;
+    return () => {
+      cancelled = true;
+      image.onload = null;
+    };
+  }, [url]);
+  return loaded === url ? url : undefined;
+}
+
 export function ArtistLinks({
   artists,
   onArtist,
@@ -300,6 +341,10 @@ export function ArtistLinks({
           <button
             className="text-link artist-link"
             onClick={() => onArtist(artist)}
+            onMouseEnter={() =>
+              artist.id && prefetchPage(`artist:${artist.id}`)
+            }
+            onMouseLeave={cancelPrefetch}
           >
             {artist.name}
           </button>

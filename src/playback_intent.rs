@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 /// Keep the latest user choice while one native transition is outstanding.
 #[derive(Default)]
 pub(crate) struct PlaybackIntent {
+    target: Option<String>,
     desired: Option<bool>,
     waiting: Option<(bool, Instant)>,
 }
@@ -11,14 +12,25 @@ impl PlaybackIntent {
         self.desired = Some(playing);
     }
     pub fn loading(&mut self, now: Instant) {
+        self.target = None;
         self.desired = Some(true);
         self.waiting = Some((true, now));
+    }
+    pub fn loading_track(&mut self, uri: Option<String>, now: Instant) {
+        self.loading(now);
+        self.target = uri;
+    }
+    pub fn acknowledge_track(&mut self, uri: &str, playing: bool) {
+        if self.target.as_deref().is_none_or(|target| target == uri) {
+            self.acknowledge(playing);
+        }
     }
     pub fn acknowledge(&mut self, playing: bool) {
         if self.waiting.is_some_and(|(wanted, _)| wanted == playing) {
             self.waiting = None;
             if self.desired == Some(playing) {
                 self.desired = None;
+                self.target = None;
             }
         }
     }
@@ -46,6 +58,16 @@ impl PlaybackIntent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn previous_song_cannot_acknowledge_a_new_load() {
+        let now = Instant::now();
+        let mut intent = PlaybackIntent::default();
+        intent.loading_track(Some("new".into()), now);
+        intent.acknowledge_track("old", true);
+        assert_eq!(intent.next(true, now + Duration::from_secs(1)), Some(true));
+        intent.acknowledge_track("new", true);
+        assert_eq!(intent.next(true, now + Duration::from_secs(2)), None);
+    }
     #[test]
     fn burst_keeps_only_the_latest_choice_after_the_current_ack() {
         let now = Instant::now();

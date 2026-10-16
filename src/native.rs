@@ -698,7 +698,7 @@ async fn run(
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
                 if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){intent.request(matches!(action,PlayerAction::Play(None)));}else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}){intent.loading(std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::PlayUris{uris,offset}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
@@ -710,11 +710,11 @@ async fn run(
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
                     Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) { emit(NativeEvent::Track(Box::new(track))); } },
-                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge(true);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
-                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge(false);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
+                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),true);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
+                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri().unwrap_or_default(),false);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri().unwrap_or_default();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: None, seeked: false });}},
-                    Some(PlayerEvent::Unavailable { .. }) => emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into())),
+                    Some(PlayerEvent::Unavailable { .. }) => {intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
                     None => break,
                     _ => {}
                 }

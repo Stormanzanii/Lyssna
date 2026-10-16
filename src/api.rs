@@ -204,6 +204,19 @@ impl Spotify {
                 "play",
                 Some(uri.map_or(json!({}), |uri| json!({"uris":[uri]}))),
             ),
+            PlayerAction::PlayContext { context, offset } => (
+                Method::PUT,
+                "play",
+                Some(match offset {
+                    Some(uri) => json!({"context_uri": context, "offset": {"uri": uri}}),
+                    None => json!({"context_uri": context}),
+                }),
+            ),
+            PlayerAction::PlayUris { uris, offset } => (
+                Method::PUT,
+                "play",
+                Some(json!({"uris": uris, "offset": {"position": offset}})),
+            ),
             PlayerAction::Pause => (Method::PUT, "pause", None),
             PlayerAction::Next => (Method::POST, "next", None),
             PlayerAction::Previous => (Method::POST, "previous", None),
@@ -338,6 +351,16 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
 
 pub enum PlayerAction {
     Play(Option<String>),
+    /// Start a playlist or album context, optionally at a track URI.
+    PlayContext {
+        context: String,
+        offset: Option<String>,
+    },
+    /// Play a list of track URIs starting at `offset`.
+    PlayUris {
+        uris: Vec<String>,
+        offset: usize,
+    },
     Pause,
     Next,
     Previous,

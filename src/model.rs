@@ -10,6 +10,8 @@ pub struct Artist {
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Artwork {
     pub url: String,
+    #[serde(default)]
+    pub width: Option<u32>,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -61,6 +63,8 @@ pub struct Profile {
 pub struct Owner {
     #[serde(default)]
     pub id: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -116,6 +120,33 @@ pub fn unique_additions(existing: &HashSet<String>, selected: &[Track]) -> Vec<S
         .collect()
 }
 
+/// Playable URIs around `index` (at most `limit`), with the clicked track's
+/// position inside the window. Local files cannot be started through the Web API.
+pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<String>, usize)> {
+    let playable: Vec<(usize, &str)> = tracks
+        .iter()
+        .enumerate()
+        .filter(|(_, track)| {
+            track.uri.starts_with("spotify:track:") || track.uri.starts_with("spotify:episode:")
+        })
+        .map(|(position, track)| (position, track.uri.as_str()))
+        .collect();
+    let clicked = playable
+        .iter()
+        .position(|(position, _)| *position == index)?;
+    let start = clicked
+        .saturating_sub(limit / 5)
+        .min(playable.len().saturating_sub(limit));
+    let end = (start + limit).min(playable.len());
+    Some((
+        playable[start..end]
+            .iter()
+            .map(|(_, uri)| (*uri).to_owned())
+            .collect(),
+        clicked - start,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +177,18 @@ mod tests {
             ),
             vec!["spotify:track:two", "spotify:track:three"]
         );
+    }
+
+    #[test]
+    fn play_window_keeps_clicked_track_and_skips_local_files() {
+        let mut tracks: Vec<Track> = (0..10).map(|n| track(&n.to_string())).collect();
+        tracks[1].uri = "spotify:local:a".into();
+        let (uris, offset) = play_window(&tracks, 6, 5).unwrap();
+        assert_eq!(uris.len(), 5);
+        assert_eq!(uris[offset], "spotify:track:6");
+        assert!(!uris.iter().any(|uri| uri.starts_with("spotify:local")));
+        let (uris, offset) = play_window(&tracks, 0, 100).unwrap();
+        assert_eq!((uris.len(), offset), (9, 0));
+        assert!(play_window(&tracks, 1, 5).is_none());
     }
 }

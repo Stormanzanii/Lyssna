@@ -20,10 +20,11 @@ use crate::{
     native::NativeEvent,
     ui::{
         art::{self, ArtCache},
+        emoji,
         icons::{self, Icon},
         lyrics_view::{self, LyricsView},
         theme::{
-            self, BASE, ELEVATED, ERROR, FAINT, GAP, GREEN, HIGHLIGHT, RADIUS, SUBDUED, SURFACE,
+            self, ACCENT, BASE, ELEVATED, ERROR, FAINT, GAP, HIGHLIGHT, RADIUS, SUBDUED, SURFACE,
             TEXT,
         },
     },
@@ -31,7 +32,7 @@ use crate::{
     worker::{Command, Event, LyricCommand, Worker},
 };
 
-const LIKED_COLOR: Color32 = Color32::from_rgb(80, 56, 180);
+const LIKED_COLOR: Color32 = Color32::from_rgb(120, 70, 200);
 const ROW_HEIGHT: f32 = 56.0;
 const PLAYER_HEIGHT: f32 = 84.0;
 const SEARCH_ID: &str = "global-search";
@@ -101,6 +102,7 @@ pub struct SpotiFlex {
     picker: Option<Vec<Track>>,
     picker_filter: String,
     import_path: String,
+    pending_import: Option<String>,
     folder_name: String,
     login_pending: bool,
     login_cancelled: Arc<AtomicBool>,
@@ -180,6 +182,7 @@ impl SpotiFlex {
             picker: None,
             picker_filter: String::new(),
             import_path: String::new(),
+            pending_import: None,
             folder_name: String::new(),
             login_pending,
             login_cancelled: Arc::new(AtomicBool::new(false)),
@@ -277,6 +280,79 @@ impl SpotiFlex {
     fn set_immersive(&mut self, immersive: bool) {
         self.immersive = immersive;
         self.pending_fullscreen = Some(immersive);
+    }
+
+    /// Attach a local .ttml/.lrc file to the current song. The file is kept
+    /// per track and used whenever that song plays again.
+    fn import_lyrics(&mut self, path: PathBuf) {
+        let Some(track) = self.playback.item.clone() else {
+            self.show_notice("Play a song first, then drop its lyrics file".into(), true);
+            return;
+        };
+        self.lyric_loading = true;
+        self.pending_import = Some(track.uri.clone());
+        let _ = self.worker.lyrics.send(LyricCommand::Import(track, path));
+    }
+
+    fn forget_lyrics(&mut self) {
+        if let Some(track) = self.playback.item.clone() {
+            let _ = self.worker.lyrics.send(LyricCommand::Forget(track));
+            self.lyrics = None;
+            self.page_lyrics.reset();
+            self.panel_lyrics.reset();
+            self.fetch_lyrics();
+            self.show_notice("Imported lyrics removed for this song".into(), false);
+        }
+    }
+
+    fn dropped_lyrics(&mut self, context: &egui::Context) {
+        let dropped = context.input(|input| {
+            input
+                .raw
+                .dropped_files
+                .iter()
+                .filter_map(|file| file.path.clone())
+                .find(|path| {
+                    path.extension()
+                        .and_then(|extension| extension.to_str())
+                        .is_some_and(|extension| {
+                            ["ttml", "lrc", "xml"]
+                                .contains(&extension.to_ascii_lowercase().as_str())
+                        })
+                })
+        });
+        if let Some(path) = dropped
+            && self.profile.is_some()
+        {
+            self.import_lyrics(path);
+        }
+        let hovering = context.input(|input| !input.raw.hovered_files.is_empty());
+        if hovering && self.profile.is_some() {
+            let screen = context.content_rect();
+            let painter = context.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                Id::new("drop-lyrics"),
+            ));
+            painter.rect_filled(screen, 0.0, Color32::from_black_alpha(170));
+            let title = match &self.playback.item {
+                Some(track) => format!("Drop to attach lyrics to “{}”", track.name),
+                None => "Play a song first to attach lyrics".into(),
+            };
+            painter.text(
+                screen.center() - vec2(0.0, 14.0),
+                Align2::CENTER_CENTER,
+                title,
+                theme::bold(24.0),
+                TEXT,
+            );
+            painter.text(
+                screen.center() + vec2(0.0, 20.0),
+                Align2::CENTER_CENTER,
+                ".ttml or .lrc · saved for this song",
+                theme::regular(15.0),
+                SUBDUED,
+            );
+        }
     }
 
     fn fetch_lyrics(&mut self) {
@@ -463,12 +539,22 @@ impl SpotiFlex {
                 .is_some_and(|track| track.uri == event.uri)
             {
                 self.lyric_loading = false;
+                let imported = self.pending_import.as_deref() == Some(event.uri.as_str());
                 match event.result {
                     Ok(lyrics) => {
                         self.lyrics = Some(lyrics);
                         self.lyric_error.clear();
+                        self.page_lyrics.reset();
+                        self.panel_lyrics.reset();
+                        if imported {
+                            self.show_notice("Lyrics saved for this song".into(), false);
+                        }
                     }
+                    Err(message) if imported => self.show_notice(message, true),
                     Err(message) => self.lyric_error = message,
+                }
+                if imported {
+                    self.pending_import = None;
                 }
             }
         }
@@ -807,12 +893,13 @@ impl SpotiFlex {
                             rect,
                             15.0,
                             if response.hovered() {
-                                theme::GREEN_HOVER
+                                theme::ACCENT_HOVER
                             } else {
-                                GREEN
+                                ACCENT
                             },
                         );
-                        ui.painter().galley(
+                        emoji::paint_galley(
+                            ui.painter(),
                             rect.center() - galley.size() / 2.0,
                             galley,
                             Color32::BLACK,
@@ -1046,11 +1133,12 @@ impl SpotiFlex {
                         text_left = art.right() + 12.0;
                     }
                     let text_width = rect.right() - text_left - 10.0;
-                    let title_color = if current { GREEN } else { TEXT };
+                    let title_color = if current { ACCENT } else { TEXT };
                     if compact {
                         let galley =
                             theme::line(ui, &name, theme::regular(14.5), title_color, text_width);
-                        ui.painter().galley(
+                        emoji::paint_galley(
+                            ui.painter(),
                             Pos2::new(text_left, rect.center().y - galley.size().y / 2.0),
                             galley,
                             title_color,
@@ -1124,9 +1212,9 @@ impl SpotiFlex {
                     .and_then(|track| art::pick(&track.album.images, 300.0));
                 self.art
                     .accent(context, url)
-                    .unwrap_or(Color32::from_rgb(34, 84, 58))
+                    .unwrap_or(Color32::from_rgb(76, 56, 150))
             }
-            _ => Color32::from_rgb(58, 58, 70),
+            _ => Color32::from_rgb(52, 52, 84),
         }
     }
 
@@ -1338,8 +1426,7 @@ impl SpotiFlex {
                 theme::regular(14.0),
                 TEXT,
             );
-            ui.painter()
-                .galley(Pos2::new(text_left, title_top), galley, TEXT);
+            emoji::paint_galley(ui.painter(), Pos2::new(text_left, title_top), galley, TEXT);
             let owner = match &playlist {
                 Some(playlist) => playlist
                     .owner
@@ -1376,7 +1463,7 @@ impl SpotiFlex {
             let play =
                 Rect::from_min_size(Pos2::new(origin.x + pad, row_top + 4.0), Vec2::splat(56.0));
             let response = ui.interact(play, Id::new(("play-view", &self.view)), Sense::click());
-            icons::round_button_at(ui, play, &response, Icon::Play, GREEN, Color32::BLACK);
+            icons::round_button_at(ui, play, &response, Icon::Play, ACCENT, Color32::BLACK);
             if response.on_hover_text("Play").clicked() {
                 self.play_view();
             }
@@ -1470,7 +1557,7 @@ impl SpotiFlex {
                         Pos2::new(rect.right() - 30.0, rect.center().y),
                         Vec2::splat(36.0),
                     );
-                    icons::round_button_at(ui, play, &response, Icon::Play, GREEN, Color32::BLACK);
+                    icons::round_button_at(ui, play, &response, Icon::Play, ACCENT, Color32::BLACK);
                 }
                 if response.clicked() {
                     open = Some(key.clone());
@@ -1520,7 +1607,7 @@ impl SpotiFlex {
                             play,
                             &response,
                             Icon::Play,
-                            GREEN,
+                            ACCENT,
                             Color32::BLACK,
                         );
                     }
@@ -1682,7 +1769,7 @@ impl SpotiFlex {
                 Align2::CENTER_CENTER,
                 (index + 1).to_string(),
                 theme::regular(15.0),
-                if current { GREEN } else { SUBDUED },
+                if current { ACCENT } else { SUBDUED },
             );
         }
         let art = Rect::from_min_size(
@@ -1697,7 +1784,7 @@ impl SpotiFlex {
             Pos2::new(text_left, mid - 19.0),
             &track.name,
             theme::regular(15.5),
-            if current { GREEN } else { TEXT },
+            if current { ACCENT } else { TEXT },
             text_width,
         );
         theme::text(
@@ -1904,10 +1991,13 @@ impl SpotiFlex {
             max_width,
         );
         let text_width = title.size().x.max(artist.size().x);
-        ui.painter()
-            .galley(Pos2::new(text_left, mid - 20.0), title, TEXT);
-        ui.painter()
-            .galley(Pos2::new(text_left, mid + 2.0), artist, SUBDUED);
+        emoji::paint_galley(ui.painter(), Pos2::new(text_left, mid - 20.0), title, TEXT);
+        emoji::paint_galley(
+            ui.painter(),
+            Pos2::new(text_left, mid + 2.0),
+            artist,
+            SUBDUED,
+        );
         if track.addable() {
             let save = Rect::from_center_size(
                 Pos2::new(text_left + text_width + 22.0, mid),
@@ -1944,7 +2034,7 @@ impl SpotiFlex {
             } else {
                 Icon::Play
             },
-            if enabled { TEXT } else { FAINT },
+            if enabled { ACCENT } else { FAINT },
             Color32::BLACK,
         );
         if response.on_hover_text("Play / pause · Space").clicked() && enabled {
@@ -2051,7 +2141,7 @@ impl SpotiFlex {
         if icons::button_at(
             ui,
             slot(32.0),
-            Id::new("immersive"),
+            Id::new(("player", "immersive")),
             full_icon,
             16.0,
             false,
@@ -2068,7 +2158,12 @@ impl SpotiFlex {
         let volume = self.playback.device.volume_percent.unwrap_or(50);
         if roomy {
             let bar_rect = slot(96.0).shrink2(vec2(4.0, 10.0));
-            let output = bar(ui, bar_rect, Id::new("volume"), volume as f32 / 100.0);
+            let output = bar(
+                ui,
+                bar_rect,
+                Id::new(("player", "volume")),
+                volume as f32 / 100.0,
+            );
             if let Some(released) = output.released {
                 let value = (released * 100.0).round() as u8;
                 self.action(PlayerAction::Volume(value));
@@ -2084,7 +2179,7 @@ impl SpotiFlex {
         if icons::button_at(
             ui,
             slot(32.0),
-            Id::new("mute"),
+            Id::new(("player", "mute")),
             volume_icon,
             17.0,
             false,
@@ -2106,7 +2201,7 @@ impl SpotiFlex {
         let devices = icons::button_at(
             ui,
             devices_rect,
-            Id::new("devices"),
+            Id::new(("player", "devices")),
             Icon::Devices,
             17.0,
             remote,
@@ -2120,7 +2215,7 @@ impl SpotiFlex {
             if icons::button_at(
                 ui,
                 slot(32.0),
-                Id::new("queue"),
+                Id::new(("player", "queue")),
                 Icon::Queue,
                 17.0,
                 self.view == "queue" && self.center == Center::Browse,
@@ -2133,7 +2228,7 @@ impl SpotiFlex {
             if icons::button_at(
                 ui,
                 slot(32.0),
-                Id::new("now-playing"),
+                Id::new(("player", "now-playing")),
                 Icon::NowPlaying,
                 17.0,
                 self.settings.show_lyrics,
@@ -2152,7 +2247,7 @@ impl SpotiFlex {
         if icons::button_at(
             ui,
             slot(32.0),
-            Id::new("lyrics"),
+            Id::new(("player", "lyrics")),
             Icon::Lyrics,
             17.0,
             self.center == Center::Lyrics,
@@ -2312,7 +2407,7 @@ impl SpotiFlex {
             );
             return;
         };
-        let wide = rect.width() >= 880.0 && rect.height() >= 420.0;
+        let wide = rect.width() >= 720.0 && rect.height() >= 420.0;
         let lyrics_rect = if wide {
             let column = rect.width() * 0.4;
             let art_size = (column * 0.72).min(rect.height() * 0.55).min(480.0);
@@ -2332,7 +2427,7 @@ impl SpotiFlex {
                 art_rect.center().x - title.size().x / 2.0,
                 art_rect.bottom() + 26.0,
             );
-            ui.painter().galley(title_pos, title.clone(), TEXT);
+            emoji::paint_galley(ui.painter(), title_pos, title.clone(), TEXT);
             let subtitle = theme::line(
                 ui,
                 &format!("{}  ·  {}", track.artist(), track.album.name),
@@ -2340,7 +2435,8 @@ impl SpotiFlex {
                 Color32::from_white_alpha(190),
                 title_width,
             );
-            ui.painter().galley(
+            emoji::paint_galley(
+                ui.painter(),
                 Pos2::new(
                     art_rect.center().x - subtitle.size().x / 2.0,
                     title_pos.y + title.size().y + 8.0,
@@ -2504,14 +2600,24 @@ impl SpotiFlex {
                         .hint_text("Path to .lrc or .ttml file")
                         .desired_width(f32::INFINITY),
                 );
-                if ui.button("Import for this track").clicked()
-                    && let Some(track) = self.playback.item.clone()
-                {
-                    self.lyric_loading = true;
-                    let _ = self.worker.lyrics.send(LyricCommand::Import(
-                        track,
-                        PathBuf::from(self.import_path.trim().trim_matches('"')),
-                    ));
+                ui.label(
+                    RichText::new(
+                        "Or drop a file onto the window. It stays attached to this song.",
+                    )
+                    .size(12.0)
+                    .color(SUBDUED),
+                );
+                if ui.button("Import for this track").clicked() {
+                    let path = PathBuf::from(self.import_path.trim().trim_matches('"'));
+                    self.import_lyrics(path);
+                    ui.close();
+                }
+                let imported = self
+                    .lyrics
+                    .as_ref()
+                    .is_some_and(|lyrics| lyrics.source.starts_with("Local"));
+                if imported && ui.button("Remove imported lyrics").clicked() {
+                    self.forget_lyrics();
                     ui.close();
                 }
             });
@@ -2720,7 +2826,7 @@ impl SpotiFlex {
                 ui.set_width(width - 32.0);
                 ui.horizontal(|ui| {
                     let (rect, _) = ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
-                    icons::paint(ui.painter(), rect, Icon::Devices, GREEN);
+                    icons::paint(ui.painter(), rect, Icon::Devices, ACCENT);
                     ui.vertical(|ui| {
                         ui.label(RichText::new("Playing on").size(12.5).color(SUBDUED));
                         let name = if self.playback.device.id.is_some()
@@ -2732,7 +2838,7 @@ impl SpotiFlex {
                         } else {
                             self.playback.device.name.clone()
                         };
-                        ui.label(RichText::new(name).font(theme::bold(14.5)).color(GREEN));
+                        ui.label(RichText::new(name).font(theme::bold(14.5)).color(ACCENT));
                     });
                 });
             });
@@ -2861,7 +2967,7 @@ impl SpotiFlex {
         card(ui, "Audio", |ui| {
             ui.horizontal(|ui| {
                 let color = if self.native_id.is_some() {
-                    GREEN
+                    ACCENT
                 } else {
                     SUBDUED
                 };
@@ -3105,7 +3211,7 @@ impl SpotiFlex {
                     .fill(if self.error {
                         Color32::from_rgb(120, 28, 38)
                     } else {
-                        Color32::from_rgb(46, 119, 208)
+                        Color32::from_rgb(88, 70, 170)
                     })
                     .corner_radius(8)
                     .inner_margin(vec2(16.0, 10.0))
@@ -3136,7 +3242,7 @@ impl SpotiFlex {
             .backdrop_color(Color32::from_black_alpha(210))
             .frame(
                 egui::Frame::new()
-                    .fill(Color32::from_rgb(24, 24, 24))
+                    .fill(ELEVATED)
                     .corner_radius(16)
                     .inner_margin(32)
                     .stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(16))),
@@ -3156,13 +3262,13 @@ impl SpotiFlex {
                     });
                     ui.add_space(18.0);
                     egui::Frame::new()
-                        .fill(Color32::from_rgba_unmultiplied(30, 215, 96, 28))
-                        .stroke(Stroke::new(1.0_f32, GREEN))
+                        .fill(Color32::from_rgba_unmultiplied(167, 139, 250, 30))
+                        .stroke(Stroke::new(1.0_f32, ACCENT))
                         .corner_radius(10)
                         .inner_margin(vec2(16.0, 12.0))
                         .show(ui, |ui| {
                             ui.set_width(width - 32.0);
-                            ui.label(RichText::new("Spotify Premium required").font(theme::bold(20.0)).color(GREEN));
+                            ui.label(RichText::new("Spotify Premium required").font(theme::bold(20.0)).color(ACCENT));
                             ui.label(
                                 RichText::new("Playback runs through Spotify Connect, which only works with Premium accounts. Development apps also need a Premium owner; other accounts must be allowed in the dashboard.")
                                     .size(13.0)
@@ -3291,6 +3397,7 @@ impl eframe::App for SpotiFlex {
             context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
         }
         self.shortcuts(context);
+        self.dropped_lyrics(context);
         let width = context.content_rect().width();
         let signed_in = self.profile.is_some();
         if !self.immersive {
@@ -3417,7 +3524,7 @@ fn bar(ui: &Ui, rect: Rect, id: Id, value: f32) -> BarOutput {
         Pos2::new(track.left() + track.width() * shown, track.bottom()),
     );
     ui.painter()
-        .rect_filled(filled, 2.0, if active { GREEN } else { TEXT });
+        .rect_filled(filled, 2.0, if active { ACCENT } else { TEXT });
     if active {
         ui.painter()
             .circle_filled(Pos2::new(filled.right(), track.center().y), 6.0, TEXT);
@@ -3432,7 +3539,7 @@ fn primary(text: &str) -> egui::Button<'_> {
             .font(theme::bold(15.0))
             .color(Color32::BLACK),
     )
-    .fill(GREEN)
+    .fill(ACCENT)
     .corner_radius(24)
     .min_size(vec2(0.0, 40.0))
 }
@@ -3443,7 +3550,7 @@ fn chip(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
     let (fill, text) = if selected {
         (TEXT, Color32::BLACK)
     } else if response.hovered() {
-        (Color32::from_rgb(60, 60, 60), TEXT)
+        (Color32::from_rgb(56, 56, 78), TEXT)
     } else {
         (HIGHLIGHT, TEXT)
     };
@@ -3476,7 +3583,7 @@ fn toggle(ui: &mut Ui, value: &mut bool, label: &str) -> egui::Response {
     ui.painter().rect_filled(
         switch,
         11.0,
-        theme::lerp_color(Color32::from_rgb(110, 110, 110), GREEN, on),
+        theme::lerp_color(Color32::from_rgb(90, 90, 116), ACCENT, on),
     );
     ui.painter().circle_filled(
         Pos2::new(switch.left() + 11.0 + on * 18.0, switch.center().y),
@@ -3504,13 +3611,13 @@ fn step(ui: &mut Ui, number: usize, text: &str, contents: impl FnOnce(&mut Ui)) 
     ui.horizontal_top(|ui| {
         let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
         ui.painter()
-            .circle_stroke(rect.center(), 13.0, Stroke::new(1.5_f32, GREEN));
+            .circle_stroke(rect.center(), 13.0, Stroke::new(1.5_f32, ACCENT));
         ui.painter().text(
             rect.center(),
             Align2::CENTER_CENTER,
             number.to_string(),
             theme::bold(14.0),
-            GREEN,
+            ACCENT,
         );
         ui.vertical(|ui| {
             ui.label(RichText::new(text).color(TEXT));
@@ -3523,7 +3630,7 @@ fn step(ui: &mut Ui, number: usize, text: &str, contents: impl FnOnce(&mut Ui)) 
 fn device_row(ui: &mut Ui, name: &str, kind: &str, active: bool) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::click());
     hover_fill(ui, rect, &response, false);
-    let color = if active { GREEN } else { TEXT };
+    let color = if active { ACCENT } else { TEXT };
     icons::paint(
         ui.painter(),
         Rect::from_center_size(
@@ -3546,7 +3653,7 @@ fn device_row(ui: &mut Ui, name: &str, kind: &str, active: bool) -> egui::Respon
         Pos2::new(rect.left() + 46.0, rect.top() + 28.0),
         if active { "Listening on" } else { kind },
         theme::regular(12.5),
-        if active { GREEN } else { SUBDUED },
+        if active { ACCENT } else { SUBDUED },
         rect.width() - 56.0,
     );
     response
@@ -3554,7 +3661,7 @@ fn device_row(ui: &mut Ui, name: &str, kind: &str, active: bool) -> egui::Respon
 
 fn popover_frame() -> egui::Frame {
     egui::Frame::new()
-        .fill(Color32::from_rgb(40, 40, 40))
+        .fill(Color32::from_rgb(36, 36, 52))
         .corner_radius(10)
         .inner_margin(12)
         .shadow(egui::Shadow {
@@ -3597,7 +3704,7 @@ fn cover(ui: &Ui, rect: Rect, images: &[Artwork], radius: u8) {
 
 fn liked_cover(painter: &egui::Painter, rect: Rect) {
     let radius = (rect.width() * 0.08).clamp(4.0, 8.0);
-    painter.rect_filled(rect, radius, Color32::from_rgb(69, 10, 245));
+    painter.rect_filled(rect, radius, Color32::from_rgb(124, 58, 237));
     let glow = Rect::from_min_max(rect.center(), rect.max);
     painter.rect_filled(
         glow,
@@ -3607,7 +3714,7 @@ fn liked_cover(painter: &egui::Painter, rect: Rect) {
             sw: 0,
             se: radius as u8,
         },
-        Color32::from_rgba_unmultiplied(196, 239, 217, 60),
+        Color32::from_rgba_unmultiplied(236, 72, 153, 110),
     );
     icons::paint(painter, rect.shrink(rect.width() * 0.3), Icon::Heart, TEXT);
 }
@@ -3624,7 +3731,7 @@ fn equalizer(painter: &egui::Painter, rect: Rect, time: f32) {
                 Pos2::new(left + width, rect.bottom()),
             ),
             1.0,
-            GREEN,
+            ACCENT,
         );
     }
 }
@@ -3680,23 +3787,30 @@ fn duration_words(milliseconds: u64) -> String {
 }
 
 fn brand(painter: &egui::Painter, center: Pos2, size: f32) {
-    painter.circle_filled(center, size / 2.0, GREEN);
-    for index in 0..3 {
-        let y = center.y - size * 0.19 + index as f32 * size * 0.18;
-        let half = size * (0.3 - index as f32 * 0.04);
-        let points = (0..=16)
-            .map(|step| {
-                let t = step as f32 / 16.0;
-                Pos2::new(
-                    center.x - half + t * half * 2.0,
-                    y - (t * std::f32::consts::PI).sin() * size * 0.05,
-                )
-            })
-            .collect();
-        painter.add(egui::Shape::line(
-            points,
-            Stroke::new(size * 0.075, Color32::BLACK),
-        ));
+    use crate::ui::icon_pixels::{ICON_BAR_HALF_WIDTH, ICON_BARS, ICON_RADIUS};
+    let tile = Rect::from_center_size(center, Vec2::splat(size * 0.94));
+    painter.rect_filled(tile, size * ICON_RADIUS, ACCENT);
+    let bottom = Rect::from_min_max(tile.center(), tile.max);
+    painter.rect_filled(
+        bottom,
+        egui::CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: 0,
+            se: (size * ICON_RADIUS) as u8,
+        },
+        Color32::from_rgba_unmultiplied(34, 211, 238, 120),
+    );
+    let origin = center - Vec2::splat(size / 2.0);
+    for (x, half) in ICON_BARS {
+        painter.rect_filled(
+            Rect::from_center_size(
+                origin + vec2(x, 0.5) * size,
+                vec2(ICON_BAR_HALF_WIDTH * 2.0, half * 2.0) * size,
+            ),
+            ICON_BAR_HALF_WIDTH * size,
+            Color32::from_rgb(10, 10, 18),
+        );
     }
 }
 

@@ -6,17 +6,20 @@ use eframe::egui::{
     text::{LayoutJob, TextFormat, TextWrapping},
 };
 
-pub const GREEN: Color32 = Color32::from_rgb(30, 215, 96);
-pub const GREEN_HOVER: Color32 = Color32::from_rgb(62, 230, 124);
-pub const BASE: Color32 = Color32::from_rgb(0, 0, 0);
-pub const SURFACE: Color32 = Color32::from_rgb(18, 18, 18);
-pub const ELEVATED: Color32 = Color32::from_rgb(31, 31, 31);
-pub const HIGHLIGHT: Color32 = Color32::from_rgb(42, 42, 42);
-pub const TEXT: Color32 = Color32::from_rgb(255, 255, 255);
-pub const SUBDUED: Color32 = Color32::from_rgb(179, 179, 179);
-pub const FAINT: Color32 = Color32::from_rgb(120, 120, 120);
-pub const ERROR: Color32 = Color32::from_rgb(243, 114, 124);
-pub const RADIUS: u8 = 10;
+// SpotiFlex palette: Spotify's layout, its own look. Violet accent with a
+// cyan partner, and slightly cool, blue-tinted surfaces.
+pub const ACCENT: Color32 = Color32::from_rgb(167, 139, 250);
+pub const ACCENT_HOVER: Color32 = Color32::from_rgb(196, 181, 253);
+pub const ACCENT_ALT: Color32 = Color32::from_rgb(34, 211, 238);
+pub const BASE: Color32 = Color32::from_rgb(7, 7, 12);
+pub const SURFACE: Color32 = Color32::from_rgb(17, 17, 25);
+pub const ELEVATED: Color32 = Color32::from_rgb(28, 28, 40);
+pub const HIGHLIGHT: Color32 = Color32::from_rgb(40, 40, 56);
+pub const TEXT: Color32 = Color32::from_rgb(244, 244, 250);
+pub const SUBDUED: Color32 = Color32::from_rgb(163, 163, 186);
+pub const FAINT: Color32 = Color32::from_rgb(105, 105, 128);
+pub const ERROR: Color32 = Color32::from_rgb(248, 113, 133);
+pub const RADIUS: u8 = 14;
 pub const GAP: f32 = 8.0;
 
 const BOLD: &str = "bold";
@@ -38,18 +41,18 @@ pub fn install(context: &egui::Context) {
     visuals.window_stroke = Stroke::new(1.0_f32, Color32::from_white_alpha(14));
     visuals.window_corner_radius = 12.into();
     visuals.menu_corner_radius = 8.into();
-    visuals.extreme_bg_color = Color32::from_rgb(36, 36, 36);
+    visuals.extreme_bg_color = Color32::from_rgb(34, 34, 48);
     visuals.faint_bg_color = Color32::from_white_alpha(6);
-    visuals.hyperlink_color = GREEN;
-    visuals.selection.bg_fill = Color32::from_rgb(28, 92, 52);
-    visuals.selection.stroke = Stroke::new(1.0_f32, GREEN);
+    visuals.hyperlink_color = ACCENT;
+    visuals.selection.bg_fill = Color32::from_rgb(76, 60, 140);
+    visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
     visuals.slider_trailing_fill = true;
     visuals.handle_shape = egui::style::HandleShape::Circle;
     for (widget, fill) in [
         (&mut visuals.widgets.inactive, HIGHLIGHT),
-        (&mut visuals.widgets.hovered, Color32::from_rgb(56, 56, 56)),
-        (&mut visuals.widgets.active, Color32::from_rgb(70, 70, 70)),
-        (&mut visuals.widgets.open, Color32::from_rgb(56, 56, 56)),
+        (&mut visuals.widgets.hovered, Color32::from_rgb(54, 54, 74)),
+        (&mut visuals.widgets.active, Color32::from_rgb(66, 66, 90)),
+        (&mut visuals.widgets.open, Color32::from_rgb(54, 54, 74)),
     ] {
         widget.bg_fill = fill;
         widget.weak_bg_fill = fill;
@@ -89,7 +92,8 @@ pub fn install(context: &egui::Context) {
         .unwrap_or_default();
     let mut regular_family = Vec::new();
     let mut bold_family = Vec::new();
-    // Bold weight first, then CJK coverage so Japanese and Korean lyrics render.
+    // Bold weight first, then CJK coverage so Japanese and Korean lyrics render,
+    // then emoji (drawn monochrome; egui has no colour font support).
     for (name, file, is_bold) in [
         ("segoe", "segoeui.ttf", false),
         ("segoe-bold", "segoeuib.ttf", true),
@@ -97,6 +101,7 @@ pub fn install(context: &egui::Context) {
         ("yugothic-bold", "YuGothB.ttc", true),
         ("malgun", "malgun.ttf", false),
         ("malgun-bold", "malgunbd.ttf", true),
+        ("segoe-emoji", "seguiemj.ttf", false),
         ("segoe-symbol", "seguisym.ttf", false),
     ] {
         let Ok(bytes) = std::fs::read(format!("C:\\Windows\\Fonts\\{file}")) else {
@@ -134,7 +139,7 @@ pub fn line(ui: &Ui, text: &str, font: FontId, color: Color32, width: f32) -> Ar
 pub fn text(ui: &Ui, pos: Pos2, text: &str, font: FontId, color: Color32, width: f32) -> Rect {
     let galley = line(ui, text, font, color, width);
     let rect = Rect::from_min_size(pos, galley.size());
-    ui.painter().galley(pos, galley, color);
+    super::emoji::paint_galley(ui.painter(), pos, galley, color);
     rect
 }
 

@@ -15,7 +15,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("SpotiFlex")
             .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([760.0, 560.0]),
+            .with_min_inner_size([760.0, 560.0])
+            .with_icon(std::sync::Arc::new(eframe::egui::IconData {
+                rgba: spotiflex::ui::icon_pixels::icon_rgba(256),
+                width: 256,
+                height: 256,
+            })),
         ..Default::default()
     };
     eframe::run_native(

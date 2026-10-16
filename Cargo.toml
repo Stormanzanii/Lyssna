@@ -32,6 +32,11 @@ sha2 = "0.10"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 url = "2"
 webbrowser = "1"
+ttf-parser = "0.25.1"
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+
+[build-dependencies]
+winresource = "0.1"
 
 [profile.dev]
 debug = 1

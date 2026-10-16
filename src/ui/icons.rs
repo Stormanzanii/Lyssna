@@ -5,7 +5,7 @@ use eframe::egui::{
     epaint::{CircleShape, Mesh, PathShape, PathStroke},
 };
 
-use super::theme::{self, GREEN, SUBDUED, TEXT};
+use super::theme::{self, ACCENT, SUBDUED, TEXT};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Icon {
@@ -281,7 +281,7 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             fill(vec![p(0.64, 0.06), p(0.86, 0.22), p(0.6, 0.34)]);
         }
         Icon::Check => {
-            painter.add(CircleShape::filled(p(0.5, 0.5), size * 0.46, GREEN));
+            painter.add(CircleShape::filled(p(0.5, 0.5), size * 0.46, ACCENT));
             painter.add(Shape::line(
                 vec![p(0.3, 0.5), p(0.44, 0.64), p(0.7, 0.36)],
                 Stroke::new(width * 1.1, Color32::BLACK),
@@ -343,7 +343,7 @@ fn paint_button(
 ) -> Response {
     let hovered = response.hovered();
     let color = if active {
-        if hovered { theme::GREEN_HOVER } else { GREEN }
+        if hovered { theme::ACCENT_HOVER } else { ACCENT }
     } else if hovered {
         TEXT
     } else {
@@ -362,7 +362,7 @@ fn paint_button(
     );
     if active {
         ui.painter()
-            .circle_filled(rect.center_bottom() - Vec2::new(0.0, 1.0), 2.0, GREEN);
+            .circle_filled(rect.center_bottom() - Vec2::new(0.0, 1.0), 2.0, ACCENT);
     }
     if tooltip.is_empty() {
         response

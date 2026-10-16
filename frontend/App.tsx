@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
@@ -82,6 +83,7 @@ import {
   usePosition,
 } from "./components";
 import "./styles.css";
+import { VolumeControl } from "./volume-control";
 
 type Center = "browse" | "lyrics" | "settings";
 const windowHandle = () => getCurrentWindow();
@@ -1686,14 +1688,29 @@ function PlayerBar({
     track = state.playback.item;
   const [seeking, setSeeking] = useState<number | null>(null),
     [volume, setVolume] = useState(70);
+  const volumeCallback = useRef(onPlayer);
+  volumeCallback.current = onPlayer;
+  const volumeControl = useMemo(
+    () =>
+      new VolumeControl(
+        (value) => volumeCallback.current({ command: "volume", volume: value }),
+        setVolume,
+      ),
+    [],
+  );
+  useEffect(() => () => volumeControl.dispose(), [volumeControl]);
   const saved = track && state.saved[track.uri];
   useEffect(() => {
-    if (
-      state.playback.device.volume_percent !== undefined &&
-      state.playback.device.volume_percent !== null
-    )
-      setVolume(state.playback.device.volume_percent);
-  }, [state.playback.device.volume_percent]);
+    volumeControl.observe(
+      state.playback.device.volume_percent,
+      state.playback.device.id ?? state.playback.device.name,
+    );
+  }, [
+    state.playback.device.volume_percent,
+    state.playback.device.id,
+    state.playback.device.name,
+    volumeControl,
+  ]);
   const seek = () => {
     if (seeking !== null) {
       onPlayer({ command: "seek", positionMs: seeking });
@@ -1848,8 +1865,8 @@ function PlayerBar({
           title={volume ? "Mute" : "Unmute"}
           onClick={() => {
             const next = volume ? 0 : 70;
-            setVolume(next);
-            onPlayer({ command: "volume", volume: next });
+            volumeControl.edit(next);
+            volumeControl.finish();
           }}
         >
           {volume ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -1861,11 +1878,15 @@ function PlayerBar({
           min="0"
           max="100"
           value={volume}
+          onPointerDown={() => volumeControl.begin()}
+          onPointerUp={() => volumeControl.finish()}
+          onPointerCancel={() => volumeControl.finish()}
+          onKeyUp={() => volumeControl.finish()}
+          onBlur={() => volumeControl.finish()}
           style={{ "--range": `${volume}%` } as CSSProperties}
           onChange={(event) => {
             const next = Number(event.target.value);
-            setVolume(next);
-            onPlayer({ command: "volume", volume: next });
+            volumeControl.edit(next);
           }}
         />
         <button

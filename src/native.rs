@@ -1,7 +1,7 @@
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         mpsc,
     },
     thread,
@@ -46,6 +46,7 @@ pub enum NativeEvent {
 }
 
 struct ControlConnection {
+    volume: Arc<AtomicU32>,
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
     playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
@@ -188,6 +189,12 @@ impl NativeControls {
         else {
             return Err(action);
         };
+        if let PlayerAction::Volume(value) = action {
+            connection
+                .volume
+                .store(u32::from(value.min(100)), Ordering::Release);
+            return Ok(());
+        }
         connection.sender.send(action).map_err(|error| error.0)
     }
 }
@@ -500,8 +507,10 @@ impl NativePlayer {
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
+        let latest_volume = Arc::new(AtomicU32::new(u32::MAX));
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
+                volume: latest_volume.clone(),
                 sender,
                 ready: ready.clone(),
                 playlists: Some(playlist_sender),
@@ -545,7 +554,7 @@ impl NativePlayer {
                         &account,
                         &cancel,
                         &mut stopped,
-                        (&mut commands, &mut playlists, &mut metadata),
+                        (&mut commands, &mut playlists, &mut metadata, &latest_volume),
                         &thread_ready,
                         &emit,
                     ))
@@ -579,11 +588,12 @@ async fn run(
         &mut async_channel::UnboundedReceiver<PlayerAction>,
         &mut async_channel::UnboundedReceiver<PlaylistRead>,
         &mut async_channel::UnboundedReceiver<MetadataRead>,
+        &AtomicU32,
     ),
     ready: &AtomicBool,
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
-    let (commands, playlists, metadata) = channels;
+    let (commands, playlists, metadata, latest_volume) = channels;
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
@@ -664,7 +674,9 @@ async fn run(
     let mut active = false;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
-    let mut intent_tick = tokio::time::interval(Duration::from_millis(100));
+    let mut intent_tick = tokio::time::interval(Duration::from_millis(20));
+    let mut volume_sync: Option<(u8, std::time::Instant)> = None;
+    let mut volume_guard: Option<(u8, std::time::Instant)> = None;
     let mut pending_seek: Option<(String, u64)> = None;
     loop {
         tokio::select! {
@@ -694,7 +706,7 @@ async fn run(
                 match event {
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
-                    Some(PlayerEvent::VolumeChanged{volume})=>emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8)}),
+                    Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
                     Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) { emit(NativeEvent::Track(Box::new(track))); } },
@@ -707,6 +719,25 @@ async fn run(
                     _ => {}
                 }
             }
+        }
+        let now = std::time::Instant::now();
+        let value = latest_volume.swap(u32::MAX, Ordering::AcqRel);
+        if value <= 100 {
+            let volume = value as u8;
+            mixer.set_volume((value * u32::from(u16::MAX) / 100) as u16);
+            volume_sync = Some((volume, now));
+            volume_guard = Some((volume, now + Duration::from_secs(3)));
+            emit(NativeEvent::Transport {
+                shuffle: None,
+                repeat: None,
+                volume: Some(volume),
+            });
+        }
+        if let Some((volume, changed)) = volume_sync
+            && now.duration_since(changed) >= Duration::from_millis(180)
+        {
+            volume_sync = None;
+            let _ = spirc.set_volume((u32::from(volume) * u32::from(u16::MAX) / 100) as u16);
         }
         if let Some(playing) = intent.next(audio_playing, std::time::Instant::now()) {
             // Local transport must not queue behind Spotify Connect HTTP notifications.
@@ -846,6 +877,7 @@ mod tests {
         let (sender, mut receiver) = async_channel::unbounded_channel();
         let ready = Arc::new(AtomicBool::new(true));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            volume: Arc::new(AtomicU32::new(u32::MAX)),
             sender,
             ready: ready.clone(),
             playlists: None,

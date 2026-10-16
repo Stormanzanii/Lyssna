@@ -332,21 +332,22 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(page.locator(".lyrics-page .lyric-line.active")).toHaveCount(2);
   await expect
     .poll(() =>
-      page
-        .locator(".lyric-scroll")
-        .first()
-        .evaluate((element) => element.scrollTop),
+      page.evaluate(() =>
+        Math.abs(
+          document
+            .querySelector(".lyrics-page .lyric-line")!
+            .getBoundingClientRect().top -
+            document
+              .querySelector(".lyrics-album>.cover")!
+              .getBoundingClientRect().top,
+        ),
+      ),
     )
-    .toBeGreaterThanOrEqual(0);
-  // The opening lead now aligns with the cover without a large opening scroll.
-  await expect
-    .poll(() =>
-      page
-        .locator(".lyric-scroll")
-        .first()
-        .evaluate((element) => Number(element.scrollTop.toFixed(0))),
-    )
-    .toBeGreaterThanOrEqual(0);
+    .toBeLessThan(35);
+  const leadTop = await page
+    .locator(".lyrics-page .lyric-line")
+    .first()
+    .evaluate((element) => element.getBoundingClientRect().top);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -364,6 +365,18 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.getByRole("status", { name: "Instrumental break" }),
   ).toHaveCount(0);
+  expect(
+    await page
+      .locator(".lyrics-page .lyric-line")
+      .first()
+      .evaluate((element) => element.getBoundingClientRect().top),
+  ).toBeCloseTo(leadTop, 0);
+  expect(
+    await page
+      .locator(".lyrics-page .lyric-wait")
+      .first()
+      .evaluate((element) => element.getBoundingClientRect().height),
+  ).toBe(0);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -378,6 +391,13 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.getByRole("status", { name: "Instrumental break" }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".lyrics-page .lyric-wait[aria-hidden='false']")
+        .evaluate((element) => element.getBoundingClientRect().height),
+    )
+    .toBeCloseTo(48, 0);
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Spicy Lyrics");

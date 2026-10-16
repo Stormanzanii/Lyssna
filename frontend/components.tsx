@@ -454,7 +454,7 @@ export function LyricsDisplay({
     };
     const retarget = () => {
       const cover = container
-        .closest(".lyrics-layout")
+        .closest(".lyrics-page")
         ?.querySelector(".lyrics-album>.cover");
       const anchor = centered
         ? container.clientHeight * 0.46
@@ -491,7 +491,7 @@ export function LyricsDisplay({
       .querySelectorAll(".lyric-wait")
       .forEach((row) => observer.observe(row));
     const album = container
-      .closest(".lyrics-layout")
+      .closest(".lyrics-page")
       ?.querySelector(".lyrics-album");
     if (album) observer.observe(album);
     return () => {

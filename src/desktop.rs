@@ -1048,6 +1048,44 @@ fn add_tracks(
         .map_err(error)
 }
 #[tauri::command]
+async fn open_creator_profile(
+    app: tauri::AppHandle,
+    id: String,
+    name: String,
+) -> std::result::Result<(), String> {
+    let result = || -> Result<()> {
+        ensure!(
+            (15..=22).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit()),
+            "Invalid creator ID"
+        );
+        let label = format!("creator-{id}");
+        if let Some(window) = app.get_webview_window(&label) {
+            window.set_focus()?;
+            return Ok(());
+        }
+        let title = format!(
+            "{} · Spicy Lyrics",
+            name.chars()
+                .filter(|character| !character.is_control())
+                .take(80)
+                .collect::<String>()
+        );
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            label,
+            tauri::WebviewUrl::External(format!("https://spicylyrics.org/embed/{id}").parse()?),
+        )
+        .title(title)
+        .inner_size(1080., 800.)
+        .min_inner_size(480., 400.)
+        .center()
+        .on_navigation(|url| url.scheme() == "https" && url.host_str() == Some("spicylyrics.org"))
+        .build()?;
+        Ok(())
+    };
+    result().map_err(error)
+}
+#[tauri::command]
 fn open_link(url: String) -> std::result::Result<(), String> {
     let parsed = url::Url::parse(&url).map_err(|_| "Invalid link")?;
     if parsed.scheme() != "https"
@@ -1122,6 +1160,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             import_lyrics,
             add_tracks,
             open_link,
+            open_creator_profile,
             app_update
         ])
         .build(tauri::generate_context!())?;

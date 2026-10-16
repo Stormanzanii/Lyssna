@@ -39,9 +39,11 @@ Native audio has a separate, one-time browser sign-in using librespot's public a
 
 ## Lyrics
 
-Configure a private HTTPS provider in **Settings > Lyrics provider**. The host is masked in the editor and stored in the operating system credential store, outside the repository. Provider requests require explicit consent to share the Spotify access token. Refresh tokens and client secrets are never sent to the provider. HTTPS certificate validation stays enabled; redirects are disabled.
+Release builds include SpotiFlex's publishable Spicy Lyrics client key. Users do not need a separate Spicy Lyrics account or API key. Requests contain the Spotify track ID; Spotify access tokens, refresh tokens, and client secrets are not sent to Spicy Lyrics.
 
-For local provisioning, the host can also be passed through standard input:
+Maintainers set the `SPOTIFLEX_SPICY_LYRICS_KEY` repository variable for release builds, or the environment variable before a local build. Only publishable `sl_pk_` keys are accepted. Build validation rejects secret keys before compilation. Development builds without a bundled key can save a publishable key in Settings using Windows Credential Manager.
+
+Existing self-hosted deployments can still provision their protected HTTPS host through standard input. This legacy mode requires explicit consent before sharing a short-lived Spotify access token:
 
 ```powershell
 Read-Host 'HTTPS lyrics host' | .\target\debug\spotiflex.exe --set-lyrics-host --allow-spotify-access-token

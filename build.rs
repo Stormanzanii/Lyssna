@@ -3,6 +3,19 @@
 include!("src/ui/icon_pixels.rs");
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=SPOTIFLEX_SPICY_LYRICS_KEY");
+    if let Ok(key) = std::env::var("SPOTIFLEX_SPICY_LYRICS_KEY")
+        && !key.is_empty()
+    {
+        assert!(
+            key.starts_with("sl_pk_")
+                && (16..=512).contains(&key.len())
+                && key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
+            "SPOTIFLEX_SPICY_LYRICS_KEY must contain a publishable sl_pk_ client key"
+        );
+    }
     if std::env::var_os("CARGO_FEATURE_DESKTOP").is_some() {
         println!("cargo:rerun-if-changed=dist");
         tauri_build::build();

@@ -118,7 +118,7 @@ impl Desktop {
                 local_device_name: native::device_name(),
                 native_status: "Waiting for sign-in".into(),
                 provider_configured: crate::provider::configured(),
-                provider_builtin: false,
+                provider_builtin: crate::provider::builtin_configured(),
                 provider_kind: crate::provider::kind(),
                 login_pending: restore,
                 can_follow: false,

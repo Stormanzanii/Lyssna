@@ -91,10 +91,12 @@ pub fn requires_spotify_token() -> bool {
 }
 
 pub fn configured() -> bool {
-    keyring::Entry::new(SERVICE, "provider")
-        .and_then(|entry| entry.get_password())
-        .is_ok()
+    load().is_ok()
 }
+pub fn builtin_configured() -> bool {
+    option_env!("SPOTIFLEX_SPICY_LYRICS_KEY").is_some_and(|key| validate_public_key(key).is_ok())
+}
+
 pub fn kind() -> Option<String> {
     load().ok().map(|provider| {
         if provider.spicy_api {
@@ -106,6 +108,16 @@ pub fn kind() -> Option<String> {
 }
 
 fn load() -> Result<Provider> {
+    if let Some(key) =
+        option_env!("SPOTIFLEX_SPICY_LYRICS_KEY").filter(|key| validate_public_key(key).is_ok())
+    {
+        return Ok(Provider {
+            host: "https://api.spicylyrics.org/".into(),
+            share_access_token: false,
+            spicy_api: true,
+            api_key: key.into(),
+        });
+    }
     let text = keyring::Entry::new(SERVICE, "provider")?
         .get_password()
         .map_err(|_| {

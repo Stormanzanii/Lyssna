@@ -233,7 +233,7 @@ impl Spotify {
                 Method::GET,
                 &format!("artists/{id}/albums"),
                 &[
-                    ("limit", "50".into()),
+                    ("limit", "10".into()),
                     ("include_groups", "album,single".into()),
                 ],
                 None,
@@ -274,7 +274,7 @@ impl Spotify {
         let response = self.request(
             Method::GET,
             &format!("albums/{id}/tracks"),
-            &[("limit", "10".into()), ("offset", offset.to_string())],
+            &[("limit", "50".into()), ("offset", offset.to_string())],
             None,
         )?;
         Ok(serde_json::from_value(response["items"].clone())?)

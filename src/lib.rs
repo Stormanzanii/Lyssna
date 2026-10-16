@@ -4,6 +4,7 @@ pub mod app;
 pub mod artist;
 mod audio;
 pub mod auth;
+pub mod canvas;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod desktop;

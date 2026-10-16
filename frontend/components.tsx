@@ -891,6 +891,67 @@ export function LyricsPage({
   );
 }
 
+function CanvasArtwork({
+  track,
+  url,
+  playing,
+  reduceMotion,
+  onOpen,
+}: {
+  track: Track;
+  url?: string;
+  playing: boolean;
+  reduceMotion: boolean;
+  onOpen: () => void;
+}) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    let visible = true;
+    const update = () => {
+      if (playing && visible && !document.hidden && !reduceMotion)
+        void element.play().catch(() => {});
+      else element.pause();
+    };
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? false;
+      update();
+    });
+    observer.observe(element);
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", update);
+      element.pause();
+    };
+  }, [url, playing, reduceMotion]);
+  if (!url || failed || reduceMotion)
+    return (
+      <Cover
+        images={track.album.images}
+        className="now-artwork"
+        onClick={onOpen}
+      />
+    );
+  return (
+    <button className="canvas-artwork" aria-label="Open album" onClick={onOpen}>
+      <video
+        ref={video}
+        src={url}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster={imageOf(track.album.images)}
+        onError={() => setFailed(true)}
+      />
+    </button>
+  );
+}
+
 export function NowPlaying({
   state,
   onPlayer,
@@ -930,10 +991,13 @@ export function NowPlaying({
         </div>
         {track ? (
           <>
-            <Cover
-              images={track.album.images}
-              className="now-artwork"
-              onClick={() => onAlbum(track.album)}
+            <CanvasArtwork
+              key={track.uri}
+              track={track}
+              url={state.canvas_url}
+              playing={state.playback.is_playing}
+              reduceMotion={state.settings.reduce_motion}
+              onOpen={() => onAlbum(track.album)}
             />
             <div className="now-track">
               <div className="now-track-text">

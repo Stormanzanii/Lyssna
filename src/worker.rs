@@ -61,6 +61,10 @@ pub enum Command {
 }
 
 pub enum Event {
+    Canvas {
+        uri: String,
+        url: Option<String>,
+    },
     ArtistStats {
         uri: String,
         artist_id: String,
@@ -542,6 +546,28 @@ impl Backend {
                 self.emit(Event::BrowseInfo { generation, info });
             }
             Command::PlayingDetails(track) => {
+                let canvas_track = track.uri.clone();
+                let native = self.native_controls.clone();
+                let events = self.events.clone();
+                let context = self.context.clone();
+                thread::spawn(move || {
+                    let url = native
+                        .metadata(
+                            &canvas_track,
+                            librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1,
+                        )
+                        .ok()
+                        .and_then(|bytes| {
+                            crate::canvas::video_url(&bytes, &canvas_track)
+                                .ok()
+                                .flatten()
+                        });
+                    let _ = events.send(Event::Canvas {
+                        uri: canvas_track,
+                        url,
+                    });
+                    context.request_repaint();
+                });
                 let mut artists = Vec::new();
                 for artist in &track.artists {
                     if let Some(id) = &artist.id

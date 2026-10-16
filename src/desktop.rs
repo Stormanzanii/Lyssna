@@ -26,6 +26,7 @@ use tauri::{Emitter, Manager, State};
 
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
+    canvas_url: Option<String>,
     profile: Option<Profile>,
     playlists: Vec<Playlist>,
     playback: Playback,
@@ -110,6 +111,7 @@ impl Desktop {
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
             snapshot: Mutex::new(Snapshot {
+                canvas_url: None,
                 profile: None,
                 playlists: Vec::new(),
                 playback: Playback::default(),
@@ -164,6 +166,17 @@ impl Desktop {
                         return;
                     };
                     match event {
+                        Event::Canvas { uri, url } => {
+                            if snapshot
+                                .playback
+                                .item
+                                .as_ref()
+                                .is_some_and(|track| track.uri == uri)
+                            {
+                                snapshot.canvas_url = url.clone();
+                                emit(json!({"type":"canvas","uri":uri,"url":url}));
+                            }
+                        }
                         Event::ArtistStats {
                             uri,
                             artist_id,
@@ -233,6 +246,7 @@ impl Desktop {
                             snapshot.playback = Playback::default();
                             snapshot.native_ready = false;
                             snapshot.lyrics = None;
+                            snapshot.canvas_url = None;
                             snapshot.details = PlayingDetails::default();
                             snapshot.tracks.clear();
                             emit(json!({"type":"signed_out"}));
@@ -317,6 +331,7 @@ impl Desktop {
                             snapshot.observed_at = now_ms();
                             if changed {
                                 snapshot.lyrics = None;
+                                snapshot.canvas_url = None;
                                 snapshot.lyric_error.clear();
                                 snapshot.details = PlayingDetails::default();
                                 if let Some(track) = snapshot.playback.item.clone() {
@@ -473,6 +488,7 @@ impl Desktop {
                             snapshot.playback.device.is_active = true;
                             snapshot.observed_at = now_ms();
                             snapshot.lyrics = None;
+                            snapshot.canvas_url = None;
                             snapshot.lyric_error.clear();
                             snapshot.details = PlayingDetails::default();
                             if let Ok(mut pending) = pump.pending_track.lock() {
@@ -847,6 +863,7 @@ fn player(
                 snapshot.playback.progress_ms = Some(0);
                 snapshot.playback.is_playing = false;
                 snapshot.lyrics = None;
+                snapshot.canvas_url = None;
                 snapshot.lyric_error.clear();
                 snapshot.details = PlayingDetails::default();
                 snapshot.observed_at = now_ms();

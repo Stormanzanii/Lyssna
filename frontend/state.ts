@@ -74,6 +74,10 @@ export type Action =
   | { type: "toast_clear" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "canvas":
+      return state.playback.item?.uri === action.uri
+        ? { ...state, canvas_url: action.url }
+        : state;
     case "bootstrap":
       return { ...state, ...action.snapshot, booted: true };
     case "session":
@@ -143,6 +147,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "play_requested":
       return {
         ...state,
+        canvas_url: undefined,
         pending: { uri: action.track.uri, at: Date.now() },
         playback: {
           ...state.playback,
@@ -175,6 +180,7 @@ export function reducer(state: AppState, action: Action): AppState {
               ? undefined
               : state.pending,
         lyrics: changed ? undefined : state.lyrics,
+        canvas_url: changed ? undefined : state.canvas_url,
         lyric_error: changed ? "" : state.lyric_error,
         details: changed ? { artists: [], queue: [] } : state.details,
       };

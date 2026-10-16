@@ -127,6 +127,7 @@ export interface BrowseInfo {
   albums: Album[];
 }
 export interface Snapshot {
+  canvas_url?: string;
   profile?: Profile;
   playlists: Playlist[];
   playback: Playback;
@@ -166,6 +167,7 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "canvas"; uri: string; url?: string }
   | { type: "session"; profile: Profile; can_follow: boolean }
   | { type: "signed_out" | "login_finished" }
   | { type: "provider_configured"; kind?: "spicy" | "legacy" }

@@ -1,5 +1,9 @@
 use std::{
     collections::HashSet,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -22,6 +26,8 @@ pub struct Spotify {
     pub client_id: String,
     pub tokens: Tokens,
     retry_after: Option<Instant>,
+    active: Arc<AtomicBool>,
+    background: bool,
 }
 
 impl Spotify {
@@ -31,9 +37,19 @@ impl Spotify {
             client_id,
             tokens,
             retry_after: None,
+            active: Arc::new(AtomicBool::new(true)),
+            background: false,
         }
     }
 
+    pub fn background(&self) -> Self {
+        let mut snapshot = self.clone();
+        snapshot.background = true;
+        snapshot
+    }
+    pub fn cancel_background(&self) {
+        self.active.store(false, Ordering::Release);
+    }
     fn request(
         &mut self,
         method: Method,
@@ -41,14 +57,28 @@ impl Spotify {
         query: &[(&str, String)],
         body: Option<Value>,
     ) -> Result<Value> {
+        ensure!(
+            self.active.load(Ordering::Acquire),
+            "Spotify session signed out"
+        );
         if let Some(until) = self.retry_after.filter(|until| *until > Instant::now()) {
             bail!(
                 "Spotify rate limit: retry in {} seconds",
                 until.duration_since(Instant::now()).as_secs() + 1
             );
         }
-        self.tokens
-            .refresh_if_needed(&self.client, &self.client_id)?;
+        if self.background {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs();
+            ensure!(
+                self.tokens.expires_at > now,
+                "Background Spotify session expired"
+            );
+        } else {
+            self.tokens
+                .refresh_if_needed(&self.client, &self.client_id)?;
+        }
         let url = if path.starts_with("https://") {
             Url::parse(path)?
         } else {
@@ -78,7 +108,7 @@ impl Spotify {
                 .send()
                 .map_err(|_| anyhow::anyhow!("Cannot reach Spotify. Check your connection."))?;
             match response.status() {
-                StatusCode::UNAUTHORIZED if attempt == 0 => {
+                StatusCode::UNAUTHORIZED if attempt == 0 && !self.background => {
                     self.tokens.expires_at = 0;
                     self.tokens
                         .refresh_if_needed(&self.client, &self.client_id)?;
@@ -542,6 +572,35 @@ pub enum PlayerAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn background_catalogue_requests_cannot_refresh_or_outlive_signout() {
+        let tokens = Tokens {
+            access_token: "test".into(),
+            refresh_token: "test".into(),
+            expires_at: 0,
+            scopes: String::new(),
+        };
+        let spotify = Spotify::new(Client::new(), "test".into(), tokens);
+        assert!(
+            spotify
+                .background()
+                .profile()
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("session expired")
+        );
+        let mut background = spotify.background();
+        spotify.cancel_background();
+        assert!(
+            background
+                .profile()
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("signed out")
+        );
+    }
     #[test]
     fn successful_player_commands_do_not_require_json_bodies() {
         for body in [&b""[..], &b" \r\n"[..], &b"OK"[..]] {

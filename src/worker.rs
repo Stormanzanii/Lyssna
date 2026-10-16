@@ -382,6 +382,13 @@ struct Backend {
     context: Notifier,
 }
 
+impl Drop for Backend {
+    fn drop(&mut self) {
+        if let Some(spotify) = &self.spotify {
+            spotify.cancel_background();
+        }
+    }
+}
 impl Backend {
     fn emit(&self, event: Event) {
         let _ = self.events.send(event);
@@ -394,6 +401,9 @@ impl Backend {
         self.profile = spotify.profile()?;
         spotify.tokens.save(&client_id)?;
         self.client_id = client_id;
+        if let Some(previous) = self.spotify.as_ref() {
+            previous.cancel_background();
+        }
         self.spotify = Some(spotify);
         self.emit(Event::Session(self.profile.clone()));
         if let Err(error) = self.start_audio() {
@@ -476,7 +486,7 @@ impl Backend {
         match command {
             Command::PrefetchPage(key) => {
                 let request = PrefetchRequest {
-                    spotify: self.api()?.clone(),
+                    spotify: self.api()?.background(),
                     native: self.native_controls.clone(),
                     account: self.profile.id.clone(),
                     key,
@@ -507,7 +517,9 @@ impl Backend {
             Command::Logout => {
                 self.native.take();
                 let audio_deleted = crate::native::forget_credentials(&self.profile.id);
-                self.spotify.take();
+                if let Some(previous) = self.spotify.take() {
+                    previous.cancel_background();
+                }
                 let deleted = Tokens::delete(&self.client_id);
                 self.emit(Event::SignedOut);
                 audio_deleted?;
@@ -541,7 +553,7 @@ impl Backend {
                             && let Some(spotify) = self.spotify.as_ref()
                         {
                             let _ = self.facts.try_send(FactsRequest {
-                                spotify: spotify.clone(),
+                                spotify: spotify.background(),
                                 native: self.native_controls.clone(),
                                 tracks: tracks.clone(),
                             });

@@ -114,6 +114,36 @@ fn parse_artist(data: &Value, id: &str) -> Result<ArtistOverview> {
     let artist = &data["entities"]["items"][format!("spotify:artist:{id}")];
     from_entity(artist, id)
 }
+pub(crate) fn basic(client: &Client, id: &str) -> Result<Artist> {
+    let entity = public_entity(client, "artist", id)?;
+    Ok(Artist {
+        id: Some(id.into()),
+        uri: format!("spotify:artist:{id}"),
+        name: entity["profile"]["name"]
+            .as_str()
+            .context("Artist name unavailable")?
+            .into(),
+        monthly_listeners: entity["stats"]["monthlyListeners"].as_u64(),
+        images: entity["visuals"]["avatarImage"]["sources"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| {
+                        let url = item["url"].as_str()?.to_owned();
+                        url.starts_with("https://").then_some(Artwork {
+                            url,
+                            width: item["width"]
+                                .as_u64()
+                                .and_then(|width| width.try_into().ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        ..Artist::default()
+    })
+}
 pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
     ensure!(
         artist["uri"].as_str() == Some(format!("spotify:artist:{id}").as_str()),

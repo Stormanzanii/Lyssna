@@ -197,6 +197,7 @@ impl Spotify {
     pub fn artist(&mut self, id: &str) -> Result<Artist> {
         ensure!(valid_id(id), "Invalid artist ID");
         self.get(&format!("artists/{id}"), &[])
+            .or_else(|_| crate::artist::basic(&self.client, id))
     }
 
     pub fn track(&mut self, uri: &str) -> Result<Track> {
@@ -226,29 +227,33 @@ impl Spotify {
             })
         } else if let Some(id) = key.strip_prefix("artist:") {
             let artist = self.artist(id)?;
-            let response = self.request(
-                Method::GET,
-                &format!("artists/{id}/albums"),
-                &[
-                    ("limit", "10".into()),
-                    ("include_groups", "album,single".into()),
-                ],
-                None,
-            )?;
+            let response = self
+                .request(
+                    Method::GET,
+                    &format!("artists/{id}/albums"),
+                    &[
+                        ("limit", "10".into()),
+                        ("include_groups", "album,single".into()),
+                    ],
+                    None,
+                )
+                .unwrap_or_else(|_| json!({"items":[],"next":null}));
             let mut albums: Vec<crate::model::Album> =
-                serde_json::from_value(response["items"].clone())
-                    .context("Cannot read artist albums")?;
+                serde_json::from_value(response["items"].clone()).unwrap_or_default();
             let mut next = response["next"].as_str().map(str::to_owned);
             let mut visited = HashSet::new();
             while let Some(path) = next {
-                ensure!(
-                    visited.insert(path.clone()),
-                    "Spotify repeated an artist album page"
-                );
-                let response = self.request(Method::GET, &path, &[], None)?;
-                let page: Vec<crate::model::Album> =
-                    serde_json::from_value(response["items"].clone())
-                        .context("Cannot read artist albums")?;
+                if !visited.insert(path.clone()) {
+                    break;
+                }
+                let Ok(response) = self.request(Method::GET, &path, &[], None) else {
+                    break;
+                };
+                let Ok(page) =
+                    serde_json::from_value::<Vec<crate::model::Album>>(response["items"].clone())
+                else {
+                    break;
+                };
                 albums.extend(page);
                 next = response["next"].as_str().map(str::to_owned);
             }

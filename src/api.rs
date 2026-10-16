@@ -107,10 +107,7 @@ impl Spotify {
                 _ => {}
             }
             let bytes = response.bytes()?;
-            if bytes.is_empty() {
-                return Ok(Value::Null);
-            }
-            return serde_json::from_slice(&bytes).context("Spotify returned invalid JSON");
+            return decode_response(&method, url.path(), &bytes);
         }
         bail!("Spotify login expired. Sign in again.")
     }
@@ -424,6 +421,16 @@ fn valid_id(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
+fn decode_response(method: &Method, path: &str, bytes: &[u8]) -> Result<Value> {
+    if bytes.iter().all(u8::is_ascii_whitespace)
+        || (*method != Method::GET
+            && (path == "/v1/me/player" || path.starts_with("/v1/me/player/")))
+    {
+        return Ok(Value::Null);
+    }
+    serde_json::from_slice(bytes).context("Spotify returned invalid JSON")
+}
+
 fn playlist_pages(mut fetch: impl FnMut(&str) -> Result<Value>) -> Result<Vec<Playlist>> {
     let mut playlists = Vec::new();
     let mut next = Some("https://api.spotify.com/v1/me/playlists?limit=50".to_owned());
@@ -496,6 +503,21 @@ pub enum PlayerAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn successful_player_commands_do_not_require_json_bodies() {
+        for body in [&b""[..], &b" \r\n"[..], &b"OK"[..]] {
+            assert!(
+                decode_response(&Method::POST, "/v1/me/player/queue", body)
+                    .unwrap()
+                    .is_null()
+            );
+        }
+        assert!(decode_response(&Method::GET, "/v1/me/player/queue", b"OK").is_err());
+        assert_eq!(
+            decode_response(&Method::GET, "/v1/me/player/queue", br#"{"queue":[]}"#).unwrap()["queue"],
+            json!([])
+        );
+    }
 
     #[test]
     fn library_follows_all_pages_including_private_and_collaborative_playlists() {

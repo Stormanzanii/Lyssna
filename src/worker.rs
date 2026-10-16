@@ -448,8 +448,12 @@ impl Backend {
                 }
             }
             Command::Player { action, device } => {
+                let queued = matches!(action, PlayerAction::Enqueue(_));
                 self.player(action, device)?;
-                self.poll()?;
+                if queued {
+                    self.emit(Event::Notice("Added to queue".into()));
+                }
+                let _ = self.poll();
             }
             Command::Add { playlist, tracks } => {
                 anyhow::ensure!(

@@ -184,8 +184,9 @@ function App() {
     void (async () => {
       try {
         unlisten = await subscribe((event) => {
+          if (disposed) return;
           if (event.type === "canvas_prefetch") preloadCanvas(event.url);
-          else if (!disposed) dispatch(event);
+          dispatch(event);
         });
         const snapshot = await rpc<Snapshot>("bootstrap");
         if (!disposed) {

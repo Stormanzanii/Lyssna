@@ -19,6 +19,16 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("opens a warmed Canvas immediately when its track is clicked", () => {
+    const warm = reducer(emptyState, {
+      type: "canvas_prefetch",
+      uri: track.uri,
+      url: "https://canvaz.scdn.co/test.mp4",
+    });
+    expect(reducer(warm, { type: "play_requested", track }).canvas_url).toBe(
+      "https://canvaz.scdn.co/test.mp4",
+    );
+  });
   it("retains a warm banner during basic refresh and clears prefetch after sign-out", () => {
     const info = {
       key: "artist:test",

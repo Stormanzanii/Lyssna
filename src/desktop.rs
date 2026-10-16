@@ -227,8 +227,8 @@ impl Desktop {
                                 }
                             }
                         }
-                        Event::CanvasPrefetched { url } => {
-                            emit(json!({"type":"canvas_prefetch","url":url}));
+                        Event::CanvasPrefetched { uri, url } => {
+                            emit(json!({"type":"canvas_prefetch","uri":uri,"url":url}));
                         }
                         Event::Canvas { uri, url } => {
                             if snapshot

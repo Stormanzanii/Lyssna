@@ -14,6 +14,15 @@ export interface CachedPage {
   info?: BrowseInfo;
 }
 const PAGE_LIMIT = 40;
+function rememberCanvas(
+  previous: AppState["canvases"],
+  uri: string,
+  url: string | undefined,
+) {
+  const copy = { ...previous };
+  delete copy[uri];
+  return { ...Object.fromEntries(Object.entries(copy).slice(-63)), [uri]: url };
+}
 function mergeInfo(
   previous: BrowseInfo | undefined,
   incoming: BrowseInfo,
@@ -56,6 +65,7 @@ export function nextToggle(
   };
 }
 export interface AppState extends Snapshot {
+  canvases: Record<string, string | undefined>;
   facts: Record<string, TrackFacts>;
   booted: boolean;
   devices: Device[];
@@ -67,6 +77,7 @@ export interface AppState extends Snapshot {
   pages: Record<string, CachedPage>;
 }
 export const emptyState: AppState = {
+  canvases: {},
   facts: {},
   booted: false,
   profile: undefined,
@@ -130,7 +141,14 @@ export function reducer(state: AppState, action: Action): AppState {
         ? { ...state, facts: { ...state.facts, ...action.facts } }
         : state;
     case "canvas_prefetch":
-      return state;
+      return {
+        ...state,
+        canvases: rememberCanvas(state.canvases, action.uri, action.url),
+        canvas_url:
+          state.playback.item?.uri === action.uri
+            ? action.url
+            : state.canvas_url,
+      };
     case "page_prefetch": {
       if (!state.profile) return state;
       const pages = rememberPage(state.pages, action.key, {
@@ -155,9 +173,14 @@ export function reducer(state: AppState, action: Action): AppState {
             : state.browse_info,
       };
     case "canvas":
-      return state.playback.item?.uri === action.uri
-        ? { ...state, canvas_url: action.url }
-        : state;
+      return {
+        ...state,
+        canvases: rememberCanvas(state.canvases, action.uri, action.url),
+        canvas_url:
+          state.playback.item?.uri === action.uri
+            ? action.url
+            : state.canvas_url,
+      };
     case "bootstrap":
       return { ...state, ...action.snapshot, booted: true };
     case "session":
@@ -243,7 +266,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "play_requested":
       return {
         ...state,
-        canvas_url: undefined,
+        canvas_url: state.canvases[action.track.uri],
         pending: { uri: action.track.uri, at: Date.now() },
         playback: {
           ...state.playback,
@@ -276,7 +299,9 @@ export function reducer(state: AppState, action: Action): AppState {
               ? undefined
               : state.pending,
         lyrics: changed ? undefined : state.lyrics,
-        canvas_url: changed ? undefined : state.canvas_url,
+        canvas_url: changed
+          ? state.canvases[action.playback.item?.uri ?? ""]
+          : state.canvas_url,
         lyric_error: changed ? "" : state.lyric_error,
         details: changed ? { artists: [], queue: [] } : state.details,
       };

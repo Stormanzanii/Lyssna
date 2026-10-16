@@ -187,7 +187,7 @@ export type PlayerRequest = {
 export type AppEvent =
   | { type: "track_facts"; facts: Record<string, TrackFacts> }
   | { type: "canvas"; uri: string; url?: string }
-  | { type: "canvas_prefetch"; url: string }
+  | { type: "canvas_prefetch"; uri: string; url: string }
   | { type: "page_prefetch"; key: string; tracks: Track[]; more: boolean }
   | { type: "info_prefetch"; info: BrowseInfo }
   | { type: "session"; profile: Profile; can_follow: boolean }

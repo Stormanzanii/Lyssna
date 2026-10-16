@@ -80,6 +80,7 @@ pub enum Event {
         url: Option<String>,
     },
     CanvasPrefetched {
+        uri: String,
         url: String,
     },
     ArtistStats {
@@ -719,7 +720,7 @@ impl Backend {
                 thread::spawn(move || {
                     for uri in uris.into_iter().take(8) {
                         if let Some(url) = canvas_url(&native, &uri) {
-                            let _ = events.send(Event::CanvasPrefetched { url });
+                            let _ = events.send(Event::CanvasPrefetched { uri, url });
                         }
                     }
                 });
@@ -758,7 +759,7 @@ impl Backend {
                     thread::spawn(move || {
                         for uri in upcoming {
                             if let Some(url) = canvas_url(&native, &uri) {
-                                let _ = events.send(Event::CanvasPrefetched { url });
+                                let _ = events.send(Event::CanvasPrefetched { uri, url });
                             }
                         }
                     });

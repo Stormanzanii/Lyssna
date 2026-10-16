@@ -59,6 +59,7 @@ pub struct SpotiFlex {
     error: bool,
     dirty: bool,
     config_damaged: bool,
+    tracks_generation: u64,
     provider_input: String,
     provider_consent: bool,
     provider_configured: bool,
@@ -155,6 +156,7 @@ impl SpotiFlex {
             error: config_damaged,
             dirty: false,
             config_damaged,
+            tracks_generation: 0,
             provider_input: String::new(),
             provider_consent: false,
             provider_configured: crate::provider::configured(),
@@ -181,6 +183,7 @@ impl SpotiFlex {
     }
 
     fn navigate(&mut self, key: String) {
+        self.tracks_generation = self.tracks_generation.wrapping_add(1);
         self.view = key.clone();
         self.settings.last_view = key.clone();
         self.dirty = true;
@@ -189,7 +192,11 @@ impl SpotiFlex {
         self.more = false;
         if self.profile.is_some() {
             self.loading = true;
-            self.send(Command::Tracks { key, offset: 0 });
+            self.send(Command::Tracks {
+                key,
+                offset: 0,
+                generation: self.tracks_generation,
+            });
         }
         self.save_settings();
     }
@@ -229,8 +236,9 @@ impl SpotiFlex {
                 Event::Tracks {
                     key,
                     offset,
+                    generation,
                     tracks,
-                } if key == self.view => {
+                } if key == self.view && generation == self.tracks_generation => {
                     self.loading = false;
                     self.more = tracks.len() == 50 && !key.starts_with("search:");
                     if offset == 0 {
@@ -240,6 +248,15 @@ impl SpotiFlex {
                     }
                 }
                 Event::Tracks { .. } => {}
+                Event::TracksFailed {
+                    generation,
+                    message,
+                } => {
+                    if generation == self.tracks_generation {
+                        self.loading = false;
+                        self.show_notice(message, true);
+                    }
+                }
                 Event::Playback(playback, observed) => {
                     let changed = self.playback.item.as_ref().map(|track| &track.uri)
                         != playback.item.as_ref().map(|track| &track.uri);
@@ -258,7 +275,6 @@ impl SpotiFlex {
                 Event::Devices(devices) => self.devices = devices,
                 Event::Notice(message) => self.show_notice(message, false),
                 Event::Error(message) => {
-                    self.loading = false;
                     self.show_notice(message, true);
                 }
             }
@@ -777,6 +793,7 @@ impl SpotiFlex {
                             self.send(Command::Tracks {
                                 key: self.view.clone(),
                                 offset: self.tracks.len(),
+                                generation: self.tracks_generation,
                             });
                         }
                     });

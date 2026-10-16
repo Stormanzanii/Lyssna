@@ -25,6 +25,7 @@ pub enum Command {
     Tracks {
         key: String,
         offset: usize,
+        generation: u64,
     },
     Player {
         action: PlayerAction,
@@ -48,7 +49,12 @@ pub enum Event {
     Tracks {
         key: String,
         offset: usize,
+        generation: u64,
         tracks: Vec<Track>,
+    },
+    TracksFailed {
+        generation: u64,
+        message: String,
     },
     Playback(Box<Playback>, Instant),
     Devices(Vec<Device>),
@@ -202,7 +208,9 @@ impl Backend {
         self.client_id = client_id;
         self.spotify = Some(spotify);
         self.emit(Event::Session(self.profile.clone()));
-        self.start_audio()?;
+        if let Err(error) = self.start_audio() {
+            self.emit(Event::Error(error.to_string()));
+        }
         let playlists = self.api()?.playlists();
         match playlists {
             Ok(playlists) => self.emit(Event::Library(playlists)),
@@ -256,8 +264,9 @@ impl Backend {
             Command::Logout => {
                 self.native.take();
                 self.spotify.take();
-                Tokens::delete(&self.client_id)?;
+                let deleted = Tokens::delete(&self.client_id);
                 self.emit(Event::SignedOut);
+                deleted?;
             }
             Command::Refresh => {
                 self.poll()?;
@@ -268,23 +277,24 @@ impl Backend {
                 let playlists = self.api()?.playlists()?;
                 self.emit(Event::Library(playlists));
             }
-            Command::Tracks { key, offset } => {
-                let tracks = if let Some(query) = key.strip_prefix("search:") {
-                    self.api()?.search(query)?
-                } else if let Some(id) = key.strip_prefix("playlist:") {
-                    self.api()?.playlist_tracks(id, offset)?
-                } else {
-                    match key.as_str() {
-                        "liked" => self.api()?.saved_tracks(offset)?,
-                        "queue" => self.api()?.queue()?,
-                        _ => self.api()?.recent()?,
-                    }
-                };
-                self.emit(Event::Tracks {
-                    key,
-                    offset,
-                    tracks,
-                });
+            Command::Tracks {
+                key,
+                offset,
+                generation,
+            } => {
+                let result = self.fetch_tracks(&key, offset);
+                match result {
+                    Ok(tracks) => self.emit(Event::Tracks {
+                        key,
+                        offset,
+                        generation,
+                        tracks,
+                    }),
+                    Err(error) => self.emit(Event::TracksFailed {
+                        generation,
+                        message: error.to_string(),
+                    }),
+                }
             }
             Command::Player { action, device } => {
                 self.api()?.player_action(action, device.as_deref())?;
@@ -315,5 +325,20 @@ impl Backend {
             Command::Shutdown => {}
         }
         Ok(())
+    }
+
+    fn fetch_tracks(&mut self, key: &str, offset: usize) -> Result<Vec<Track>> {
+        let api = self.api()?;
+        if let Some(query) = key.strip_prefix("search:") {
+            api.search(query)
+        } else if let Some(id) = key.strip_prefix("playlist:") {
+            api.playlist_tracks(id, offset)
+        } else {
+            match key {
+                "liked" => api.saved_tracks(offset),
+                "queue" => api.queue(),
+                _ => api.recent(),
+            }
+        }
     }
 }

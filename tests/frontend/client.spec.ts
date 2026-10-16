@@ -130,6 +130,9 @@ async function startClient(page: Page) {
     },
   );
   await page.goto("/");
+  await page
+    .locator(".application")
+    .waitFor({ state: "visible", timeout: 20_000 });
   await expect(page.locator(".setup-backdrop")).toHaveCount(0);
   await expect(page.locator(".track-row")).toHaveCount(50);
 }

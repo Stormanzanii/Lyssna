@@ -52,6 +52,7 @@ struct ControlConnection {
     metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
 }
 struct MetadataRead {
+    offset: usize,
     uri: String,
     kind: librespot_protocol::extension_kind::ExtensionKind,
     reply: mpsc::Sender<std::result::Result<Vec<u8>, String>>,
@@ -67,22 +68,57 @@ struct PlaylistRead {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
+        use librespot_protocol::extension_kind::ExtensionKind;
+        anyhow::ensure!(
+            id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()) && offset <= 5000,
+            "Invalid catalogue request"
+        );
+        let extension = match kind {
+            "artist" => ExtensionKind::ARTIST_V4,
+            "album" => ExtensionKind::ALBUM_V4,
+            _ => anyhow::bail!("Unsupported catalogue query"),
+        };
+        serde_json::from_slice(&self.request_metadata(
+            &format!("spotify:{kind}:{id}"),
+            extension,
+            offset,
+        )?)
+        .map_err(anyhow::Error::from)
+    }
     pub fn metadata(
         &self,
         uri: &str,
         kind: librespot_protocol::extension_kind::ExtensionKind,
     ) -> Result<Vec<u8>> {
+        self.request_metadata(uri, kind, 0)
+    }
+    fn request_metadata(
+        &self,
+        uri: &str,
+        kind: librespot_protocol::extension_kind::ExtensionKind,
+        offset: usize,
+    ) -> Result<Vec<u8>> {
         use librespot_protocol::extension_kind::ExtensionKind;
         anyhow::ensure!(
             matches!(
                 kind,
-                ExtensionKind::CANVAS_V1 | ExtensionKind::CANVAZ | ExtensionKind::STREAM_COUNT
+                ExtensionKind::CANVAS_V1
+                    | ExtensionKind::CANVAZ
+                    | ExtensionKind::STREAM_COUNT
+                    | ExtensionKind::ARTIST_V4
+                    | ExtensionKind::ALBUM_V4
             ),
             "Unsupported native metadata kind"
         );
         let parsed = librespot_core::SpotifyUri::from_uri(uri)?;
         anyhow::ensure!(
-            matches!(parsed, librespot_core::SpotifyUri::Track { .. }),
+            matches!(
+                parsed,
+                librespot_core::SpotifyUri::Track { .. }
+                    | librespot_core::SpotifyUri::Artist { .. }
+                    | librespot_core::SpotifyUri::Album { .. }
+            ),
             "Track metadata required"
         );
         let (reply, receive) = mpsc::channel();
@@ -98,6 +134,7 @@ impl NativeControls {
                 .context("Connect native audio for metadata")?;
             sender
                 .send(MetadataRead {
+                    offset,
                     uri: uri.into(),
                     kind,
                     reply,
@@ -631,7 +668,7 @@ async fn run(
     let mut pending_seek: Option<(String, u64)> = None;
     loop {
         tokio::select! {
-            Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri()?;let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
+            Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri()?;let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
             _=intent_tick.tick()=>{},
             Some(())=audible_seeks.recv()=>{if let Some((uri,position_ms))=pending_seek.take(){emit(NativeEvent::Position{uri,position_ms,playing:Some(audio_playing),seeked:true});}}
             Some(request)=playlists.recv()=>{

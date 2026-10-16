@@ -16,7 +16,7 @@ pub struct AlbumDetails {
 pub fn fetch(client: &Client, id: &str) -> Result<AlbumDetails> {
     Ok(parse(&crate::artist::public_entity(client, "album", id)?))
 }
-fn parse(album: &Value) -> AlbumDetails {
+pub(crate) fn parse(album: &Value) -> AlbumDetails {
     let mut details = AlbumDetails::default();
     if let Some(items) = album["tracksV2"]["items"].as_array() {
         details.complete_duration =

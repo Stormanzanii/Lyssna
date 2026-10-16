@@ -498,11 +498,16 @@ impl Backend {
                 });
                 if let Some(id) = key.strip_prefix("artist:") {
                     let id = id.to_owned();
+                    let native = self.native_controls.clone();
                     let client = self.client.clone();
                     let events = self.events.clone();
                     let context = self.context.clone();
                     thread::spawn(move || {
-                        if let Ok(overview) = crate::artist::fetch(&client, &id) {
+                        if let Ok(overview) = native
+                            .catalogue("artist", &id, 0)
+                            .and_then(|entity| crate::artist::from_entity(&entity, &id))
+                            .or_else(|_| crate::artist::fetch(&client, &id))
+                        {
                             let mut info = info;
                             info.overview = Some(overview);
                             let _ = events.send(Event::BrowseInfo {
@@ -514,11 +519,43 @@ impl Backend {
                     });
                 } else if let Some(id) = key.strip_prefix("album:") {
                     let id = id.to_owned();
+                    let native = self.native_controls.clone();
                     let client = self.client.clone();
                     let events = self.events.clone();
                     let context = self.context.clone();
                     thread::spawn(move || {
-                        if let Ok(mut details) = crate::album::fetch(&client, &id) {
+                        let desktop = native.catalogue("album", &id, 0).map(|entity| {
+                            let mut details = crate::album::parse(&entity);
+                            let total = entity["tracksV2"]["totalCount"]
+                                .as_u64()
+                                .unwrap_or_default()
+                                as usize;
+                            let mut offset =
+                                entity["tracksV2"]["items"].as_array().map_or(0, Vec::len);
+                            while offset > 0 && offset < total && offset < 5000 {
+                                let Ok(page) = native.catalogue("album", &id, offset) else {
+                                    break;
+                                };
+                                let count =
+                                    page["tracksV2"]["items"].as_array().map_or(0, Vec::len);
+                                if count == 0 {
+                                    break;
+                                }
+                                let next = crate::album::parse(&page);
+                                let before = details.streams.len();
+                                details.streams.extend(next.streams);
+                                if before == details.streams.len() {
+                                    break;
+                                }
+                                details.duration_ms += next.duration_ms;
+                                offset += count;
+                            }
+                            details.complete_duration = offset >= total;
+                            details
+                        });
+                        if let Ok(mut details) =
+                            desktop.or_else(|_| crate::album::fetch(&client, &id))
+                        {
                             if let Some(artist_id) = info
                                 .album
                                 .as_ref()

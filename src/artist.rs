@@ -112,6 +112,9 @@ pub(crate) fn public_entity(client: &Client, kind: &str, id: &str) -> Result<Val
 
 fn parse_artist(data: &Value, id: &str) -> Result<ArtistOverview> {
     let artist = &data["entities"]["items"][format!("spotify:artist:{id}")];
+    from_entity(artist, id)
+}
+pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
     ensure!(
         artist["uri"].as_str() == Some(format!("spotify:artist:{id}").as_str()),
         "Artist page does not match request"
@@ -200,9 +203,17 @@ fn parse_artist(data: &Value, id: &str) -> Result<ArtistOverview> {
         details_loaded: false,
         monthly_listeners: artist["stats"]["monthlyListeners"].as_u64(),
         followers: artist["stats"]["followers"].as_u64(),
-        header_image: artist["visuals"]["headerImage"]["sources"]
+        header_image: artist["headerImage"]["data"]["sources"]
             .as_array()
-            .and_then(|items| items.first())
+            .or_else(|| artist["visuals"]["headerImage"]["sources"].as_array())
+            .and_then(|items| {
+                items.iter().max_by_key(|image| {
+                    image["maxWidth"]
+                        .as_u64()
+                        .or_else(|| image["width"].as_u64())
+                        .unwrap_or_default()
+                })
+            })
             .and_then(|image| image["url"].as_str())
             .filter(|url| url.starts_with("https://"))
             .map(str::to_owned),
@@ -249,6 +260,15 @@ fn plain_text(html: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn desktop_banner_uses_the_current_header_field_and_largest_source() {
+        let id = "0123456789abcdefghijkl";
+        let entity = json!({"uri":format!("spotify:artist:{id}"),"headerImage":{"data":{"sources":[{"url":"https://i.scdn.co/image/small","maxWidth":640},{"url":"https://i.scdn.co/image/banner","maxWidth":2660}]}},"visuals":{"avatarImage":{"sources":[{"url":"https://i.scdn.co/image/avatar"}]}}});
+        assert_eq!(
+            from_entity(&entity, id).unwrap().header_image.as_deref(),
+            Some("https://i.scdn.co/image/banner")
+        );
+    }
     #[test]
     fn extracts_only_public_artist_data_and_rejects_other_artists() {
         let id = "0123456789abcdefghijkl";

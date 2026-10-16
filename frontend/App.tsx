@@ -47,7 +47,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
-import { emptyState, reducer, formatTime } from "./state";
+import {
+  emptyState,
+  reducer,
+  formatTime,
+  nextToggle,
+  type ToggleIntent,
+} from "./state";
 import type { AppState } from "./state";
 import type {
   Album,
@@ -223,21 +229,31 @@ function App() {
     },
     [call],
   );
+  const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
   const play = useCallback(
     (request: PlayerRequest) => {
+      if (
+        request.command === "pause" ||
+        (request.command === "play" && !request.uri)
+      )
+        toggleIntent.current = {
+          wanted: request.command === "play",
+          at: performance.now(),
+        };
       if (request.track)
         dispatch({ type: "play_requested", track: request.track });
       void call("player", { request, target });
     },
     [call, target],
   );
-  const toggle = useCallback(
-    () =>
-      play({
-        command: stateRef.current.playback.is_playing ? "pause" : "play",
-      }),
-    [play],
-  );
+  const toggle = useCallback(() => {
+    const intent = nextToggle(
+      stateRef.current.playback.is_playing,
+      toggleIntent.current,
+      performance.now(),
+    );
+    play({ command: intent.wanted ? "play" : "pause" });
+  }, [play]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const editing = (event.target as HTMLElement)?.closest(

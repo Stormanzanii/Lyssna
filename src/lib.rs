@@ -11,6 +11,7 @@ pub mod lyrics;
 pub mod model;
 pub mod native;
 pub mod notify;
+mod playback_intent;
 pub mod provider;
 #[cfg(feature = "legacy-ui")]
 pub mod ui;

@@ -1,4 +1,15 @@
 import type { AppEvent, Device, Snapshot, Track, Word } from "./types";
+export type ToggleIntent = { wanted: boolean; at: number };
+export function nextToggle(
+  current: boolean,
+  previous: ToggleIntent | undefined,
+  now: number,
+): ToggleIntent {
+  return {
+    wanted: !(previous && now - previous.at < 2000 ? previous.wanted : current),
+    at: now,
+  };
+}
 export interface AppState extends Snapshot {
   booted: boolean;
   devices: Device[];

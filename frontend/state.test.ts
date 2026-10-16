@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { reducer, emptyState, activeLines, progress, position } from "./state";
+import {
+  reducer,
+  emptyState,
+  activeLines,
+  progress,
+  position,
+  nextToggle,
+  type ToggleIntent,
+} from "./state";
 import type { Track } from "./types";
 const track: Track = {
   id: "song",
@@ -11,6 +19,16 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("alternates rapid play and pause before native acknowledgments arrive", () => {
+    let previous: ToggleIntent | undefined;
+    const choices = [];
+    for (let n = 0; n < 6; n++) {
+      previous = nextToggle(true, previous, n * 10);
+      choices.push(previous.wanted);
+    }
+    expect(choices).toEqual([false, true, false, true, false, true]);
+    expect(nextToggle(false, previous, 3000).wanted).toBe(true);
+  });
   it("moves active focus to the next lead while the previous backing vocals continue", () => {
     const lines = [
       {

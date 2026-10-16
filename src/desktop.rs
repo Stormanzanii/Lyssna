@@ -238,6 +238,13 @@ impl Desktop {
                             emit(json!({"type":"library","playlists":snapshot.playlists}));
                         }
                         Event::Playback(mut playback, _observed) => {
+                            if snapshot.playback.keep_native_when_empty(
+                                &playback,
+                                snapshot.native_ready,
+                                &native::device_name(),
+                            ) {
+                                continue;
+                            }
                             if let Ok(mut pending) = pump.pending_track.lock()
                                 && let Some((uri, requested)) = pending.as_ref()
                             {

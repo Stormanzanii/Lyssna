@@ -155,6 +155,17 @@ pub struct PlayingDetails {
 }
 
 impl Playback {
+    pub fn keep_native_when_empty(
+        &self,
+        incoming: &Self,
+        native_ready: bool,
+        native_name: &str,
+    ) -> bool {
+        native_ready
+            && self.item.is_some()
+            && self.device.name == native_name
+            && incoming.item.is_none()
+    }
     /// Apply a local player event only to the matching track and device.
     pub fn apply_native_position(
         &mut self,

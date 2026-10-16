@@ -18,6 +18,7 @@ pub struct Settings {
     pub lyric_offset_ms: i64,
     pub romanized: bool,
     pub reduce_motion: bool,
+    pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
 }
 
@@ -32,6 +33,7 @@ impl Default for Settings {
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,
+            auto_download_updates: true,
             folders: Vec::new(),
         }
     }

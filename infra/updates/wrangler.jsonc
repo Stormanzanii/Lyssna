@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "616d3c649a3c077e5beb9d9395b7e2ee",
+  "compatibility_date": "2026-10-16",
+  "main": "src/index.js",
+  "name": "spotiflex-updates",
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  },
+  "r2_buckets": [
+    {
+      "binding": "RELEASES",
+      "bucket_name": "spotiflex-releases"
+    }
+  ],
+  "routes": [
+    {
+      "custom_domain": true,
+      "pattern": "updates.clypdat.xyz"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "PUBLISH_TOKEN"
+    ]
+  },
+  "vars": {
+    "UPDATE_PUBLIC_KEY": "YofF1uRg5DZ7htUmLHrVCkUcG0w4ftrOi+1RCTtVdfo="
+  },
+  "workers_dev": false
+}

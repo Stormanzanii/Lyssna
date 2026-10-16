@@ -6,4 +6,5 @@ pub mod lyrics;
 pub mod model;
 pub mod native;
 pub mod provider;
+pub mod updater;
 pub mod worker;

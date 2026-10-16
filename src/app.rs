@@ -16,6 +16,7 @@ use crate::{
     lyrics::Lyrics,
     model::{Device, Playback, Playlist, Profile, Track},
     native::NativeEvent,
+    updater::{self, Updater},
     worker::{Command, Event, LyricCommand, Worker},
 };
 
@@ -24,6 +25,12 @@ const MUTED: Color32 = Color32::from_rgb(166, 173, 169);
 const PANEL: Color32 = Color32::from_rgb(18, 20, 19);
 
 pub struct SpotiFlex {
+    updater: Updater,
+    available_update: Option<updater::Update>,
+    ready_update: Option<updater::ReadyUpdate>,
+    update_status: String,
+    update_busy: bool,
+    exit_after_update: bool,
     settings: Settings,
     worker: Worker,
     profile: Option<Profile>,
@@ -122,6 +129,12 @@ impl SpotiFlex {
             .unwrap_or_default()
             .to_owned();
         Self {
+            updater: Updater::start(context.egui_ctx.clone()),
+            available_update: None,
+            ready_update: None,
+            update_status: "Checking for updates…".into(),
+            update_busy: false,
+            exit_after_update: false,
             view: settings.last_view.clone(),
             settings,
             worker,
@@ -212,6 +225,47 @@ impl SpotiFlex {
     }
 
     fn receive(&mut self) {
+        while let Ok(event) = self.updater.events.try_recv() {
+            match event {
+                updater::Event::Current => {
+                    self.update_status = "Up to date".into();
+                }
+                updater::Event::Available(update) => {
+                    self.update_status = format!("Version {} available", update.manifest.version);
+                    if self.settings.auto_download_updates
+                        && !self.update_busy
+                        && self.ready_update.is_none()
+                    {
+                        self.update_busy = true;
+                        let _ = self
+                            .updater
+                            .commands
+                            .send(updater::Command::Download(update.clone()));
+                    }
+                    self.available_update = Some(update);
+                }
+                updater::Event::Progress { downloaded, total } => {
+                    self.update_status = format!(
+                        "Downloading update: {}%",
+                        downloaded.saturating_mul(100) / total.max(1)
+                    );
+                }
+                updater::Event::Ready(update) => {
+                    self.update_status = format!("Version {} ready to install", update.version);
+                    self.ready_update = Some(update);
+                    self.update_busy = false;
+                }
+                updater::Event::Restarted => {
+                    self.login_cancelled.store(true, Ordering::Relaxed);
+                    self.save_settings();
+                    self.exit_after_update = true;
+                }
+                updater::Event::Error(message) => {
+                    self.update_status = message;
+                    self.update_busy = false;
+                }
+            }
+        }
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
                 Event::Session(profile) => {
@@ -369,6 +423,42 @@ impl SpotiFlex {
             .unwrap_or(0)
             .saturating_add(elapsed)
             .min(duration)
+    }
+
+    fn update_controls(&mut self, ui: &mut egui::Ui) {
+        ui.label(format!("SpotiFlex {}", env!("CARGO_PKG_VERSION")));
+        ui.label(&self.update_status);
+        if let Some(update) = &self.available_update {
+            ui.label(&update.manifest.notes);
+        }
+        if !self.update_busy
+            && self.ready_update.is_some()
+            && ui.add(primary("Install update and restart")).clicked()
+        {
+            if let Some(update) = self.ready_update.take() {
+                self.update_busy = true;
+                self.update_status = "Installing update…".into();
+                let _ = self
+                    .updater
+                    .commands
+                    .send(updater::Command::Install(update));
+            }
+        } else if !self.update_busy
+            && self.ready_update.is_none()
+            && self.available_update.is_some()
+            && ui.button("Download update").clicked()
+            && let Some(update) = self.available_update.clone()
+        {
+            self.update_busy = true;
+            let _ = self
+                .updater
+                .commands
+                .send(updater::Command::Download(update));
+        }
+        if !self.update_busy && ui.button("Check for updates").clicked() {
+            self.update_status = "Checking for updates…".into();
+            let _ = self.updater.commands.send(updater::Command::Check);
+        }
     }
 
     fn action(&self, action: PlayerAction) {
@@ -577,6 +667,14 @@ impl SpotiFlex {
                         }
                     });
                     ui.add_space(12.0);
+                }
+                if self.available_update.is_some() && self.profile.is_some() {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&self.update_status).color(GREEN));
+                        if ui.button("App updates").clicked() {
+                            self.settings_open = true;
+                        }
+                    });
                 }
                 if self.profile.is_none() {
                     return;
@@ -1140,6 +1238,10 @@ impl SpotiFlex {
             let mut open = true;
             egui::Window::new("Settings").open(&mut open).default_width(560.0).resizable(true).vscroll(true).show(context, |ui| {
                 ui.heading("Appearance");
+                ui.collapsing("App updates", |ui| {
+                    self.dirty |= ui.checkbox(&mut self.settings.auto_download_updates, "Automatically download verified updates").changed();
+                    self.update_controls(ui);
+                });
                 ui.collapsing("Lyrics provider", |ui| {
                     ui.label(if self.provider_configured { "Private provider configured in operating system credential store." } else { "Configure a private lyrics provider, or import local lyric files." });
                     ui.add(egui::TextEdit::singleline(&mut self.provider_input).password(true).hint_text("HTTPS provider host"));
@@ -1284,6 +1386,10 @@ impl SpotiFlex {
 impl eframe::App for SpotiFlex {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.receive();
+        if self.exit_after_update {
+            context.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
         if !context.wants_keyboard_input() {
             if context.input(|input| input.key_pressed(egui::Key::Space)) && self.profile.is_some()
             {
@@ -1338,6 +1444,10 @@ impl eframe::App for SpotiFlex {
                     }));
                 }
                 self.setup(ui);
+                if self.available_update.is_some() {
+                    ui.separator();
+                    self.update_controls(ui);
+                }
             });
         }
         if self.playback.is_playing {

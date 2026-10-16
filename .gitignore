@@ -11,3 +11,8 @@ credentials*.json
 tokens*.json
 /.idea/
 /.vs/
+**/node_modules/
+**/.wrangler/
+**/worker-configuration.d.ts
+*.signing-key
+*.private-key

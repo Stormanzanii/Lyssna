@@ -181,7 +181,7 @@ impl Desktop {
                                     }
                                 }
                                 emit(
-                                    json!({"type":"details","uri":uri,"details":snapshot.details}),
+                                    json!({"type":"playing_details","uri":uri,"details":snapshot.details}),
                                 );
                             }
                         }

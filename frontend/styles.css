@@ -836,7 +836,7 @@ small {
 }
 .lyric-end-credits {
   /* Leave room below so credits can scroll clear of the bottom fade. */
-  padding: 24px 2px 45%;
+  padding: 24px 2px 24px;
   color: #ddd6e8a6;
   font-size: 15px;
   line-height: 1.6;
@@ -1557,6 +1557,12 @@ small {
 .lyric-scroll::-webkit-scrollbar {
   display: none;
 }
+.lyric-scroll[data-at-end="true"] {
+  mask-image: linear-gradient(transparent, #000 10%, #000);
+}
+.compact .lyric-scroll[data-at-end="true"] {
+  mask-image: none;
+}
 .lyric-spacer {
   height: var(--lead-top, 40px);
 }
@@ -1566,7 +1572,7 @@ small {
   text-align: left;
   font-size: var(--lyric-size);
   font-weight: 780;
-  line-height: 1.18;
+  line-height: 1.22;
   letter-spacing: -1.1px;
   padding: 0.16em 0;
   margin: 0;
@@ -1841,7 +1847,7 @@ small {
   padding-inline: 10px;
 }
 .compact .lyric-line {
-  padding: 3px 0;
+  padding: 2px 0;
   font-size: var(--lyric-size);
   letter-spacing: -0.5px;
   filter: none;

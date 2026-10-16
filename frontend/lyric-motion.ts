@@ -79,9 +79,9 @@ export function wordMotion(start: number, end: number, time: number) {
   );
   const envelope = Math.sin(phase * Math.PI) ** 2;
   return {
-    lift: -0.035 * envelope,
-    scale: 1 + 0.065 * envelope,
-    glow: 0.45 * envelope,
+    lift: -0.025 * envelope,
+    scale: 1 + 0.05 * envelope,
+    glow: 0.35 * envelope,
   };
 }
 export function letterMotion(
@@ -99,9 +99,9 @@ export function letterMotion(
   );
   const envelope = Math.sin(phase * Math.PI) ** 2;
   return {
-    lift: -0.03 * envelope,
-    scale: 1 + 0.06 * envelope,
-    glow: 0.32 * envelope,
+    lift: -0.02 * envelope,
+    scale: 1 + 0.04 * envelope,
+    glow: 0.25 * envelope,
     fill: Math.max(0, Math.min(1, (time - letterStart) / slot)),
   };
 }

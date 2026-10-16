@@ -424,6 +424,7 @@ export function LyricsDisplay({
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
   const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Browsing pauses follow mode; it resumes on its own once scrolling stops.
   const browse = () => {
@@ -512,15 +513,23 @@ export function LyricsDisplay({
       else container.scrollTop = motion.target;
     };
     const retarget = () => {
-      // Full page: the active line sits in the vertical centre. Compact
-      // card: a little above centre so the next lines stay visible.
-      const focus = container.clientHeight * (compact ? 0.3 : 0.5);
+      const cover = container
+        .closest(".lyrics-page")
+        ?.querySelector(".lyrics-album>.cover");
+      const focus = compact
+        ? 8
+        : Math.max(
+            12,
+            (cover?.getBoundingClientRect().top ??
+              container.getBoundingClientRect().top + 40) -
+              container.getBoundingClientRect().top,
+          );
       container.style.setProperty("--lead-top", `${focus}px`);
       spring.current.target = Math.max(
         0,
         Math.min(
           container.scrollHeight - container.clientHeight,
-          line.offsetTop + line.offsetHeight / 2 - focus,
+          line.offsetTop - focus,
         ),
       );
       if (settings.reduce_motion) {
@@ -571,6 +580,13 @@ export function LyricsDisplay({
     >
       <div
         className="lyric-scroll"
+        data-at-end={atEnd}
+        onScroll={(event) => {
+          const node = event.currentTarget;
+          setAtEnd(
+            node.scrollTop + node.clientHeight >= node.scrollHeight - 24,
+          );
+        }}
         ref={scroll}
         onWheel={browse}
         onTouchStart={browse}

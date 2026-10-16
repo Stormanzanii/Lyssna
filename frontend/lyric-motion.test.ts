@@ -35,7 +35,7 @@ it("keeps scrolling stable through retargets and different display refresh rates
 });
 it("eases word lift continuously into and out of held syllables", () => {
   expect(wordMotion(1000, 2000, 849)).toEqual({ lift: -0, scale: 1, glow: 0 });
-  expect(wordMotion(1000, 2000, 1725).scale).toBeCloseTo(1.065);
+  expect(wordMotion(1000, 2000, 1725).scale).toBeCloseTo(1.05);
   expect(wordMotion(1000, 2000, 2601).lift).toBeCloseTo(0);
 });
 it("shows waiting dots only in long gaps with no main or background vocals", () => {

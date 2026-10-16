@@ -49,6 +49,12 @@ struct ControlConnection {
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
     playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
+    metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
+}
+struct MetadataRead {
+    uri: String,
+    kind: librespot_protocol::extension_kind::ExtensionKind,
+    reply: mpsc::Sender<std::result::Result<Vec<u8>, String>>,
 }
 struct PlaylistRead {
     id: String,
@@ -61,6 +67,48 @@ struct PlaylistRead {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn metadata(
+        &self,
+        uri: &str,
+        kind: librespot_protocol::extension_kind::ExtensionKind,
+    ) -> Result<Vec<u8>> {
+        use librespot_protocol::extension_kind::ExtensionKind;
+        anyhow::ensure!(
+            matches!(
+                kind,
+                ExtensionKind::CANVAS_V1 | ExtensionKind::CANVAZ | ExtensionKind::STREAM_COUNT
+            ),
+            "Unsupported native metadata kind"
+        );
+        let parsed = librespot_core::SpotifyUri::from_uri(uri)?;
+        anyhow::ensure!(
+            matches!(parsed, librespot_core::SpotifyUri::Track { .. }),
+            "Track metadata required"
+        );
+        let (reply, receive) = mpsc::channel();
+        {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native metadata unavailable"))?;
+            let sender = connection
+                .as_ref()
+                .filter(|connection| connection.ready.load(Ordering::Acquire))
+                .and_then(|connection| connection.metadata.as_ref())
+                .context("Connect native audio for metadata")?;
+            sender
+                .send(MetadataRead {
+                    uri: uri.into(),
+                    kind,
+                    reply,
+                })
+                .map_err(|_| anyhow::anyhow!("Native metadata unavailable"))?;
+        }
+        receive
+            .recv_timeout(Duration::from_secs(10))
+            .context("Native metadata request timed out")?
+            .map_err(anyhow::Error::msg)
+    }
     pub fn playlist_tracks(&self, id: &str, offset: usize) -> Result<Vec<crate::model::Track>> {
         anyhow::ensure!(
             id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
@@ -414,11 +462,13 @@ impl NativePlayer {
         let thread_ready = ready.clone();
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
+        let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
                 sender,
                 ready: ready.clone(),
                 playlists: Some(playlist_sender),
+                metadata: Some(metadata_sender),
             });
         }
         thread::spawn(move || {
@@ -458,7 +508,7 @@ impl NativePlayer {
                         &account,
                         &cancel,
                         &mut stopped,
-                        (&mut commands, &mut playlists),
+                        (&mut commands, &mut playlists, &mut metadata),
                         &thread_ready,
                         &emit,
                     ))
@@ -491,11 +541,12 @@ async fn run(
     channels: (
         &mut async_channel::UnboundedReceiver<PlayerAction>,
         &mut async_channel::UnboundedReceiver<PlaylistRead>,
+        &mut async_channel::UnboundedReceiver<MetadataRead>,
     ),
     ready: &AtomicBool,
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
-    let (commands, playlists) = channels;
+    let (commands, playlists, metadata) = channels;
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
@@ -580,6 +631,7 @@ async fn run(
     let mut pending_seek: Option<(String, u64)> = None;
     loop {
         tokio::select! {
+            Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=session.spclient().get_metadata(request.kind,&uri).await?;anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
             _=intent_tick.tick()=>{},
             Some(())=audible_seeks.recv()=>{if let Some((uri,position_ms))=pending_seek.take(){emit(NativeEvent::Position{uri,position_ms,playing:Some(audio_playing),seeked:true});}}
             Some(request)=playlists.recv()=>{
@@ -760,6 +812,7 @@ mod tests {
             sender,
             ready: ready.clone(),
             playlists: None,
+            metadata: None,
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
         assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Pause));

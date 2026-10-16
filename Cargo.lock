@@ -5747,6 +5747,7 @@ dependencies = [
  "librespot-metadata",
  "librespot-playback",
  "librespot-protocol",
+ "protobuf",
  "reqwest 0.12.28",
  "rodio",
  "roxmltree",

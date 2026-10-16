@@ -45,6 +45,7 @@ webbrowser = "1"
 ttf-parser = { version = "0.25.1", optional = true }
 tiny-skia = { version = "0.11", optional = true, default-features = false, features = ["std", "simd"] }
 librespot-protocol = "0.8"
+protobuf = "3.7"
 
 [build-dependencies]
 winresource = "0.1"

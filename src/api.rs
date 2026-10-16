@@ -134,26 +134,7 @@ impl Spotify {
     }
 
     pub fn playlists(&mut self) -> Result<Vec<Playlist>> {
-        let mut playlists = Vec::new();
-        let mut next = Some("https://api.spotify.com/v1/me/playlists?limit=50".to_owned());
-        let mut visited = HashSet::new();
-        while let Some(path) = next {
-            ensure!(
-                visited.insert(path.clone()),
-                "Spotify repeated a playlist page"
-            );
-            let page = self.request(Method::GET, &path, &[], None)?;
-            for item in page["items"]
-                .as_array()
-                .context("Playlist page has no items")?
-            {
-                if !item.is_null() {
-                    playlists.push(serde_json::from_value(item.clone())?);
-                }
-            }
-            next = page["next"].as_str().map(str::to_owned);
-        }
-        Ok(playlists)
+        playlist_pages(|path| self.request(Method::GET, path, &[], None))
     }
 
     pub fn search(&mut self, text: &str) -> Result<Vec<Track>> {
@@ -310,6 +291,33 @@ fn valid_id(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
+fn playlist_pages(mut fetch: impl FnMut(&str) -> Result<Value>) -> Result<Vec<Playlist>> {
+    let mut playlists = Vec::new();
+    let mut next = Some("https://api.spotify.com/v1/me/playlists?limit=50".to_owned());
+    let mut visited = HashSet::new();
+    let mut ids = HashSet::new();
+    while let Some(path) = next {
+        ensure!(
+            visited.insert(path.clone()),
+            "Spotify repeated a playlist page"
+        );
+        let page = fetch(&path)?;
+        for item in page["items"]
+            .as_array()
+            .context("Playlist page has no items")?
+        {
+            if !item.is_null() {
+                let playlist: Playlist = serde_json::from_value(item.clone())?;
+                if ids.insert(playlist.id.clone()) {
+                    playlists.push(playlist);
+                }
+            }
+        }
+        next = page["next"].as_str().map(str::to_owned);
+    }
+    Ok(playlists)
+}
+
 fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
     let mut tracks = Vec::new();
     for item in response["items"]
@@ -344,6 +352,35 @@ pub enum PlayerAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn library_follows_all_pages_including_private_and_collaborative_playlists() {
+        let mut requests = Vec::new();
+        let playlists = playlist_pages(|path| {
+            requests.push(path.to_owned());
+            Ok(if requests.len() == 1 {
+                json!({"items":[{"id":"public","name":"Public","public":true},{"id":"private","name":"Private","public":false},null],"next":"https://api.spotify.com/v1/me/playlists?offset=50&limit=50"})
+            } else {
+                json!({"items":[{"id":"shared","name":"Collaborative","collaborative":true},{"id":"public","name":"Public"}],"next":null})
+            })
+        }).unwrap();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[1].contains("offset=50"));
+        assert_eq!(
+            playlists
+                .iter()
+                .map(|playlist| playlist.id.as_str())
+                .collect::<Vec<_>>(),
+            ["public", "private", "shared"]
+        );
+        assert!(playlists[2].collaborative);
+    }
+
+    #[test]
+    fn repeated_playlist_page_stops_instead_of_looping() {
+        let result = playlist_pages(|path| Ok(json!({"items":[],"next":path})));
+        assert!(result.err().unwrap().to_string().contains("repeated"));
+    }
 
     #[test]
     fn playlist_parser_handles_2026_and_legacy_fields_and_missing_tracks() {

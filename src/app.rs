@@ -1004,7 +1004,8 @@ impl SpotiFlex {
                 .show(ui, |ui| {
                     ui.add_space(16.0);
                     for (index, line) in lyrics.lines.iter().enumerate() {
-                        let is_active = active == Some(index);
+                        let is_active =
+                            lyrics.synced && position >= line.start_ms && position < line.end_ms;
                         let color = if is_active {
                             Color32::WHITE
                         } else {
@@ -1063,7 +1064,7 @@ impl SpotiFlex {
                             self.action(PlayerAction::Seek(line.start_ms));
                             self.follow_lyrics = true;
                         }
-                        if is_active
+                        if active == Some(index)
                             && self.follow_lyrics
                             && (changed || !self.settings.reduce_motion)
                         {

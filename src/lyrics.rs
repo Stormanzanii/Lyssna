@@ -42,9 +42,9 @@ impl Lyrics {
         let index = self
             .lines
             .partition_point(|line| line.start_ms <= position_ms);
-        index
-            .checked_sub(1)
-            .filter(|index| position_ms < self.lines[*index].end_ms)
+        (0..index)
+            .rev()
+            .find(|index| !self.lines[*index].background && position_ms < self.lines[*index].end_ms)
     }
 }
 
@@ -316,6 +316,32 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlapping_background_does_not_replace_active_lead() {
+        let lyrics = Lyrics {
+            synced: true,
+            lines: vec![
+                Line {
+                    start_ms: 1000,
+                    end_ms: 5000,
+                    text: "Lead".into(),
+                    ..Line::default()
+                },
+                Line {
+                    start_ms: 2000,
+                    end_ms: 3000,
+                    text: "Background".into(),
+                    background: true,
+                    ..Line::default()
+                },
+            ],
+            ..Lyrics::default()
+        };
+        assert_eq!(lyrics.active_line(2500), Some(0));
+        assert_eq!(lyrics.active_line(4000), Some(0));
+        assert_eq!(lyrics.active_line(5000), None);
+    }
 
     #[test]
     fn lrc_handles_offsets_repeated_timestamps_and_seek_backwards() {

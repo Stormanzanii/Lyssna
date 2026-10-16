@@ -2723,6 +2723,7 @@ input[type="range"]:hover {
   aspect-ratio: 9 / 16;
   max-height: 82vh;
   overflow: hidden;
+  mask-image: linear-gradient(#000 0%, #000 55%, #0009 78%, transparent 100%);
 }
 .canvas-hero > .canvas-artwork,
 .canvas-hero > .now-artwork {

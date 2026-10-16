@@ -702,7 +702,7 @@ async fn run(
                     Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge(false);emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri().unwrap_or_default();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri().unwrap_or_default(), position_ms: position_ms.into(), playing: None, seeked: false });}},
-                    Some(PlayerEvent::Unavailable { .. }) => emit(NativeEvent::Error("Spotify could not load this track for native playback".into())),
+                    Some(PlayerEvent::Unavailable { .. }) => emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into())),
                     None => break,
                     _ => {}
                 }

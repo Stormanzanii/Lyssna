@@ -1,0 +1,36 @@
+[package]
+name = "spotiflex"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Native Rust Spotify client with synchronized lyrics and playlist tools"
+publish = false
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+directories = "6"
+dotenvy = "0.15"
+eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+egui_extras = { version = "0.33", features = ["image"] }
+getrandom = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+keyring = { version = "3.6", features = ["windows-native", "apple-native", "sync-secret-service"] }
+librespot-connect = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
+librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
+librespot-playback = { version = "0.8", default-features = false, features = ["rodio-backend", "rustls-tls-native-roots"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
+roxmltree = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+url = "2"
+webbrowser = "1"
+
+[profile.dev]
+debug = 1
+
+[profile.release]
+lto = "thin"
+strip = true

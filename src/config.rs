@@ -1,0 +1,82 @@
+use std::{fs, path::PathBuf};
+
+use anyhow::{Context, Result};
+use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
+
+pub const REDIRECT_URI: &str = "http://127.0.0.1:43821/callback";
+pub const DASHBOARD_URL: &str = "https://developer.spotify.com/dashboard";
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    pub client_id: String,
+    pub last_view: String,
+    pub show_lyrics: bool,
+    pub compact_library: bool,
+    pub lyric_size: f32,
+    pub lyric_offset_ms: i64,
+    pub romanized: bool,
+    pub reduce_motion: bool,
+    pub folders: Vec<PlaylistFolder>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            client_id: String::new(),
+            last_view: "home".into(),
+            show_lyrics: true,
+            compact_library: false,
+            lyric_size: 32.0,
+            lyric_offset_ms: 0,
+            romanized: false,
+            reduce_motion: false,
+            folders: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct PlaylistFolder {
+    pub name: String,
+    pub playlist_ids: Vec<String>,
+    pub show_in_picker: bool,
+}
+
+pub fn data_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("", "", "SpotiFlex")
+        .context("Cannot locate SpotiFlex application data directory")?;
+    Ok(dirs.config_dir().to_path_buf())
+}
+
+impl Settings {
+    pub fn load() -> Result<Self> {
+        let path = data_dir()?.join("settings.json");
+        let mut settings: Self = if path.exists() {
+            serde_json::from_slice(&fs::read(&path)?)
+                .context("Cannot read settings.json; existing file was preserved")?
+        } else {
+            Self::default()
+        };
+        if settings.client_id.is_empty() {
+            settings.client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
+        }
+        settings.lyric_size = settings.lyric_size.clamp(18.0, 60.0);
+        settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        Ok(settings)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let directory = data_dir()?;
+        fs::create_dir_all(&directory)?;
+        let temporary = directory.join("settings.json.tmp");
+        fs::write(&temporary, serde_json::to_vec_pretty(self)?)?;
+        fs::rename(temporary, directory.join("settings.json"))
+            .context("Cannot save SpotiFlex settings")
+    }
+}
+
+pub fn valid_client_id(value: &str) -> bool {
+    value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}

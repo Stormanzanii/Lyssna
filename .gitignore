@@ -1,0 +1,13 @@
+/AGENTS.md
+/target/
+/dist/
+/.references/
+.env
+.env.*
+!.env.example
+*.log
+*.token
+credentials*.json
+tokens*.json
+/.idea/
+/.vs/

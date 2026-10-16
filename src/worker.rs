@@ -61,6 +61,11 @@ pub enum Command {
 }
 
 pub enum Event {
+    ArtistStats {
+        uri: String,
+        artist_id: String,
+        listeners: u64,
+    },
     TrackInfo {
         uri: String,
         track: Box<Track>,
@@ -547,9 +552,28 @@ impl Backend {
                 }
                 let queue = self.api()?.queue().unwrap_or_default();
                 self.emit(Event::PlayingDetails {
-                    uri: track.uri,
+                    uri: track.uri.clone(),
                     details: Box::new(PlayingDetails { artists, queue }),
                 });
+                if let Some(artist_id) = track.artists.first().and_then(|artist| artist.id.clone())
+                {
+                    let client = self.client.clone();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    let uri = track.uri;
+                    thread::spawn(move || {
+                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id)
+                            && let Some(listeners) = overview.monthly_listeners
+                        {
+                            let _ = events.send(Event::ArtistStats {
+                                uri,
+                                artist_id,
+                                listeners,
+                            });
+                            context.request_repaint();
+                        }
+                    });
+                }
             }
             Command::SetSaved { uri, saved } => {
                 self.api()?.set_saved_item(&uri, saved)?;

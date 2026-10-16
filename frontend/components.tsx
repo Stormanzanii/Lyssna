@@ -995,6 +995,12 @@ export function NowPlaying({
                           : "Enable following"}
                     </button>
                   </div>
+                  {artist.monthly_listeners != null && (
+                    <p className="artist-stat">
+                      {artist.monthly_listeners.toLocaleString()} monthly
+                      listeners
+                    </p>
+                  )}
                   {artist.followers && (
                     <p className="artist-stat">
                       {artist.followers.total.toLocaleString()} followers

@@ -415,6 +415,7 @@ impl SpotiFlex {
             match event {
                 Event::BrowseInfo { .. }
                 | Event::PlayingDetails { .. }
+                | Event::ArtistStats { .. }
                 | Event::Saved { .. }
                 | Event::TrackInfo { .. } => {}
                 Event::Session(profile) => {

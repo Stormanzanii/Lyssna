@@ -3,6 +3,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Artist {
+    #[serde(default)]
+    pub monthly_listeners: Option<u64>,
     pub id: Option<String>,
     #[serde(default)]
     pub uri: String,

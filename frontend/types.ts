@@ -3,6 +3,7 @@ export interface Artwork {
   width?: number;
 }
 export interface Artist {
+  monthly_listeners?: number;
   id?: string;
   uri?: string;
   name: string;

@@ -164,6 +164,27 @@ impl Desktop {
                         return;
                     };
                     match event {
+                        Event::ArtistStats {
+                            uri,
+                            artist_id,
+                            listeners,
+                        } => {
+                            if snapshot
+                                .playback
+                                .item
+                                .as_ref()
+                                .is_some_and(|track| track.uri == uri)
+                            {
+                                for artist in &mut snapshot.details.artists {
+                                    if artist.id.as_deref() == Some(&artist_id) {
+                                        artist.monthly_listeners = Some(listeners);
+                                    }
+                                }
+                                emit(
+                                    json!({"type":"details","uri":uri,"details":snapshot.details}),
+                                );
+                            }
+                        }
                         Event::TrackInfo { uri, mut track } => {
                             if snapshot
                                 .playback

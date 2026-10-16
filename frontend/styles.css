@@ -772,7 +772,8 @@ small {
 }
 .primary-play .lucide-play,
 .play-toggle .lucide-play {
-  transform: translateX(1px);
+  transform: translateX(-1px);
+  left: 0 !important;
 }
 .follow-lyrics:hover {
   background: #302b48;
@@ -1846,7 +1847,7 @@ small {
 }
 .seek-row {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
   width: 100%;
 }
@@ -1854,8 +1855,11 @@ small {
   font-size: 12px;
   color: #b4aebe;
   font-variant-numeric: tabular-nums;
-  min-width: 34px;
-  text-align: center;
+  min-width: 30px;
+  text-align: left;
+}
+.seek-row time:first-child {
+  text-align: right;
 }
 input[type="range"] {
   height: 4px;

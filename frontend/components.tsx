@@ -370,6 +370,7 @@ export function LyricsDisplay({
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
+  const [centered, setCentered] = useState(false);
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
   const spring = useRef<ScrollSpring>({ position: 0, velocity: 0, target: 0 });
   const waiting = useRef<HTMLDivElement>(null);
@@ -423,6 +424,7 @@ export function LyricsDisplay({
     );
   useEffect(() => {
     setFollowing(true);
+    setCentered(false);
   }, [lyrics]);
   useLayoutEffect(() => {
     const container = scroll.current,
@@ -453,14 +455,16 @@ export function LyricsDisplay({
       const cover = container
         .closest(".lyrics-layout")
         ?.querySelector(".lyrics-album>.cover");
-      const anchor = compact
-        ? 0
-        : Math.max(
-            8,
-            (cover?.getBoundingClientRect().top ??
-              container.getBoundingClientRect().top + 40) -
-              container.getBoundingClientRect().top,
-          );
+      const anchor = centered
+        ? container.clientHeight * 0.46
+        : compact
+          ? 0
+          : Math.max(
+              8,
+              (cover?.getBoundingClientRect().top ??
+                container.getBoundingClientRect().top + 40) -
+                container.getBoundingClientRect().top,
+            );
       container.style.setProperty("--lead-top", `${anchor}px`);
       spring.current.target = Math.max(
         0,
@@ -498,6 +502,7 @@ export function LyricsDisplay({
     settings.lyric_size,
     settings.romanized,
     gap?.start,
+    centered,
   ]);
   if (lyrics.instrumental)
     return (
@@ -538,6 +543,7 @@ export function LyricsDisplay({
                 className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${index < primary ? "past" : ""}`}
                 style={{ "--distance": Math.min(5, distance) } as CSSProperties}
                 onClick={() => {
+                  setCentered(true);
                   if (lyrics.synced) {
                     onSeek(line.words[0]?.start_ms ?? line.start_ms);
                     setFollowing(true);

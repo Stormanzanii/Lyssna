@@ -523,20 +523,26 @@ export function LyricsDisplay({
       const cover = container
         .closest(".lyrics-page")
         ?.querySelector(".lyrics-album>.cover");
+      const coverBox = cover?.getBoundingClientRect();
       const focus = compact
         ? 8
-        : Math.max(
-            12,
-            (cover?.getBoundingClientRect().top ??
-              container.getBoundingClientRect().top + 40) -
-              container.getBoundingClientRect().top,
-          );
+        : coverBox
+          ? coverBox.top +
+            coverBox.height / 2 -
+            container.getBoundingClientRect().top
+          : container.clientHeight / 2;
       container.style.setProperty("--lead-top", `${focus}px`);
+      const lastLine = lines.current.at(-1),
+        credits = container.querySelector(".lyric-end-credits");
+      container.style.setProperty(
+        "--tail-space",
+        `${compact ? 0 : Math.max(0, container.clientHeight - focus - (lastLine?.offsetHeight ?? 0) / 2 - (credits?.getBoundingClientRect().height ?? 0))}px`,
+      );
       spring.current.target = Math.max(
         0,
         Math.min(
           container.scrollHeight - container.clientHeight,
-          line.offsetTop - focus,
+          line.offsetTop + (compact ? 0 : line.offsetHeight / 2) - focus,
         ),
       );
       if (settings.reduce_motion) {
@@ -584,6 +590,7 @@ export function LyricsDisplay({
   return (
     <div
       className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""}`}
+      data-following={following}
     >
       <div
         className="lyric-scroll"

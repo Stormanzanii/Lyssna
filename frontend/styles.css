@@ -1586,6 +1586,14 @@ small {
 .lyric-scroll::-webkit-scrollbar {
   display: none;
 }
+.lyric-scroll::after {
+  content: "";
+  display: block;
+  height: var(--tail-space, 0px);
+}
+.lyrics-display[data-following="false"] .lyric-scroll::after {
+  height: 0;
+}
 .lyric-scroll[data-at-end="true"] {
   mask-image: linear-gradient(transparent, #000 10%, #000);
 }

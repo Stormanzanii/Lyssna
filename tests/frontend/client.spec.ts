@@ -332,18 +332,19 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(page.locator(".lyrics-page .lyric-line.active")).toHaveCount(2);
   await expect
     .poll(() =>
-      page.evaluate(() =>
-        Math.abs(
-          document
+      page.evaluate(() => {
+        const line = document
             .querySelector(".lyrics-page .lyric-line")!
-            .getBoundingClientRect().top -
-            document
-              .querySelector(".lyrics-album>.cover")!
-              .getBoundingClientRect().top,
-        ),
-      ),
+            .getBoundingClientRect(),
+          cover = document
+            .querySelector(".lyrics-album>.cover")!
+            .getBoundingClientRect();
+        return Math.abs(
+          line.top + line.height / 2 - cover.top - cover.height / 2,
+        );
+      }),
     )
-    .toBeLessThan(35);
+    .toBeLessThan(0.5);
   const leadTop = await page
     .locator(".lyrics-page .lyric-line")
     .first()

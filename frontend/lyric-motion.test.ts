@@ -1,6 +1,24 @@
 import { expect, it } from "vitest";
-import { stepScroll, wordMotion, vocalGap, letterMotion } from "./lyric-motion";
+import {
+  stepScroll,
+  wordMotion,
+  vocalGap,
+  vocalGaps,
+  letterMotion,
+} from "./lyric-motion";
 import type { Line } from "./types";
+it("keeps countdown layout after every overlapping vocal in the preceding section", () => {
+  const lines = [
+    { start_ms: 5000, end_ms: 6000 },
+    { start_ms: 5500, end_ms: 8000, background: true },
+    { start_ms: 7000, end_ms: 7500 },
+    { start_ms: 12000, end_ms: 13000 },
+  ] as Line[];
+  expect(vocalGaps(lines)).toEqual([
+    { start: 0, end: 5000, after: -1 },
+    { start: 8000, end: 12000, after: 2 },
+  ]);
+});
 
 it("keeps scrolling stable through retargets and different display refresh rates", () => {
   const results = [30, 60, 144].map((rate) => {

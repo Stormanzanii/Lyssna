@@ -35,6 +35,8 @@ import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
 import {
   stepScroll,
+  vocalGaps,
+  type VocalGap,
   wordMotion,
   letterMotion,
   wordGroups,
@@ -372,36 +374,45 @@ export function LyricsDisplay({
   const spring = useRef<ScrollSpring>({ position: 0, velocity: 0, target: 0 });
   const waiting = useRef<HTMLDivElement>(null);
   const gap = lyrics.synced ? vocalGap(lyrics.lines, positionMs) : undefined;
-  const waitingDots = gap ? (
-    <div
-      ref={waiting}
-      className="lyric-wait"
-      role="status"
-      aria-label="Instrumental break"
-    >
-      {[0, 1, 2].map((index) => {
-        const phase = Math.max(
-          0,
-          Math.min(
-            1,
-            ((positionMs - gap.start) / (gap.end - gap.start)) * 3 - index,
-          ),
-        );
-        const lift = settings.reduce_motion ? 0 : Math.sin(phase * Math.PI);
-        return (
-          <i
-            key={index}
-            style={
-              {
-                "--dot-opacity": 0.35 + phase * 0.65,
-                "--dot-lift": lift,
-              } as CSSProperties
-            }
-          />
-        );
-      })}
-    </div>
-  ) : null;
+  const gaps = useMemo(
+    () => new Map(vocalGaps(lyrics.lines).map((item) => [item.after, item])),
+    [lyrics],
+  );
+  const waitingDots = (item: VocalGap) => {
+    const visible = gap?.start === item.start;
+    return (
+      <div
+        key={item.start}
+        ref={visible ? waiting : undefined}
+        aria-hidden={!visible}
+        className="lyric-wait"
+        role="status"
+        aria-label="Instrumental break"
+      >
+        {[0, 1, 2].map((index) => {
+          const phase = Math.max(
+            0,
+            Math.min(
+              1,
+              ((positionMs - item.start) / (item.end - item.start)) * 3 - index,
+            ),
+          );
+          const lift = settings.reduce_motion ? 0 : Math.sin(phase * Math.PI);
+          return (
+            <i
+              key={index}
+              style={
+                {
+                  "--dot-opacity": 0.35 + phase * 0.65,
+                  "--dot-lift": lift,
+                } as CSSProperties
+              }
+            />
+          );
+        })}
+      </div>
+    );
+  };
   const active = activeLines(lyrics.lines, positionMs);
   const primary =
     active.find((index) => !lyrics.lines[index].background) ??
@@ -499,7 +510,7 @@ export function LyricsDisplay({
         }
       >
         <div className="lyric-spacer" />
-        {gap?.after === -1 && waitingDots}
+        {gaps.has(-1) && waitingDots(gaps.get(-1)!)}
         {lyrics.lines.map((line, index) => {
           const playing = active.includes(index);
           const distance = Math.abs(index - primary);
@@ -542,7 +553,7 @@ export function LyricsDisplay({
                   <span className="lyric-translation">{line.translation}</span>
                 )}
               </button>
-              {gap?.after === index && waitingDots}
+              {gaps.has(index) && waitingDots(gaps.get(index)!)}
             </Fragment>
           );
         })}

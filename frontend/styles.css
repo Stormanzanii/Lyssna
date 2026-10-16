@@ -1422,6 +1422,7 @@ small {
   min-height: 0;
 }
 .lyric-scroll {
+  overflow-anchor: none;
   position: relative;
   height: 100%;
   min-height: 0;
@@ -1519,12 +1520,17 @@ small {
   text-shadow: 0 0 14px rgb(245 234 255 / var(--syllable-glow, 0));
 }
 .lyric-wait {
+  transition: opacity 0.2s ease;
   display: flex;
   justify-content: flex-start;
   gap: 16px;
   align-items: center;
   height: 90px;
   padding: 20px 8px;
+}
+.lyric-wait[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
 }
 .lyric-wait i {
   display: block;

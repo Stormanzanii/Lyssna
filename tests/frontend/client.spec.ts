@@ -334,15 +334,15 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.getByRole("status", { name: "Instrumental break" }),
   ).toBeVisible();
-  await expect(page.locator(".lyrics-page .lyric-source")).toContainText(
-    "Spicy Lyrics",
-  );
-  await expect(page.locator(".lyrics-page .lyric-source")).toContainText(
-    "Uploaded by Uploader",
-  );
-  await expect(page.locator(".lyrics-page .lyric-source")).toContainText(
-    "Made by Maker",
-  );
+  await expect(
+    page.locator(".lyrics-page .lyric-source:not(.expanded)"),
+  ).toContainText("Spicy Lyrics");
+  await expect(
+    page.locator(".lyrics-page .lyric-source:not(.expanded)"),
+  ).toContainText("Uploaded by Uploader");
+  await expect(
+    page.locator(".lyrics-page .lyric-source:not(.expanded)"),
+  ).toContainText("Made by Maker");
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page

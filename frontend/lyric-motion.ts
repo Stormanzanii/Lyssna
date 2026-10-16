@@ -4,6 +4,35 @@ export function vocalEnd(line: Line) {
     ? Math.max(...line.words.map((word) => word.end_ms))
     : line.end_ms;
 }
+export interface VocalGap {
+  start: number;
+  end: number;
+  after: number;
+}
+export function vocalGaps(lines: Line[]): VocalGap[] {
+  const intervals = lines
+    .map((line, index) => ({
+      start: line.start_ms,
+      end: vocalEnd(line),
+      index,
+    }))
+    .sort((a, b) => a.start - b.start);
+  const gaps: VocalGap[] = [];
+  let end = 0,
+    after = -1;
+  for (const interval of intervals) {
+    if (interval.start - end >= 2500)
+      gaps.push({ start: end, end: interval.start, after });
+    if (interval.start > end) {
+      end = interval.end;
+      after = interval.index;
+    } else {
+      end = Math.max(end, interval.end);
+      after = Math.max(after, interval.index);
+    }
+  }
+  return gaps;
+}
 
 export function vocalGap(lines: Line[], time: number) {
   let start = 0,

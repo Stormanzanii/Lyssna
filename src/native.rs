@@ -526,6 +526,7 @@ async fn run(
         },
     );
     let mut player_events = player.get_player_event_channel();
+    let local_player = player.clone();
     let config = ConnectConfig {
         name: device_name(),
         ..ConnectConfig::default()
@@ -618,22 +619,13 @@ async fn run(
                 }
             }
         }
-        if let Some(playing) = intent.next(audio_playing, std::time::Instant::now())
-            && apply_control(
-                &spirc,
-                if playing {
-                    PlayerAction::Play(None)
-                } else {
-                    PlayerAction::Pause
-                },
-                &mut active,
-            )
-            .is_err()
-        {
-            intent.reset();
-            emit(NativeEvent::ControlError(
-                "Native playback command failed. Reconnect native audio in Settings.".into(),
-            ));
+        if let Some(playing) = intent.next(audio_playing, std::time::Instant::now()) {
+            // Local transport must not queue behind Spotify Connect HTTP notifications.
+            if playing {
+                local_player.play();
+            } else {
+                local_player.pause();
+            }
         }
     }
     session.shutdown();

@@ -135,7 +135,7 @@ pub fn cache_namespace() -> Result<String> {
     let provider = load()?;
     Ok(format!(
         "{:x}",
-        Sha256::digest(format!("v4:{}:{}", provider.spicy_api, provider.host).as_bytes())
+        Sha256::digest(format!("v5:{}:{}", provider.spicy_api, provider.host).as_bytes())
     ))
 }
 
@@ -376,6 +376,13 @@ fn parse_line(value: &Value, start_ms: u64, end_ms: u64) -> Line {
             });
         }
         line.text = line.words.iter().map(|word| word.text.as_str()).collect();
+        if let (Some(start), Some(end)) = (
+            line.words.iter().map(|word| word.start_ms).min(),
+            line.words.iter().map(|word| word.end_ms).max(),
+        ) {
+            line.start_ms = start;
+            line.end_ms = end;
+        }
         let romanized = syllables
             .iter()
             .map(|syllable| syllable["TransliteratedText"].as_str().unwrap_or_default())
@@ -538,6 +545,12 @@ impl Decoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn lead_timing_excludes_a_background_tail() {
+        let voice = json!({"Syllables":[{"Text":"Lead","StartTime":1.0,"EndTime":2.0}]});
+        let lead = parse_line(&voice, 1000, 8000);
+        assert_eq!((lead.start_ms, lead.end_ms), (1000, 2000));
+    }
     #[test]
     fn direct_requests_use_only_publishable_key_and_valid_track_id() {
         let client = crate::auth::http_client().unwrap();

@@ -11,6 +11,22 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("moves active focus to the next lead while the previous backing vocals continue", () => {
+    const lines = [
+      {
+        start_ms: 1000,
+        end_ms: 8000,
+        words: [{ start_ms: 1000, end_ms: 2000, text: "Lead" }],
+      },
+      { start_ms: 1500, end_ms: 6000, words: [] },
+      {
+        start_ms: 3000,
+        end_ms: 5000,
+        words: [{ start_ms: 3000, end_ms: 5000, text: "Next" }],
+      },
+    ];
+    expect(activeLines(lines, 3500)).toEqual([1, 2]);
+  });
   it("preserves imported lyrics when an earlier provider request fails", () => {
     const lyrics = {
       lines: [],

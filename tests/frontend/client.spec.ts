@@ -260,7 +260,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
         instrumental: false,
         attribution: {
           uploader: {
-            id: "1",
+            id: "123456789012345678",
             username: "Uploader",
             url: "https://spicylyrics.org/uid/1",
           },
@@ -343,6 +343,17 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Made by @Maker");
+  await page.route("https://spicylyrics.org/embed/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<h1>Profile</h1>" }),
+  );
+  await page.getByRole("button", { name: "@Uploader", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".creator-panel iframe")).toHaveAttribute(
+    "src",
+    "https://spicylyrics.org/embed/123456789012345678",
+  );
+  await page.getByRole("button", { name: "Close creator profile" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page

@@ -33,6 +33,7 @@ import type { AppState } from "./state";
 import { activeLines, progress } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
+import { useCreatorProfile, creatorEmbed } from "./creator-profile";
 import {
   stepScroll,
   vocalGaps,
@@ -620,6 +621,7 @@ const LyricCredits = memo(function LyricCredits({
         musixmatch: "Musixmatch",
       } as Record<string, string>
     )[lyrics.source] ?? lyrics.source;
+  const openCreator = useCreatorProfile();
   return (
     <div className={`lyric-source ${expanded ? "expanded" : ""}`}>
       Lyrics provided by: {source}
@@ -649,10 +651,14 @@ const LyricCredits = memo(function LyricCredits({
             <span key={role}>
               {" "}
               · {label}{" "}
-              {url ? (
+              {creatorEmbed(person.id) || url ? (
                 <button
                   className="text-link"
-                  onClick={() => void rpc("open_link", { url }).catch(() => {})}
+                  onClick={() =>
+                    creatorEmbed(person.id)
+                      ? openCreator(person)
+                      : void rpc("open_link", { url }).catch(() => {})
+                  }
                 >
                   {expanded ? "@" : ""}
                   {person.username}

@@ -59,6 +59,8 @@ pub struct Copyright {
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Track {
     #[serde(default)]
+    pub added_at: String,
+    #[serde(default)]
     pub explicit: bool,
     #[serde(default)]
     pub songwriters: Vec<String>,

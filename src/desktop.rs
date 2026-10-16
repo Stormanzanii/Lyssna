@@ -54,6 +54,7 @@ pub struct Snapshot {
     observed_at: u64,
 }
 struct Inner {
+    resume_seek: Mutex<Option<(String, u64)>>,
     snapshot: Mutex<Snapshot>,
     commands: mpsc::Sender<Command>,
     lyrics: mpsc::Sender<LyricCommand>,
@@ -69,6 +70,19 @@ struct Inner {
     ready_update: Mutex<Option<updater::ReadyUpdate>>,
 }
 pub struct Desktop(Arc<Inner>);
+fn restore_playback(snapshot: &mut Snapshot, value: crate::resume::LastPlayed) {
+    snapshot.playback.item = Some(value.track);
+    snapshot.playback.progress_ms = Some(value.position_ms);
+    snapshot.playback.is_playing = false;
+    snapshot.playback.device = Device {
+        name: native::device_name(),
+        ..Device::default()
+    };
+    snapshot.observed_at = now_ms();
+    snapshot.lyrics = None;
+    snapshot.canvas_url = None;
+    snapshot.details = PlayingDetails::default();
+}
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -110,6 +124,7 @@ impl Desktop {
         let restore = config::valid_client_id(&settings.client_id);
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
+            resume_seek: Mutex::new(None),
             snapshot: Mutex::new(Snapshot {
                 canvas_url: None,
                 profile: None,
@@ -166,6 +181,33 @@ impl Desktop {
                         return;
                     };
                     match event {
+                        Event::TrackFacts(facts) => {
+                            if snapshot.profile.is_some() {
+                                emit(json!({"type":"track_facts","facts":facts}));
+                            }
+                        }
+                        Event::LastPlayed { account, value } => {
+                            if snapshot
+                                .profile
+                                .as_ref()
+                                .is_some_and(|profile| profile.id == account)
+                                && !snapshot.playback.is_playing
+                                && pump
+                                    .last_native
+                                    .lock()
+                                    .ok()
+                                    .is_some_and(|last| last.is_none())
+                                && let Some(value) = crate::resume::newer(
+                                    crate::resume::load(&account),
+                                    Some(*value),
+                                )
+                            {
+                                restore_playback(&mut snapshot, value);
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":true}),
+                                );
+                            }
+                        }
                         Event::PagePrefetched {
                             account,
                             key,
@@ -260,6 +302,12 @@ impl Desktop {
                             emit(
                                 json!({"type":"session","profile":profile,"can_follow":snapshot.can_follow}),
                             );
+                            if let Some(value) = crate::resume::load(&profile.id) {
+                                restore_playback(&mut snapshot, value);
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":true}),
+                                );
+                            }
                         }
                         Event::SignedOut => {
                             snapshot.profile = None;
@@ -539,6 +587,10 @@ impl Desktop {
                             emit(
                                 json!({"type":"native","ready":true,"status":snapshot.native_status}),
                             );
+                            if let Some(track) = snapshot.playback.item.clone() {
+                                let _ = pump.commands.send(Command::FetchLyrics(track.clone()));
+                                let _ = pump.commands.send(Command::PlayingDetails(track));
+                            }
                         }
                         NativeEvent::Error(message) => {
                             snapshot.native_ready = false;
@@ -573,6 +625,21 @@ impl Desktop {
                                     *last = Some(Instant::now());
                                 }
                                 snapshot.observed_at = now_ms();
+                                if let Some(profile) = &snapshot.profile {
+                                    let _ = crate::resume::save(
+                                        &profile.id,
+                                        &snapshot.playback,
+                                        snapshot.observed_at,
+                                        false,
+                                    );
+                                }
+                                if playing == Some(true)
+                                    && let Ok(mut pending) = pump.resume_seek.lock()
+                                    && pending.as_ref().is_some_and(|(track, _)| track == &uri)
+                                    && let Some((_, position)) = pending.take()
+                                {
+                                    let _ = pump.controls.send(PlayerAction::Seek(position));
+                                }
                                 emit(
                                     json!({"type":"native_position","uri":uri,"position_ms":position_ms,"playing":playing,"seeked":seeked,"observed_at":snapshot.observed_at}),
                                 );
@@ -667,6 +734,18 @@ impl Desktop {
         Ok(Self(inner))
     }
     fn stop(&self) {
+        if let Ok(snapshot) = self.0.snapshot.lock()
+            && let Some(profile) = &snapshot.profile
+            && self
+                .0
+                .last_native
+                .lock()
+                .ok()
+                .is_some_and(|last| last.is_some())
+        {
+            let _ =
+                crate::resume::save(&profile.id, &snapshot.playback, snapshot.observed_at, true);
+        }
         self.0.stopped.store(true, Ordering::Relaxed);
         if let Ok(cancelled) = self.0.login_cancelled.lock() {
             cancelled.store(true, Ordering::Relaxed);
@@ -893,6 +972,17 @@ fn player(
             lock(&state.0.native_id)?.as_deref(),
             &snapshot.playback.device,
         );
+        if local
+            && matches!(action, PlayerAction::Play(None))
+            && lock(&state.0.last_native)?.is_none()
+            && let Some(track) = snapshot.playback.item.as_ref()
+        {
+            action = PlayerAction::Play(Some(track.uri.clone()));
+            *lock(&state.0.resume_seek)? = Some((
+                track.uri.clone(),
+                snapshot.playback.progress_ms.unwrap_or_default(),
+            ));
+        }
         if local && !matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
             action = local_load(action, &snapshot.tracks)?;
             ensure!(

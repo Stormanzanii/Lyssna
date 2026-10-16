@@ -172,6 +172,36 @@ impl Spotify {
         )?;
         parse_track_items(&response)
     }
+    pub fn last_played(&mut self) -> Result<Option<crate::resume::LastPlayed>> {
+        let response = self.request(
+            Method::GET,
+            "me/player/recently-played",
+            &[("limit", "1".into())],
+            None,
+        )?;
+        let Some(item) = response["items"].as_array().and_then(|items| items.first()) else {
+            return Ok(None);
+        };
+        let track = serde_json::from_value(
+            item.get("track")
+                .or_else(|| item.get("item"))
+                .context("Missing recent track")?
+                .clone(),
+        )?;
+        let played_at = time::OffsetDateTime::parse(
+            item["played_at"]
+                .as_str()
+                .context("Missing playback date")?,
+            &time::format_description::well_known::Rfc3339,
+        )?
+        .unix_timestamp_nanos()
+            / 1_000_000;
+        Ok(Some(crate::resume::LastPlayed {
+            track,
+            position_ms: 0,
+            played_at: played_at.max(0) as u64,
+        }))
+    }
 
     pub fn playlist_tracks(&mut self, playlist_id: &str, offset: usize) -> Result<Vec<Track>> {
         ensure!(valid_id(playlist_id), "Invalid playlist ID");
@@ -477,7 +507,10 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
         if track.is_null() || track["type"].as_str().is_some_and(|kind| kind != "track") {
             continue;
         }
-        tracks.push(serde_json::from_value(track.clone()).context("Invalid track in playlist")?);
+        let mut track: Track =
+            serde_json::from_value(track.clone()).context("Invalid track in playlist")?;
+        track.added_at = item["added_at"].as_str().unwrap_or_default().into();
+        tracks.push(track);
     }
     Ok(tracks)
 }

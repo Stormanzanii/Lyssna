@@ -5759,6 +5759,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-window-state",
+ "time",
  "tiny-skia",
  "tokio",
  "ttf-parser",

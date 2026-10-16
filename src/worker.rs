@@ -64,6 +64,11 @@ pub enum Command {
 }
 
 pub enum Event {
+    TrackFacts(std::collections::HashMap<String, crate::track_facts::Facts>),
+    LastPlayed {
+        account: String,
+        value: Box<crate::resume::LastPlayed>,
+    },
     PagePrefetched {
         account: String,
         key: String,
@@ -163,6 +168,18 @@ impl Worker {
         let (send_native, native_events) = mpsc::channel();
         let (lyrics, receive_lyrics) = mpsc::channel();
         let (send_lyrics, lyric_events) = mpsc::channel();
+        let (facts, fact_requests) = mpsc::sync_channel::<FactsRequest>(32);
+        let fact_events = send_events.clone();
+        let fact_context = context.clone();
+        thread::spawn(move || {
+            let mut catalogue = crate::track_facts::Catalogue::default();
+            while let Ok(mut request) = fact_requests.recv() {
+                let values =
+                    catalogue.enrich(&request.native, &mut request.spotify, request.tracks);
+                let _ = fact_events.send(Event::TrackFacts(values));
+                fact_context.request_repaint();
+            }
+        });
         let (prefetch, requests) = mpsc::sync_channel::<PrefetchRequest>(1);
         let prefetch_events = send_events.clone();
         let prefetch_context = context.clone();
@@ -217,6 +234,7 @@ impl Worker {
                 }
             };
             let mut backend = Backend {
+                facts,
                 prefetch,
                 spotify: None,
                 native: None,
@@ -348,6 +366,7 @@ impl Drop for Worker {
 }
 
 struct Backend {
+    facts: mpsc::SyncSender<FactsRequest>,
     prefetch: mpsc::SyncSender<PrefetchRequest>,
     native_controls: NativeControls,
     spotify: Option<Spotify>,
@@ -384,7 +403,14 @@ impl Backend {
             Ok(playlists) => self.emit(Event::Library(playlists)),
             Err(error) => self.emit(Event::Error(error.to_string())),
         }
-        self.poll()
+        self.poll()?;
+        if let Ok(Some(value)) = self.api()?.last_played() {
+            self.emit(Event::LastPlayed {
+                account: self.profile.id.clone(),
+                value: Box::new(value),
+            });
+        }
+        Ok(())
     }
 
     fn api(&mut self) -> Result<&mut Spotify> {
@@ -509,12 +535,23 @@ impl Backend {
             } => {
                 let result = self.fetch_tracks(&key, offset);
                 match result {
-                    Ok(tracks) => self.emit(Event::Tracks {
-                        key,
-                        offset,
-                        generation,
-                        tracks,
-                    }),
+                    Ok(tracks) => {
+                        if (key == "liked" || key.starts_with("playlist:"))
+                            && let Some(spotify) = self.spotify.as_ref()
+                        {
+                            let _ = self.facts.try_send(FactsRequest {
+                                spotify: spotify.clone(),
+                                native: self.native_controls.clone(),
+                                tracks: tracks.clone(),
+                            });
+                        }
+                        self.emit(Event::Tracks {
+                            key,
+                            offset,
+                            generation,
+                            tracks,
+                        });
+                    }
                     Err(error) => self.emit(Event::TracksFailed {
                         generation,
                         message: error.to_string(),
@@ -769,6 +806,11 @@ struct PrefetchRequest {
     native: NativeControls,
     account: String,
     key: String,
+}
+struct FactsRequest {
+    spotify: Spotify,
+    native: NativeControls,
+    tracks: Vec<Track>,
 }
 fn fetch_tracks(
     api: &mut Spotify,

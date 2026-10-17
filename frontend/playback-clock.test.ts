@@ -66,3 +66,22 @@ it("applies a requested backward seek immediately", () => {
   clock.observe({ ...playback, progress_ms: 500 }, 2500, 1, 2500, 2500);
   expect(clock.read(2500)).toBe(500);
 });
+it("stops extrapolating beyond a missing native audio observation", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0);
+  expect(clock.read(5000)).toBeLessThanOrEqual(1500);
+});
+it("holds lyrics while narration or buffering repeats the same song position", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0);
+  const before = clock.read(250);
+  clock.observe(playback, 250, 0, 250, 250);
+  expect(clock.read(5000)).toBe(before);
+});
+it("keeps remote playback moving between polls and applies a remote seek", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0, false);
+  expect(clock.read(5000)).toBe(6000);
+  clock.observe({ ...playback, progress_ms: 500 }, 5000, 0, 5000, 5000, false);
+  expect(clock.read(5000)).toBe(500);
+});

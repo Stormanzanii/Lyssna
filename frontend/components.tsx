@@ -228,7 +228,8 @@ export function TrackTitle({
 }
 
 export function usePosition(
-  state: Pick<AppState, "playback" | "observed_at" | "clock_revision">,
+  state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
+    Partial<Pick<AppState, "local_device_name">>,
 ) {
   const clock = useRef(new PlaybackClock());
   const [time, setTime] = useState(performance.now());
@@ -239,6 +240,9 @@ export function usePosition(
     state.clock_revision,
     now,
     Date.now(),
+    state.local_device_name
+      ? state.playback.device.name === state.local_device_name
+      : true,
   );
   useEffect(() => {
     setTime(performance.now());

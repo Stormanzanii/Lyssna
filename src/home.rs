@@ -1,24 +1,27 @@
 //! Account-bound music shelves from Spotify's native Home feed.
 use crate::model::Artwork;
 use anyhow::{Context, Result, ensure};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub const DJ_URI: &str = "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct HomePage {
     pub account: String,
     pub greeting: String,
     pub sections: Vec<HomeSection>,
+    /// Restored from disk; refresh once native audio connects.
+    #[serde(default)]
+    pub cached: bool,
 }
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct HomeSection {
     pub uri: String,
     pub title: String,
     pub subtitle: String,
     pub items: Vec<HomeItem>,
 }
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct HomeItem {
     pub uri: String,
     pub route: String,

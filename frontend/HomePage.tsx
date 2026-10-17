@@ -8,7 +8,12 @@ import {
   Play,
   RefreshCw,
 } from "lucide-react";
-import type { HomeItem, HomePage as HomeData, HomeSection } from "./types";
+import type {
+  HomeItem,
+  HomePage as HomeData,
+  HomeSection,
+  Playlist,
+} from "./types";
 import { Cover } from "./components";
 import "./HomePage.css";
 
@@ -105,8 +110,27 @@ function Shelf({
     </section>
   );
 }
+function SkeletonShelf() {
+  return (
+    <section className="home-shelf home-skeleton" aria-hidden="true">
+      <div className="home-shelf-heading">
+        <span className="skeleton-bar heading" />
+      </div>
+      <div className="home-shelf-items">
+        {Array.from({ length: 7 }, (_, index) => (
+          <div className="home-card" key={index}>
+            <span className="skeleton-bar art" />
+            <span className="skeleton-bar title" />
+            <span className="skeleton-bar subtitle" />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 export const HomePage = memo(function HomePage({
   data,
+  playlists,
   loading,
   error,
   ready,
@@ -116,6 +140,7 @@ export const HomePage = memo(function HomePage({
   refresh,
 }: {
   data?: HomeData;
+  playlists: Playlist[];
   loading: boolean;
   error: string;
   ready: boolean;
@@ -155,14 +180,24 @@ export const HomePage = memo(function HomePage({
           disabled={!ready}
         >
           <div className="dj-cover">
-            <Headphones size={30} />
+            <Headphones size={26} />
           </div>
           <div>
             <strong>DJ</strong>
             <span>Music picked for you</span>
           </div>
-          <Play size={20} fill="currentColor" />
+          <Play className="quick-tile-play" size={18} fill="currentColor" />
         </button>
+        {playlists.slice(0, 6).map((playlist) => (
+          <button
+            className="quick-tile"
+            key={playlist.id}
+            onClick={() => navigate(`playlist:${playlist.id}`)}
+          >
+            <Cover images={playlist.images} />
+            <strong>{playlist.name}</strong>
+          </button>
+        ))}
       </div>
       {error && (
         <div className="home-status" role="status">
@@ -173,13 +208,13 @@ export const HomePage = memo(function HomePage({
         </div>
       )}
       {!data && !error && (
-        <div className="home-status">
-          {loading
-            ? "Loading your recommendations…"
-            : ready
-              ? "Your music is on its way…"
-              : "Connecting to your music…"}
-        </div>
+        <>
+          <p className="home-status-hint" role="status">
+            {ready ? "Loading your recommendations…" : "Connecting to Spotify…"}
+          </p>
+          <SkeletonShelf />
+          <SkeletonShelf />
+        </>
       )}
       {data?.sections.map((section, index) => (
         <Shelf

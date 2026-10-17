@@ -1,6 +1,7 @@
 .personal-home {
-  padding: 0 8px 24px;
+  padding: 0 12px 32px;
   min-width: 0;
+  container-type: inline-size;
 }
 .home-toolbar {
   display: flex;
@@ -15,36 +16,134 @@
 .home-toolbar .pill {
   background: #f5f5f5;
   color: #151515;
+  padding: 7px 14px;
 }
 .home-quick-links {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 8px 0 28px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 32px;
 }
 .home-quick-links .quick-tile {
-  text-align: left;
-  min-height: 70px;
+  position: relative;
+  height: 56px;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  color: #fff;
+  border-radius: 6px;
+  background: #ffffff12;
 }
-.dj-quick-tile {
-  gap: 16px;
+.home-quick-links .quick-tile:hover {
+  background: #ffffff24;
+}
+.home-quick-links .quick-tile:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.home-quick-links .quick-tile > .cover,
+.home-quick-links .quick-tile > .liked-cover,
+.dj-cover {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 6px 0 0 6px;
+  box-shadow: 0 4px 14px #0006;
+}
+.home-quick-links .quick-tile > .liked-cover svg {
+  width: 22px;
+  height: 22px;
+}
+.home-quick-links .quick-tile strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 .dj-quick-tile > div:nth-child(2) {
   flex: 1;
+  min-width: 0;
 }
 .dj-quick-tile span {
   display: block;
-  color: #bcbcbc;
+  color: #b3b3b3;
   font-size: 12px;
-  margin-top: 4px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dj-cover {
-  height: 70px;
-  min-width: 70px;
-  background: #0858b8;
+  background: radial-gradient(circle at 30% 25%, #2c7bf2, #0b3f8f 70%);
   color: #19e68c;
   display: grid;
   place-items: center;
+}
+.quick-tile-play {
+  flex-shrink: 0;
+  margin-right: 14px;
+  color: #1ed760;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.quick-tile:hover .quick-tile-play,
+.quick-tile:focus-visible .quick-tile-play {
+  opacity: 1;
+}
+@container (max-width: 980px) {
+  .home-quick-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 520px) {
+  .home-quick-links {
+    grid-template-columns: 1fr;
+  }
+}
+.home-status-hint {
+  color: #8f8f8f;
+  font-size: 13px;
+  margin: 0 0 -8px;
+}
+.skeleton-bar {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #ffffff0d 25%,
+    #ffffff1a 50%,
+    #ffffff0d 75%
+  );
+  background-size: 300% 100%;
+  animation: home-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-bar.heading {
+  width: 220px;
+  height: 24px;
+}
+.skeleton-bar.art {
+  aspect-ratio: 1;
+  border-radius: 7px;
+}
+.skeleton-bar.title {
+  width: 80%;
+  height: 14px;
+  margin-top: 12px;
+}
+.skeleton-bar.subtitle {
+  width: 55%;
+  height: 12px;
+  margin-top: 8px;
+}
+.home-skeleton .home-shelf-items {
+  overflow: hidden;
+}
+@keyframes home-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 .home-shelf {
   margin: 28px 0;
@@ -197,9 +296,6 @@
   }
 }
 @media (max-width: 850px) {
-  .home-quick-links {
-    grid-template-columns: 1fr;
-  }
   .home-shelf-items {
     grid-auto-columns: 150px;
     gap: 16px;
@@ -212,7 +308,8 @@
   .home-card-play {
     transition: none;
   }
-  .home-toolbar .spin {
+  .home-toolbar .spin,
+  .skeleton-bar {
     animation: none;
   }
 }

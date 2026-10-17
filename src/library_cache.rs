@@ -1,7 +1,11 @@
+use crate::home::HomePage;
 use crate::model::Playlist;
 use crate::model::Track;
 use sha2::{Digest, Sha256};
 fn path(account: &str) -> Option<std::path::PathBuf> {
+    account_file("library", account)
+}
+fn account_file(folder: &str, account: &str) -> Option<std::path::PathBuf> {
     let key = Sha256::digest(account)
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -9,7 +13,7 @@ fn path(account: &str) -> Option<std::path::PathBuf> {
     Some(
         crate::config::data_dir()
             .ok()?
-            .join("library")
+            .join(folder)
             .join(format!("{key}.json")),
     )
 }
@@ -21,10 +25,30 @@ pub fn load(account: &str) -> Option<Vec<Playlist>> {
     serde_json::from_slice(&std::fs::read(path).ok()?).ok()
 }
 pub fn save(account: &str, playlists: &[Playlist]) {
-    let Some(path) = path(account) else {
-        return;
-    };
-    let Ok(bytes) = serde_json::to_vec(playlists) else {
+    if let Some(path) = path(account) {
+        write(&path, playlists);
+    }
+}
+/// Last personalized Home for an account, shown until a fresh feed arrives.
+pub fn home(account: &str) -> Option<HomePage> {
+    let path = account_file("home", account)?;
+    if std::fs::metadata(&path).ok()?.len() > 4_000_000 {
+        return None;
+    }
+    let mut page: HomePage = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    if page.account != account {
+        return None;
+    }
+    page.cached = true;
+    Some(page)
+}
+pub fn save_home(page: &HomePage) {
+    if let Some(path) = account_file("home", &page.account) {
+        write(&path, page);
+    }
+}
+fn write<T: serde::Serialize + ?Sized>(path: &std::path::Path, value: &T) {
+    let Ok(bytes) = serde_json::to_vec(value) else {
         return;
     };
     if bytes.len() > 4_000_000 {

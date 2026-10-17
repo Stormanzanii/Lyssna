@@ -260,6 +260,84 @@ test("personalized Home shelves launch native mixes and DJ", async ({
   await page.screenshot({ path: "target/diagnostics/home-preview.png" });
 });
 
+test("cached Home shows at once and refreshes when native audio connects", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  const homeCalls = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (command: any) => command.command === "home",
+        ).length,
+    );
+  const before = await homeCalls();
+  await page.evaluate(() => {
+    const { emit } = (window as any).__clientTest;
+    emit({ type: "native", ready: false, status: "Connecting native audio…" });
+    emit({
+      type: "library",
+      playlists: [
+        {
+          id: "4123456789abcdefghijkl",
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    });
+    emit({
+      type: "home",
+      page: {
+        account: "test-user",
+        greeting: "",
+        cached: true,
+        sections: [
+          {
+            uri: "cached",
+            title: "Cached shelf",
+            subtitle: "",
+            items: [
+              {
+                uri: "spotify:album:5123456789abcdefghijkl",
+                route: "album:5123456789abcdefghijkl",
+                name: "Cached album",
+                subtitle: "Artist",
+                images: [],
+                kind: "album",
+                playable: true,
+                format: "",
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+  await expect(
+    page.getByRole("heading", { name: "Cached shelf", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".home-quick-links").getByText("Road trip", { exact: true }),
+  ).toBeVisible();
+  expect(await homeCalls()).toBe(before);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "native",
+      ready: true,
+      status: "Ready · this computer",
+    }),
+  );
+  await expect.poll(homeCalls).toBe(before + 1);
+  await expect(
+    page.getByRole("heading", { name: "Daily Mixes", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Cached shelf", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("Daily Mix navigation retains title, artwork and description", async ({
   page,
 }) => {

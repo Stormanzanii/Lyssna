@@ -272,7 +272,7 @@ function App() {
       state.profile &&
       state.native_ready &&
       state.route === "home" &&
-      state.home?.account !== state.profile.id
+      (state.home?.account !== state.profile.id || state.home.cached)
     )
       refreshHome();
   }, [
@@ -280,6 +280,7 @@ function App() {
     state.native_ready,
     state.route,
     state.home?.account,
+    state.home?.cached,
     refreshHome,
   ]);
   const play = useCallback(
@@ -986,6 +987,7 @@ function App() {
               {state.route === "home" ? (
                 <HomePage
                   data={state.home}
+                  playlists={state.playlists}
                   loading={state.home_loading}
                   error={state.home_error}
                   ready={state.native_ready}

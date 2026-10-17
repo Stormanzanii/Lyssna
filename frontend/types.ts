@@ -199,6 +199,7 @@ export type HomePage = {
   account: string;
   greeting: string;
   sections: HomeSection[];
+  cached?: boolean;
 };
 export type PlayerRequest = {
   command: string;

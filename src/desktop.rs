@@ -325,6 +325,12 @@ impl Desktop {
                             emit(
                                 json!({"type":"session","profile":profile,"can_follow":snapshot.can_follow}),
                             );
+                            if snapshot.home.is_none()
+                                && let Some(page) = crate::library_cache::home(&profile.id)
+                            {
+                                snapshot.home = Some(page.clone());
+                                emit(json!({"type":"home","page":page}));
+                            }
                             if let Some(value) = crate::resume::load(&profile.id) {
                                 restore_playback(&mut snapshot, value);
                                 emit(
@@ -923,7 +929,12 @@ async fn home(
         json!({"type":"home_loading","account":account}),
     );
     let controls = inner.controls.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || controls.home(&timezone)).await;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let page = controls.home(&timezone)?;
+        crate::library_cache::save_home(&page);
+        Ok::<_, anyhow::Error>(page)
+    })
+    .await;
     let mut snapshot = lock(&inner.snapshot).map_err(error)?;
     if inner.home_generation.load(Ordering::SeqCst) != generation
         || snapshot.profile.as_ref().map(|profile| &profile.id) != Some(&account)

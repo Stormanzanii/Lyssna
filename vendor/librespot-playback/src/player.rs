@@ -148,6 +148,8 @@ enum PlayerCommand {
     EmitAutoPlayChangedEvent(bool),
     EmitSetQueueEvent {
         context_uri: String,
+        session_url: Option<String>,
+        track_uid: Option<String>,
         current_track: Option<QueueTrack>,
         next_tracks: Vec<QueueTrack>,
         prev_tracks: Vec<QueueTrack>,
@@ -272,6 +274,8 @@ pub enum PlayerEvent {
     /// Fired when the queue is set or context is loaded with its track list.
     SetQueue {
         context_uri: String,
+        session_url: Option<String>,
+        track_uid: Option<String>,
         current_track: Option<QueueTrack>,
         next_tracks: Vec<QueueTrack>,
         prev_tracks: Vec<QueueTrack>,
@@ -707,8 +711,29 @@ impl Player {
         next_tracks: Vec<QueueTrack>,
         prev_tracks: Vec<QueueTrack>,
     ) {
+        self.emit_set_queue_event_with_session(
+            context_uri,
+            current_track,
+            next_tracks,
+            prev_tracks,
+            None,
+            None,
+        );
+    }
+
+    pub fn emit_set_queue_event_with_session(
+        &self,
+        context_uri: String,
+        current_track: Option<QueueTrack>,
+        next_tracks: Vec<QueueTrack>,
+        prev_tracks: Vec<QueueTrack>,
+        session_url: Option<String>,
+        track_uid: Option<String>,
+    ) {
         self.command(PlayerCommand::EmitSetQueueEvent {
             context_uri,
+            session_url,
+            track_uid,
             current_track,
             next_tracks,
             prev_tracks,
@@ -2444,11 +2469,15 @@ impl PlayerInternal {
 
             PlayerCommand::EmitSetQueueEvent {
                 context_uri,
+                session_url,
+                track_uid,
                 current_track,
                 next_tracks,
                 prev_tracks,
             } => self.send_event(PlayerEvent::SetQueue {
                 context_uri,
+                session_url,
+                track_uid,
                 current_track,
                 next_tracks,
                 prev_tracks,

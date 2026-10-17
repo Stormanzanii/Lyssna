@@ -28,6 +28,10 @@ pub(super) enum PlayContext {
 /// The parameters for creating a load request
 #[derive(Debug, Default, Clone)]
 pub struct LoadRequestOptions {
+    /// Reopen an existing DJ session instead of generating another session.
+    pub session_url: Option<String>,
+    /// Select a track relative to `playing_track` after resolving all required pages.
+    pub relative_offset: i32,
     /// Whether the given tracks should immediately start playing, or just be initially loaded.
     pub start_playing: bool,
     /// Start the playback at a specific point of the track.
@@ -111,6 +115,13 @@ impl LoadRequest {
 /// An item that represent a track to play
 #[derive(Debug, Clone)]
 pub enum PlayingTrack {
+    /// Prefer the persisted occurrence UID, falling back to its URI if Spotify regenerated UIDs.
+    UidOrUri {
+        /// The saved occurrence in its original context.
+        uid: String,
+        /// The catalogue URI to find if the occurrence was regenerated.
+        uri: String,
+    },
     /// Represent the track at a given index.
     Index(u32),
     /// Represent the uri of a track.

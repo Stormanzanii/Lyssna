@@ -80,6 +80,11 @@ struct Inner {
 }
 pub struct Desktop(Arc<Inner>);
 fn restore_playback(snapshot: &mut Snapshot, value: crate::resume::LastPlayed) {
+    if value.dj_context.is_some()
+        && let Some(profile) = snapshot.profile.as_ref()
+    {
+        crate::resume::remember_dj_context(&profile.id, &value.track.uri, value.dj_context);
+    }
     snapshot.playback.item = Some(value.track);
     snapshot.playback.progress_ms = Some(value.position_ms);
     snapshot.playback.is_playing = false;
@@ -1152,6 +1157,20 @@ fn player(
                 &snapshot.playback.device,
             );
         if local
+            && lock(&state.0.last_native)?.is_none()
+            && let (Some(profile), Some(track)) =
+                (snapshot.profile.as_ref(), snapshot.playback.item.as_ref())
+            && let Some(restored) = crate::resume::restore_dj_action(
+                &profile.id,
+                &track.uri,
+                snapshot.playback.progress_ms.unwrap_or_default(),
+                &action,
+            )
+        {
+            action = restored;
+            *lock(&state.0.resume_seek)? = None;
+        }
+        if local
             && matches!(action, PlayerAction::Play(None))
             && lock(&state.0.last_native)?.is_none()
             && let Some(track) = snapshot.playback.item.as_ref()
@@ -1199,6 +1218,7 @@ fn player(
                         PlayerAction::Play(_)
                             | PlayerAction::PlayUris { .. }
                             | PlayerAction::PlayContext { .. }
+                            | PlayerAction::RestoreDJ { .. }
                     ),
                     "Native audio is connecting. Try again when ready."
                 );

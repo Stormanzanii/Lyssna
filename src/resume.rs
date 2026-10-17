@@ -16,6 +16,95 @@ pub struct LastPlayed {
     pub played_at: u64,
     #[serde(default)]
     pub queue: Vec<String>,
+    #[serde(default)]
+    pub dj_context: Option<DJContext>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DJContext {
+    pub uri: String,
+    pub session_url: Option<String>,
+    pub track_uid: Option<String>,
+}
+impl DJContext {
+    fn valid(&self) -> bool {
+        (self.uri == crate::home::DJ_URI || self.uri.starts_with("spotify:lexicon:"))
+            && self.uri.len() < 1024
+            && !self.uri.chars().any(char::is_control)
+            && self
+                .track_uid
+                .as_ref()
+                .is_none_or(|uid| uid.len() < 1024 && !uid.chars().any(char::is_control))
+            && self.session_url.as_ref().is_none_or(|url| {
+                url.starts_with("hm://lexicon-session-provider/context-resolve/")
+                    && url.len() < 8192
+                    && !url.contains("..")
+                    && !url.chars().any(char::is_control)
+            })
+    }
+}
+type DJHistory = HashMap<String, (String, DJContext)>;
+static DJ_CONTEXTS: LazyLock<Mutex<DJHistory>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+pub fn remember_dj_context(account: &str, track: &str, context: Option<DJContext>) {
+    let changed = if let Ok(mut contexts) = DJ_CONTEXTS.lock() {
+        if let Some(context) = context.filter(DJContext::valid) {
+            let changed = contexts.get(account) != Some(&(track.into(), context.clone()));
+            contexts.insert(account.into(), (track.into(), context));
+            changed
+        } else {
+            contexts.remove(account).is_some()
+        }
+    } else {
+        false
+    };
+    if changed && let Ok(mut saves) = SAVES.lock() {
+        saves.remove(account);
+    }
+}
+pub fn remember_native_queue(account: &str, uris: Vec<String>) {
+    if let Ok(mut queues) = QUEUES.lock() {
+        queues.insert(account.into(), uris.into_iter().take(100).collect());
+    }
+}
+fn dj_context(account: &str, track: &str) -> Option<DJContext> {
+    DJ_CONTEXTS
+        .lock()
+        .ok()?
+        .get(account)
+        .filter(|(uri, _)| uri == track)
+        .map(|(_, context)| context.clone())
+}
+pub fn restore_dj_action(
+    account: &str,
+    track: &str,
+    position_ms: u64,
+    requested: &crate::api::PlayerAction,
+) -> Option<crate::api::PlayerAction> {
+    let relative_offset = match requested {
+        crate::api::PlayerAction::Play(None) => 0,
+        crate::api::PlayerAction::Next => 1,
+        crate::api::PlayerAction::Previous => {
+            if position_ms >= 3000 {
+                0
+            } else {
+                -1
+            }
+        }
+        _ => return None,
+    };
+    let context = dj_context(account, track)?;
+    Some(crate::api::PlayerAction::RestoreDJ {
+        context: context.uri,
+        session_url: context.session_url,
+        track: track.into(),
+        track_uid: context.track_uid,
+        position_ms: if matches!(requested, crate::api::PlayerAction::Play(None)) {
+            position_ms
+        } else {
+            0
+        },
+        relative_offset,
+    })
 }
 static QUEUES: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -25,6 +114,7 @@ pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
         crate::api::PlayerAction::Play(Some(uri)) => vec![uri.clone()],
         _ => return,
     };
+    remember_dj_context(account, "", None);
     if let Ok(mut queues) = QUEUES.lock() {
         queues.insert(account.into(), queue.into_iter().take(100).collect());
     }
@@ -64,7 +154,20 @@ pub fn load(account: &str) -> Option<LastPlayed> {
     if std::fs::metadata(&path).ok()?.len() > 2_000_000 {
         return None;
     }
-    let value: LastPlayed = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    let value = decode(&std::fs::read(path).ok()?)?;
+    if let Ok(mut queues) = QUEUES.lock() {
+        queues.insert(account.into(), value.queue.clone());
+    }
+    if value.dj_context.is_some() && dj_context(account, &value.track.uri).is_none() {
+        remember_dj_context(account, &value.track.uri, value.dj_context.clone());
+    }
+    Some(value)
+}
+fn decode(bytes: &[u8]) -> Option<LastPlayed> {
+    if bytes.len() > 2_000_000 {
+        return None;
+    }
+    let mut value: LastPlayed = serde_json::from_slice(bytes).ok()?;
     if value.queue.len() > 100
         || value.queue.iter().any(|uri| {
             !uri.strip_prefix("spotify:track:").is_some_and(|id| {
@@ -74,9 +177,7 @@ pub fn load(account: &str) -> Option<LastPlayed> {
     {
         return None;
     }
-    if let Ok(mut queues) = QUEUES.lock() {
-        queues.insert(account.into(), value.queue.clone());
-    }
+    value.dj_context = value.dj_context.filter(DJContext::valid);
     value
         .track
         .uri
@@ -85,9 +186,12 @@ pub fn load(account: &str) -> Option<LastPlayed> {
 }
 pub fn newer(local: Option<LastPlayed>, spotify: Option<LastPlayed>) -> Option<LastPlayed> {
     match (local, spotify) {
-        (Some(local), Some(spotify)) => Some(if spotify.played_at > local.played_at {
+        (Some(mut local), Some(spotify)) => Some(if spotify.played_at > local.played_at {
             spotify
         } else {
+            if local.dj_context.is_none() && local.track.uri == spotify.track.uri {
+                local.dj_context = spotify.dj_context;
+            }
             local
         }),
         (local, spotify) => local.or(spotify),
@@ -111,7 +215,7 @@ pub fn save(account: &str, playback: &Playback, observed_at: u64, force: bool) -
     }
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
     let position_ms = (playback.progress_ms.unwrap_or_default()
-        + if playback.is_playing {
+        + if playback.is_playing && playback.device.name != crate::native::device_name() {
             now.saturating_sub(observed_at)
         } else {
             0
@@ -131,6 +235,7 @@ pub fn save(account: &str, playback: &Playback, observed_at: u64, force: bool) -
                     .cloned()
             })
             .unwrap_or_default(),
+        dj_context: dj_context(account, &track.uri),
     };
     let path = path(account)?;
     std::fs::create_dir_all(path.parent().unwrap())?;
@@ -146,6 +251,77 @@ pub fn save(account: &str, playback: &Playback, observed_at: u64, force: bool) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reopening_dj_restores_session_position_and_can_skip_without_refresh() {
+        let account = "test-dj-reopen";
+        let uri = "spotify:track:abcdefghijklmnopqrstuv";
+        let context = DJContext {
+            uri: crate::home::DJ_URI.into(),
+            session_url: Some(
+                "hm://lexicon-session-provider/context-resolve/v2/session?session_id=test".into(),
+            ),
+            track_uid: Some("set-2-song-3".into()),
+        };
+        let saved = LastPlayed {
+            track: Track {
+                uri: uri.into(),
+                ..Track::default()
+            },
+            position_ms: 77000,
+            played_at: 10,
+            queue: vec![uri.into(), "spotify:track:bcdefghijklmnopqrstuvw".into()],
+            dj_context: Some(context.clone()),
+        };
+        let reopened = decode(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        remember_dj_context(account, uri, reopened.dj_context);
+        remember_native_queue(account, reopened.queue);
+        assert!(
+            matches!(restore_dj_action(account,uri,reopened.position_ms,&crate::api::PlayerAction::Play(None)),Some(crate::api::PlayerAction::RestoreDJ{position_ms:77000,relative_offset:0,session_url,..}) if session_url==context.session_url)
+        );
+        assert!(
+            matches!(restore_dj_action(account,uri,reopened.position_ms,&crate::api::PlayerAction::Next),Some(crate::api::PlayerAction::RestoreDJ{position_ms:0,relative_offset:1,track_uid,..}) if track_uid==context.track_uid)
+        );
+        assert!(matches!(
+            restore_dj_action(account, uri, 77000, &crate::api::PlayerAction::Previous),
+            Some(crate::api::PlayerAction::RestoreDJ {
+                position_ms: 0,
+                relative_offset: 0,
+                ..
+            })
+        ));
+        assert!(
+            restore_dj_action(
+                "another-account",
+                uri,
+                77000,
+                &crate::api::PlayerAction::Next
+            )
+            .is_none()
+        );
+        assert!(
+            restore_dj_action(
+                account,
+                "spotify:track:different",
+                77000,
+                &crate::api::PlayerAction::Next
+            )
+            .is_none()
+        );
+        remember_queue(account, &crate::api::PlayerAction::Play(Some(uri.into())));
+        assert!(restore_dj_action(account, uri, 77000, &crate::api::PlayerAction::Next).is_none());
+    }
+    #[test]
+    fn older_saved_files_remain_readable_and_reject_other_service_urls() {
+        let saved = serde_json::json!({"track":{"uri":"spotify:track:abcdefghijklmnopqrstuv"},"position_ms":77000,"played_at":10});
+        let value = decode(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        assert!(value.dj_context.is_none());
+        let context = DJContext {
+            uri: crate::home::DJ_URI.into(),
+            session_url: Some("hm://keymaster/token/authenticated".into()),
+            track_uid: None,
+        };
+        assert!(!context.valid());
+    }
     #[test]
     fn restoring_playback_preserves_its_queue_position() {
         let queue: Vec<String> = vec![
@@ -167,6 +343,7 @@ mod tests {
             position_ms: 50,
             played_at,
             queue: Vec::new(),
+            dj_context: None,
         };
         assert_eq!(
             newer(Some(value(20)), Some(value(10))).unwrap().played_at,

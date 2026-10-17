@@ -146,6 +146,26 @@ const CONTEXT_FETCH_THRESHOLD: usize = 2;
 const VOLUME_UPDATE_DELAY: Duration = Duration::from_millis(500);
 // to reduce updates to remote, we group some request by waiting for a set amount of time
 const UPDATE_STATE_DELAY: Duration = Duration::from_millis(200);
+fn requested_context_index(context: &Context, track: &PlayingTrack) -> Option<usize> {
+    let mut tracks = context.pages.iter().flat_map(|page| &page.tracks);
+    match track {
+        PlayingTrack::Index(index) => Some(*index as usize),
+        PlayingTrack::Uri(uri) => tracks.position(|track| track.uri.as_ref() == Some(uri)),
+        PlayingTrack::Uid(uid) => tracks.position(|track| track.uid.as_ref() == Some(uid)),
+        PlayingTrack::UidOrUri { uid, uri } => context
+            .pages
+            .iter()
+            .flat_map(|page| &page.tracks)
+            .position(|track| track.uid.as_ref() == Some(uid))
+            .or_else(|| {
+                context
+                    .pages
+                    .iter()
+                    .flat_map(|page| &page.tracks)
+                    .position(|track| track.uri.as_ref() == Some(uri))
+            }),
+    }
+}
 fn automatic_restore_allowed(enabled: bool, cluster: &Cluster, session_id: &str) -> bool {
     enabled
         && cluster.active_device_id.is_empty()
@@ -705,8 +725,17 @@ impl SpircTask {
 
         let context_uri = self.connect_state.context_uri().clone();
 
-        self.player
-            .emit_set_queue_event(context_uri, current_track, next_tracks, prev_tracks);
+        self.player.emit_set_queue_event_with_session(
+            context_uri,
+            current_track,
+            next_tracks,
+            prev_tracks,
+            state_player
+                .context_metadata
+                .get(LEXICON_CONTEXT_URL)
+                .cloned(),
+            state_player.track.as_ref().map(|track| track.uid.clone()),
+        );
     }
 
     // todo: is the time_delta still necessary?
@@ -920,6 +949,29 @@ impl SpircTask {
         );
 
         self.connect_established = true;
+        if !self.resume_on_startup
+            && let Ok(transfer) =
+                <TransferState as protobuf::Message>::parse_from_bytes(&cluster.transfer_data)
+            && let (Some(session), Some(playback)) = (
+                transfer.current_session.as_ref(),
+                transfer.playback.as_ref(),
+            )
+            && let (Some(context), Some(track)) =
+                (session.context.as_ref(), playback.current_track.as_ref())
+            && let (Some(uri), Some(track_uri)) = (context.uri.as_ref(), track.uri.as_ref())
+        {
+            self.player.emit_set_queue_event_with_session(
+                uri.clone(),
+                Some(QueueTrack {
+                    uri: track_uri.clone(),
+                    provider: "context".into(),
+                }),
+                Vec::new(),
+                Vec::new(),
+                context.metadata.get(LEXICON_CONTEXT_URL).cloned(),
+                session.current_uid.clone().or_else(|| track.uid.clone()),
+            );
+        }
         if !automatic_restore_allowed(self.resume_on_startup, &cluster, &self.session.session_id())
         {
             debug!("New connection remains idle until playback is requested");
@@ -1105,6 +1157,8 @@ impl SpircTask {
                     LoadRequest {
                         context,
                         options: LoadRequestOptions {
+                            session_url: None,
+                            relative_offset: 0,
                             start_playing: true,
                             seek_to: play.options.seek_to.unwrap_or_default(),
                             playing_track: play.options.skip_to.and_then(|s| s.try_into().ok()),
@@ -1367,15 +1421,23 @@ impl SpircTask {
             ),
             Some(_) => false,
         };
-        match cmd.context {
+        let resumed = match cmd.context {
             PlayContext::Uri(uri) => {
-                self.load_context_from_uri(uri, page.as_ref(), autoplay, fresh)
+                self.load_context_from_uri(uri, page.as_ref(), autoplay, fresh, &cmd.options)
                     .await?
             }
-            PlayContext::Tracks(tracks) => self.load_context_from_tracks(tracks)?,
-        }
+            PlayContext::Tracks(tracks) => {
+                self.load_context_from_tracks(tracks)?;
+                true
+            }
+        };
 
-        let cmd_options = cmd.options;
+        let mut cmd_options = cmd.options;
+        if !resumed {
+            cmd_options.playing_track = None;
+            cmd_options.seek_to = 0;
+            cmd_options.relative_offset = 0;
+        }
 
         self.connect_state.set_active_context(ContextType::Default);
 
@@ -1389,7 +1451,7 @@ impl SpircTask {
 
         debug!("play track <{:?}>", cmd_options.playing_track);
 
-        let index = match cmd_options.playing_track {
+        let mut index = match cmd_options.playing_track {
             None => None,
             Some(ref playing_track) => Some(match playing_track {
                 PlayingTrack::Index(i) => Ok(*i as usize),
@@ -1401,10 +1463,18 @@ impl SpircTask {
                     let ctx = self.connect_state.get_context(ContextType::Default)?;
                     ConnectState::find_index_in_context(ctx, |t| &t.uid == uid)
                 }
+                PlayingTrack::UidOrUri { uid, uri } => {
+                    let ctx = self.connect_state.get_context(ContextType::Default)?;
+                    ConnectState::find_index_in_context(ctx, |track| &track.uid == uid).or_else(
+                        |_| ConnectState::find_index_in_context(ctx, |track| &track.uri == uri),
+                    )
+                }
             }),
         }
         .map(|i| {
             i.unwrap_or_else(|why| {
+                cmd_options.seek_to = 0;
+                cmd_options.relative_offset = 0;
                 warn!(
                     "Failed to resolve index by {:?}, using fallback index: {:?} (Error: {why})",
                     cmd_options.playing_track, fallback_index
@@ -1412,6 +1482,19 @@ impl SpircTask {
                 fallback_index.unwrap_or_default()
             })
         });
+        if cmd_options.relative_offset != 0 {
+            let length = self
+                .connect_state
+                .get_context(ContextType::Default)?
+                .tracks
+                .len();
+            index = Some(
+                index
+                    .unwrap_or_default()
+                    .saturating_add_signed(cmd_options.relative_offset as isize)
+                    .min(length.saturating_sub(1)),
+            );
+        }
 
         if let Some(LoadContextOptions::Options(ref options)) = cmd_options.context_options {
             debug!(
@@ -1461,7 +1544,8 @@ impl SpircTask {
         page: Option<&ContextPage>,
         autoplay: bool,
         fresh: bool,
-    ) -> Result<(), Error> {
+        options: &LoadRequestOptions,
+    ) -> Result<bool, Error> {
         if !self.connect_state.is_active() {
             self.handle_activate();
         }
@@ -1473,6 +1557,14 @@ impl SpircTask {
         };
 
         self.connect_state.set_active_context(update_context);
+
+        let saved_context = if let Some(url) = options.session_url.as_deref() {
+            self.session.spclient().get_context_url(url).await.ok()
+        } else {
+            None
+        };
+        let resumed = options.session_url.is_none() || saved_context.is_some();
+        let fresh = fresh || !resumed;
 
         let fallback = match page {
             // check that the uri is valid or the page has a valid uri that can be used
@@ -1492,25 +1584,76 @@ impl SpircTask {
                 .get_context(update_context)
                 .is_ok_and(|ctx| ctx.metadata.contains_key(LEXICON_CONTEXT_URL));
 
-        if current_context_uri == &context_uri && fallback == context_uri && !new_set {
+        if saved_context.is_none()
+            && resumed
+            && current_context_uri == &context_uri
+            && fallback == context_uri
+            && !new_set
+        {
             debug!("context <{current_context_uri}> didn't change, no resolving required")
         } else {
             debug!("resolving context for load command");
             self.context_resolver.clear();
-            self.context_resolver.add(
-                ResolveContext::from_uri(
-                    &context_uri,
-                    fallback,
+            if let Some(mut context) = saved_context {
+                context.uri = Some(context_uri.clone());
+                if let Some(url) = options.session_url.as_ref() {
+                    context
+                        .metadata
+                        .insert(LEXICON_CONTEXT_URL.into(), url.clone());
+                }
+                self.context_resolver.add(ResolveContext::from_context(
+                    context,
                     update_context,
                     ContextAction::Replace,
-                )
-                .starting_fresh(fresh),
-            );
-            let context = self.context_resolver.get_next_context(Vec::new).await;
-            self.handle_next_context(context);
+                ));
+            } else {
+                self.context_resolver.add(
+                    ResolveContext::from_uri(
+                        &context_uri,
+                        fallback,
+                        update_context,
+                        ContextAction::Replace,
+                    )
+                    .starting_fresh(fresh),
+                );
+            }
+            let mut context = self.context_resolver.get_next_context(Vec::new).await?;
+            if resumed && options.relative_offset > 0 {
+                for _ in 0..8 {
+                    let Some(index) = options
+                        .playing_track
+                        .as_ref()
+                        .and_then(|track| requested_context_index(&context, track))
+                    else {
+                        break;
+                    };
+                    let length = context
+                        .pages
+                        .iter()
+                        .map(|page| page.tracks.len())
+                        .sum::<usize>();
+                    if index.saturating_add(options.relative_offset as usize) < length {
+                        break;
+                    }
+                    let Some(url) = context
+                        .pages
+                        .last()
+                        .and_then(|page| page.next_page_url.as_ref())
+                        .filter(|url| !url.is_empty())
+                    else {
+                        break;
+                    };
+                    let page = self.session.spclient().get_context_page(url).await?;
+                    if page.tracks.is_empty() {
+                        break;
+                    }
+                    context.pages.push(page);
+                }
+            }
+            self.handle_next_context(Ok(context));
         }
 
-        Ok(())
+        Ok(resumed)
     }
 
     fn load_context_from_tracks(&mut self, tracks: impl Into<ContextPage>) -> Result<(), Error> {
@@ -1971,6 +2114,58 @@ impl Drop for SpircTask {
 #[cfg(test)]
 mod startup_tests {
     use super::*;
+    #[test]
+    fn restored_cursor_keeps_duplicate_occurrence_and_next_page() {
+        use crate::protocol::context_track::ContextTrack;
+        let track = |uid: &str, uri: &str| ContextTrack {
+            uid: Some(uid.into()),
+            uri: Some(uri.into()),
+            ..ContextTrack::default()
+        };
+        let mut context = Context {
+            pages: vec![ContextPage {
+                tracks: vec![
+                    track("first-occurrence", "same-song"),
+                    track("saved-occurrence", "same-song"),
+                ],
+                next_page_url: Some("hm://lexicon-session-provider/next".into()),
+                ..ContextPage::default()
+            }],
+            ..Context::default()
+        };
+        let cursor = PlayingTrack::UidOrUri {
+            uid: "saved-occurrence".into(),
+            uri: "same-song".into(),
+        };
+        let current = requested_context_index(&context, &cursor).unwrap();
+        assert_eq!(current, 1);
+        assert_eq!(current + 1, context.pages[0].tracks.len());
+        context.pages.push(ContextPage {
+            tracks: vec![track("next-occurrence", "next-song")],
+            ..ContextPage::default()
+        });
+        assert_eq!(
+            context
+                .pages
+                .iter()
+                .flat_map(|page| &page.tracks)
+                .nth(current + 1)
+                .unwrap()
+                .uri
+                .as_deref(),
+            Some("next-song")
+        );
+        assert_eq!(
+            requested_context_index(
+                &context,
+                &PlayingTrack::UidOrUri {
+                    uid: "regenerated".into(),
+                    uri: "next-song".into()
+                }
+            ),
+            Some(2)
+        );
+    }
     #[test]
     fn passive_startup_does_not_claim_a_restorable_session() {
         let mut cluster = Cluster {

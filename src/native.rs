@@ -260,11 +260,89 @@ impl NativeControls {
     }
 }
 
+fn remember_player_queue(account: &str, event: PlayerEvent) {
+    let PlayerEvent::SetQueue {
+        context_uri,
+        session_url,
+        track_uid,
+        current_track: Some(track),
+        next_tracks,
+        prev_tracks,
+    } = event
+    else {
+        return;
+    };
+    let context =
+        if context_uri == crate::home::DJ_URI || context_uri.starts_with("spotify:lexicon:") {
+            let queue = prev_tracks
+                .iter()
+                .rev()
+                .take(33)
+                .rev()
+                .chain(std::iter::once(&track))
+                .chain(next_tracks.iter().take(66))
+                .filter(|track| track.uri.starts_with("spotify:track:"))
+                .map(|track| track.uri.clone())
+                .collect();
+            crate::resume::remember_native_queue(account, queue);
+            Some(crate::resume::DJContext {
+                uri: context_uri,
+                session_url,
+                track_uid,
+            })
+        } else {
+            None
+        };
+    crate::resume::remember_dj_context(account, &track.uri, context);
+}
+
+#[cfg(test)]
+mod dj_queue_tests {
+    use super::*;
+    #[test]
+    fn player_queue_remembers_dj_origin_but_manual_play_clears_it() {
+        use librespot_playback::player::QueueTrack;
+        let account = "test-native-dj-origin";
+        let current = "spotify:track:abcdefghijklmnopqrstuv";
+        let event = |context_uri: String, session_url: Option<String>| PlayerEvent::SetQueue {
+            context_uri,
+            session_url,
+            track_uid: Some("set2-track3".into()),
+            current_track: Some(QueueTrack {
+                uri: current.into(),
+                provider: "context".into(),
+            }),
+            prev_tracks: Vec::new(),
+            next_tracks: vec![QueueTrack {
+                uri: "spotify:track:bcdefghijklmnopqrstuvw".into(),
+                provider: "context".into(),
+            }],
+        };
+        remember_player_queue(
+            account,
+            event(
+                crate::home::DJ_URI.into(),
+                Some("hm://lexicon-session-provider/context-resolve/v2/session?id=test".into()),
+            ),
+        );
+        assert_eq!(crate::resume::queue(account).len(), 2);
+        assert!(
+            matches!(crate::resume::restore_dj_action(account,current,77000,&PlayerAction::Next),Some(PlayerAction::RestoreDJ{relative_offset:1,track_uid:Some(uid),..}) if uid=="set2-track3")
+        );
+        remember_player_queue(account, event("spotify:album:manual".into(), None));
+        assert!(
+            crate::resume::restore_dj_action(account, current, 77000, &PlayerAction::Next)
+                .is_none()
+        );
+    }
+}
+
 fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
     if matches!(
         action,
         PlayerAction::Play(Some(_))
             | PlayerAction::PlayContext { .. }
+            | PlayerAction::RestoreDJ { .. }
             | PlayerAction::PlayUris { .. }
     ) || (!*active && matches!(action, PlayerAction::Play(None)))
     {
@@ -277,6 +355,32 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
         ..LoadRequestOptions::default()
     };
     match action {
+        PlayerAction::RestoreDJ {
+            context,
+            session_url,
+            track,
+            track_uid,
+            position_ms,
+            relative_offset,
+        } => {
+            spirc.load(LoadRequest::from_context_uri(
+                context,
+                LoadRequestOptions {
+                    start_playing: true,
+                    seek_to: position_ms.min(u64::from(u32::MAX)) as u32,
+                    playing_track: Some(track_uid.filter(|uid| !uid.is_empty()).map_or_else(
+                        || PlayingTrack::Uri(track.clone()),
+                        |uid| PlayingTrack::UidOrUri {
+                            uid,
+                            uri: track.clone(),
+                        },
+                    )),
+                    session_url,
+                    relative_offset,
+                    ..LoadRequestOptions::default()
+                },
+            ))?;
+        }
         PlayerAction::Play(None) => {
             spirc.play()?;
         }
@@ -706,6 +810,7 @@ async fn run(
     let local_player = player.clone();
     let config = ConnectConfig {
         resume_on_startup: false,
+        emit_set_queue_events: true,
         name: device_name(),
         initial_volume: crate::config::Settings::load()
             .ok()
@@ -788,12 +893,13 @@ async fn run(
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
                 if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){intent.request(matches!(action,PlayerAction::Play(None)));}else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::PlayUris{uris,offset}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
             event = player_events.recv() => {
                 match event {
+                    Some(event @ PlayerEvent::SetQueue{..})=>remember_player_queue(account,event),
                     Some(PlayerEvent::Loading{track_id,..})=>intent.track_loading(track_id.to_uri(),std::time::Instant::now()),
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),

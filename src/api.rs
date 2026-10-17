@@ -225,6 +225,14 @@ impl Spotify {
         .unix_timestamp_nanos()
             / 1_000_000;
         Ok(Some(crate::resume::LastPlayed {
+            dj_context: item["context"]["uri"]
+                .as_str()
+                .filter(|uri| *uri == crate::home::DJ_URI || uri.starts_with("spotify:lexicon:"))
+                .map(|uri| crate::resume::DJContext {
+                    uri: uri.into(),
+                    session_url: None,
+                    track_uid: None,
+                }),
             queue: Vec::new(),
             track,
             position_ms: 0,
@@ -394,6 +402,9 @@ impl Spotify {
                     None => json!({"context_uri": context}),
                 }),
             ),
+            PlayerAction::RestoreDJ { .. } => {
+                anyhow::bail!("DJ session restore requires native playback")
+            }
             PlayerAction::PlayUris { uris, offset } => (
                 Method::PUT,
                 "play",
@@ -546,6 +557,15 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
 
 #[derive(Clone)]
 pub enum PlayerAction {
+    /// Restore a paged DJ session before resuming or advancing its queue.
+    RestoreDJ {
+        context: String,
+        session_url: Option<String>,
+        track: String,
+        track_uid: Option<String>,
+        position_ms: u64,
+        relative_offset: i32,
+    },
     Play(Option<String>),
     /// Start a playlist or album context, optionally at a track URI.
     PlayContext {

@@ -75,6 +75,8 @@ function Shelf({
           <article
             className={`home-card ${item.kind === "artist" ? "artist-card" : ""}`}
             key={item.uri}
+            data-context-route={item.route}
+            data-context-name={item.name}
           >
             <div className="home-card-art">
               <button

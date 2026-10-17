@@ -9,7 +9,7 @@ publish = false
 default-run = "spotiflex"
 
 [workspace]
-members = ["vendor/librespot-playback"]
+members = ["vendor/librespot-playback","vendor/librespot-connect"]
 default-members = ["."]
 
 [features]
@@ -60,7 +60,7 @@ tauri-build = { version = "2", features = [] }
 # Pin the reviewed implementation so dependency resolution cannot follow branch changes.
 [patch.crates-io]
 librespot-audio = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
-librespot-connect = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-connect = { path = "vendor/librespot-connect" }
 librespot-core = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-metadata = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-oauth = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
@@ -71,6 +71,7 @@ librespot-protocol = { git = "https://github.com/School-User/librespot.git", rev
 debug = 1
 
 [patch."https://github.com/School-User/librespot.git"]
+librespot-connect = { path = "vendor/librespot-connect" }
 librespot-playback = { path = "vendor/librespot-playback" }
 
 [profile.release]

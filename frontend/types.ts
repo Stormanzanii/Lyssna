@@ -71,6 +71,7 @@ export interface Folder {
   show_in_picker: boolean;
 }
 export interface Settings {
+  library_order?: Record<string, import("./library-order").LibraryOrder>;
   client_id: string;
   last_view: string;
   show_lyrics: boolean;
@@ -149,6 +150,7 @@ export interface BrowseInfo {
   albums: Album[];
 }
 export interface Snapshot {
+  narrating: boolean;
   home?: HomePage;
   home_loading: boolean;
   home_error: string;
@@ -214,6 +216,7 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "narration"; active: boolean }
   | { type: "home"; page: HomePage }
   | { type: "home_loading"; account: string }
   | { type: "home_error"; account: string; message: string }

@@ -51,29 +51,31 @@ macro_rules! sink_as_bytes {
             use crate::convert::i24;
             use zerocopy::IntoBytes;
             match packet {
-                AudioPacket::Samples(samples) => match self.format {
-                    AudioFormat::F64 => self.write_bytes(samples.as_bytes()),
-                    AudioFormat::F32 => {
-                        let samples_f32: &[f32] = &converter.f64_to_f32(&samples);
-                        self.write_bytes(samples_f32.as_bytes())
+                AudioPacket::Samples(samples) | AudioPacket::Narration(samples) => {
+                    match self.format {
+                        AudioFormat::F64 => self.write_bytes(samples.as_bytes()),
+                        AudioFormat::F32 => {
+                            let samples_f32: &[f32] = &converter.f64_to_f32(&samples);
+                            self.write_bytes(samples_f32.as_bytes())
+                        }
+                        AudioFormat::S32 => {
+                            let samples_s32: &[i32] = &converter.f64_to_s32(&samples);
+                            self.write_bytes(samples_s32.as_bytes())
+                        }
+                        AudioFormat::S24 => {
+                            let samples_s24: &[i32] = &converter.f64_to_s24(&samples);
+                            self.write_bytes(samples_s24.as_bytes())
+                        }
+                        AudioFormat::S24_3 => {
+                            let samples_s24_3: &[i24] = &converter.f64_to_s24_3(&samples);
+                            self.write_bytes(samples_s24_3.as_bytes())
+                        }
+                        AudioFormat::S16 => {
+                            let samples_s16: &[i16] = &converter.f64_to_s16(&samples);
+                            self.write_bytes(samples_s16.as_bytes())
+                        }
                     }
-                    AudioFormat::S32 => {
-                        let samples_s32: &[i32] = &converter.f64_to_s32(&samples);
-                        self.write_bytes(samples_s32.as_bytes())
-                    }
-                    AudioFormat::S24 => {
-                        let samples_s24: &[i32] = &converter.f64_to_s24(&samples);
-                        self.write_bytes(samples_s24.as_bytes())
-                    }
-                    AudioFormat::S24_3 => {
-                        let samples_s24_3: &[i24] = &converter.f64_to_s24_3(&samples);
-                        self.write_bytes(samples_s24_3.as_bytes())
-                    }
-                    AudioFormat::S16 => {
-                        let samples_s16: &[i16] = &converter.f64_to_s16(&samples);
-                        self.write_bytes(samples_s16.as_bytes())
-                    }
-                },
+                }
                 AudioPacket::Raw(samples) => self.write_bytes(&samples),
             }
         }

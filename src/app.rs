@@ -531,7 +531,7 @@ impl SpotiFlex {
                         });
                     }
                 }
-                NativeEvent::Track(_) => {}
+                NativeEvent::Track(_) | NativeEvent::Narration(_) => {}
                 NativeEvent::Transport {
                     shuffle,
                     repeat,

@@ -28,6 +28,7 @@ use tauri::{Emitter, Manager, State};
 const QUEUED_NATIVE_TTL: Duration = Duration::from_secs(45);
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
+    narrating: bool,
     home: Option<crate::home::HomePage>,
     home_loading: bool,
     home_error: String,
@@ -136,6 +137,7 @@ impl Desktop {
             home_generation: std::sync::atomic::AtomicU64::new(0),
             resume_seek: Mutex::new(None),
             snapshot: Mutex::new(Snapshot {
+                narrating: false,
                 canvas_url: None,
                 home: None,
                 home_loading: false,
@@ -354,6 +356,7 @@ impl Desktop {
                             snapshot.home_loading = false;
                             snapshot.home_error.clear();
                             snapshot.playback = Playback::default();
+                            snapshot.narrating = false;
                             snapshot.native_ready = false;
                             snapshot.lyrics = None;
                             snapshot.canvas_url = None;
@@ -552,6 +555,10 @@ impl Desktop {
                         continue;
                     }
                     match message.event {
+                        NativeEvent::Narration(active) => {
+                            snapshot.narrating = active;
+                            emit(json!({"type":"narration","active":active}));
+                        }
                         NativeEvent::Transport {
                             shuffle,
                             repeat,
@@ -619,6 +626,7 @@ impl Desktop {
                             );
                         }
                         NativeEvent::Authorizing => {
+                            snapshot.narrating = false;
                             snapshot.native_status =
                                 "Authorize audio playback in your browser…".into();
                             emit(
@@ -658,6 +666,7 @@ impl Desktop {
                             }
                         }
                         NativeEvent::Error(message) => {
+                            snapshot.narrating = false;
                             if let Ok(mut queued) = pump.queued_native.lock() {
                                 *queued = None;
                             }
@@ -1270,6 +1279,8 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
         settings.client_id = snapshot.settings.client_id.clone();
+        settings.last_view = snapshot.route.clone();
+        settings.volume_percent = snapshot.settings.volume_percent;
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.save()?;

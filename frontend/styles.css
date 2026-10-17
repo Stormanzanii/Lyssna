@@ -326,6 +326,83 @@ small {
   height: 100dvh;
   user-select: none;
 }
+.dj-refresh .dj-art {
+  width: 24px;
+  border-radius: 50%;
+  background: #0754a0;
+}
+.library-row {
+  position: relative;
+}
+.library-row .library-item {
+  width: 100%;
+  padding-right: 36px;
+}
+.library-pin {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+.library-row:hover .library-pin,
+.library-row:focus-within .library-pin {
+  opacity: 1;
+}
+.pinned-mark {
+  color: #1ed760;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+.library-item .dj-art {
+  width: 48px;
+}
+.dj-presentation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.dj-art {
+  width: 56px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #0968b9, #06417e);
+  color: #19e68c;
+  border-radius: 6px;
+}
+.dj-art svg {
+  width: 60%;
+  height: 60%;
+}
+.dj-presentation h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.dj-presentation p {
+  margin: 6px 0 0;
+  color: #b3b3b3;
+  font-size: 13px;
+}
+.dj-view .dj-presentation {
+  flex-direction: column;
+  text-align: center;
+  padding: 32px 16px;
+}
+.dj-view .dj-art {
+  width: min(100%, 300px);
+}
+.dj-view .dj-presentation h2 {
+  font-size: 36px;
+  margin-top: 16px;
+}
+.lyrics-page.dj-view {
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+}
 .topbar {
   display: flex;
   align-items: center;

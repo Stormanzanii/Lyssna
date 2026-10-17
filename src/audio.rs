@@ -3,6 +3,7 @@ use librespot_playback::{
     audio_backend::{Sink, SinkError, SinkResult},
     convert::Converter,
     decoder::AudioPacket,
+    mixer::{Mixer, NoOpVolume, VolumeGetter},
 };
 use rodio::{OutputStream, OutputStreamBuilder, Source};
 use std::{
@@ -21,8 +22,12 @@ const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000
 #[derive(Clone, Default)]
 pub struct AudioBuffer {
     queued: Arc<AtomicUsize>,
+    narration: Arc<AtomicBool>,
 }
 impl AudioBuffer {
+    pub fn narrating(&self) -> bool {
+        self.narration.load(Ordering::Acquire)
+    }
     pub fn latency_ms(&self) -> u64 {
         (self.queued.load(Ordering::Relaxed) as u64) * 1000
             / (u64::from(SAMPLE_RATE) * u64::from(CHANNELS))
@@ -30,6 +35,8 @@ impl AudioBuffer {
 }
 
 pub struct AudioSink {
+    buffer: AudioBuffer,
+    mixer: Option<Arc<dyn Mixer>>,
     stream: Option<OutputStream>,
     sink: Option<rodio::Sink>,
     queued: Arc<AtomicUsize>,
@@ -44,6 +51,8 @@ impl AudioSink {
         buffer: AudioBuffer,
     ) -> Self {
         Self {
+            buffer: buffer.clone(),
+            mixer: None,
             stream: None,
             sink: None,
             queued: buffer.queued,
@@ -51,6 +60,10 @@ impl AudioSink {
             seek_ready,
             awaiting_seek: false,
         }
+    }
+    pub fn with_mixer(mut self, mixer: Arc<dyn Mixer>) -> Self {
+        self.mixer = Some(mixer);
+        self
     }
     fn discard_old_audio(&mut self) {
         if self.flush.swap(false, Ordering::AcqRel)
@@ -81,6 +94,7 @@ impl Sink for AudioSink {
         Ok(())
     }
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
+        let narration = packet.is_narration();
         self.discard_old_audio();
         let samples = packet
             .samples()
@@ -90,7 +104,15 @@ impl Sink for AudioSink {
             .sink
             .as_ref()
             .ok_or_else(|| SinkError::NotConnected("Audio output not started".into()))?;
-        sink.append(QueuedPacket::new(samples, self.queued.clone()));
+        sink.append(QueuedPacket::with_output(
+            samples,
+            self.buffer.clone(),
+            narration,
+            self.mixer.as_ref().map_or_else(
+                || Box::new(NoOpVolume) as Box<dyn VolumeGetter + Send>,
+                |mixer| mixer.get_soft_volume(),
+            ),
+        ));
         if self.awaiting_seek {
             self.awaiting_seek = false;
             let _ = self.seek_ready.send(());
@@ -104,17 +126,34 @@ impl Sink for AudioSink {
 }
 
 struct QueuedPacket {
+    marker_applied: bool,
+    marker: Option<(Arc<AtomicBool>, bool)>,
+    volume: Box<dyn VolumeGetter + Send>,
     samples: std::vec::IntoIter<f32>,
     queued: Arc<AtomicUsize>,
     duration: Duration,
 }
 impl QueuedPacket {
+    fn with_output(
+        samples: Vec<f32>,
+        buffer: AudioBuffer,
+        narration: bool,
+        volume: Box<dyn VolumeGetter + Send>,
+    ) -> Self {
+        let mut packet = Self::new(samples, buffer.queued);
+        packet.marker = Some((buffer.narration, narration));
+        packet.volume = volume;
+        packet
+    }
     fn new(samples: Vec<f32>, queued: Arc<AtomicUsize>) -> Self {
         let duration = Duration::from_secs_f64(
             samples.len() as f64 / f64::from(SAMPLE_RATE) / f64::from(CHANNELS),
         );
         queued.fetch_add(samples.len(), Ordering::Relaxed);
         Self {
+            marker: None,
+            marker_applied: false,
+            volume: Box::new(NoOpVolume),
             samples: samples.into_iter(),
             queued,
             duration,
@@ -126,14 +165,24 @@ impl Iterator for QueuedPacket {
     fn next(&mut self) -> Option<f32> {
         let sample = self.samples.next();
         if sample.is_some() {
+            if !self.marker_applied {
+                if let Some((marker, narration)) = &self.marker {
+                    marker.store(*narration, Ordering::Release);
+                }
+                self.marker_applied = true;
+            }
             self.queued.fetch_sub(1, Ordering::Relaxed);
         }
-        sample
+        sample.map(|value| value * self.volume.attenuation_factor() as f32)
     }
 }
 impl Drop for QueuedPacket {
     fn drop(&mut self) {
-        self.queued.fetch_sub(self.samples.len(), Ordering::Relaxed);
+        if self.queued.fetch_sub(self.samples.len(), Ordering::AcqRel) == self.samples.len()
+            && let Some((marker, _)) = &self.marker
+        {
+            marker.store(false, Ordering::Release);
+        }
     }
 }
 impl Source for QueuedPacket {
@@ -155,6 +204,66 @@ impl Source for QueuedPacket {
 mod tests {
     use super::*;
     #[test]
+    fn narration_labels_follow_consumed_audio_not_decoding() {
+        let buffer = AudioBuffer::default();
+        let mut speech =
+            QueuedPacket::with_output(vec![0.5; 8], buffer.clone(), true, Box::new(NoOpVolume));
+        let mut music =
+            QueuedPacket::with_output(vec![0.5; 8], buffer.clone(), false, Box::new(NoOpVolume));
+        assert!(!buffer.narrating());
+        speech.next();
+        assert!(buffer.narrating());
+        drop(speech);
+        assert!(buffer.narrating());
+        music.next();
+        assert!(!buffer.narrating());
+    }
+    #[test]
+    fn volume_changes_affect_already_buffered_audio() {
+        use librespot_playback::{
+            config::VolumeCtrl,
+            mixer::{MixerConfig, softmixer::SoftMixer},
+        };
+        let mixer = Arc::new(
+            SoftMixer::open(MixerConfig {
+                volume_ctrl: VolumeCtrl::Linear,
+                ..Default::default()
+            })
+            .unwrap(),
+        );
+        mixer.set_volume(u16::MAX);
+        let (sink, mut output) = rodio::Sink::new();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(
+            Arc::new(AtomicBool::new(false)),
+            ready,
+            AudioBuffer::default(),
+        )
+        .with_mixer(mixer.clone());
+        audio.sink = Some(sink);
+        audio
+            .write(
+                AudioPacket::Samples(vec![0.5; MAX_SAMPLES]),
+                &mut Converter::new(None),
+            )
+            .unwrap();
+        assert_eq!(output.next(), Some(0.5));
+        mixer.set_volume(0);
+        assert_eq!(output.next(), Some(0.0));
+        mixer.set_volume(u16::MAX);
+        assert_eq!(output.next(), Some(0.5));
+    }
+    #[test]
+    fn drained_speech_clears_narration_without_another_song() {
+        let buffer = AudioBuffer::default();
+        let mut speech =
+            QueuedPacket::with_output(vec![0.5; 4], buffer.clone(), true, Box::new(NoOpVolume));
+        speech.next();
+        assert!(buffer.narrating());
+        drop(speech);
+        assert!(!buffer.narrating());
+    }
+    #[test]
     fn output_survives_a_short_producer_scheduling_gap() {
         let queued = Arc::new(AtomicUsize::new(0));
         let paused = Arc::new(AtomicBool::new(false));
@@ -165,6 +274,7 @@ mod tests {
             ready,
             AudioBuffer {
                 queued: queued.clone(),
+                ..Default::default()
             },
         );
         audio.sink = Some(sink);

@@ -10,6 +10,7 @@ pub const DASHBOARD_URL: &str = "https://developer.spotify.com/dashboard";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub library_order: std::collections::BTreeMap<String, LibraryOrder>,
     pub client_id: String,
     pub last_view: String,
     pub show_lyrics: bool,
@@ -30,6 +31,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            library_order: Default::default(),
             client_id: String::new(),
             last_view: "home".into(),
             show_lyrics: true,
@@ -47,6 +49,14 @@ impl Default for Settings {
             folders: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LibraryOrder {
+    pub pinned: Vec<String>,
+    pub recent: Vec<String>,
+    pub items: Vec<crate::model::Playlist>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -80,6 +90,14 @@ impl Settings {
     }
 
     pub fn save(&self) -> Result<()> {
+        anyhow::ensure!(self.library_order.len() <= 16, "Too many library accounts");
+        for order in self.library_order.values() {
+            anyhow::ensure!(
+                order.pinned.len() <= 3 && order.recent.len() <= 40 && order.items.len() <= 43,
+                "Library order exceeds limits"
+            );
+            anyhow::ensure!(order.pinned.iter().chain(order.recent.iter()).chain(order.items.iter().map(|item|&item.id)).all(|id|id.len()==22&&id.bytes().all(|byte|byte.is_ascii_alphanumeric())),"Invalid playlist ID in library order");
+        }
         let directory = data_dir()?;
         fs::create_dir_all(&directory)?;
         let temporary = directory.join("settings.json.tmp");

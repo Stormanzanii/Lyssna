@@ -217,6 +217,135 @@ async function startClient(page: Page, initialRoute = "liked") {
   else await expect(page.locator(".track-row")).toHaveCount(50);
 }
 
+test("sidebar preserves pins and changes recents only after manual playback", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    (window as any).__clientTest.emit({
+      type: "library",
+      playlists: Array.from({ length: 5 }, (_, index) => ({
+        id: String(index).padStart(22, "0"),
+        name: `Playlist ${index}`,
+        images: [],
+        owner: { id: "test-user" },
+        collaborative: false,
+      })),
+    });
+  });
+  const names = () => page.locator(".library-row strong").allTextContents();
+  await expect(page.locator(".library-row strong").first()).toHaveText("DJ");
+  await page
+    .locator(".library-row")
+    .filter({ has: page.getByText("Playlist 2", { exact: true }) })
+    .locator(".library-item")
+    .click();
+  expect((await names())[0]).toBe("DJ");
+  await page.getByTitle("Play Playlist 2", { exact: true }).click();
+  await expect(page.locator(".library-row strong").first()).toHaveText(
+    "Playlist 2",
+  );
+  for (const name of ["Playlist 0", "Playlist 1", "Playlist 3"]) {
+    await page
+      .locator(".library-row")
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .click({ button: "right" });
+    await page
+      .getByRole("menuitem", { name: "Pin playlist", exact: true })
+      .click();
+  }
+  expect((await names()).slice(0, 3)).toEqual([
+    "Playlist 0",
+    "Playlist 1",
+    "Playlist 3",
+  ]);
+  await page
+    .locator(".library-row")
+    .filter({ has: page.getByText("Playlist 4", { exact: true }) })
+    .click({ button: "right" });
+  await page
+    .getByRole("menuitem", { name: "Pin playlist", exact: true })
+    .click();
+  await expect(
+    page.getByText("Four pins maximum, including Liked Songs.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".library-list > .library-item").first(),
+  ).toContainText("Liked Songs");
+  await expect(
+    page
+      .locator(".library-list > .library-item")
+      .first()
+      .locator(".pinned-mark"),
+  ).toHaveCount(0);
+});
+test("artist and song right clicks offer relevant actions", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page
+    .locator(".player-song .artist-link")
+    .first()
+    .click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Go to artist", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Follow artist", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Pin playlist", exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.locator(".track-row").first().click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Add to queue", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Save to Liked Songs", exact: true }),
+  ).toBeVisible();
+});
+test("DJ speech replaces song metadata across player, Now playing and lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "narration", active: true }),
+  );
+  await expect(page.locator(".player-song")).toContainText("DJ");
+  await expect(page.locator(".now-playing")).toContainText("DJ");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toContainText("DJ");
+  await expect(page.locator(".lyrics-page")).not.toContainText("Timing test");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "narration", active: false }),
+  );
+  await expect(page.locator(".player-song")).toContainText("Timing test");
+  await expect(page.locator(".lyrics-page")).toContainText("Timing test");
+});
+test("player DJ button requests a fresh DJ selection on every click", async ({
+  page,
+}) => {
+  await startClient(page);
+  const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
+  await button.click();
+  await button.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (entry: any) =>
+              entry.command === "player" && entry.args.request.command === "dj",
+          ).length,
+      ),
+    )
+    .toBe(2);
+});
+
 test("personalized Home shelves launch native mixes and DJ", async ({
   page,
 }) => {

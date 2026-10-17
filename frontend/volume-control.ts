@@ -17,7 +17,17 @@ export class VolumeControl {
     this.wanted = { value, until: Date.now() + 2500 };
     this.queued = value;
     this.show(value);
-    this.timer ??= setTimeout(() => this.flush(), 40);
+    if (this.timer === undefined) {
+      this.flush();
+      this.timer = setTimeout(() => this.tick(), 16);
+    }
+  }
+  private tick() {
+    this.timer = undefined;
+    if (this.queued !== undefined) {
+      this.flush();
+      this.timer = setTimeout(() => this.tick(), 16);
+    }
   }
   finish() {
     this.dragging = false;

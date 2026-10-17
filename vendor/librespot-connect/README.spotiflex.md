@@ -1,0 +1,7 @@
+# Local Connect adapter
+
+Source: [School-User/librespot](https://github.com/School-User/librespot/tree/b199674d7c241eb82abce494f3f17a9d373b8d23/connect), revision `b199674d7c241eb82abce494f3f17a9d373b8d23`.
+
+License: MIT, copyright 2015 Paul Lietar. The upstream license is included as `LICENSE`; see also the root `THIRD_PARTY_NOTICES.md`.
+
+The manifest replaces workspace inheritance and relative dependency paths with explicit metadata. SpotiFlex accepts the audio player's transition from paused to playing, so direct local controls also update Spotify Connect's published playback state. Stale play-request IDs remain rejected. Other librespot crates remain pinned to the same revision.

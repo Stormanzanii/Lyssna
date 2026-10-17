@@ -1839,7 +1839,9 @@ impl PlayerInternal {
         match packet {
             Some((_, mut packet)) => {
                 if !packet.is_empty() {
-                    if let AudioPacket::Samples(ref mut data) = packet {
+                    if let AudioPacket::Samples(ref mut data)
+                    | AudioPacket::Narration(ref mut data) = packet
+                    {
                         // Get the volume for the packet. In the case of hardware volume control
                         // this will always be 1.0 (no change).
                         let volume = self.volume_getter.attenuation_factor();

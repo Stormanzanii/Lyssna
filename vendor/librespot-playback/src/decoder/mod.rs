@@ -32,14 +32,19 @@ pub type AudioPacketResult<T> = Result<T, AudioPacketError>;
 
 pub enum AudioPacket {
     Samples(Vec<f64>),
+    /// Spoken narration; preserved through processing to the output sink.
+    Narration(Vec<f64>),
     Raw(Vec<u8>),
 }
 
 impl AudioPacket {
+    pub fn is_narration(&self) -> bool {
+        matches!(self, Self::Narration(_))
+    }
     #[inline]
     pub fn samples(&self) -> AudioPacketResult<&[f64]> {
         match self {
-            AudioPacket::Samples(s) => Ok(s),
+            AudioPacket::Samples(s) | AudioPacket::Narration(s) => Ok(s),
             AudioPacket::Raw(_) => Err(AudioPacketError::Raw),
         }
     }
@@ -48,14 +53,14 @@ impl AudioPacket {
     pub fn raw(&self) -> AudioPacketResult<&[u8]> {
         match self {
             AudioPacket::Raw(d) => Ok(d),
-            AudioPacket::Samples(_) => Err(AudioPacketError::Samples),
+            AudioPacket::Samples(_) | AudioPacket::Narration(_) => Err(AudioPacketError::Samples),
         }
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
-            AudioPacket::Samples(s) => s.is_empty(),
+            AudioPacket::Samples(s) | AudioPacket::Narration(s) => s.is_empty(),
             AudioPacket::Raw(d) => d.is_empty(),
         }
     }

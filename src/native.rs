@@ -26,6 +26,7 @@ const CREDENTIAL_SERVICE: &str = "SpotiFlex/SpotifyAudio";
 static CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
 pub enum NativeEvent {
+    Narration(bool),
     /// Waiting for the one-time browser authorization for audio.
     Authorizing,
     Ready(String),
@@ -682,19 +683,23 @@ async fn run(
     let (seek_ready, mut audible_seeks) = async_channel::unbounded_channel();
     let audio_buffer = crate::audio::AudioBuffer::default();
     let sink_buffer = audio_buffer.clone();
+    let sink_mixer = mixer.clone();
     let player = Player::new(
         PlayerConfig {
             position_update_interval: Some(Duration::from_millis(250)),
             ..PlayerConfig::default()
         },
         session.clone(),
-        mixer.get_soft_volume(),
+        Box::new(librespot_playback::mixer::NoOpVolume),
         move || {
-            Box::new(crate::audio::AudioSink::new(
-                sink_flush.clone(),
-                seek_ready.clone(),
-                sink_buffer.clone(),
-            ))
+            Box::new(
+                crate::audio::AudioSink::new(
+                    sink_flush.clone(),
+                    seek_ready.clone(),
+                    sink_buffer.clone(),
+                )
+                .with_mixer(sink_mixer.clone()),
+            )
         },
     );
     let mut player_events = player.get_player_event_channel();
@@ -761,6 +766,7 @@ async fn run(
     let mut volume_sync: Option<(u8, std::time::Instant)> = None;
     let mut volume_guard: Option<(u8, std::time::Instant)> = None;
     let mut pending_seek: Option<(String, u64)> = None;
+    let mut narrating = false;
     loop {
         tokio::select! {
             Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri();let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
@@ -805,6 +811,11 @@ async fn run(
             }
         }
         let now = std::time::Instant::now();
+        let audible_narration = audio_buffer.narrating();
+        if audible_narration != narrating {
+            narrating = audible_narration;
+            emit(NativeEvent::Narration(narrating));
+        }
         let value = latest_volume.swap(u32::MAX, Ordering::AcqRel);
         if value <= 100 {
             let volume = value as u8;

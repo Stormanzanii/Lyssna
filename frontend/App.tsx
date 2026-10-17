@@ -46,6 +46,7 @@ import {
   Copy,
   LogOut,
   ExternalLink,
+  Pin,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
@@ -74,6 +75,8 @@ import {
   LyricsPage,
   Marquee,
   NowPlaying,
+  DJPresentation,
+  DJArtwork,
   TrackTitle,
   artistNames,
   imageOf,
@@ -87,13 +90,30 @@ import {
 } from "./components";
 import "./styles.css";
 import { VolumeControl } from "./volume-control";
+import {
+  DJ_ID,
+  accountOrder,
+  libraryItems,
+  playlistForManualPlay,
+  recordManualPlay,
+  saveAccountOrder,
+  togglePlaylistPin,
+} from "./library-order";
 import { FontSettings, fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { collectionTracks, genresFor } from "./collection";
 
 type Center = "browse" | "lyrics" | "settings";
+type EntityMenu = {
+  kind: "playlist" | "album" | "artist" | "liked";
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+};
 const windowHandle = () => getCurrentWindow();
 
 function App() {
+  const [entityMenu, setEntityMenu] = useState<EntityMenu | null>(null);
   const [state, dispatch] = useReducer(reducer, emptyState);
   const [center, setCenter] = useState<Center>("browse");
   const [query, setQuery] = useState("");
@@ -109,6 +129,7 @@ function App() {
   const [folderName, setFolderName] = useState("");
   const [songMenu, setSongMenu] = useState<{
     track: Track;
+    fromList?: boolean;
     x: number;
     y: number;
   } | null>(null);
@@ -256,11 +277,44 @@ function App() {
   const updateSettings = useCallback(
     (changes: Partial<Settings>) => {
       const settings = { ...stateRef.current.settings, ...changes };
+      stateRef.current = { ...stateRef.current, settings };
       dispatch({ type: "settings", settings });
       void call("save_settings", { settings });
     },
     [call],
   );
+  const togglePin = useCallback(
+    (playlist: Playlist) => {
+      try {
+        const current = stateRef.current;
+        if (!current.profile) return;
+        updateSettings(
+          saveAccountOrder(
+            current,
+            togglePlaylistPin(accountOrder(current), playlist),
+          ),
+        );
+      } catch (error) {
+        notify(
+          error instanceof Error ? error.message : "Could not pin playlist",
+          true,
+        );
+      }
+    },
+    [notify, updateSettings],
+  );
+  useEffect(() => {
+    if (!entityMenu && !songMenu) return;
+    document.querySelector<HTMLButtonElement>(".song-menu button")?.focus();
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEntityMenu(null);
+        setSongMenu(null);
+      }
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [entityMenu, songMenu]);
   const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
   const refreshHome = useCallback(() => {
     void call("home", {
@@ -285,6 +339,15 @@ function App() {
   ]);
   const play = useCallback(
     (request: PlayerRequest) => {
+      const current = stateRef.current,
+        item = playlistForManualPlay(current, request);
+      if (item && current.profile)
+        updateSettings(
+          saveAccountOrder(
+            current,
+            recordManualPlay(accountOrder(current), item),
+          ),
+        );
       if (
         request.command === "pause" ||
         (request.command === "play" && !request.uri)
@@ -297,7 +360,7 @@ function App() {
         dispatch({ type: "play_requested", track: request.track });
       void call("player", { request, target });
     },
-    [call, target],
+    [call, target, updateSettings],
   );
   const homeNavigate = useCallback(
     (route: string) =>
@@ -602,7 +665,7 @@ function App() {
   const songGenres = [
     ...new Set(state.tracks.flatMap((track) => genresFor(track, state.facts))),
   ].sort();
-  const visibleLibrary = state.playlists
+  const visibleLibrary = libraryItems(state)
     .filter((playlist) =>
       playlist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
     )
@@ -699,6 +762,48 @@ function App() {
         } as CSSProperties
       }
       onDragOver={(event) => event.preventDefault()}
+      onContextMenu={(event) => {
+        if (event.defaultPrevented) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('input,textarea,[contenteditable="true"]')) return;
+        event.preventDefault();
+        if (!stateRef.current.profile) return;
+        const element = target.closest<HTMLElement>("[data-context-route]");
+        const route = element?.dataset.contextRoute;
+        if (!element || !route) return;
+        const match = /^(playlist|album|artist|track):([A-Za-z0-9]{22})$/.exec(
+          route,
+        );
+        if (match?.[1] === "track") {
+          const current = stateRef.current,
+            track = [
+              ...current.tracks,
+              ...current.details.queue,
+              ...(current.playback.item ? [current.playback.item] : []),
+            ].find(
+              (item) =>
+                item.id === match[2] ||
+                item.uri === `spotify:track:${match[2]}`,
+            );
+          if (track) {
+            setEntityMenu(null);
+            setSongMenu({ track, x: event.clientX, y: event.clientY });
+          }
+          return;
+        }
+        if (match || route === "liked") {
+          setSongMenu(null);
+          setEntityMenu({
+            kind:
+              route === "liked" ? "liked" : (match![1] as EntityMenu["kind"]),
+            id: match?.[2] ?? "",
+            name:
+              element.dataset.contextName || element.textContent?.trim() || "",
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }
+      }}
       onDrop={(event) => {
         event.preventDefault();
         const file = event.dataTransfer.files[0];
@@ -866,6 +971,8 @@ function App() {
           <div className="library-list">
             <button
               className={`library-item ${state.route === "liked" ? "current" : ""}`}
+              data-context-route="liked"
+              data-context-name="Liked Songs"
               onClick={() => navigate("liked")}
               {...prefetchOn("liked")}
             >
@@ -877,6 +984,54 @@ function App() {
                 <small>Playlist · Pinned</small>
               </div>
             </button>
+            {visibleLibrary.map((playlist) => (
+              <div
+                className="library-row"
+                key={playlist.id}
+                data-playlist-id={playlist.id}
+                data-context-route={`playlist:${playlist.id}`}
+                data-context-name={playlist.name}
+              >
+                <button
+                  className={`library-item ${state.route === `playlist:${playlist.id}` ? "current" : ""}`}
+                  onClick={() =>
+                    playlist.id === DJ_ID
+                      ? play({ command: "dj" })
+                      : navigate(`playlist:${playlist.id}`)
+                  }
+                  {...(playlist.id === DJ_ID
+                    ? {}
+                    : prefetchOn(`playlist:${playlist.id}`))}
+                >
+                  {playlist.id === DJ_ID ? (
+                    <DJArtwork />
+                  ) : (
+                    <Cover images={playlist.images} />
+                  )}
+                  <div>
+                    <strong>{playlist.name}</strong>
+                    <small>
+                      {accountOrder(state).pinned.includes(playlist.id) && (
+                        <Pin size={12} className="pinned-mark" />
+                      )}
+                      {playlist.id === DJ_ID
+                        ? "Click to start listening"
+                        : `Playlist · ${playlist.owner.display_name || playlist.owner.id}`}
+                    </small>
+                  </div>
+                </button>
+                <button
+                  className={`library-pin icon-button ${accountOrder(state).pinned.includes(playlist.id) ? "pinned" : ""}`}
+                  title={`${accountOrder(state).pinned.includes(playlist.id) ? "Unpin" : "Pin"} ${playlist.name}`}
+                  aria-pressed={accountOrder(state).pinned.includes(
+                    playlist.id,
+                  )}
+                  onClick={() => togglePin(playlist)}
+                >
+                  <Pin size={14} />
+                </button>
+              </div>
+            ))}
             {state.settings.folders.map((folder, index) => (
               <details
                 className="library-folder"
@@ -894,6 +1049,8 @@ function App() {
                     <button
                       className="library-item"
                       key={playlist.id}
+                      data-context-route={`playlist:${playlist.id}`}
+                      data-context-name={playlist.name}
                       onClick={() => navigate(`playlist:${playlist.id}`)}
                       {...prefetchOn(`playlist:${playlist.id}`)}
                     >
@@ -905,23 +1062,6 @@ function App() {
                     </button>
                   ))}
               </details>
-            ))}
-            {visibleLibrary.map((playlist) => (
-              <button
-                key={playlist.id}
-                className={`library-item ${state.route === `playlist:${playlist.id}` ? "current" : ""}`}
-                onClick={() => navigate(`playlist:${playlist.id}`)}
-                {...prefetchOn(`playlist:${playlist.id}`)}
-              >
-                <Cover images={playlist.images} />
-                <div>
-                  <strong>{playlist.name}</strong>
-                  <small>
-                    Playlist ·{" "}
-                    {playlist.owner.display_name || playlist.owner.id}
-                  </small>
-                </div>
-              </button>
             ))}
             {!visibleLibrary.length && state.playlists.length > 0 && (
               <p className="empty-library">No playlists match.</p>
@@ -999,6 +1139,8 @@ function App() {
               ) : (
                 <section
                   className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
+                  data-context-route={state.route}
+                  data-context-name={title}
                   style={
                     entity?.artist && artistBanner
                       ? {
@@ -1271,9 +1413,16 @@ function App() {
                               onDoubleClick={() => playTrack(track, index)}
                               onMouseEnter={() => prefetchCanvas(track.uri)}
                               onContextMenu={(event) => {
+                                if (
+                                  (event.target as HTMLElement).closest(
+                                    '[data-context-route^="artist:"]',
+                                  )
+                                )
+                                  return;
                                 event.preventDefault();
                                 setSongMenu({
                                   track,
+                                  fromList: true,
                                   x: event.clientX,
                                   y: event.clientY,
                                 });
@@ -1390,6 +1539,7 @@ function App() {
                                     event.stopPropagation();
                                     setSongMenu({
                                       track,
+                                      fromList: true,
                                       x: event.clientX - 160,
                                       y: event.clientY,
                                     });
@@ -1739,13 +1889,33 @@ function App() {
           <div className="popover-dismiss" onClick={() => setSongMenu(null)} />
           <div
             className="song-menu popover"
+            role="menu"
+            aria-label="Song actions"
             style={{
               left: Math.min(songMenu.x, window.innerWidth - 240),
-              top: Math.min(songMenu.y, window.innerHeight - 260),
+              top: Math.max(8, Math.min(songMenu.y, window.innerHeight - 320)),
             }}
           >
             {[
-              ["Play", Play, () => playTrack(songMenu.track)],
+              [
+                "Play",
+                Play,
+                () =>
+                  songMenu.fromList
+                    ? playTrack(songMenu.track)
+                    : play({
+                        command: "play",
+                        uri: songMenu.track.uri,
+                        track: songMenu.track,
+                      }),
+              ],
+              [
+                state.saved[songMenu.track.uri]
+                  ? "Remove from Liked Songs"
+                  : "Save to Liked Songs",
+                Heart,
+                () => save(songMenu.track),
+              ],
               [
                 "Add to queue",
                 ListMusic,
@@ -1753,6 +1923,14 @@ function App() {
               ],
               ["Add to playlist", Plus, () => setPicker([songMenu.track])],
               ["Open album", Music2, () => openAlbum(songMenu.track.album)],
+              [
+                "Go to artist",
+                Music2,
+                () => {
+                  const artist = songMenu.track.artists[0];
+                  if (artist) openArtist(artist);
+                },
+              ],
               [
                 "Copy clean link",
                 Copy,
@@ -1770,6 +1948,7 @@ function App() {
               return (
                 <button
                   key={String(label)}
+                  role="menuitem"
                   onClick={() => {
                     (action as () => void)();
                     setSongMenu(null);
@@ -1783,6 +1962,135 @@ function App() {
           </div>
         </>
       )}
+      {entityMenu &&
+        (() => {
+          const menu = entityMenu,
+            current = stateRef.current;
+          const playlist =
+            menu.kind === "playlist"
+              ? libraryItems(current).find((item) => item.id === menu.id) ||
+                playlistForManualPlay(current, {
+                  command: "play_home",
+                  context: `spotify:playlist:${menu.id}`,
+                }) || {
+                  id: menu.id,
+                  name: menu.name,
+                  images: [],
+                  owner: { id: "" },
+                  collaborative: false,
+                }
+              : undefined;
+          const actions: { label: string; run: () => void }[] = [];
+          if (menu.kind === "liked")
+            actions.push({
+              label: "Open Liked Songs",
+              run: () => navigate("liked"),
+            });
+          else {
+            actions.push({
+              label: `Go to ${menu.kind}`,
+              run: () =>
+                menu.id === DJ_ID
+                  ? play({ command: "dj" })
+                  : navigate(`${menu.kind}:${menu.id}`),
+            });
+            actions.push({
+              label: "Play",
+              run: () =>
+                play(
+                  menu.id === DJ_ID
+                    ? { command: "dj" }
+                    : {
+                        command: "play_home",
+                        context: `spotify:${menu.kind}:${menu.id}`,
+                      },
+                ),
+            });
+            if (playlist)
+              actions.push({
+                label: accountOrder(current).pinned.includes(playlist.id)
+                  ? "Unpin playlist"
+                  : "Pin playlist",
+                run: () => togglePin(playlist),
+              });
+            if (menu.kind === "artist")
+              actions.push({
+                label: current.saved[`spotify:artist:${menu.id}`]
+                  ? "Unfollow artist"
+                  : "Follow artist",
+                run: () =>
+                  follow({
+                    id: menu.id,
+                    name: menu.name,
+                    uri: `spotify:artist:${menu.id}`,
+                  }),
+              });
+            actions.push({
+              label: `Copy link to ${menu.kind}`,
+              run: () => {
+                void navigator.clipboard
+                  .writeText(`https://open.spotify.com/${menu.kind}/${menu.id}`)
+                  .then(() => notify("Link copied."))
+                  .catch(() => notify("Could not copy the link.", true));
+              },
+            });
+          }
+          return (
+            <>
+              <div
+                className="popover-dismiss"
+                onClick={() => setEntityMenu(null)}
+              />
+              <div
+                role="menu"
+                aria-label={`${menu.kind} actions`}
+                className="song-menu popover entity-menu"
+                style={{
+                  left: Math.max(8, Math.min(menu.x, window.innerWidth - 250)),
+                  top: Math.max(8, Math.min(menu.y, window.innerHeight - 280)),
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)
+                  )
+                    return;
+                  event.preventDefault();
+                  const buttons = Array.from(
+                    event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                      "button",
+                    ),
+                  );
+                  const index = buttons.indexOf(
+                    document.activeElement as HTMLButtonElement,
+                  );
+                  buttons[
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? buttons.length - 1
+                        : (index +
+                            (event.key === "ArrowDown" ? 1 : -1) +
+                            buttons.length) %
+                          buttons.length
+                  ]?.focus();
+                }}
+              >
+                {actions.map((action) => (
+                  <button
+                    role="menuitem"
+                    key={action.label}
+                    onClick={() => {
+                      action.run();
+                      setEntityMenu(null);
+                    }}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       {picker && (
         <div className="modal-backdrop" onClick={() => setPicker(null)}>
           <section
@@ -1983,8 +2291,13 @@ function PlayerBar({
   useEffect(() => setSeeking(null), [track?.uri]);
   return (
     <footer className="player-bar" inert={!state.profile}>
-      <div className="player-song">
-        {track ? (
+      <div
+        className="player-song"
+        data-context-route={track?.id ? `track:${track.id}` : undefined}
+      >
+        {state.narrating ? (
+          <DJPresentation playing={state.playback.is_playing} />
+        ) : track ? (
           <>
             <Cover
               images={track.album.images}
@@ -2111,6 +2424,14 @@ function PlayerBar({
         </div>
       </div>
       <div className="player-extras">
+        <button
+          className="icon-button dj-refresh"
+          title="Refresh DJ"
+          aria-label="Refresh DJ"
+          onClick={() => onPlayer({ command: "dj" })}
+        >
+          <DJArtwork />
+        </button>
         <button
           className={`icon-button ${lyricsActive ? "active" : ""}`}
           title="Lyrics"

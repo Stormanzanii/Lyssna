@@ -20,6 +20,7 @@ import {
   RotateCw,
   Mic2,
   ArrowUpRight,
+  Headphones,
 } from "lucide-react";
 import type {
   Album,
@@ -180,6 +181,8 @@ export function ArtistLinks({
           {index > 0 && <span className="artist-separator">, </span>}
           <button
             className="text-link artist-link"
+            data-context-route={artist.id ? `artist:${artist.id}` : undefined}
+            data-context-name={artist.name}
             onClick={() => onArtist(artist)}
             onMouseEnter={() =>
               artist.id && prefetchPage(`artist:${artist.id}`)
@@ -219,6 +222,7 @@ export function TrackTitle({
     >
       <button
         className="text-link song-title"
+        data-context-route={track.id ? `track:${track.id}` : undefined}
         onClick={() => onAlbum(track.album)}
       >
         {track.name}
@@ -715,7 +719,34 @@ type Links = {
   onAlbum: (album: Album) => void;
   onArtist: (artist: Artist) => void;
 };
-export function LyricsPage({
+export function DJArtwork() {
+  return (
+    <div className="dj-art" aria-label="DJ artwork">
+      <Headphones aria-hidden="true" />
+    </div>
+  );
+}
+export function DJPresentation({ playing }: { playing: boolean }) {
+  return (
+    <div className="dj-presentation">
+      <DJArtwork />
+      <div>
+        <h2>DJ</h2>
+        <p>{playing ? "Speaking…" : "Paused"}</p>
+      </div>
+    </div>
+  );
+}
+export function LyricsPage(props: Parameters<typeof SongLyricsPage>[0]) {
+  return props.state.narrating ? (
+    <section className="lyrics-page dj-view">
+      <DJPresentation playing={props.state.playback.is_playing} />
+    </section>
+  ) : (
+    <SongLyricsPage {...props} />
+  );
+}
+function SongLyricsPage({
   state,
   onPlayer,
   onAlbum,
@@ -768,7 +799,10 @@ export function LyricsPage({
       )}
       {track ? (
         <>
-          <div className="lyrics-album">
+          <div
+            className="lyrics-album"
+            data-context-route={track.id ? `track:${track.id}` : undefined}
+          >
             {canvas ? (
               <LyricsCanvas
                 key={track.uri}
@@ -980,6 +1014,12 @@ export function NowPlaying({
   const artist = state.details.artists[0] ?? track?.artists[0],
     next = state.details.queue[0];
   const saved = track && state.saved[track.uri];
+  if (state.narrating)
+    return (
+      <aside className="now-playing dj-view">
+        <DJPresentation playing={state.playback.is_playing} />
+      </aside>
+    );
   // Spotify's Canvas layout: the video fills the panel top edge to edge with
   // the header and title laid over it.
   const canvas = !!track && !!state.canvas_url && !state.settings.reduce_motion;
@@ -1021,7 +1061,10 @@ export function NowPlaying({
                 onOpen={() => onAlbum(track.album)}
               />
             )}
-            <div className={`now-track ${canvas ? "canvas-hero-track" : ""}`}>
+            <div
+              className={`now-track ${canvas ? "canvas-hero-track" : ""}`}
+              data-context-route={track.id ? `track:${track.id}` : undefined}
+            >
               <div className="now-track-text">
                 <TrackTitle
                   track={track}

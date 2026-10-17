@@ -81,6 +81,7 @@ export interface AppState extends Snapshot {
   pages: Record<string, CachedPage>;
 }
 export const emptyState: AppState = {
+  narrating: false,
   home: undefined,
   home_loading: false,
   home_error: "",
@@ -145,6 +146,11 @@ export type Action =
   | { type: "toast_clear" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "narration":
+      return {
+        ...state,
+        narrating: !!state.profile && state.native_ready && action.active,
+      };
     case "track_facts":
       return state.profile
         ? { ...state, facts: { ...state.facts, ...action.facts } }
@@ -203,6 +209,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "session":
       return {
         ...state,
+        narrating: state.profile?.id === action.profile.id && state.narrating,
         home:
           state.home?.account === action.profile.id ? state.home : undefined,
         home_loading: false,
@@ -237,6 +244,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "native":
       return {
         ...state,
+        narrating: action.ready && state.narrating,
         native_ready: action.ready,
         native_status: action.status,
       };

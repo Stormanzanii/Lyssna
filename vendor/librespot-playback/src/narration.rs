@@ -1,7 +1,7 @@
 //! Spotify's DJ talks around the tracks it plays. A DJ context carries the
 //! script of each line in its tracks' metadata (`narration.intro.ssml` and
 //! friends); Spotify synthesizes it on request, and the line plays before or
-//! after its track, never over it.
+//! after its track. The output adapter blends speech/music boundaries.
 
 use std::{collections::HashMap, io::Cursor, time::Duration};
 
@@ -63,13 +63,13 @@ pub(crate) async fn narrate(
     if intro.is_none() && outro.is_none() {
         return track;
     }
-    Box::new(Narrated {
+    Box::new(crate::narration_mix::SmoothDJ::new(Box::new(Narrated {
         intro,
         track,
         track_done: false,
         outro,
         end_ms: position_ms,
-    })
+    })))
 }
 
 fn has_script(narration: &Narration, kind: &str) -> bool {
@@ -156,7 +156,7 @@ impl Line {
         match self.decoder.next_packet() {
             Ok(Some((_, AudioPacket::Samples(mut samples)))) => {
                 samples.iter_mut().for_each(|s| *s *= self.gain);
-                Some(AudioPacket::Samples(samples))
+                Some(AudioPacket::Narration(samples))
             }
             Ok(Some((_, packet))) => Some(packet),
             Ok(None) => None,
@@ -253,6 +253,26 @@ mod tests {
         std::iter::from_fn(|| decoder.next_packet().unwrap())
             .map(|(position, _)| position.position_ms)
             .collect()
+    }
+    #[test]
+    fn speech_packets_are_marked_until_the_music_resumes() {
+        let mut narrated = Narrated {
+            intro: Some(Line {
+                decoder: Box::new(Fake { next: 0, n: 2 }),
+                gain: 1.0,
+            }),
+            track: Box::new(Fake { next: 0, n: 3 }),
+            track_done: false,
+            outro: Some(Line {
+                decoder: Box::new(Fake { next: 0, n: 1 }),
+                gain: 1.0,
+            }),
+            end_ms: 0,
+        };
+        let markers: Vec<_> = std::iter::from_fn(|| narrated.next_packet().unwrap())
+            .map(|(_, packet)| packet.is_narration())
+            .collect();
+        assert_eq!(markers, vec![true, true, false, false, false, true]);
     }
 
     #[test]

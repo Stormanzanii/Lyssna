@@ -24,6 +24,8 @@ use std::{
 };
 use tauri::{Emitter, Manager, State};
 
+/// Drop playback queued during connect if audio took longer than this.
+const QUEUED_NATIVE_TTL: Duration = Duration::from_secs(45);
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
     home: Option<crate::home::HomePage>,
@@ -67,6 +69,8 @@ struct Inner {
     generation: Mutex<u64>,
     last_native: Mutex<Option<Instant>>,
     pending_track: Mutex<Option<(String, Instant)>>,
+    /// Local playback requested before native audio connected.
+    queued_native: Mutex<Option<(PlayerAction, Instant)>>,
     login_cancelled: Mutex<Arc<AtomicBool>>,
     stopped: AtomicBool,
     update_commands: mpsc::Sender<updater::Command>,
@@ -175,6 +179,7 @@ impl Desktop {
             generation: Mutex::new(0),
             last_native: Mutex::new(None),
             pending_track: Mutex::new(None),
+            queued_native: Mutex::new(None),
             login_cancelled: Mutex::new(Arc::new(AtomicBool::new(false))),
             stopped: AtomicBool::new(false),
             update_commands: updates.commands.clone(),
@@ -339,6 +344,9 @@ impl Desktop {
                             }
                         }
                         Event::SignedOut => {
+                            if let Ok(mut queued) = pump.queued_native.lock() {
+                                *queued = None;
+                            }
                             snapshot.profile = None;
                             snapshot.login_pending = false;
                             snapshot.playlists.clear();
@@ -623,6 +631,17 @@ impl Desktop {
                             }
                             snapshot.native_ready = true;
                             snapshot.native_status = "Ready · this computer".into();
+                            if let Some((action, _)) = pump
+                                .queued_native
+                                .lock()
+                                .ok()
+                                .and_then(|mut queued| queued.take())
+                                .filter(|(_, at)| at.elapsed() < QUEUED_NATIVE_TTL)
+                                && pump.controls.send(action).is_ok()
+                                && let Ok(mut last) = pump.last_native.lock()
+                            {
+                                *last = Some(Instant::now());
+                            }
                             if snapshot.route.starts_with("playlist:") && snapshot.profile.is_some()
                             {
                                 let _ = pump.commands.send(Command::BrowseInfo {
@@ -639,6 +658,9 @@ impl Desktop {
                             }
                         }
                         NativeEvent::Error(message) => {
+                            if let Ok(mut queued) = pump.queued_native.lock() {
+                                *queued = None;
+                            }
                             snapshot.native_ready = false;
                             snapshot.native_status = message;
                             emit(
@@ -1162,13 +1184,27 @@ fn player(
             if !native_context {
                 action = local_load(action, &snapshot.tracks)?;
             }
-            ensure!(
-                snapshot.native_ready,
-                "Native audio is connecting. Try again when ready."
-            );
-            state.0.controls.send(action.clone()).map_err(|_| {
-                anyhow::anyhow!("Native audio disconnected. Reconnect native audio in Settings.")
-            })?;
+            if snapshot.native_ready {
+                state.0.controls.send(action.clone()).map_err(|_| {
+                    anyhow::anyhow!(
+                        "Native audio disconnected. Reconnect native audio in Settings."
+                    )
+                })?;
+            } else if matches!(action, PlayerAction::Pause) {
+                *lock(&state.0.queued_native)? = None;
+                return Ok(());
+            } else {
+                ensure!(
+                    matches!(
+                        action,
+                        PlayerAction::Play(_)
+                            | PlayerAction::PlayUris { .. }
+                            | PlayerAction::PlayContext { .. }
+                    ),
+                    "Native audio is connecting. Try again when ready."
+                );
+                *lock(&state.0.queued_native)? = Some((action.clone(), Instant::now()));
+            }
             if let Some(profile) = snapshot.profile.as_ref() {
                 crate::resume::remember_queue(&profile.id, &action);
             }

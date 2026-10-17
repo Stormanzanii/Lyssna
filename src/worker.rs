@@ -421,7 +421,31 @@ impl Backend {
         self.context.request_repaint();
     }
 
-    fn establish(&mut self, mut tokens: Tokens, client_id: String, restoring: bool) -> Result<()> {
+    fn establish(&mut self, tokens: Tokens, client_id: String, restoring: bool) -> Result<()> {
+        // Audio login is slow and needs only the account, so start it from the
+        // stored profile while the Web API session is still being verified.
+        let early_audio = restoring
+            .then(|| tokens.profile.clone())
+            .flatten()
+            .map(|profile| {
+                self.profile = profile;
+                let _ = self.start_audio();
+                self.profile.id.clone()
+            });
+        let result = self.establish_session(tokens, client_id, restoring, early_audio.as_deref());
+        if result.is_err() && early_audio.is_some() {
+            self.native.take();
+        }
+        result
+    }
+
+    fn establish_session(
+        &mut self,
+        mut tokens: Tokens,
+        client_id: String,
+        restoring: bool,
+        early_audio: Option<&str>,
+    ) -> Result<()> {
         tokens.refresh_if_needed(&self.client, &client_id)?;
         let cached = tokens.profile.clone();
         let mut spotify = Spotify::new(self.client.clone(), client_id.clone(), tokens);
@@ -437,7 +461,9 @@ impl Backend {
         if let Some(playlists) = crate::library_cache::load(&self.profile.id) {
             self.emit(Event::Library(playlists));
         }
-        if let Err(error) = self.start_audio() {
+        if early_audio != Some(self.profile.id.as_str())
+            && let Err(error) = self.start_audio()
+        {
             self.emit(Event::Error(error.to_string()));
         }
         let playlists = self.api()?.playlists();

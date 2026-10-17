@@ -69,6 +69,7 @@ export function nextToggle(
   };
 }
 export interface AppState extends Snapshot {
+  restoring_session: boolean;
   canvases: Record<string, string | undefined>;
   facts: Record<string, TrackFacts>;
   booted: boolean;
@@ -88,6 +89,7 @@ export const emptyState: AppState = {
   canvases: {},
   facts: {},
   booted: false,
+  restoring_session: true,
   profile: undefined,
   playlists: [],
   playback: {
@@ -135,6 +137,15 @@ export const emptyState: AppState = {
   clock_revision: 0,
   pages: {},
 };
+export function sessionScreen(
+  state: Pick<AppState, "booted" | "profile" | "restoring_session">,
+): "restoring" | "setup" | "client" {
+  return !state.booted || (!state.profile && state.restoring_session)
+    ? "restoring"
+    : state.profile
+      ? "client"
+      : "setup";
+}
 export type Action =
   | AppEvent
   | { type: "bootstrap"; snapshot: Snapshot }
@@ -200,6 +211,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         ...action.snapshot,
+        restoring_session:
+          !action.snapshot.profile && action.snapshot.login_pending,
         home:
           action.snapshot.home?.account === action.snapshot.profile?.id
             ? action.snapshot.home
@@ -209,6 +222,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "session":
       return {
         ...state,
+        restoring_session: false,
         narrating: state.profile?.id === action.profile.id && state.narrating,
         home:
           state.home?.account === action.profile.id ? state.home : undefined,
@@ -221,6 +235,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "signed_out":
       return {
         ...emptyState,
+        restoring_session: false,
         booted: true,
         settings: state.settings,
         native_status: "Waiting for sign-in",
@@ -240,7 +255,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "login_pending":
       return { ...state, login_pending: true };
     case "login_finished":
-      return { ...state, login_pending: false };
+      return { ...state, login_pending: false, restoring_session: false };
     case "native":
       return {
         ...state,

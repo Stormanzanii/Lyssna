@@ -6,6 +6,7 @@ import {
   progress,
   position,
   nextToggle,
+  sessionScreen,
   type ToggleIntent,
 } from "./state";
 import type { Track } from "./types";
@@ -20,6 +21,32 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("keeps first-run setup hidden until saved sign-in restoration finishes", () => {
+    expect(sessionScreen(emptyState)).toBe("restoring");
+    const restoring = reducer(emptyState, {
+      type: "bootstrap",
+      snapshot: { ...emptyState, login_pending: true },
+    });
+    expect(sessionScreen(restoring)).toBe("restoring");
+    const failed = reducer(restoring, { type: "login_finished" });
+    expect(sessionScreen(failed)).toBe("setup");
+    expect(sessionScreen(reducer(failed, { type: "login_pending" }))).toBe(
+      "setup",
+    );
+    const restored = reducer(restoring, {
+      type: "session",
+      profile: {
+        id: "listener",
+        display_name: "Listener",
+        images: [],
+      },
+      can_follow: false,
+    });
+    expect(sessionScreen(restored)).toBe("client");
+    expect(sessionScreen(reducer(restored, { type: "signed_out" }))).toBe(
+      "setup",
+    );
+  });
   it("rebases a batched same-song native takeover to actual audio position", () => {
     const song = { ...track, duration_ms: 180000 };
     const before = {

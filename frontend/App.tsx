@@ -55,6 +55,7 @@ import {
   reducer,
   formatTime,
   nextToggle,
+  sessionScreen,
   type ToggleIntent,
 } from "./state";
 import type { AppState } from "./state";
@@ -67,6 +68,7 @@ import type {
   Snapshot,
   Track,
   HomeItem,
+  AppEvent,
 } from "./types";
 import {
   Ambience,
@@ -215,11 +217,20 @@ function App() {
     let disposed = false,
       unlisten: (() => void) | undefined;
     void (async () => {
+      let bootstrapped = false;
+      const pending: AppEvent[] = [];
+      const receive = (event: AppEvent) => {
+        if (event.type === "canvas_prefetch") preloadCanvas(event.url);
+        dispatch(event);
+      };
       try {
         unlisten = await subscribe((event) => {
           if (disposed) return;
-          if (event.type === "canvas_prefetch") preloadCanvas(event.url);
-          dispatch(event);
+          if (!bootstrapped) {
+            pending.push(event);
+            return;
+          }
+          receive(event);
         });
         const snapshot = await rpc<Snapshot>("bootstrap");
         if (!disposed) {
@@ -229,6 +240,8 @@ function App() {
             snapshot.route.startsWith("search:") ? snapshot.route.slice(7) : "",
           );
           dispatch({ type: "bootstrap", snapshot });
+          bootstrapped = true;
+          pending.splice(0).forEach(receive);
         }
       } catch (error) {
         if (!disposed)
@@ -2187,7 +2200,18 @@ function App() {
           </section>
         </div>
       )}
-      {(!state.profile || !state.booted) && (
+      {sessionScreen(state) === "restoring" && (
+        <div
+          className="startup-screen"
+          role="status"
+          aria-label="Restoring session"
+        >
+          <LoaderCircle className="spin" size={28} />
+          <strong>SpotiFlex</strong>
+          <span>Restoring session…</span>
+        </div>
+      )}
+      {sessionScreen(state) === "setup" && (
         <Setup
           state={state}
           onSignIn={(clientId) => {

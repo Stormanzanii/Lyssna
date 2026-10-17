@@ -2321,6 +2321,21 @@ input[type="range"]:hover {
   padding: 25px;
   z-index: 60;
 }
+.startup-screen {
+  position: absolute;
+  inset: 60px 0 0;
+  z-index: 90;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: #121212;
+  color: #b3b3b3;
+}
+.startup-screen strong {
+  color: #fff;
+  font-size: 22px;
+}
 .dialog,
 .setup-dialog {
   background: #1a1723;

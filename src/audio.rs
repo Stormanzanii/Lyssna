@@ -16,7 +16,18 @@ use std::{
 
 const CHANNELS: u16 = 2;
 const SAMPLE_RATE: u32 = 44_100;
-const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 80 / 1000;
+const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000;
+
+#[derive(Clone, Default)]
+pub struct AudioBuffer {
+    queued: Arc<AtomicUsize>,
+}
+impl AudioBuffer {
+    pub fn latency_ms(&self) -> u64 {
+        (self.queued.load(Ordering::Relaxed) as u64) * 1000
+            / (u64::from(SAMPLE_RATE) * u64::from(CHANNELS))
+    }
+}
 
 pub struct AudioSink {
     stream: Option<OutputStream>,
@@ -27,11 +38,15 @@ pub struct AudioSink {
     awaiting_seek: bool,
 }
 impl AudioSink {
-    pub fn new(flush: Arc<AtomicBool>, seek_ready: tokio::sync::mpsc::UnboundedSender<()>) -> Self {
+    pub fn new(
+        flush: Arc<AtomicBool>,
+        seek_ready: tokio::sync::mpsc::UnboundedSender<()>,
+        buffer: AudioBuffer,
+    ) -> Self {
         Self {
             stream: None,
             sink: None,
-            queued: Arc::default(),
+            queued: buffer.queued,
             flush,
             seek_ready,
             awaiting_seek: false,
@@ -139,6 +154,46 @@ impl Source for QueuedPacket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn output_survives_a_short_producer_scheduling_gap() {
+        let queued = Arc::new(AtomicUsize::new(0));
+        let paused = Arc::new(AtomicBool::new(false));
+        let (sink, mut output) = rodio::Sink::new();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(
+            Arc::new(AtomicBool::new(false)),
+            ready,
+            AudioBuffer {
+                queued: queued.clone(),
+            },
+        );
+        audio.sink = Some(sink);
+        let producer_paused = paused.clone();
+        let producer = thread::spawn(move || {
+            let mut converter = Converter::new(None);
+            while !producer_paused.load(Ordering::Acquire) {
+                audio
+                    .write(
+                        AudioPacket::Samples(vec![
+                            0.25;
+                            SAMPLE_RATE as usize * CHANNELS as usize / 100
+                        ]),
+                        &mut converter,
+                    )
+                    .unwrap();
+            }
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while queued.load(Ordering::Acquire) < MAX_SAMPLES {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        paused.store(true, Ordering::Release);
+        let samples = SAMPLE_RATE as usize * CHANNELS as usize * 150 / 1000;
+        let gaps = (0..samples).filter(|_| output.next() != Some(0.25)).count();
+        producer.join().unwrap();
+        assert_eq!(gaps, 0, "audio ran dry during a 150 ms scheduling gap");
+    }
     #[test]
     fn seek_discards_old_samples_before_new_audio_without_waiting_for_playback() {
         let queued = Arc::new(AtomicUsize::new(0));

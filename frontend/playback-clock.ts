@@ -36,7 +36,7 @@ export class PlaybackClock {
       this.track !== playback.item?.uri ||
       this.playing !== playback.is_playing ||
       this.revision !== revision ||
-      Math.abs(desired - current) > 1000;
+      desired - current > 1000;
     this.track = playback.item?.uri;
     this.playing = playback.is_playing;
     this.revision = revision;

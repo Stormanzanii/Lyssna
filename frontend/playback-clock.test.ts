@@ -51,3 +51,18 @@ it("immediately applies seeks, pause, and track changes", () => {
   );
   expect(clock.read(5000)).toBe(1300);
 });
+it("does not rewind lyrics after a delayed decoder position report", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0);
+  const before = clock.read(2500);
+  clock.observe({ ...playback, progress_ms: 1500 }, 2500, 0, 2500, 2500);
+  expect(clock.read(2500)).toBeGreaterThanOrEqual(before);
+  expect(clock.read(2516)).toBeGreaterThan(before);
+});
+it("applies a requested backward seek immediately", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0);
+  clock.read(2500);
+  clock.observe({ ...playback, progress_ms: 500 }, 2500, 1, 2500, 2500);
+  expect(clock.read(2500)).toBe(500);
+});

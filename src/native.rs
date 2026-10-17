@@ -630,6 +630,8 @@ async fn run(
     let flush_audio = Arc::new(AtomicBool::new(false));
     let sink_flush = flush_audio.clone();
     let (seek_ready, mut audible_seeks) = async_channel::unbounded_channel();
+    let audio_buffer = crate::audio::AudioBuffer::default();
+    let sink_buffer = audio_buffer.clone();
     let player = Player::new(
         PlayerConfig {
             position_update_interval: Some(Duration::from_millis(250)),
@@ -641,6 +643,7 @@ async fn run(
             Box::new(crate::audio::AudioSink::new(
                 sink_flush.clone(),
                 seek_ready.clone(),
+                sink_buffer.clone(),
             ))
         },
     );
@@ -741,7 +744,7 @@ async fn run(
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri(),true);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
                     Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri(),false);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
-                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: None, seeked: false });}},
+                    Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: u64::from(position_ms).saturating_sub(audio_buffer.latency_ms()), playing: None, seeked: false });}},
                     Some(PlayerEvent::Unavailable { .. }) => {intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
                     None => break,
                     _ => {}

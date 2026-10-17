@@ -28,6 +28,8 @@ Desktop output defaults to This computer. Incoming playback updates do not chang
 
 Native connection readiness and failures are retained until the matching account completes sign-in. A connection established before the profile check finishes can then accept Play without requiring a manual reconnect. Play retries a failed native connection while preserving the pending selection.
 
+Optional Web API playback polling cannot cancel the authenticated audio session during startup. Closed native control channels trigger reconnection on Play even if the earlier readiness event was never delivered.
+
 Metadata context menus target song titles, artist names, album labels/artwork and playlist items. Right-clicking blank row space, hero backgrounds or player controls dismisses them. Human-created playlists and Liked Songs hide the Plays column; album, artist and Spotify-owned playlist statistics remain available.
 
 Artist and album headers load through native catalogue requests independently of the Web API worker. Known artist names appear as soon as navigation starts. Account-scoped metadata caches retain up to 512 headers with artwork URLs, artist overviews and album details across restarts; cached details render before background refresh. Current music and nearby artist links are prefetched, with six-hour reuse for speculative requests. Shared image decoding warms banners and profile pictures. Album basics render before optional stream-count enrichment; partial updates preserve cached duration and other stream counts. Previously unseen metadata and artwork still require network access.

@@ -499,7 +499,9 @@ impl Backend {
             Ok(playlists) => self.emit(Event::Library(playlists)),
             Err(error) => self.emit(Event::Error(error.to_string())),
         }
-        self.poll()?;
+        if let Err(error) = self.poll() {
+            self.emit(Event::Error(error.to_string()));
+        }
         if let Ok(Some(value)) = self.api()?.last_played() {
             self.emit(Event::LastPlayed {
                 account: self.profile.id.clone(),

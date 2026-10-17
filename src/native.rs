@@ -90,6 +90,11 @@ impl NativeControls {
         let connection = connection
             .as_ref()
             .filter(|connection| connection.account == account)?;
+        if connection.sender.is_closed() {
+            return Some(NativeEvent::Error(
+                "Native audio disconnected. Press Play to reconnect.".into(),
+            ));
+        }
         let event = connection.status.lock().ok()?.clone()?;
         if matches!(event, NativeEvent::Ready(_)) && !connection.ready.load(Ordering::Acquire) {
             Some(NativeEvent::Error(
@@ -1194,6 +1199,12 @@ mod tests {
         assert!(matches!(
             controls.connection_event(Some("listener")),
             Some(NativeEvent::Authorizing)
+        ));
+        *status.lock().unwrap() = None;
+        receiver.close();
+        assert!(matches!(
+            controls.connection_event(Some("listener")),
+            Some(NativeEvent::Error(_))
         ));
         assert!(matches!(
             controls.send(PlayerAction::Pause),

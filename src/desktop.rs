@@ -1465,7 +1465,14 @@ fn player(
             if !native_context {
                 action = local_load(action, &snapshot.tracks)?;
             }
-            if snapshot.native_ready {
+            if snapshot.native_ready
+                && matches!(
+                    state.0.controls.connection_event(
+                        snapshot.profile.as_ref().map(|profile| profile.id.as_str())
+                    ),
+                    Some(NativeEvent::Ready(_))
+                )
+            {
                 state.0.controls.send(action.clone()).map_err(|_| {
                     anyhow::anyhow!(
                         "Native audio disconnected. Reconnect native audio in Settings."

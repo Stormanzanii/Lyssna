@@ -1942,6 +1942,12 @@ impl PlayerInternal {
             }
 
             None => {
+                // The next track can stop the sink; keep its final spoken samples alive.
+                // Returning leaves the command loop responsive while output drains.
+                if !self.sink.is_empty() {
+                    std::thread::sleep(Duration::from_millis(2));
+                    return;
+                }
                 self.state.playing_to_end_of_track();
                 if let PlayerState::EndOfTrack {
                     ref track_id,

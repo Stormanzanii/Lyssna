@@ -78,6 +78,8 @@ impl From<StateError> for Error {
 /// Configuration of the connect device
 #[derive(Debug, Clone)]
 pub struct ConnectConfig {
+    /// Automatically restore an unowned Connect session on reconnect (default: true).
+    pub resume_on_startup: bool,
     /// The name of the connect device (default: librespot)
     pub name: String,
     /// The icon type of the connect device (default: [DeviceType::Speaker])
@@ -97,6 +99,7 @@ pub struct ConnectConfig {
 impl Default for ConnectConfig {
     fn default() -> Self {
         Self {
+            resume_on_startup: true,
             name: "librespot".to_string(),
             device_type: DeviceType::Speaker,
             is_group: false,

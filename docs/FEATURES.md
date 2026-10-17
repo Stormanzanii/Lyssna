@@ -31,3 +31,7 @@ Live checks on 2026-10-17 verified native play/pause after repeated click bursts
 Narration transition tests cover stereo fade direction, speech labels during overlap, unchanged music without narration, and seek buffer resets. Connect tests cover direct resume from pause, ignored stopped-session events and clock corrections that must not resume playback. Local pins and recents persist separately for each signed-in account. Discord presence itself has not been verified.
 
 The player DJ button distinguishes click from a 500 ms hold. Click refreshes the DJ selection. Hold shows an availability notice and suppresses refresh on release. Text/voice request transport remains unimplemented; the hold gesture does not record or submit audio. Cancelling a hold prevents delayed actions, and keyboard refresh remains available.
+
+Native reconnect stays idle until playback is requested. A same-song takeover claims the local device before accepting decoder positions; the UI starts a new clock observation even when loading and playing events arrive together. Regression tests reproduce the prior 1:17 display against audio at 0:01.2.
+
+DJ transitions duck music under speech rather than fading the final words to silence. Music rises after the spoken line ends. End-of-track waits for submitted PCM to drain before advancing, preserving buffered narration tails. Synthetic audio tests cover audible final syllables and output completion; the revised transitions still need live listening confirmation.

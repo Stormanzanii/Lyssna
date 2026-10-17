@@ -24,6 +24,10 @@ pub trait Open {
 }
 
 pub trait Sink {
+    /// Whether all submitted PCM has been consumed. Legacy backends may complete immediately.
+    fn is_empty(&self) -> bool {
+        true
+    }
     fn start(&mut self) -> SinkResult<()> {
         Ok(())
     }

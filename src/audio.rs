@@ -75,6 +75,9 @@ impl AudioSink {
     }
 }
 impl Sink for AudioSink {
+    fn is_empty(&self) -> bool {
+        self.queued.load(Ordering::Acquire) == 0
+    }
     fn start(&mut self) -> SinkResult<()> {
         if self.sink.is_none() {
             let mut stream = OutputStreamBuilder::open_default_stream().map_err(|_| {
@@ -203,6 +206,21 @@ impl Source for QueuedPacket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn eof_waits_for_last_spoken_sample() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let sink = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut speech =
+            QueuedPacket::with_output(vec![0.5; 4], buffer, true, Box::new(NoOpVolume));
+        assert!(!sink.is_empty());
+        for _ in 0..3 {
+            assert!(speech.next().is_some());
+            assert!(!sink.is_empty());
+        }
+        assert!(speech.next().is_some());
+        assert!(sink.is_empty());
+    }
     #[test]
     fn narration_labels_follow_consumed_audio_not_decoding() {
         let buffer = AudioBuffer::default();

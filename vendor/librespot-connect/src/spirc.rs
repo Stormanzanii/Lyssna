@@ -70,6 +70,7 @@ impl From<SpircError> for Error {
 }
 
 struct SpircTask {
+    resume_on_startup: bool,
     player: Arc<Player>,
     mixer: Arc<dyn Mixer>,
 
@@ -145,6 +146,13 @@ const CONTEXT_FETCH_THRESHOLD: usize = 2;
 const VOLUME_UPDATE_DELAY: Duration = Duration::from_millis(500);
 // to reduce updates to remote, we group some request by waiting for a set amount of time
 const UPDATE_STATE_DELAY: Duration = Duration::from_millis(200);
+fn automatic_restore_allowed(enabled: bool, cluster: &Cluster, session_id: &str) -> bool {
+    enabled
+        && cluster.active_device_id.is_empty()
+        && (cluster.player_state.session_id.is_empty()
+            || cluster.player_state.session_id == session_id)
+        && !cluster.transfer_data.is_empty()
+}
 
 /// The spotify connect handle
 pub struct Spirc {
@@ -177,6 +185,7 @@ impl Spirc {
         debug!("new Spirc[{spirc_id}]");
 
         let emit_set_queue_events = config.emit_set_queue_events;
+        let resume_on_startup = config.resume_on_startup;
         let connect_state = ConnectState::new(config, &session);
 
         let connection_id_update = session
@@ -230,6 +239,7 @@ impl Spirc {
         let player_events = player.get_player_event_channel();
 
         let mut task = SpircTask {
+            resume_on_startup,
             player,
             mixer,
 
@@ -910,23 +920,10 @@ impl SpircTask {
         );
 
         self.connect_established = true;
-
-        let same_session = cluster.player_state.session_id == self.session.session_id()
-            || cluster.player_state.session_id.is_empty();
-        if !cluster.active_device_id.is_empty() || !same_session {
-            info!(
-                "active device is <{}> with session <{}>",
-                cluster.active_device_id, cluster.player_state.session_id
-            );
+        if !automatic_restore_allowed(self.resume_on_startup, &cluster, &self.session.session_id())
+        {
+            debug!("New connection remains idle until playback is requested");
             return Ok(());
-        } else if cluster.transfer_data.is_empty() {
-            debug!("got empty transfer state, do nothing");
-            return Ok(());
-        } else {
-            info!(
-                "trying to take over control automatically, session_id: {}",
-                cluster.player_state.session_id
-            )
         }
 
         use protobuf::Message;
@@ -1968,5 +1965,24 @@ impl SpircTask {
 impl Drop for SpircTask {
     fn drop(&mut self) {
         debug!("drop Spirc[{}]", self.spirc_id);
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+    #[test]
+    fn passive_startup_does_not_claim_a_restorable_session() {
+        let mut cluster = Cluster {
+            transfer_data: vec![1],
+            ..Cluster::default()
+        };
+        assert!(automatic_restore_allowed(true, &cluster, "session"));
+        assert!(!automatic_restore_allowed(false, &cluster, "session"));
+        cluster.active_device_id = "spotify-desktop".into();
+        assert!(!automatic_restore_allowed(true, &cluster, "session"));
+        cluster.active_device_id.clear();
+        cluster.player_state.mut_or_insert_default().session_id = "other-session".into();
+        assert!(!automatic_restore_allowed(true, &cluster, "session"));
     }
 }

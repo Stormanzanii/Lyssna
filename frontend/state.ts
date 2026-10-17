@@ -354,6 +354,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const changed = state.playback.item?.uri !== action.playback.item?.uri;
       return {
         ...state,
+        clock_revision: state.clock_revision + (action.loading ? 1 : 0),
         playback: action.playback,
         observed_at: action.observed_at,
         pending:

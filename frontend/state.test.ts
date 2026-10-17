@@ -9,6 +9,7 @@ import {
   type ToggleIntent,
 } from "./state";
 import type { Track } from "./types";
+import { PlaybackClock } from "./playback-clock";
 const track: Track = {
   id: "song",
   uri: "spotify:track:song",
@@ -19,6 +20,36 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("rebases a batched same-song native takeover to actual audio position", () => {
+    const song = { ...track, duration_ms: 180000 };
+    const before = {
+      ...emptyState,
+      playback: {
+        ...emptyState.playback,
+        item: song,
+        progress_ms: 77000,
+        is_playing: true,
+      },
+    };
+    const clock = new PlaybackClock();
+    clock.observe(before.playback, 0, before.clock_revision, 0, 0);
+    let state = reducer(before, {
+      type: "playback",
+      playback: { ...before.playback, is_playing: false },
+      observed_at: 100,
+      loading: true,
+    } as any);
+    state = reducer(state, {
+      type: "native_position",
+      uri: song.uri,
+      position_ms: 1200,
+      playing: true,
+      seeked: false,
+      observed_at: 100,
+    });
+    clock.observe(state.playback, 100, state.clock_revision, 100, 100);
+    expect(clock.read(100)).toBe(1200);
+  });
   it("opens a warmed Canvas immediately when its track is clicked", () => {
     const warm = reducer(emptyState, {
       type: "canvas_prefetch",

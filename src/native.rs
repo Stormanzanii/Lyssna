@@ -705,6 +705,7 @@ async fn run(
     let mut player_events = player.get_player_event_channel();
     let local_player = player.clone();
     let config = ConnectConfig {
+        resume_on_startup: false,
         name: device_name(),
         initial_volume: crate::config::Settings::load()
             .ok()

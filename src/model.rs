@@ -180,6 +180,32 @@ pub struct PlayingDetails {
 }
 
 impl Playback {
+    /// Apply native decoder metadata, retaining richer catalogue fields for the same song.
+    pub fn load_native_track(
+        &mut self,
+        track: Track,
+        native_id: Option<&str>,
+        own_name: &str,
+    ) -> bool {
+        self.is_playing = false;
+        self.device.name = own_name.into();
+        self.device.id = native_id.map(str::to_owned);
+        self.device.is_active = true;
+        if let Some(current) = self
+            .item
+            .as_mut()
+            .filter(|current| current.uri == track.uri)
+        {
+            current.duration_ms = track.duration_ms;
+            if !track.songwriters.is_empty() {
+                current.songwriters = track.songwriters;
+            }
+            return false;
+        }
+        self.item = Some(track);
+        self.progress_ms = Some(0);
+        true
+    }
     pub fn keep_native_when_empty(
         &self,
         incoming: &Self,
@@ -287,6 +313,34 @@ pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn same_song_takeover_accepts_actual_decoder_position() {
+        let track = Track {
+            uri: "spotify:track:current".into(),
+            ..Track::default()
+        };
+        let mut playback = Playback {
+            item: Some(track.clone()),
+            progress_ms: Some(77_000),
+            is_playing: true,
+            device: Device {
+                id: Some("spotify-desktop".into()),
+                name: "Spotify".into(),
+                ..Device::default()
+            },
+            ..Playback::default()
+        };
+        assert!(!playback.load_native_track(track, Some("native-session"), "SpotiFlex"));
+        assert!(playback.apply_native_position(
+            Some("native-session"),
+            "SpotiFlex",
+            "spotify:track:current",
+            1200,
+            Some(true)
+        ));
+        assert_eq!(playback.progress_ms, Some(1200));
+        assert_eq!(playback.device.name, "SpotiFlex");
+    }
 
     #[test]
     fn pause_event_updates_web_api_device_alias_without_waiting_for_poll() {

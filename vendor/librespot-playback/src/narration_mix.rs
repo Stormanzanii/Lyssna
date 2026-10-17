@@ -16,6 +16,7 @@ pub(crate) struct SmoothDJ {
     tail: VecDeque<Frame>,
     ready: VecDeque<Frame>,
     fade: usize,
+    music_ramp: usize,
     ended: bool,
 }
 impl SmoothDJ {
@@ -26,12 +27,18 @@ impl SmoothDJ {
             tail: VecDeque::new(),
             ready: VecDeque::new(),
             fade: SAMPLE_RATE as usize * 7 / 10,
+            music_ramp: 0,
             ended: false,
         }
     }
     fn read_frame(&mut self) -> DecoderResult<Option<Frame>> {
         loop {
-            if let Some(frame) = self.input.pop_front() {
+            if let Some(mut frame) = self.input.pop_front() {
+                if !frame.narration && self.music_ramp > 0 {
+                    let gain = 0.18 + 0.82 * (1.0 - self.music_ramp as f64 / self.fade as f64);
+                    frame.samples.iter_mut().for_each(|sample| *sample *= gain);
+                    self.music_ramp -= 1;
+                }
                 return Ok(Some(frame));
             }
             let Some((position, packet)) = self.decoder.next_packet()? else {
@@ -87,8 +94,24 @@ impl SmoothDJ {
             } else {
                 0.5
             };
+            // Duck music under words; fading speech to zero loses the last syllables.
+            let music_gain = if old.narration {
+                0.18 * blend
+            } else {
+                let attack = (index as f64
+                    / ((SAMPLE_RATE as usize / 50)
+                        .min(count.saturating_sub(1))
+                        .max(1)) as f64)
+                    .min(1.0);
+                (1.0 - blend) * (1.0 - 0.82 * attack)
+            };
+            let (voice, music) = if old.narration {
+                (&old, &new)
+            } else {
+                (&new, &old)
+            };
             let samples = std::array::from_fn(|channel| {
-                old.samples[channel] * (1.0 - blend) + new.samples[channel] * blend
+                voice.samples[channel] * (1.0 - music_gain) + music.samples[channel] * music_gain
             });
             let position = if old.narration {
                 new.position
@@ -100,6 +123,9 @@ impl SmoothDJ {
                 position,
                 narration: true,
             });
+        }
+        if !kind {
+            self.music_ramp = self.fade;
         }
         self.tail.append(&mut incoming);
         Ok(())
@@ -134,6 +160,7 @@ impl AudioDecoder for SmoothDJ {
         self.tail.clear();
         self.ready.clear();
         self.ended = false;
+        self.music_ramp = 0;
         Ok(actual)
     }
     fn next_packet(&mut self) -> DecoderResult<Option<(AudioPacketPosition, AudioPacket)>> {
@@ -170,6 +197,15 @@ impl AudioDecoder for SmoothDJ {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn final_spoken_syllables_remain_audible_during_music_fade() {
+        let mut decoder = decoder(vec![packet(true, 1.0, 8, 0), packet(false, 0.0, 12, 0)]);
+        let result = drain(&mut decoder);
+        assert!(
+            result[4..8].iter().all(|frame| frame.0 && frame.1 >= 0.8),
+            "Music fade must not erase the end of the spoken line"
+        );
+    }
     struct Audio {
         packets: VecDeque<(AudioPacketPosition, AudioPacket)>,
     }

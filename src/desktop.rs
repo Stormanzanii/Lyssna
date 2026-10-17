@@ -591,28 +591,18 @@ impl Desktop {
                                 }
                                 *pending = None;
                             }
-                            if let Some(current) = snapshot
-                                .playback
-                                .item
-                                .as_mut()
-                                .filter(|current| current.uri == track.uri)
-                            {
-                                current.duration_ms = track.duration_ms;
-                                if !track.songwriters.is_empty() {
-                                    current.songwriters = track.songwriters.clone();
-                                }
+                            let native_id = pump.native_id.lock().ok().and_then(|id| id.clone());
+                            snapshot.observed_at = now_ms();
+                            if !snapshot.playback.load_native_track(
+                                track.clone(),
+                                native_id.as_deref(),
+                                &native::device_name(),
+                            ) {
                                 emit(
-                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false,"loading":true}),
                                 );
                                 continue;
                             }
-                            snapshot.playback.item = Some(track.clone());
-                            snapshot.playback.progress_ms = Some(0);
-                            snapshot.playback.is_playing = false;
-                            snapshot.playback.device.name = native::device_name();
-                            snapshot.playback.device.id =
-                                pump.native_id.lock().ok().and_then(|id| id.clone());
-                            snapshot.playback.device.is_active = true;
                             snapshot.observed_at = now_ms();
                             snapshot.lyrics = None;
                             snapshot.canvas_url = None;

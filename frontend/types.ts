@@ -148,6 +148,9 @@ export interface BrowseInfo {
   albums: Album[];
 }
 export interface Snapshot {
+  home?: HomePage;
+  home_loading: boolean;
+  home_error: string;
   canvas_url?: string;
   profile?: Profile;
   playlists: Playlist[];
@@ -175,6 +178,27 @@ export interface Snapshot {
   notice: string;
   observed_at: number;
 }
+export type HomeItem = {
+  uri: string;
+  route: string;
+  name: string;
+  subtitle: string;
+  images: Artwork[];
+  kind: string;
+  playable: boolean;
+  format: string;
+};
+export type HomeSection = {
+  uri: string;
+  title: string;
+  subtitle: string;
+  items: HomeItem[];
+};
+export type HomePage = {
+  account: string;
+  greeting: string;
+  sections: HomeSection[];
+};
 export type PlayerRequest = {
   command: string;
   uri?: string;
@@ -188,6 +212,9 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "home"; page: HomePage }
+  | { type: "home_loading"; account: string }
+  | { type: "home_error"; account: string; message: string }
   | { type: "track_facts"; facts: Record<string, TrackFacts> }
   | { type: "canvas"; uri: string; url?: string }
   | { type: "canvas_prefetch"; uri: string; url: string }

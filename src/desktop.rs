@@ -26,6 +26,9 @@ use tauri::{Emitter, Manager, State};
 
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
+    home: Option<crate::home::HomePage>,
+    home_loading: bool,
+    home_error: String,
     canvas_url: Option<String>,
     profile: Option<Profile>,
     playlists: Vec<Playlist>,
@@ -54,6 +57,7 @@ pub struct Snapshot {
     observed_at: u64,
 }
 struct Inner {
+    home_generation: std::sync::atomic::AtomicU64,
     resume_seek: Mutex<Option<(String, u64)>>,
     snapshot: Mutex<Snapshot>,
     commands: mpsc::Sender<Command>,
@@ -125,9 +129,13 @@ impl Desktop {
         let restore = config::valid_client_id(&settings.client_id);
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
+            home_generation: std::sync::atomic::AtomicU64::new(0),
             resume_seek: Mutex::new(None),
             snapshot: Mutex::new(Snapshot {
                 canvas_url: None,
+                home: None,
+                home_loading: false,
+                home_error: String::new(),
                 profile: None,
                 playlists: Vec::new(),
                 playback: Playback {
@@ -297,6 +305,12 @@ impl Desktop {
                             if !snapshot.login_pending {
                                 continue;
                             }
+                            if snapshot.profile.as_ref().map(|old| &old.id) != Some(&profile.id) {
+                                snapshot.home = None;
+                                snapshot.home_loading = false;
+                                snapshot.home_error.clear();
+                                pump.home_generation.fetch_add(1, Ordering::SeqCst);
+                            }
                             snapshot.profile = Some(profile.clone());
                             snapshot.login_pending = false;
                             snapshot.can_follow = auth::Tokens::load(&snapshot.settings.client_id)
@@ -322,6 +336,9 @@ impl Desktop {
                             snapshot.profile = None;
                             snapshot.login_pending = false;
                             snapshot.playlists.clear();
+                            snapshot.home = None;
+                            snapshot.home_loading = false;
+                            snapshot.home_error.clear();
                             snapshot.playback = Playback::default();
                             snapshot.native_ready = false;
                             snapshot.lyrics = None;
@@ -866,6 +883,63 @@ fn valid_route(key: &str) -> bool {
         })
 }
 #[tauri::command]
+async fn home(
+    timezone: String,
+    app: tauri::AppHandle,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    let inner = state.0.clone();
+    let (account, generation) = {
+        let mut snapshot = lock(&inner.snapshot).map_err(error)?;
+        let account = snapshot
+            .profile
+            .as_ref()
+            .context("Sign in first")
+            .map_err(error)?
+            .id
+            .clone();
+        if !snapshot.native_ready {
+            return Err("Native audio is connecting".into());
+        }
+        if timezone.len() > 100 || timezone.chars().any(char::is_control) {
+            return Err("Invalid time zone".into());
+        }
+        snapshot.home_loading = true;
+        snapshot.home_error.clear();
+        (
+            account,
+            inner.home_generation.fetch_add(1, Ordering::SeqCst) + 1,
+        )
+    };
+    let _ = app.emit(
+        "spotiflex",
+        json!({"type":"home_loading","account":account}),
+    );
+    let controls = inner.controls.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || controls.home(&timezone)).await;
+    let mut snapshot = lock(&inner.snapshot).map_err(error)?;
+    if inner.home_generation.load(Ordering::SeqCst) != generation
+        || snapshot.profile.as_ref().map(|profile| &profile.id) != Some(&account)
+    {
+        return Ok(());
+    }
+    snapshot.home_loading = false;
+    match result {
+        Ok(Ok(page)) if page.account == account => {
+            snapshot.home = Some(page.clone());
+            let _ = app.emit("spotiflex", json!({"type":"home","page":page}));
+        }
+        _ => {
+            snapshot.home_error = "Personalized Home could not load. Try refreshing.".into();
+            let _ = app.emit(
+                "spotiflex",
+                json!({"type":"home_error","account":account,"message":snapshot.home_error}),
+            );
+        }
+    }
+    Ok(())
+}
+#[tauri::command]
 fn browse(
     key: String,
     generation: u64,
@@ -893,6 +967,11 @@ fn browse(
             "Page changed"
         );
         snapshot.loading = true;
+        if key == "home" {
+            snapshot.loading = false;
+            snapshot.more = false;
+            return Ok(());
+        }
         if offset == 0 && (key.starts_with("album:") || key.starts_with("artist:")) {
             state.0.commands.send(Command::BrowseInfo {
                 key: key.clone(),
@@ -909,6 +988,9 @@ fn browse(
     result().map_err(error)
 }
 fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
+    if matches!(&action,PlayerAction::PlayContext{context,..} if context==crate::home::DJ_URI) {
+        return Ok(action);
+    }
     if let PlayerAction::PlayContext { offset, .. } = &action {
         let uris: Vec<_> = tracks
             .iter()
@@ -948,6 +1030,23 @@ impl PlayerRequest {
     fn action(&self) -> Result<PlayerAction> {
         Ok(match self.command.as_str() {
             "play" => PlayerAction::Play(self.uri.clone()),
+            "dj" => PlayerAction::PlayContext {
+                context: crate::home::DJ_URI.into(),
+                offset: None,
+            },
+            "play_home" => {
+                let context = self.context.clone().context("Playback context missing")?;
+                let route = crate::home::route(&context).context("Invalid music context")?;
+                if route.starts_with("track:") {
+                    PlayerAction::Play(Some(context))
+                } else {
+                    ensure!(route != "liked", "Open Liked Songs first");
+                    PlayerAction::PlayContext {
+                        context,
+                        offset: None,
+                    }
+                }
+            }
             "pause" => PlayerAction::Pause,
             "next" => PlayerAction::Next,
             "previous" => PlayerAction::Previous,
@@ -1002,11 +1101,13 @@ fn player(
         ) {
             *lock(&state.0.resume_seek)? = None;
         }
-        let local = targets_local_device(
-            target.as_deref(),
-            lock(&state.0.native_id)?.as_deref(),
-            &snapshot.playback.device,
-        );
+        let native_context = matches!(request.command.as_str(), "dj" | "play_home");
+        let local = native_context
+            || targets_local_device(
+                target.as_deref(),
+                lock(&state.0.native_id)?.as_deref(),
+                &snapshot.playback.device,
+            );
         if local
             && matches!(action, PlayerAction::Play(None))
             && lock(&state.0.last_native)?.is_none()
@@ -1036,7 +1137,9 @@ fn player(
             if matches!(action, PlayerAction::Next | PlayerAction::Previous) {
                 *lock(&state.0.pending_track)? = None;
             }
-            action = local_load(action, &snapshot.tracks)?;
+            if !native_context {
+                action = local_load(action, &snapshot.tracks)?;
+            }
             ensure!(
                 snapshot.native_ready,
                 "Native audio is connecting. Try again when ready."
@@ -1334,6 +1437,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            home,
             bootstrap,
             sign_in,
             cancel_sign_in,
@@ -1370,6 +1474,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dj_launch_keeps_session_context_without_playlist_tracks() {
+        let request: PlayerRequest = serde_json::from_value(json!({"command":"dj"})).unwrap();
+        let action = local_load(request.action().unwrap(), &[])
+            .expect("DJ must resolve its session rather than a static playlist");
+        assert!(
+            matches!(action,PlayerAction::PlayContext{context,offset:None} if context==crate::home::DJ_URI)
+        );
+    }
     #[test]
     fn creator_profiles_use_usernames_and_encode_path_characters() {
         assert_eq!(

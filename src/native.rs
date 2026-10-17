@@ -46,6 +46,7 @@ pub enum NativeEvent {
 }
 
 struct ControlConnection {
+    session: Arc<Mutex<Option<Session>>>,
     volume: Arc<AtomicU32>,
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
@@ -63,12 +64,41 @@ struct PlaylistRead {
     offset: usize,
     reply: mpsc::Sender<std::result::Result<Vec<crate::model::Track>, String>>,
 }
+struct PlaybackServices<'a> {
+    commands: &'a mut async_channel::UnboundedReceiver<PlayerAction>,
+    playlists: &'a mut async_channel::UnboundedReceiver<PlaylistRead>,
+    metadata: &'a mut async_channel::UnboundedReceiver<MetadataRead>,
+    latest_volume: &'a AtomicU32,
+    shared_session: &'a Mutex<Option<Session>>,
+}
 
 /// Local transport commands never wait for the browsing/Web API worker.
 #[derive(Clone, Default)]
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
+        let session = {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native audio unavailable"))?;
+            let connection = connection
+                .as_ref()
+                .filter(|connection| connection.ready.load(Ordering::Acquire))
+                .context("Native audio is connecting")?;
+            connection
+                .session
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
+                .clone()
+                .context("Native session unavailable")?
+        };
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::home::fetch(&session, timezone))
+    }
     pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
         use librespot_protocol::extension_kind::ExtensionKind;
         anyhow::ensure!(
@@ -525,12 +555,14 @@ impl NativePlayer {
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
+        let shared_session = Arc::new(Mutex::new(None));
         let volume = crate::config::Settings::load()
             .map(|settings| settings.volume_percent.min(100))
             .unwrap_or(100);
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
+                session: shared_session.clone(),
                 volume: latest_volume.clone(),
                 sender,
                 ready: ready.clone(),
@@ -575,7 +607,13 @@ impl NativePlayer {
                         &account,
                         &cancel,
                         &mut stopped,
-                        (&mut commands, &mut playlists, &mut metadata, &latest_volume),
+                        PlaybackServices {
+                            commands: &mut commands,
+                            playlists: &mut playlists,
+                            metadata: &mut metadata,
+                            latest_volume: &latest_volume,
+                            shared_session: &shared_session,
+                        },
                         &thread_ready,
                         &emit,
                     ))
@@ -605,16 +643,17 @@ async fn run(
     account: &str,
     cancelled: &AtomicBool,
     stopped: &mut oneshot::Receiver<()>,
-    channels: (
-        &mut async_channel::UnboundedReceiver<PlayerAction>,
-        &mut async_channel::UnboundedReceiver<PlaylistRead>,
-        &mut async_channel::UnboundedReceiver<MetadataRead>,
-        &AtomicU32,
-    ),
+    channels: PlaybackServices<'_>,
     ready: &AtomicBool,
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
-    let (commands, playlists, metadata, latest_volume) = channels;
+    let PlaybackServices {
+        commands,
+        playlists,
+        metadata,
+        latest_volume,
+        shared_session,
+    } = channels;
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
@@ -697,6 +736,9 @@ async fn run(
     if cancelled.load(Ordering::Relaxed) {
         session.shutdown();
         return Outcome::Stopped;
+    }
+    if let Ok(mut shared) = shared_session.lock() {
+        *shared = Some(session.clone());
     }
     ready.store(true, Ordering::Release);
     emit(NativeEvent::Ready(session.device_id().to_owned()));
@@ -910,6 +952,7 @@ mod tests {
         let (sender, mut receiver) = async_channel::unbounded_channel();
         let ready = Arc::new(AtomicBool::new(true));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            session: Arc::default(),
             volume: Arc::new(AtomicU32::new(u32::MAX)),
             sender,
             ready: ready.clone(),

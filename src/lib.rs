@@ -11,6 +11,7 @@ pub mod catalogue;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod desktop;
+pub mod home;
 pub mod library_cache;
 pub mod lyrics;
 pub mod model;

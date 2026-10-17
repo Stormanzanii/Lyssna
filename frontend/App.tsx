@@ -48,6 +48,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import { HomePage } from "./HomePage";
 import {
   emptyState,
   reducer,
@@ -64,6 +65,7 @@ import type {
   Settings,
   Snapshot,
   Track,
+  HomeItem,
 } from "./types";
 import {
   Ambience,
@@ -260,6 +262,26 @@ function App() {
     [call],
   );
   const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
+  const refreshHome = useCallback(() => {
+    void call("home", {
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    });
+  }, [call]);
+  useEffect(() => {
+    if (
+      state.profile &&
+      state.native_ready &&
+      state.route === "home" &&
+      state.home?.account !== state.profile.id
+    )
+      refreshHome();
+  }, [
+    state.profile?.id,
+    state.native_ready,
+    state.route,
+    state.home?.account,
+    refreshHome,
+  ]);
   const play = useCallback(
     (request: PlayerRequest) => {
       if (
@@ -276,6 +298,27 @@ function App() {
     },
     [call, target],
   );
+  const homeNavigate = useCallback(
+    (route: string) =>
+      route === "playlist:37i9dQZF1EYkqdzj48dyYq"
+        ? play({ command: "dj" })
+        : navigate(route),
+    [navigate, play],
+  );
+  const homePlay = useCallback(
+    (item: HomeItem) => {
+      if (!item.playable) return;
+      if (item.route === "liked") navigate("liked");
+      else
+        play(
+          item.uri === "spotify:playlist:37i9dQZF1EYkqdzj48dyYq"
+            ? { command: "dj" }
+            : { command: "play_home", context: item.uri },
+        );
+    },
+    [navigate, play],
+  );
+  const startDJ = useCallback(() => play({ command: "dj" }), [play]);
   const toggle = useCallback(() => {
     const intent = nextToggle(
       stateRef.current.playback.is_playing,
@@ -630,6 +673,8 @@ function App() {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
+  const showTrackList =
+    state.route !== "home" && (!entity?.artist || displayTracks.length > 0);
   return (
     <div
       className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""}`}
@@ -928,45 +973,16 @@ function App() {
           ) : (
             <div className="browse-scroll" ref={mainScroll}>
               {state.route === "home" ? (
-                <>
-                  <section className="home-heading">
-                    <span className="eyebrow">YOUR MUSIC, YOUR SPACE</span>
-                    <h1>{title}</h1>
-                    <p>Put on a favourite. Stay for the lyrics.</p>
-                  </section>
-                  <div className="quick-links">
-                    <button
-                      className="quick-tile"
-                      onClick={() => navigate("liked")}
-                      {...prefetchOn("liked")}
-                    >
-                      <div className="liked-cover">
-                        <Heart fill="currentColor" />
-                      </div>
-                      <strong>Liked Songs</strong>
-                    </button>
-                    {state.playlists.slice(0, 7).map((playlist) => (
-                      <button
-                        className="quick-tile"
-                        key={playlist.id}
-                        onClick={() => navigate(`playlist:${playlist.id}`)}
-                        {...prefetchOn(`playlist:${playlist.id}`)}
-                      >
-                        <Cover images={playlist.images} />
-                        <strong>{playlist.name}</strong>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="browse-section-title">
-                    <h2>Recently played</h2>
-                    <button
-                      className="text-link muted"
-                      onClick={() => navigate("queue")}
-                    >
-                      Open queue
-                    </button>
-                  </div>
-                </>
+                <HomePage
+                  data={state.home}
+                  loading={state.home_loading}
+                  error={state.home_error}
+                  ready={state.native_ready}
+                  navigate={homeNavigate}
+                  play={homePlay}
+                  dj={startDJ}
+                  refresh={refreshHome}
+                />
               ) : (
                 <section
                   className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
@@ -1119,7 +1135,7 @@ function App() {
                       <h2>Popular</h2>
                     </div>
                   )}
-                  {(!entity?.artist || displayTracks.length > 0) && (
+                  {showTrackList && (
                     <>
                       {collection && (
                         <div className="song-filters">
@@ -1566,7 +1582,8 @@ function App() {
                   </button>
                 </div>
               )}
-              {!state.loading &&
+              {state.route !== "home" &&
+                !state.loading &&
                 !state.pageError &&
                 !state.tracks.length &&
                 !entity?.artist && (

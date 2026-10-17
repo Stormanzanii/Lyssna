@@ -93,13 +93,28 @@ pub async fn page(session: &Session, kind: &str, id: &str, offset: usize) -> Res
         ),
         _ => anyhow::bail!("Unsupported catalogue query"),
     };
+    let mut data=query(session,operation,hash,json!({"uri":format!("spotify:{kind}:{id}"),"locale":"","preReleaseV2":false,"offset":offset,"limit":50})).await?;
+    let entity = data["data"][field].take();
+    ensure!(
+        entity["uri"].as_str() == Some(format!("spotify:{kind}:{id}").as_str()),
+        "Desktop catalogue data unavailable"
+    );
+    entity.as_object().context("Invalid catalogue data")?;
+    Ok(entity)
+}
+pub(crate) async fn query(
+    session: &Session,
+    operation: &str,
+    hash: &str,
+    variables: Value,
+) -> Result<Value> {
     let token = session.login5().auth_token().await?;
     let client_token = session.spclient().client_token().await?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(8))
         .build()?;
-    let mut response=client.post("https://api-partner.spotify.com/pathfinder/v2/query").bearer_auth(token.access_token).header("client-token",client_token).header("app-platform","WebPlayer").header("spotify-app-version","896000000").json(&json!({"operationName":operation,"variables":{"uri":format!("spotify:{kind}:{id}"),"locale":"","preReleaseV2":false,"offset":offset,"limit":50},"extensions":{"persistedQuery":{"version":1,"sha256Hash":hash}}})).send().await?.error_for_status()?;
+    let mut response=client.post("https://api-partner.spotify.com/pathfinder/v2/query").bearer_auth(token.access_token).header("client-token",client_token).header("app-platform","WebPlayer").header("spotify-app-version","896000000").json(&json!({"operationName":operation,"variables":variables,"extensions":{"persistedQuery":{"version":1,"sha256Hash":hash}}})).send().await?.error_for_status()?;
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         ensure!(
@@ -108,14 +123,7 @@ pub async fn page(session: &Session, kind: &str, id: &str, offset: usize) -> Res
         );
         bytes.extend_from_slice(&chunk);
     }
-    let mut data: Value = serde_json::from_slice(&bytes)?;
-    let entity = data["data"][field].take();
-    ensure!(
-        entity["uri"].as_str() == Some(format!("spotify:{kind}:{id}").as_str()),
-        "Desktop catalogue data unavailable"
-    );
-    entity.as_object().context("Invalid catalogue data")?;
-    Ok(entity)
+    Ok(serde_json::from_slice(&bytes)?)
 }
 #[cfg(test)]
 mod base_tests {

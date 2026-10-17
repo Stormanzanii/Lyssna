@@ -77,6 +77,9 @@ export interface AppState extends Snapshot {
   pages: Record<string, CachedPage>;
 }
 export const emptyState: AppState = {
+  home: undefined,
+  home_loading: false,
+  home_error: "",
   canvases: {},
   facts: {},
   booted: false,
@@ -184,10 +187,22 @@ export function reducer(state: AppState, action: Action): AppState {
             : state.canvas_url,
       };
     case "bootstrap":
-      return { ...state, ...action.snapshot, booted: true };
+      return {
+        ...state,
+        ...action.snapshot,
+        home:
+          action.snapshot.home?.account === action.snapshot.profile?.id
+            ? action.snapshot.home
+            : undefined,
+        booted: true,
+      };
     case "session":
       return {
         ...state,
+        home:
+          state.home?.account === action.profile.id ? state.home : undefined,
+        home_loading: false,
+        home_error: "",
         profile: action.profile,
         can_follow: action.can_follow,
         login_pending: false,
@@ -199,6 +214,18 @@ export function reducer(state: AppState, action: Action): AppState {
         settings: state.settings,
         native_status: "Waiting for sign-in",
       };
+    case "home_loading":
+      return action.account === state.profile?.id
+        ? { ...state, home_loading: true, home_error: "" }
+        : state;
+    case "home":
+      return action.page.account === state.profile?.id
+        ? { ...state, home: action.page, home_loading: false, home_error: "" }
+        : state;
+    case "home_error":
+      return action.account === state.profile?.id
+        ? { ...state, home_loading: false, home_error: action.message }
+        : state;
     case "login_pending":
       return { ...state, login_pending: true };
     case "login_finished":
@@ -224,7 +251,7 @@ export function reducer(state: AppState, action: Action): AppState {
         generation: action.generation,
         tracks: cached?.tracks ?? [],
         browse_info: cached?.info,
-        loading: true,
+        loading: action.key !== "home",
         more: false,
         pageError: "",
       };

@@ -198,3 +198,42 @@ describe("lyric timing", () => {
     expect(progress(100, 100, 100)).toBe(0);
   });
 });
+describe("personalized Home ownership", () => {
+  it("rejects another account's feed and clears shelves when account changes", () => {
+    const current = { ...emptyState, profile: { id: "account-a" } };
+    const page = { account: "account-a", greeting: "Hello", sections: [] };
+    const loaded = reducer(current, { type: "home", page });
+    expect(loaded.home).toBe(page);
+    expect(
+      reducer(current, {
+        type: "home",
+        page: { ...page, account: "account-b" },
+      }),
+    ).toBe(current);
+    const changed = reducer(loaded, {
+      type: "session",
+      profile: { id: "account-b" },
+      can_follow: false,
+    });
+    expect(changed.home).toBeUndefined();
+    expect(reducer(changed, { type: "home", page })).toBe(changed);
+    expect(
+      reducer(changed, {
+        type: "home_error",
+        account: "account-a",
+        message: "old",
+      }),
+    ).toBe(changed);
+  });
+  it("drops mismatched shelves during session restore", () => {
+    const restored = reducer(emptyState, {
+      type: "bootstrap",
+      snapshot: {
+        ...emptyState,
+        profile: { id: "account-b" },
+        home: { account: "account-a", greeting: "Hello", sections: [] },
+      },
+    });
+    expect(restored.home).toBeUndefined();
+  });
+});

@@ -16,7 +16,7 @@ const track: Track = {
   is_local: false,
 };
 
-async function startClient(page: Page) {
+async function startClient(page: Page, initialRoute = "liked") {
   await page.route("https://artwork.example.test/**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
@@ -65,7 +65,76 @@ async function startClient(page: Page) {
             return;
           }
           if (command === "bootstrap") return structuredClone(snapshot);
+          if (command === "home") {
+            emit({ type: "home_loading", account: "test-user" });
+            setTimeout(
+              () =>
+                emit({
+                  type: "home",
+                  page: {
+                    account: "test-user",
+                    greeting: "Hello",
+                    sections: [
+                      {
+                        uri: "daily-mixes",
+                        title: "Daily Mixes",
+                        subtitle: "",
+                        items: [
+                          {
+                            uri: "spotify:playlist:1123456789abcdefghijkl",
+                            route: "playlist:1123456789abcdefghijkl",
+                            name: "Daily Mix 1",
+                            subtitle: "Your favorite artists",
+                            images: track.album.images,
+                            kind: "playlist",
+                            playable: true,
+                            format: "daily-mix",
+                          },
+                        ],
+                      },
+                      {
+                        uri: "personal-releases",
+                        title: "New releases for you",
+                        subtitle: "New music from artists you love",
+                        items: [
+                          {
+                            uri: "spotify:album:2123456789abcdefghijkl",
+                            route: "album:2123456789abcdefghijkl",
+                            name: "Your new album",
+                            subtitle: "Your artist",
+                            images: track.album.images,
+                            kind: "album",
+                            playable: true,
+                            format: "",
+                          },
+                        ],
+                      },
+                      {
+                        uri: "personal-stations",
+                        title: "Recommended Stations",
+                        subtitle: "",
+                        items: [
+                          {
+                            uri: "spotify:playlist:3123456789abcdefghijkl",
+                            route: "playlist:3123456789abcdefghijkl",
+                            name: "Your station",
+                            subtitle: "Based on your music",
+                            images: track.album.images,
+                            kind: "playlist",
+                            playable: true,
+                            format: "radio",
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                }),
+              20,
+            );
+            return;
+          }
           if (command === "browse") {
+            if (args.key === "home") return;
             const offset = args.offset ?? 0;
             setTimeout(
               () =>
@@ -117,6 +186,7 @@ async function startClient(page: Page) {
     {
       snapshot: {
         ...emptyState,
+        route: initialRoute,
         profile: { id: "test-user" },
         local_device_name: "SpotiFlex (test)",
         native_ready: true,
@@ -140,8 +210,55 @@ async function startClient(page: Page) {
     .locator(".application")
     .waitFor({ state: "visible", timeout: 20_000 });
   await expect(page.locator(".setup-backdrop")).toHaveCount(0);
-  await expect(page.locator(".track-row")).toHaveCount(50);
+  if (initialRoute === "home")
+    await expect(
+      page.getByRole("heading", { name: "Daily Mixes", exact: true }),
+    ).toBeVisible();
+  else await expect(page.locator(".track-row")).toHaveCount(50);
 }
+
+test("personalized Home shelves launch native mixes and DJ", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await expect(
+    page.getByRole("heading", { name: "New releases for you", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Recommended Stations", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Nothing here yet", { exact: true })).toHaveCount(
+    0,
+  );
+  await page
+    .getByRole("button", { name: "Play Daily Mix 1", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((command: any) => command.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({
+      command: "play_home",
+      context: "spotify:playlist:1123456789abcdefghijkl",
+    });
+  await page.getByRole("button", { name: "Start DJ", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((command: any) => command.command === "player")
+            .at(-1)?.args.request.command,
+      ),
+    )
+    .toBe("dj");
+  await page.screenshot({ path: "target/diagnostics/home-preview.png" });
+});
 
 test("imported lyrics keep artwork and ambience in place, without a duplicate preview", async ({
   page,

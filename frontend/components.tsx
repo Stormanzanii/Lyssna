@@ -55,10 +55,14 @@ export function Cover({
   images,
   className = "",
   onClick,
+  contextRoute,
+  contextName,
 }: {
   images?: { url: string }[];
   className?: string;
   onClick?: () => void;
+  contextRoute?: string;
+  contextName?: string;
 }) {
   const src = imageOf(images);
   const inner = src ? (
@@ -71,11 +75,19 @@ export function Cover({
       className={`cover ${className}`}
       onClick={onClick}
       aria-label="Open album"
+      data-context-route={contextRoute}
+      data-context-name={contextName}
     >
       {inner}
     </button>
   ) : (
-    <div className={`cover ${className}`}>{inner}</div>
+    <div
+      className={`cover ${className}`}
+      data-context-route={contextRoute}
+      data-context-name={contextName}
+    >
+      {inner}
+    </div>
   );
 }
 import { Ambience } from "./ambience";

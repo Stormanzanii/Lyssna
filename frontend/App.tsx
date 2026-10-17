@@ -725,6 +725,12 @@ function App() {
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const collection =
     state.route === "liked" || state.route.startsWith("playlist:");
+  const collectionPlays =
+    collection &&
+    state.route !== "liked" &&
+    (playlist
+      ? playlist.owner.id === "spotify"
+      : entity?.playlist?.owner === "Spotify");
   const filtering = !!(
     songQuery.trim() ||
     songGenre ||
@@ -844,13 +850,23 @@ function App() {
       onDragOver={(event) => event.preventDefault()}
       onContextMenu={(event) => {
         if (event.defaultPrevented) return;
+        setSongMenu(null);
+        setEntityMenu(null);
         const target = event.target as HTMLElement;
-        if (target.closest('input,textarea,[contenteditable="true"]')) return;
+        if (target.closest('input,textarea,[contenteditable="true"]')) {
+          setSongMenu(null);
+          setEntityMenu(null);
+          return;
+        }
         event.preventDefault();
         if (!stateRef.current.profile) return;
         const element = target.closest<HTMLElement>("[data-context-route]");
         const route = element?.dataset.contextRoute;
-        if (!element || !route) return;
+        if (!element || !route) {
+          setSongMenu(null);
+          setEntityMenu(null);
+          return;
+        }
         const match = /^(playlist|album|artist|track):([A-Za-z0-9]{22})$/.exec(
           route,
         );
@@ -1219,8 +1235,6 @@ function App() {
               ) : (
                 <section
                   className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
-                  data-context-route={state.route}
-                  data-context-name={title}
                   style={
                     entity?.artist && artistBanner
                       ? {
@@ -1244,7 +1258,12 @@ function App() {
                   ) : (
                     (!!entity?.images.length || !!playlist?.images.length) &&
                     !entity?.artist && (
-                      <Cover images={heroImages} className="hero-cover" />
+                      <Cover
+                        images={heroImages}
+                        className="hero-cover"
+                        contextRoute={state.route}
+                        contextName={title}
+                      />
                     )
                   )}
                   <div className="hero-copy">
@@ -1259,7 +1278,14 @@ function App() {
                               ? "Up next"
                               : "Playlist"}
                     </span>
-                    <h1>{title}</h1>
+                    <h1>
+                      <span
+                        data-context-route={state.route}
+                        data-context-name={title}
+                      >
+                        {title}
+                      </span>
+                    </h1>
                     {entity?.overview?.verified && (
                       <p className="artist-verified">
                         <Check size={18} /> Verified by Spotify
@@ -1458,7 +1484,7 @@ function App() {
                         </div>
                       )}
                       <div
-                        className={`track-table ${collection ? "collection-table" : ""}`}
+                        className={`track-table ${collectionPlays ? "collection-table" : ""}`}
                       >
                         <div className="track-table-head">
                           <span>#</span>
@@ -1470,7 +1496,7 @@ function App() {
                                 ? "Plays"
                                 : "Album"}
                           </span>
-                          {collection && <span>Plays</span>}
+                          {collectionPlays && <span>Plays</span>}
                           <span>
                             <Clock3 size={16} />
                           </span>
@@ -1494,12 +1520,13 @@ function App() {
                               onMouseEnter={() => prefetchCanvas(track.uri)}
                               onContextMenu={(event) => {
                                 if (
-                                  (event.target as HTMLElement).closest(
-                                    '[data-context-route^="artist:"]',
+                                  !(event.target as HTMLElement).closest(
+                                    ".track-name,.song-title",
                                   )
                                 )
                                   return;
                                 event.preventDefault();
+                                setEntityMenu(null);
                                 setSongMenu({
                                   track,
                                   fromList: true,
@@ -1580,6 +1607,16 @@ function App() {
                               ) : (
                                 <button
                                   className="text-link album-link"
+                                  data-context-route={
+                                    (entity?.album || track.album).id
+                                      ? `album:${(entity?.album || track.album).id}`
+                                      : (
+                                          entity?.album || track.album
+                                        ).uri?.replace("spotify:", "")
+                                  }
+                                  data-context-name={
+                                    (entity?.album || track.album).name
+                                  }
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openAlbum(entity?.album || track.album);
@@ -1592,7 +1629,7 @@ function App() {
                                     : track.album.name || entity?.album?.name}
                                 </button>
                               )}
-                              {collection && (
+                              {collectionPlays && (
                                 <span
                                   className="track-streams"
                                   title={
@@ -2396,16 +2433,19 @@ function PlayerBar({
   useEffect(() => setSeeking(null), [track?.uri]);
   return (
     <footer className="player-bar" inert={!state.profile}>
-      <div
-        className="player-song"
-        data-context-route={track?.id ? `track:${track.id}` : undefined}
-      >
+      <div className="player-song">
         {state.narrating ? (
           <DJPresentation playing={state.playback.is_playing} />
         ) : track ? (
           <>
             <Cover
               images={track.album.images}
+              contextRoute={
+                track.album.id
+                  ? `album:${track.album.id}`
+                  : track.album.uri?.replace("spotify:", "")
+              }
+              contextName={track.album.name}
               onClick={() => onAlbum(track.album)}
             />
             <div>

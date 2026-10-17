@@ -64,6 +64,35 @@ test("artist links show the artist immediately while metadata is pending", async
   await expect(page.locator(".skeleton-rows")).toHaveCount(0);
 });
 
+test("metadata menus stay off blank rows, backgrounds and player controls", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page
+    .locator(".track-row .track-name")
+    .first()
+    .click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible();
+  const row = await page.locator(".track-row").first().boundingBox();
+  if (!row) throw Error("Track row missing");
+  await page.mouse.click(row.x + 12, row.y + row.height / 2, {
+    button: "right",
+  });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page
+    .locator(".page-hero")
+    .click({ button: "right", position: { x: 5, y: 5 } });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page
+    .locator('.player-song button[title="Save to Liked Songs"]')
+    .click({ button: "right" });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.locator(".album-link").first().click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Go to album", exact: true }),
+  ).toBeVisible();
+});
+
 async function startClient(page: Page, initialRoute = "liked") {
   await page.route("https://artwork.example.test/**", (route) =>
     route.fulfill({
@@ -348,7 +377,10 @@ test("artist and song right clicks offer relevant actions", async ({
   ).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
-  await page.locator(".track-row").first().click({ button: "right" });
+  await page
+    .locator(".track-row .track-name")
+    .first()
+    .click({ button: "right" });
   await expect(
     page.getByRole("menuitem", { name: "Add to queue", exact: true }),
   ).toBeVisible();
@@ -1004,7 +1036,7 @@ test("playlist search spans unloaded pages and play counts drive sorting", async
       },
     });
   });
-  await expect(page.locator(".track-streams")).toHaveText("123,456");
+  await expect(page.locator(".track-streams")).toHaveCount(0);
   await page.getByLabel("Search songs in this playlist").clear();
   await page.getByLabel("Sort songs").selectOption("popular");
   await expect(page.locator(".track-row").first()).toContainText("Song 125");

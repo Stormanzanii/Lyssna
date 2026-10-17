@@ -26,7 +26,7 @@ impl SmoothDJ {
             input: VecDeque::new(),
             tail: VecDeque::new(),
             ready: VecDeque::new(),
-            fade: SAMPLE_RATE as usize * 7 / 10,
+            fade: SAMPLE_RATE as usize * 2,
             music_ramp: 0,
             ended: false,
         }

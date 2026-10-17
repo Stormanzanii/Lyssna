@@ -532,6 +532,7 @@ impl SpotiFlex {
                     }
                 }
                 NativeEvent::Track(_) | NativeEvent::Narration(_) => {}
+                NativeEvent::Stopped => self.playback.is_playing = false,
                 NativeEvent::Transport {
                     shuffle,
                     repeat,

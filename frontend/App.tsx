@@ -162,8 +162,7 @@ function App() {
     searchInput = useRef<HTMLInputElement>(null),
     mainScroll = useRef<HTMLDivElement>(null),
     pageSentinel = useRef<HTMLDivElement>(null),
-    pendingPage = useRef<string>(""),
-    targetChosen = useRef(false);
+    pendingPage = useRef<string>("");
   stateRef.current = state;
   useEffect(() => {
     void loadSelectedFonts([
@@ -275,19 +274,6 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [state.toast]);
-  useEffect(() => {
-    if (
-      !targetChosen.current &&
-      state.playback.is_playing &&
-      state.playback.device.id &&
-      state.playback.device.name
-    )
-      setTarget(
-        state.playback.device.name === state.local_device_name
-          ? "native"
-          : state.playback.device.id,
-      );
-  }, [state.playback, state.local_device_name]);
   const updateSettings = useCallback(
     (changes: Partial<Settings>) => {
       const settings = { ...stateRef.current.settings, ...changes };
@@ -1860,7 +1846,6 @@ function App() {
             className={target === "native" ? "selected" : ""}
             onClick={() => {
               setTarget("native");
-              targetChosen.current = true;
               setDeviceMenu(false);
             }}
           >
@@ -1883,7 +1868,6 @@ function App() {
                 className={target === device.id ? "selected" : ""}
                 onClick={() => {
                   setTarget(device.id || "native");
-                  targetChosen.current = true;
                   setDeviceMenu(false);
                   if (device.id)
                     void call("player", {

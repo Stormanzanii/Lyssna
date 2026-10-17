@@ -30,6 +30,7 @@ pub enum NativeEvent {
     /// Waiting for the one-time browser authorization for audio.
     Authorizing,
     Ready(String),
+    Stopped,
     Track(Box<crate::model::Track>),
     Transport {
         shuffle: Option<bool>,
@@ -51,6 +52,7 @@ struct ControlConnection {
     volume: Arc<AtomicU32>,
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
+    loaded: Arc<AtomicBool>,
     playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
     metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
 }
@@ -71,6 +73,7 @@ struct PlaybackServices<'a> {
     metadata: &'a mut async_channel::UnboundedReceiver<MetadataRead>,
     latest_volume: &'a AtomicU32,
     shared_session: &'a Mutex<Option<Session>>,
+    loaded: &'a AtomicBool,
 }
 
 /// Local transport commands never wait for the browsing/Web API worker.
@@ -78,6 +81,14 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn has_track(&self) -> bool {
+        self.0.lock().is_ok_and(|connection| {
+            connection.as_ref().is_some_and(|connection| {
+                connection.ready.load(Ordering::Acquire)
+                    && connection.loaded.load(Ordering::Acquire)
+            })
+        })
+    }
     fn session(&self) -> Result<Session> {
         let session = {
             let connection = self
@@ -256,7 +267,21 @@ impl NativeControls {
                 .store(u32::from(value.min(100)), Ordering::Release);
             return Ok(());
         }
-        connection.sender.send(action).map_err(|error| error.0)
+        let loading = matches!(
+            action,
+            PlayerAction::Play(Some(_))
+                | PlayerAction::PlayUris { .. }
+                | PlayerAction::PlayContext { .. }
+                | PlayerAction::RestoreDJ { .. }
+        );
+        if loading {
+            connection.loaded.store(true, Ordering::Release);
+        }
+        let result = connection.sender.send(action).map_err(|error| error.0);
+        if loading && result.is_err() {
+            connection.loaded.store(false, Ordering::Release);
+        }
+        result
     }
 }
 
@@ -668,6 +693,7 @@ impl NativePlayer {
         let cancel = cancelled.clone();
         let ready = Arc::new(AtomicBool::new(false));
         let thread_ready = ready.clone();
+        let loaded = Arc::new(AtomicBool::new(false));
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
@@ -682,6 +708,7 @@ impl NativePlayer {
                 volume: latest_volume.clone(),
                 sender,
                 ready: ready.clone(),
+                loaded: loaded.clone(),
                 playlists: Some(playlist_sender),
                 metadata: Some(metadata_sender),
             });
@@ -729,6 +756,7 @@ impl NativePlayer {
                             metadata: &mut metadata,
                             latest_volume: &latest_volume,
                             shared_session: &shared_session,
+                            loaded: &loaded,
                         },
                         &thread_ready,
                         &emit,
@@ -769,7 +797,9 @@ async fn run(
         metadata,
         latest_volume,
         shared_session,
+        loaded,
     } = channels;
+    loaded.store(false, Ordering::Release);
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
@@ -892,26 +922,33 @@ async fn run(
             }
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
-                if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){intent.request(matches!(action,PlayerAction::Play(None)));}else{
+                if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){
+                    if matches!(action,PlayerAction::Play(None))&&!active{
+                        if spirc.activate().is_err(){loaded.store(false,Ordering::Release);emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into()));continue;}
+                        active=true;
+                    }
+                    intent.request(matches!(action,PlayerAction::Play(None)));
+                }else{
                 if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
-                if apply_control(&spirc, action, &mut active).is_err() {intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
+                if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
             event = player_events.recv() => {
                 match event {
                     Some(event @ PlayerEvent::SetQueue{..})=>remember_player_queue(account,event),
-                    Some(PlayerEvent::Loading{track_id,..})=>intent.track_loading(track_id.to_uri(),std::time::Instant::now()),
+                    Some(PlayerEvent::Loading{track_id,..})=>{loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
-                    Some(PlayerEvent::SessionDisconnected { .. }) => active = false,
-                    Some(PlayerEvent::TrackChanged { audio_item }) => {pending_seek=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;loaded.store(false,Ordering::Release);},
+                    Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;intent.reset();emit(NativeEvent::Stopped);},
+                    Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri(),true);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
                     Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri(),false);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: u64::from(position_ms).saturating_sub(audio_buffer.latency_ms()), playing: None, seeked: false });}},
-                    Some(PlayerEvent::Unavailable { .. }) => {intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
+                    Some(PlayerEvent::Unavailable { .. }) => {loaded.store(false,Ordering::Release);intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
                     None => break,
                     _ => {}
                 }
@@ -1076,20 +1113,42 @@ mod tests {
     }
 
     #[test]
-    fn local_pause_bypasses_browsing_worker_and_retired_sessions() {
+    fn transport_commands_do_not_claim_a_track_is_loaded() {
         let controls = NativeControls::default();
         let (sender, mut receiver) = async_channel::unbounded_channel();
         let ready = Arc::new(AtomicBool::new(true));
+        let loaded = Arc::new(AtomicBool::new(false));
         *controls.0.lock().unwrap() = Some(ControlConnection {
             session: Arc::default(),
             volume: Arc::new(AtomicU32::new(u32::MAX)),
             sender,
             ready: ready.clone(),
+            loaded: loaded.clone(),
             playlists: None,
             metadata: None,
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
+        assert!(!controls.has_track());
         assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Pause));
+        assert!(controls.send(PlayerAction::Volume(50)).is_ok());
+        assert!(!controls.has_track());
+        assert!(controls.send(PlayerAction::Next).is_ok());
+        assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Next));
+        assert!(!controls.has_track());
+        assert!(
+            controls
+                .send(PlayerAction::Play(Some(
+                    "spotify:track:0123456789abcdefghijkl".into()
+                )))
+                .is_ok()
+        );
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            PlayerAction::Play(Some(_))
+        ));
+        assert!(controls.has_track());
+        loaded.store(false, Ordering::Release);
+        assert!(!controls.has_track());
         ready.store(false, Ordering::Release);
         assert!(matches!(
             controls.send(PlayerAction::Pause),

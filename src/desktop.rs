@@ -560,6 +560,15 @@ impl Desktop {
                         continue;
                     }
                     match message.event {
+                        NativeEvent::Stopped => {
+                            if snapshot.playback.device.name == native::device_name() {
+                                snapshot.playback.is_playing = false;
+                                snapshot.observed_at = now_ms();
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
+                        }
                         NativeEvent::Narration(active) => {
                             snapshot.narrating = active;
                             emit(json!({"type":"narration","active":active}));
@@ -1157,7 +1166,30 @@ fn player(
                 &snapshot.playback.device,
             );
         if local
-            && lock(&state.0.last_native)?.is_none()
+            && matches!(action, PlayerAction::Play(None))
+            && !state.0.controls.has_track()
+            && snapshot.playback.item.is_none()
+        {
+            if let Some(saved) = snapshot
+                .profile
+                .as_ref()
+                .and_then(|profile| crate::resume::load(&profile.id))
+            {
+                restore_playback(&mut snapshot, saved);
+            } else if let Some(track) = snapshot
+                .tracks
+                .iter()
+                .find(|track| !track.is_local)
+                .cloned()
+            {
+                snapshot.playback.item = Some(track);
+                snapshot.playback.progress_ms = Some(0);
+            } else {
+                anyhow::bail!("Choose a song to start playback");
+            }
+        }
+        if local
+            && !state.0.controls.has_track()
             && let (Some(profile), Some(track)) =
                 (snapshot.profile.as_ref(), snapshot.playback.item.as_ref())
             && let Some(restored) = crate::resume::restore_dj_action(
@@ -1172,7 +1204,7 @@ fn player(
         }
         if local
             && matches!(action, PlayerAction::Play(None))
-            && lock(&state.0.last_native)?.is_none()
+            && !state.0.controls.has_track()
             && let Some(track) = snapshot.playback.item.as_ref()
         {
             let queue = snapshot

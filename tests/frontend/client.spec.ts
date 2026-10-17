@@ -15,6 +15,43 @@ const track: Track = {
   duration_ms: 180_000,
   is_local: false,
 };
+test("playing on another device does not silently redirect local Play", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          device: {
+            id: "remote-device",
+            name: "Other device",
+            is_active: true,
+          },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  await page.waitForTimeout(100);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const commands = (window as any).__clientTest.commands;
+        return commands
+          .filter((entry: any) => entry.command === "player")
+          .at(-1)?.args.target;
+      }),
+    )
+    .toBe("native");
+});
 
 async function startClient(page: Page, initialRoute = "liked") {
   await page.route("https://artwork.example.test/**", (route) =>

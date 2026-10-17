@@ -445,6 +445,31 @@ impl Desktop {
                             emit(
                                 json!({"type":"session","profile":profile,"can_follow":snapshot.can_follow}),
                             );
+                            if let Some(connection) =
+                                pump.controls.connection_event(Some(&profile.id))
+                            {
+                                match connection {
+                                    NativeEvent::Ready(id) => {
+                                        snapshot.native_ready = true;
+                                        snapshot.native_status = "Ready · this computer".into();
+                                        if let Ok(mut current) = pump.native_id.lock() {
+                                            *current = Some(id);
+                                        }
+                                    }
+                                    NativeEvent::Authorizing => {
+                                        snapshot.native_status =
+                                            "Authorize audio playback in your browser…".into()
+                                    }
+                                    NativeEvent::Error(message) => {
+                                        snapshot.native_ready = false;
+                                        snapshot.native_status = message;
+                                    }
+                                    _ => {}
+                                }
+                                emit(
+                                    json!({"type":"native","ready":snapshot.native_ready,"status":snapshot.native_status}),
+                                );
+                            }
                             if snapshot.home.is_none()
                                 && let Some(page) = crate::library_cache::home(&profile.id)
                             {
@@ -751,6 +776,10 @@ impl Desktop {
                             );
                         }
                         NativeEvent::Ready(id) => {
+                            if !matches!(pump.controls.connection_event(snapshot.profile.as_ref().map(|profile|profile.id.as_str())),Some(NativeEvent::Ready(current))if current==id)
+                            {
+                                continue;
+                            }
                             if let Ok(mut current) = pump.native_id.lock() {
                                 *current = Some(id);
                             }
@@ -1446,6 +1475,14 @@ fn player(
                 *lock(&state.0.queued_native)? = None;
                 return Ok(());
             } else {
+                if matches!(
+                    state.0.controls.connection_event(
+                        snapshot.profile.as_ref().map(|profile| profile.id.as_str())
+                    ),
+                    Some(NativeEvent::Error(_))
+                ) {
+                    state.0.commands.send(Command::RetryAudio)?;
+                }
                 ensure!(
                     matches!(
                         action,

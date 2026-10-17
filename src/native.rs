@@ -25,6 +25,7 @@ use tokio::sync::oneshot;
 const CREDENTIAL_SERVICE: &str = "SpotiFlex/SpotifyAudio";
 static CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
+#[derive(Clone)]
 pub enum NativeEvent {
     Narration(bool),
     /// Waiting for the one-time browser authorization for audio.
@@ -48,6 +49,8 @@ pub enum NativeEvent {
 }
 
 struct ControlConnection {
+    account: String,
+    status: Arc<Mutex<Option<NativeEvent>>>,
     session: Arc<Mutex<Option<Session>>>,
     volume: Arc<AtomicU32>,
     sender: async_channel::UnboundedSender<PlayerAction>,
@@ -81,6 +84,21 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn connection_event(&self, account: Option<&str>) -> Option<NativeEvent> {
+        let account = account?;
+        let connection = self.0.lock().ok()?;
+        let connection = connection
+            .as_ref()
+            .filter(|connection| connection.account == account)?;
+        let event = connection.status.lock().ok()?.clone()?;
+        if matches!(event, NativeEvent::Ready(_)) && !connection.ready.load(Ordering::Acquire) {
+            Some(NativeEvent::Error(
+                "Native audio disconnected. Press Play to reconnect.".into(),
+            ))
+        } else {
+            Some(event)
+        }
+    }
     pub fn has_track(&self) -> bool {
         self.0.lock().is_ok_and(|connection| {
             connection.as_ref().is_some_and(|connection| {
@@ -694,6 +712,7 @@ impl NativePlayer {
         let ready = Arc::new(AtomicBool::new(false));
         let thread_ready = ready.clone();
         let loaded = Arc::new(AtomicBool::new(false));
+        let connection_status = Arc::new(Mutex::new(None));
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
@@ -704,6 +723,8 @@ impl NativePlayer {
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
+                account: account.clone(),
+                status: connection_status.clone(),
                 session: shared_session.clone(),
                 volume: latest_volume.clone(),
                 sender,
@@ -715,6 +736,13 @@ impl NativePlayer {
         }
         thread::spawn(move || {
             let emit = |event| {
+                if matches!(
+                    &event,
+                    NativeEvent::Ready(_) | NativeEvent::Authorizing | NativeEvent::Error(_)
+                ) && let Ok(mut status) = connection_status.lock()
+                {
+                    *status = Some(event.clone());
+                }
                 let _ = events.send(NativeMessage { generation, event });
                 repaint.request_repaint();
             };
@@ -1118,7 +1146,10 @@ mod tests {
         let (sender, mut receiver) = async_channel::unbounded_channel();
         let ready = Arc::new(AtomicBool::new(true));
         let loaded = Arc::new(AtomicBool::new(false));
+        let status = Arc::new(Mutex::new(Some(NativeEvent::Ready("device".into()))));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            account: "listener".into(),
+            status: status.clone(),
             session: Arc::default(),
             volume: Arc::new(AtomicU32::new(u32::MAX)),
             sender,
@@ -1128,6 +1159,11 @@ mod tests {
             metadata: None,
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
+        assert!(controls.connection_event(None).is_none());
+        assert!(controls.connection_event(Some("another-account")).is_none());
+        assert!(
+            matches!(controls.connection_event(Some("listener")),Some(NativeEvent::Ready(device))if device=="device")
+        );
         assert!(!controls.has_track());
         assert!(matches!(receiver.try_recv().unwrap(), PlayerAction::Pause));
         assert!(controls.send(PlayerAction::Volume(50)).is_ok());
@@ -1150,6 +1186,15 @@ mod tests {
         loaded.store(false, Ordering::Release);
         assert!(!controls.has_track());
         ready.store(false, Ordering::Release);
+        assert!(matches!(
+            controls.connection_event(Some("listener")),
+            Some(NativeEvent::Error(_))
+        ));
+        *status.lock().unwrap() = Some(NativeEvent::Authorizing);
+        assert!(matches!(
+            controls.connection_event(Some("listener")),
+            Some(NativeEvent::Authorizing)
+        ));
         assert!(matches!(
             controls.send(PlayerAction::Pause),
             Err(PlayerAction::Pause)

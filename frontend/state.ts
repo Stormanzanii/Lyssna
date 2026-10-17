@@ -30,6 +30,10 @@ function mergeInfo(
   return previous?.key === incoming.key
     ? {
         ...incoming,
+        title: incoming.title || previous.title,
+        subtitle: incoming.title ? incoming.subtitle : previous.subtitle,
+        images: incoming.images.length ? incoming.images : previous.images,
+        playlist: incoming.playlist ?? previous.playlist,
         overview: incoming.overview ?? previous.overview,
         album_details: incoming.album_details ?? previous.album_details,
       }
@@ -245,12 +249,35 @@ export function reducer(state: AppState, action: Action): AppState {
     case "navigate": {
       // Show the cached copy at once; fresh data replaces it when it lands.
       const cached = state.pages[action.key];
+      const item =
+        state.home?.account === state.profile?.id
+          ? state.home?.sections
+              .flatMap((section) => section.items)
+              .find((item) => item.route === action.key)
+          : undefined;
+      const homeInfo: BrowseInfo | undefined = item
+        ? {
+            key: action.key,
+            title: item.name,
+            subtitle: item.subtitle,
+            images: item.images,
+            albums: [],
+            playlist:
+              item.kind === "playlist"
+                ? { owner: "", format: item.format }
+                : undefined,
+          }
+        : undefined;
+      const info = cached?.info ? mergeInfo(homeInfo, cached.info) : homeInfo;
       return {
         ...state,
         route: action.key,
         generation: action.generation,
         tracks: cached?.tracks ?? [],
-        browse_info: cached?.info,
+        browse_info: info,
+        pages: info
+          ? rememberPage(state.pages, action.key, { info })
+          : state.pages,
         loading: action.key !== "home",
         more: false,
         pageError: "",

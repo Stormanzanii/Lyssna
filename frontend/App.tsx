@@ -556,6 +556,15 @@ function App() {
       }
     : fallbackInfo;
   const artistBanner = useLoadedImage(entity?.overview?.header_image);
+  const heroImages = entity?.images.length ? entity.images : playlist?.images;
+  const playlistInfo = entity?.playlist;
+  const personalizedMix = playlistInfo?.format.startsWith("daily-mix");
+  const playlistDuration =
+    playlistInfo?.total_tracks === state.tracks.length &&
+    state.tracks.length > 0 &&
+    state.tracks.every((track) => track.duration_ms > 0)
+      ? state.tracks.reduce((sum, track) => sum + track.duration_ms, 0)
+      : undefined;
   const title =
     entity?.title ||
     playlist?.name ||
@@ -565,7 +574,9 @@ function App() {
         ? "Queue"
         : state.route.startsWith("search:")
           ? `Results for “${state.route.slice(7)}”`
-          : "Good to see you");
+          : state.route.startsWith("playlist:")
+            ? "Playlist"
+            : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const collection =
@@ -994,11 +1005,11 @@ function App() {
                       : undefined
                   }
                 >
-                  {imageOf(entity?.images || playlist?.images) && (
+                  {imageOf(heroImages) && (
                     <div
                       className="hero-wash"
                       style={{
-                        backgroundImage: `url("${imageOf(entity?.images || playlist?.images)}")`,
+                        backgroundImage: `url("${imageOf(heroImages)}")`,
                       }}
                     />
                   )}
@@ -1009,10 +1020,7 @@ function App() {
                   ) : (
                     (!!entity?.images.length || !!playlist?.images.length) &&
                     !entity?.artist && (
-                      <Cover
-                        images={entity?.images || playlist?.images}
-                        className="hero-cover"
-                      />
+                      <Cover images={heroImages} className="hero-cover" />
                     )
                   )}
                   <div className="hero-copy">
@@ -1063,6 +1071,36 @@ function App() {
                         )}
                       </small>
                     )}
+                    {playlistInfo &&
+                      (personalizedMix ||
+                        playlistInfo.owner ||
+                        playlistInfo.total_tracks != null) && (
+                        <small className="playlist-meta">
+                          {personalizedMix
+                            ? `Made for ${profileName}`
+                            : playlistInfo.owner === "spotify"
+                              ? "Spotify"
+                              : playlistInfo.owner}
+                          {playlistInfo.total_tracks != null && (
+                            <>
+                              {personalizedMix || playlistInfo.owner
+                                ? " · "
+                                : ""}
+                              {playlistInfo.total_tracks} songs
+                            </>
+                          )}
+                          {playlistDuration != null && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              {playlistDuration >= 3_600_000
+                                ? `${Math.floor(playlistDuration / 3_600_000)} hr `
+                                : ""}
+                              {Math.floor(playlistDuration / 60_000) % 60} min
+                            </>
+                          )}
+                        </small>
+                      )}
                   </div>
                 </section>
               )}

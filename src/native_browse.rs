@@ -20,6 +20,63 @@ static TRACKS: OnceLock<std::sync::Mutex<HashMap<Key, Track>>> = OnceLock::new()
 fn listing_pages(context: librespot_protocol::context::Context) -> VecDeque<Value> {
     context.pages.into_iter().map(|page|json!({"tracks":page.tracks.into_iter().filter_map(|track|track.uri).map(|uri|json!({"uri":uri})).collect::<Vec<_>>(),"page_url":page.page_url,"next_page_url":page.next_page_url})).collect()
 }
+pub async fn playlist_info(session: &Session, id: &str) -> Result<crate::model::BrowseInfo> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid playlist ID"
+    );
+    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    let playlist = tokio::time::timeout(Duration::from_secs(8), Playlist::get(session, &uri))
+        .await
+        .context("Playlist metadata request timed out")??;
+    ensure!(
+        !playlist.attributes.name.is_empty(),
+        "Playlist name unavailable"
+    );
+    Ok(playlist_header(id, &playlist))
+}
+fn playlist_header(id: &str, playlist: &Playlist) -> crate::model::BrowseInfo {
+    use crate::model::{Artwork, BrowseInfo, PlaylistDetails};
+    let mut images: Vec<_> = playlist
+        .attributes
+        .picture_sizes
+        .iter()
+        .filter(|picture| picture.url.starts_with("https://"))
+        .map(|picture| Artwork {
+            url: picture.url.clone(),
+            width: None,
+        })
+        .collect();
+    if images.is_empty() && playlist.attributes.picture.len() == 20 {
+        let file: String = playlist
+            .attributes
+            .picture
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        images.push(Artwork {
+            url: format!("https://i.scdn.co/image/{file}"),
+            width: None,
+        });
+    }
+    let owner = match &playlist.id {
+        SpotifyUri::Playlist { user, .. } => user.clone().unwrap_or_default(),
+        _ => String::new(),
+    };
+    BrowseInfo {
+        key: format!("playlist:{id}"),
+        title: playlist.attributes.name.clone(),
+        subtitle: playlist.attributes.description.clone(),
+        images,
+        playlist: Some(PlaylistDetails {
+            owner,
+            total_tracks: usize::try_from(playlist.length).ok(),
+            format: playlist.attributes.format.clone(),
+        }),
+        ..BrowseInfo::default()
+    }
+}
+
 pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Track>> {
     let identity = session.username();
     let cache_key = (identity.clone(), key.to_owned());
@@ -180,4 +237,38 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
         result.extend(ordered.into_iter().map(|(_, track)| track));
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod playlist_header_tests {
+    use super::*;
+    #[test]
+    fn generated_playlist_metadata_is_independent_of_saved_library() {
+        let id = "0123456789abcdefghijkl";
+        let mut attributes = librespot_protocol::playlist4_external::ListAttributes::new();
+        attributes.set_name("Daily Mix 1".into());
+        attributes.set_description("Your favorite artists".into());
+        attributes.set_format("daily-mix".into());
+        let mut picture = librespot_protocol::playlist4_external::PictureSize::new();
+        picture.set_url("https://artwork.example.test/mix".into());
+        attributes.picture_size.push(picture);
+        let mut data = librespot_protocol::playlist4_external::SelectedListContent::new();
+        data.attributes = Some(attributes).into();
+        data.set_length(50);
+        data.set_owner_username("spotify".into());
+        data.set_timestamp(1);
+        let playlist = Playlist::parse(
+            &data,
+            &SpotifyUri::from_uri(&format!("spotify:playlist:{id}")).unwrap(),
+        )
+        .unwrap();
+        let info = playlist_header(id, &playlist);
+        assert_eq!(info.title, "Daily Mix 1");
+        assert_eq!(info.subtitle, "Your favorite artists");
+        assert_eq!(info.images[0].url, "https://artwork.example.test/mix");
+        let details = info.playlist.unwrap();
+        assert_eq!(details.owner, "spotify");
+        assert_eq!(details.total_tracks, Some(50));
+        assert_eq!(details.format, "daily-mix");
+    }
 }

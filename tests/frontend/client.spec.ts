@@ -260,6 +260,125 @@ test("personalized Home shelves launch native mixes and DJ", async ({
   await page.screenshot({ path: "target/diagnostics/home-preview.png" });
 });
 
+test("Daily Mix navigation retains title, artwork and description", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await page
+    .getByRole("button", { name: "Open Daily Mix 1", exact: true })
+    .click();
+  await expect(page.locator(".page-hero h1")).toHaveText("Daily Mix 1");
+  await expect(page.locator(".page-hero")).toContainText(
+    "Your favorite artists",
+  );
+  await expect(page.locator(".page-hero img")).toHaveAttribute(
+    "src",
+    "https://artwork.example.test/cover.svg",
+  );
+  await expect(page.locator(".track-row")).toHaveCount(50);
+  await page.evaluate(() => {
+    const request = (window as any).__clientTest.commands
+      .filter((request: any) => request.command === "browse")
+      .at(-1);
+    (window as any).__clientTest.emit({
+      type: "browse_info",
+      generation: request.args.generation,
+      info: {
+        key: request.args.key,
+        title: "Daily Mix 1",
+        subtitle: "Your favorite artists",
+        images: [],
+        albums: [],
+        playlist: { owner: "spotify", format: "daily-mix", total_tracks: 50 },
+      },
+    });
+  });
+  await expect(page.locator(".playlist-meta")).toContainText(
+    "Made for test-user",
+  );
+  await expect(page.locator(".playlist-meta")).toContainText("50 songs");
+  await page.getByTitle("Go back", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open Daily Mix 1", exact: true })
+    .click();
+  await expect(page.locator(".page-hero h1")).toHaveText("Daily Mix 1");
+});
+
+test("Home shelves keep header, player and DJ inside the window", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await page.evaluate(() => {
+    const items = Array.from({ length: 25 }, (_, index) => ({
+      uri: `spotify:playlist:${String(index).padStart(22, "0")}`,
+      route: `playlist:${String(index).padStart(22, "0")}`,
+      name: `Personal mix ${index + 1}`,
+      subtitle: "Favorite artists and new discoveries",
+      images: [],
+      kind: "playlist",
+      playable: true,
+      format: "daily-mix",
+    }));
+    (window as any).__clientTest.emit({
+      type: "home",
+      page: {
+        account: "test-user",
+        greeting: "Hello",
+        sections: [{ uri: "mixes", title: "Daily Mixes", subtitle: "", items }],
+      },
+    });
+  });
+  await expect(page.locator(".home-card")).toHaveCount(25);
+  for (const viewport of [
+    { width: 2560, height: 1323 },
+    { width: 1600, height: 1000 },
+    { width: 900, height: 600 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const selector of [
+      ".application",
+      ".topbar",
+      ".window-controls",
+      ".player-bar",
+      ".player-extras",
+      ".home-quick-links",
+      '[aria-label="Start DJ"]',
+    ]) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box, selector).not.toBeNull();
+      expect(
+        box!.x,
+        `${selector} extends past left edge`,
+      ).toBeGreaterThanOrEqual(-1);
+      expect(
+        box!.x + box!.width,
+        `${selector} extends past right edge at ${viewport.width}px`,
+      ).toBeLessThanOrEqual(viewport.width + 1);
+    }
+    const player = await page.locator(".player-bar").boundingBox();
+    expect(player!.y + player!.height).toBeLessThanOrEqual(viewport.height + 1);
+  }
+  const shelf = page.locator(".home-shelf-items");
+  await page
+    .getByRole("button", { name: "Scroll Daily Mixes right", exact: true })
+    .click();
+  await expect
+    .poll(() => shelf.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Expand", exact: true }).click();
+  await expect(shelf).toHaveClass(/expanded/);
+  const width = await shelf.evaluate((element) => ({
+    scroll: element.scrollWidth,
+    client: element.clientWidth,
+  }));
+  expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
+  const footer = await page.locator(".player-bar").boundingBox();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(601);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.getByRole("button", { name: "Collapse", exact: true }).click();
+  await page.screenshot({ path: "target/diagnostics/home-layout-fixed.png" });
+});
+
 test("imported lyrics keep artwork and ambience in place, without a duplicate preview", async ({
   page,
 }) => {

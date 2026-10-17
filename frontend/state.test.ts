@@ -199,6 +199,66 @@ describe("lyric timing", () => {
   });
 });
 describe("personalized Home ownership", () => {
+  it("keeps generated playlist metadata through navigation and incomplete responses", () => {
+    const item = {
+      uri: "spotify:playlist:1123456789abcdefghijkl",
+      route: "playlist:1123456789abcdefghijkl",
+      name: "Daily Mix 1",
+      subtitle: "Your favorite artists",
+      images: [{ url: "https://artwork.example.test/mix" }],
+      kind: "playlist",
+      playable: true,
+      format: "daily-mix",
+    };
+    let state = reducer(
+      { ...emptyState, profile: { id: "account-a" } },
+      {
+        type: "home",
+        page: {
+          account: "account-a",
+          greeting: "Hello",
+          sections: [
+            { uri: "mixes", title: "Mixes", subtitle: "", items: [item] },
+          ],
+        },
+      },
+    );
+    state = reducer(state, {
+      type: "navigate",
+      key: item.route,
+      generation: 1,
+    });
+    expect(state.browse_info?.title).toBe(item.name);
+    state = reducer(state, {
+      type: "browse_info",
+      generation: 1,
+      info: {
+        key: item.route,
+        title: "",
+        subtitle: "",
+        images: [],
+        albums: [],
+      },
+    });
+    expect(state.browse_info?.title).toBe(item.name);
+    expect(state.browse_info?.images).toEqual(item.images);
+    const native = {
+      ...state.browse_info!,
+      playlist: { owner: "spotify", total_tracks: 50, format: "daily-mix" },
+    };
+    state = reducer(state, {
+      type: "browse_info",
+      generation: 1,
+      info: native,
+    });
+    state = reducer(state, { type: "navigate", key: "home", generation: 2 });
+    state = reducer(state, {
+      type: "navigate",
+      key: item.route,
+      generation: 3,
+    });
+    expect(state.browse_info?.playlist?.total_tracks).toBe(50);
+  });
   it("rejects another account's feed and clears shelves when account changes", () => {
     const current = { ...emptyState, profile: { id: "account-a" } };
     const page = { account: "account-a", greeting: "Hello", sections: [] };

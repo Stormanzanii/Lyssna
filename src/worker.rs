@@ -681,6 +681,20 @@ impl Backend {
                             context.request_repaint();
                         }
                     });
+                } else if let Some(id) = key.strip_prefix("playlist:") {
+                    let id = id.to_owned();
+                    let native = self.native_controls.clone();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    thread::spawn(move || {
+                        if let Ok(info) = native.playlist_info(&id) {
+                            let _ = events.send(Event::BrowseInfo {
+                                generation,
+                                info: Box::new(info),
+                            });
+                            context.request_repaint();
+                        }
+                    });
                 } else if let Some(id) = key.strip_prefix("album:") {
                     let id = id.to_owned();
                     let native = self.native_controls.clone();

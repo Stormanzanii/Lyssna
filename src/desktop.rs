@@ -617,6 +617,13 @@ impl Desktop {
                             }
                             snapshot.native_ready = true;
                             snapshot.native_status = "Ready · this computer".into();
+                            if snapshot.route.starts_with("playlist:") && snapshot.profile.is_some()
+                            {
+                                let _ = pump.commands.send(Command::BrowseInfo {
+                                    key: snapshot.route.clone(),
+                                    generation: snapshot.generation,
+                                });
+                            }
                             emit(
                                 json!({"type":"native","ready":true,"status":snapshot.native_status}),
                             );
@@ -972,7 +979,11 @@ fn browse(
             snapshot.more = false;
             return Ok(());
         }
-        if offset == 0 && (key.starts_with("album:") || key.starts_with("artist:")) {
+        if offset == 0
+            && (key.starts_with("album:")
+                || key.starts_with("artist:")
+                || key.starts_with("playlist:"))
+        {
             state.0.commands.send(Command::BrowseInfo {
                 key: key.clone(),
                 generation,

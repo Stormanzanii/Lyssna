@@ -77,7 +77,7 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
-    pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
+    fn session(&self) -> Result<Session> {
         let session = {
             let connection = self
                 .0
@@ -94,6 +94,17 @@ impl NativeControls {
                 .clone()
                 .context("Native session unavailable")?
         };
+        Ok(session)
+    }
+    pub fn playlist_info(&self, id: &str) -> Result<crate::model::BrowseInfo> {
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::native_browse::playlist_info(&session, id))
+    }
+    pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
+        let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?

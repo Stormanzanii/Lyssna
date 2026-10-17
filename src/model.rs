@@ -153,7 +153,15 @@ pub struct Playback {
 }
 
 #[derive(Clone, Default, Serialize)]
+pub struct PlaylistDetails {
+    pub owner: String,
+    pub total_tracks: Option<usize>,
+    pub format: String,
+}
+
+#[derive(Clone, Default, Serialize)]
 pub struct BrowseInfo {
+    pub playlist: Option<PlaylistDetails>,
     pub album_details: Option<crate::album::AlbumDetails>,
     pub key: String,
     pub title: String,

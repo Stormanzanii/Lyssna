@@ -122,6 +122,7 @@ export interface PlayingDetails {
   queue: Track[];
 }
 export interface BrowseInfo {
+  playlist?: { owner: string; total_tracks?: number | null; format: string };
   album_details?: {
     streams: Record<string, number>;
     duration_ms: number;

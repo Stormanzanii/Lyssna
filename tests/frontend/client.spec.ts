@@ -346,6 +346,87 @@ test("player DJ button requests a fresh DJ selection on every click", async ({
     .toBe(2);
 });
 
+test("holding DJ explains request availability without refreshing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.clock.install();
+  const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
+  await button.hover();
+  await page.mouse.down();
+  await page.clock.runFor(600);
+  await expect(
+    page.getByText(
+      "DJ text and voice requests aren't available yet. Click DJ for a new selection.",
+      { exact: true },
+    ),
+  ).toBeVisible({ timeout: 1000 });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) =>
+            entry.command === "player" && entry.args.request.command === "dj",
+        ).length,
+    ),
+  ).toBe(0);
+  await button.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (entry: any) =>
+              entry.command === "player" && entry.args.request.command === "dj",
+          ).length,
+      ),
+    )
+    .toBe(1);
+});
+
+test("cancelled DJ holds stay silent and preserve keyboard refresh", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.clock.install();
+  const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
+  await button.hover();
+  await page.mouse.down();
+  await page.clock.runFor(200);
+  await page.mouse.move(0, 0);
+  await page.clock.runFor(600);
+  await page.mouse.up();
+  await expect(
+    page.getByText(
+      "DJ text and voice requests aren't available yet. Click DJ for a new selection.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) =>
+            entry.command === "player" && entry.args.request.command === "dj",
+        ).length,
+    ),
+  ).toBe(0);
+  await button.focus();
+  await button.press("Enter");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (entry: any) =>
+              entry.command === "player" && entry.args.request.command === "dj",
+          ).length,
+      ),
+    )
+    .toBe(1);
+});
+
 test("personalized Home shelves launch native mixes and DJ", async ({
   page,
 }) => {

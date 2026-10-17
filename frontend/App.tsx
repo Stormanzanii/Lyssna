@@ -90,6 +90,7 @@ import {
 } from "./components";
 import "./styles.css";
 import { VolumeControl } from "./volume-control";
+import { DJButton } from "./dj-button";
 import {
   DJ_ID,
   accountOrder,
@@ -1819,6 +1820,11 @@ function App() {
       <PlayerBar
         state={state}
         onPlayer={play}
+        onDJRequest={() =>
+          notify(
+            "DJ text and voice requests aren't available yet. Click DJ for a new selection.",
+          )
+        }
         onToggle={toggle}
         onAlbum={openAlbum}
         onArtist={openArtist}
@@ -2229,6 +2235,7 @@ function App() {
 function PlayerBar({
   state,
   onPlayer,
+  onDJRequest,
   onToggle,
   onAlbum,
   onArtist,
@@ -2243,6 +2250,7 @@ function PlayerBar({
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
+  onDJRequest: () => void;
   onToggle: () => void;
   onAlbum: (album: Album) => void;
   onArtist: (artist: Artist) => void;
@@ -2424,14 +2432,10 @@ function PlayerBar({
         </div>
       </div>
       <div className="player-extras">
-        <button
-          className="icon-button dj-refresh"
-          title="Refresh DJ"
-          aria-label="Refresh DJ"
-          onClick={() => onPlayer({ command: "dj" })}
-        >
-          <DJArtwork />
-        </button>
+        <DJButton
+          onRefresh={() => onPlayer({ command: "dj" })}
+          onHold={onDJRequest}
+        />
         <button
           className={`icon-button ${lyricsActive ? "active" : ""}`}
           title="Lyrics"

@@ -33,7 +33,7 @@ export function CreatorProfiles({ children }: { children: ReactNode }) {
         username: person.username,
         userId: person.id,
       }).catch(() =>
-        setError("Creator profile unavailable. It may not be published yet."),
+        setError("Could not open creator profile. Try again shortly."),
       );
   };
   return (

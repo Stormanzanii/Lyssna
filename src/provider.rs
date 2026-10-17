@@ -241,6 +241,27 @@ pub fn creator_profile(id: &str) -> Result<Url> {
 fn creator_redirect(location: &str) -> Result<Url> {
     let mut url = Url::parse("https://spicylyrics.org/")?.join(location)?;
     let path = url.path().trim_matches('/').to_owned();
+    let trusted = url.scheme() == "https"
+        && url.host_str() == Some("spicylyrics.org")
+        && url.port_or_known_default() == Some(443)
+        && url.username().is_empty()
+        && url.password().is_none();
+    if trusted && path == "identity/captcha" {
+        let target = url
+            .query_pairs()
+            .find(|(key, _)| key == "returnTo")
+            .map(|(_, value)| value.into_owned())
+            .context("Missing creator verification destination")?;
+        let destination = url.join(&target)?;
+        ensure!(
+            destination.origin() == url.origin()
+                && destination.username().is_empty()
+                && destination.password().is_none(),
+            "Invalid creator verification destination"
+        );
+        url.set_fragment(None);
+        return Ok(url);
+    }
     ensure!(
         url.scheme() == "https"
             && url.host_str() == Some("spicylyrics.org")
@@ -598,6 +619,15 @@ impl Decoder<'_> {
 mod tests {
     use super::*;
     #[test]
+    fn creator_profile_verification_is_not_treated_as_unpublished() {
+        assert_eq!(
+            creator_redirect("/identity/captcha?returnTo=%2Fuid%2F123456789012345678")
+                .unwrap()
+                .as_str(),
+            "https://spicylyrics.org/identity/captcha?returnTo=%2Fuid%2F123456789012345678"
+        );
+    }
+    #[test]
     fn creator_identity_uses_canonical_handle_and_rejects_other_origins() {
         assert_eq!(
             creator_redirect("/actual-handle").unwrap().as_str(),
@@ -608,6 +638,8 @@ mod tests {
             "http://spicylyrics.org/person",
             "https://user@spicylyrics.org/person",
             "/unexpected/nested/path",
+            "/identity/captcha?returnTo=https%3A%2F%2Funtrusted.example%2Fperson",
+            "/identity/captcha",
         ] {
             assert!(creator_redirect(location).is_err());
         }

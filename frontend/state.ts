@@ -34,6 +34,8 @@ function mergeInfo(
         subtitle: incoming.title ? incoming.subtitle : previous.subtitle,
         images: incoming.images.length ? incoming.images : previous.images,
         playlist: incoming.playlist ?? previous.playlist,
+        artist: incoming.artist ?? previous.artist,
+        album: incoming.album ?? previous.album,
         overview: incoming.overview ?? previous.overview,
         album_details: incoming.album_details ?? previous.album_details,
       }
@@ -333,9 +335,14 @@ export function reducer(state: AppState, action: Action): AppState {
         ? { ...state, loading: false, pageError: action.message }
         : state;
     case "browse_info":
-      return action.generation === state.generation
+      return action.generation === state.generation &&
+        action.info.key === state.route
         ? {
             ...state,
+            loading:
+              state.route.startsWith("artist:") && action.info.overview
+                ? false
+                : state.loading,
             browse_info: mergeInfo(state.browse_info, action.info),
             pages: rememberPage(state.pages, action.info.key, {
               info: action.info,

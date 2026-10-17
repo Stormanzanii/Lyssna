@@ -144,27 +144,51 @@ export function prefetchPage(key: string) {
 }
 export const cancelPrefetch = () => clearTimeout(hoverTimer);
 
+const decodedImages = new Set<string>();
+const imageLoads = new Map<string, Promise<boolean>>();
+export function preloadImage(url?: string): Promise<boolean> {
+  if (!url) return Promise.resolve(false);
+  if (decodedImages.has(url)) return Promise.resolve(true);
+  const existing = imageLoads.get(url);
+  if (existing) return existing;
+  const request = new Promise<boolean>((resolve) => {
+    const image = new Image();
+    const finish = (success: boolean) => {
+      image.onload = null;
+      image.onerror = null;
+      imageLoads.delete(url);
+      if (success) {
+        decodedImages.add(url);
+        if (decodedImages.size > 512)
+          decodedImages.delete(decodedImages.values().next().value!);
+      }
+      resolve(success);
+    };
+    image.onload = () => {
+      void image
+        .decode()
+        .catch(() => {})
+        .then(() => finish(true));
+    };
+    image.onerror = () => finish(false);
+    image.src = url;
+  });
+  imageLoads.set(url, request);
+  return request;
+}
 export function useLoadedImage(url?: string) {
   const [loaded, setLoaded] = useState<string>();
   useEffect(() => {
     if (!url) return;
     let cancelled = false;
-    const image = new Image();
-    image.onload = () => {
-      void image
-        .decode()
-        .catch(() => {})
-        .then(() => {
-          if (!cancelled) setLoaded(url);
-        });
-    };
-    image.src = url;
+    void preloadImage(url).then((success) => {
+      if (success && !cancelled) setLoaded(url);
+    });
     return () => {
       cancelled = true;
-      image.onload = null;
     };
   }, [url]);
-  return loaded === url ? url : undefined;
+  return loaded === url || (url && decodedImages.has(url)) ? url : undefined;
 }
 
 export function ArtistLinks({

@@ -87,6 +87,7 @@ import {
   prefetchPage,
   cancelPrefetch,
   useLoadedImage,
+  preloadImage,
   ExplicitBadge,
   usePosition,
 } from "./components";
@@ -206,6 +207,20 @@ function App() {
       setSelected(new Set());
       setSongMenu(null);
       const next = ++generation.current;
+      const hint = stateRef.current.home?.sections
+        .flatMap((section) => section.items)
+        .find((item) => item.route === key);
+      if (hint && (key.startsWith("artist:") || key.startsWith("album:")))
+        dispatch({
+          type: "info_prefetch",
+          info: {
+            key,
+            title: hint.name,
+            subtitle: hint.subtitle,
+            images: hint.images,
+            albums: [],
+          },
+        });
       dispatch({ type: "navigate", key, generation: next });
       mainScroll.current?.scrollTo({ top: 0 });
       void call("browse", { key, generation: next, offset: 0 });
@@ -220,6 +235,12 @@ function App() {
       const pending: AppEvent[] = [];
       const receive = (event: AppEvent) => {
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);
+        if (event.type === "session")
+          void preloadImage(imageOf(event.profile.images));
+        if (event.type === "browse_info" || event.type === "info_prefetch") {
+          void preloadImage(imageOf(event.info.images));
+          void preloadImage(event.info.overview?.header_image);
+        }
         dispatch(event);
       };
       try {
@@ -232,6 +253,8 @@ function App() {
           receive(event);
         });
         const snapshot = await rpc<Snapshot>("bootstrap");
+        void preloadImage(imageOf(snapshot.profile?.images));
+        void preloadImage(snapshot.browse_info?.overview?.header_image);
         if (!disposed) {
           generation.current = snapshot.generation;
           bootRoute.current = snapshot.route || "home";
@@ -337,6 +360,41 @@ function App() {
     state.home?.cached,
     refreshHome,
   ]);
+  const metadataKeys = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...(state.playback.item?.artists.flatMap((artist) =>
+            artist.id ? [`artist:${artist.id}`] : [],
+          ) || []),
+          ...(state.playback.item?.album.id
+            ? [`album:${state.playback.item.album.id}`]
+            : []),
+          ...state.tracks
+            .slice(0, 8)
+            .flatMap((track) =>
+              track.artists.flatMap((artist) =>
+                artist.id ? [`artist:${artist.id}`] : [],
+              ),
+            ),
+          ...(state.home?.account === state.profile?.id
+            ? state.home?.sections.flatMap((section) =>
+                section.items
+                  .filter(
+                    (item) => item.kind === "artist" || item.kind === "album",
+                  )
+                  .map((item) => item.route),
+              ) || []
+            : []),
+        ]),
+      ].slice(0, 8),
+    [state.playback.item?.uri, state.tracks, state.home, state.profile?.id],
+  );
+  const metadataSignature = metadataKeys.join("|");
+  useEffect(() => {
+    if (state.profile && state.native_ready && metadataKeys.length)
+      void rpc("prefetch_metadata", { keys: metadataKeys }).catch(() => {});
+  }, [state.profile?.id, state.native_ready, metadataSignature]);
   const play = useCallback(
     (request: PlayerRequest) => {
       const current = stateRef.current,
@@ -462,8 +520,24 @@ function App() {
   const openArtist = useCallback(
     (artist: Artist) => {
       const id = artist.id || artist.uri?.split(":")[2];
-      if (id) navigate(`artist:${id}`);
-      else setQuery(artist.name);
+      if (id) {
+        const known =
+          stateRef.current.details.artists.find(
+            (item) => item.id === id && item.images?.length,
+          ) || artist;
+        dispatch({
+          type: "info_prefetch",
+          info: {
+            key: `artist:${id}`,
+            title: artist.name,
+            subtitle: "Artist",
+            images: known.images || [],
+            artist: known,
+            albums: [],
+          },
+        });
+        navigate(`artist:${id}`);
+      } else setQuery(artist.name);
     },
     [navigate],
   );
@@ -640,7 +714,13 @@ function App() {
           ? `Results for “${state.route.slice(7)}”`
           : state.route.startsWith("playlist:")
             ? "Playlist"
-            : "Good to see you");
+            : state.route.startsWith("artist:")
+              ? state.playback.item?.artists.find(
+                  (artist) => artist.id === state.route.slice(7),
+                )?.name || "Artist"
+              : state.route.startsWith("album:")
+                ? "Album"
+                : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const collection =
@@ -1738,28 +1818,36 @@ function App() {
                   </button>
                 </section>
               )}
-              {state.loading && !state.tracks.length && (
-                <div
-                  className="skeleton-rows"
-                  role="status"
-                  aria-label={
-                    state.route.startsWith("search:")
-                      ? "Searching Spotify"
-                      : "Loading"
-                  }
-                >
-                  {Array.from({ length: 8 }, (_, index) => (
-                    <div className="skeleton-row" key={index}>
-                      <i />
-                      <i />
-                      <div>
-                        <i />
-                        <i />
-                      </div>
-                    </div>
-                  ))}
+              {state.route.startsWith("artist:") && !entity?.overview && (
+                <div className="artist-loading" role="status">
+                  <LoaderCircle className="spin" size={18} />
+                  Loading artist details…
                 </div>
               )}
+              {state.loading &&
+                !state.tracks.length &&
+                !state.route.startsWith("artist:") && (
+                  <div
+                    className="skeleton-rows"
+                    role="status"
+                    aria-label={
+                      state.route.startsWith("search:")
+                        ? "Searching Spotify"
+                        : "Loading"
+                    }
+                  >
+                    {Array.from({ length: 8 }, (_, index) => (
+                      <div className="skeleton-row" key={index}>
+                        <i />
+                        <i />
+                        <div>
+                          <i />
+                          <i />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               {!state.loading && state.pageError && (
                 <div className="empty-page">
                   <h2>Couldn’t load this page</h2>
@@ -1773,6 +1861,7 @@ function App() {
                 </div>
               )}
               {state.route !== "home" &&
+                !state.route.startsWith("artist:") &&
                 !state.loading &&
                 !state.pageError &&
                 !state.tracks.length &&

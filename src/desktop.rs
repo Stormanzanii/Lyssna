@@ -121,6 +121,114 @@ fn targets_local_device(target: Option<&str>, native_id: Option<&str>, device: &
             && (target.is_none() || target == device.id.as_deref())
 }
 
+fn load_native_catalogue(
+    inner: Arc<Inner>,
+    app: tauri::AppHandle,
+    account: String,
+    key: String,
+    generation: Option<u64>,
+) {
+    thread::spawn(move || {
+        let Some((kind, id)) = key
+            .split_once(':')
+            .filter(|(kind, _)| matches!(*kind, "artist" | "album"))
+        else {
+            return;
+        };
+        let cached = crate::library_cache::info(&account, &key);
+        let complete = cached.as_ref().is_some_and(|info| {
+            if kind == "artist" {
+                info.overview.is_some()
+            } else {
+                info.album_details.is_some()
+            }
+        });
+        let info = if generation.is_none()
+            && complete
+            && crate::library_cache::info_is_fresh(&account, &key)
+        {
+            cached
+        } else {
+            inner
+                .controls
+                .catalogue(kind, id, 0)
+                .ok()
+                .and_then(|entity| {
+                    let mut info = crate::catalogue::base_info(&entity, kind, id).ok()?;
+                    if kind == "artist" {
+                        info.overview = crate::artist::from_entity(&entity, id).ok();
+                    } else {
+                        info.album_details = Some(crate::album::parse(&entity));
+                    }
+                    Some(crate::library_cache::save_info(&account, info))
+                })
+        };
+        let Some(info) = info else {
+            if let Some(generation) = generation
+                && let Ok(snapshot) = inner.snapshot.lock()
+                && snapshot.generation == generation
+                && snapshot.route == key
+                && snapshot
+                    .profile
+                    .as_ref()
+                    .is_some_and(|profile| profile.id == account)
+            {
+                let _ = inner.commands.send(Command::BrowseInfo { key, generation });
+            }
+            return;
+        };
+        let album_incomplete = info
+            .album_details
+            .as_ref()
+            .is_some_and(|details| !details.complete_duration || details.streams.is_empty());
+        let Ok(mut snapshot) = inner.snapshot.lock() else {
+            return;
+        };
+        if snapshot
+            .profile
+            .as_ref()
+            .is_none_or(|profile| profile.id != account)
+        {
+            return;
+        }
+        if let Some(generation) = generation {
+            if snapshot.generation != generation || snapshot.route != key {
+                return;
+            }
+            let needs_status = info
+                .overview
+                .as_ref()
+                .is_some_and(|overview| !overview.details_loaded)
+                && snapshot
+                    .browse_info
+                    .as_ref()
+                    .and_then(|info| info.overview.as_ref())
+                    .is_none();
+            snapshot.browse_info = Some(info.clone());
+            if kind == "artist" && info.overview.is_some() {
+                snapshot.loading = false;
+                snapshot.more = false;
+            }
+            let _ = app.emit(
+                "spotiflex",
+                json!({"type":"browse_info","generation":generation,"info":info}),
+            );
+            if needs_status {
+                let _ = inner.commands.send(Command::ArtistTracks {
+                    account,
+                    generation,
+                    info: Box::new(info),
+                });
+            }
+            if album_incomplete {
+                let _ = inner.commands.send(Command::BrowseInfo { key, generation });
+            }
+        } else {
+            let _ = app.emit("spotiflex", json!({"type":"info_prefetch","info":info}));
+        }
+    });
+}
+
 impl Desktop {
     fn start(app: tauri::AppHandle) -> Result<Self> {
         let (settings, notice) = match Settings::load() {
@@ -509,6 +617,11 @@ impl Desktop {
                                     .is_some_and(|overview| !overview.details_loaded)
                                 {
                                     let _ = pump.commands.send(Command::ArtistTracks {
+                                        account: snapshot
+                                            .profile
+                                            .as_ref()
+                                            .map(|profile| profile.id.clone())
+                                            .unwrap_or_default(),
                                         generation,
                                         info: info.clone(),
                                     });
@@ -654,12 +767,31 @@ impl Desktop {
                             {
                                 *last = Some(Instant::now());
                             }
-                            if snapshot.route.starts_with("playlist:") && snapshot.profile.is_some()
+                            if ["playlist:", "album:", "artist:"]
+                                .iter()
+                                .any(|prefix| snapshot.route.starts_with(prefix))
+                                && snapshot.profile.is_some()
                             {
-                                let _ = pump.commands.send(Command::BrowseInfo {
-                                    key: snapshot.route.clone(),
-                                    generation: snapshot.generation,
-                                });
+                                if snapshot.route.starts_with("artist:")
+                                    || snapshot.route.starts_with("album:")
+                                {
+                                    load_native_catalogue(
+                                        pump.clone(),
+                                        app.clone(),
+                                        snapshot
+                                            .profile
+                                            .as_ref()
+                                            .map(|profile| profile.id.clone())
+                                            .unwrap_or_default(),
+                                        snapshot.route.clone(),
+                                        Some(snapshot.generation),
+                                    );
+                                } else {
+                                    let _ = pump.commands.send(Command::BrowseInfo {
+                                        key: snapshot.route.clone(),
+                                        generation: snapshot.generation,
+                                    });
+                                }
                             }
                             emit(
                                 json!({"type":"native","ready":true,"status":snapshot.native_status}),
@@ -852,6 +984,33 @@ fn bootstrap(state: State<'_, Desktop>) -> std::result::Result<Snapshot, String>
         .map_err(error)
 }
 #[tauri::command]
+fn prefetch_metadata(
+    keys: Vec<String>,
+    state: State<'_, Desktop>,
+    app: tauri::AppHandle,
+) -> std::result::Result<(), String> {
+    let snapshot = lock(&state.0.snapshot).map_err(error)?;
+    let account = snapshot
+        .profile
+        .as_ref()
+        .map(|profile| profile.id.clone())
+        .ok_or_else(|| "Sign in first".to_owned())?;
+    if !snapshot.native_ready {
+        return Ok(());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for key in keys
+        .into_iter()
+        .take(8)
+        .filter(|key| valid_route(key) && (key.starts_with("artist:") || key.starts_with("album:")))
+    {
+        if seen.insert(key.clone()) {
+            load_native_catalogue(state.0.clone(), app.clone(), account.clone(), key, None);
+        }
+    }
+    Ok(())
+}
+#[tauri::command]
 fn sign_in(client_id: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
         ensure!(
@@ -998,6 +1157,7 @@ fn browse(
     generation: u64,
     offset: usize,
     state: State<'_, Desktop>,
+    app: tauri::AppHandle,
 ) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
         ensure!(valid_route(&key), "Unknown page");
@@ -1011,7 +1171,32 @@ fn browse(
             snapshot.route = key.clone();
             snapshot.generation = generation;
             snapshot.tracks.clear();
-            snapshot.browse_info = None;
+            snapshot.browse_info = snapshot
+                .profile
+                .as_ref()
+                .and_then(|profile| crate::library_cache::info(&profile.id, &key));
+            if let Some(info) = snapshot.browse_info.as_ref() {
+                let _ = app.emit(
+                    "spotiflex",
+                    json!({"type":"browse_info","generation":generation,"info":info}),
+                );
+                if info
+                    .overview
+                    .as_ref()
+                    .is_some_and(|overview| !overview.details_loaded)
+                {
+                    state.0.commands.send(Command::ArtistTracks {
+                        account: snapshot
+                            .profile
+                            .as_ref()
+                            .context("Sign in first")?
+                            .id
+                            .clone(),
+                        generation,
+                        info: Box::new(info.clone()),
+                    })?;
+                }
+            }
             snapshot.settings.last_view = key.clone();
             snapshot.settings.save()?;
         }
@@ -1030,10 +1215,27 @@ fn browse(
                 || key.starts_with("artist:")
                 || key.starts_with("playlist:"))
         {
-            state.0.commands.send(Command::BrowseInfo {
-                key: key.clone(),
-                generation,
-            })?;
+            if snapshot.native_ready && (key.starts_with("artist:") || key.starts_with("album:")) {
+                let account = snapshot
+                    .profile
+                    .as_ref()
+                    .context("Sign in first")?
+                    .id
+                    .clone();
+                load_native_catalogue(
+                    state.0.clone(),
+                    app.clone(),
+                    account,
+                    key.clone(),
+                    Some(generation),
+                );
+            }
+            if !snapshot.native_ready || key.starts_with("playlist:") {
+                state.0.commands.send(Command::BrowseInfo {
+                    key: key.clone(),
+                    generation,
+                })?;
+            }
         }
         state.0.commands.send(Command::Tracks {
             key,
@@ -1554,6 +1756,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             cancel_sign_in,
             prefetch_canvas,
             prefetch_page,
+            prefetch_metadata,
             sign_out,
             browse,
             player,

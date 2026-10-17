@@ -2336,6 +2336,13 @@ input[type="range"]:hover {
   color: #fff;
   font-size: 22px;
 }
+.artist-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--muted, #b3b3b3);
+}
 .dialog,
 .setup-dialog {
   background: #1a1723;

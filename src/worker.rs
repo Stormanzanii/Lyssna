@@ -52,6 +52,7 @@ pub enum Command {
     /// Resolve Canvas videos ahead of playback (hovered rows, upcoming queue).
     PrefetchCanvas(Vec<String>),
     ArtistTracks {
+        account: String,
         generation: u64,
         info: Box<BrowseInfo>,
     },
@@ -186,14 +187,38 @@ impl Worker {
         let prefetch_context = context.clone();
         thread::spawn(move || {
             while let Ok(mut request) = requests.recv() {
-                let mut info =
-                    if request.key.starts_with("album:") || request.key.starts_with("artist:") {
-                        request.spotify.browse_info(&request.key).ok()
-                    } else {
-                        None
-                    };
+                let mut info = request
+                    .key
+                    .split_once(':')
+                    .filter(|(kind, _)| matches!(*kind, "album" | "artist"))
+                    .and_then(|(kind, id)| {
+                        request
+                            .native
+                            .catalogue(kind, id, 0)
+                            .ok()
+                            .and_then(|entity| {
+                                let mut info =
+                                    crate::catalogue::base_info(&entity, kind, id).ok()?;
+                                if kind == "artist" {
+                                    info.overview = crate::artist::from_entity(&entity, id).ok();
+                                } else {
+                                    info.album_details = Some(crate::album::parse(&entity));
+                                }
+                                Some(info)
+                            })
+                    })
+                    .or_else(|| crate::library_cache::info(&request.account, &request.key))
+                    .or_else(|| {
+                        if request.key.starts_with("artist:") || request.key.starts_with("album:") {
+                            request.spotify.browse_info(&request.key).ok()
+                        } else {
+                            None
+                        }
+                    });
                 if let Some(info) = info.as_mut() {
-                    if let Some(id) = request.key.strip_prefix("artist:") {
+                    if let Some(id) = request.key.strip_prefix("artist:")
+                        && info.overview.is_none()
+                    {
                         info.overview = request
                             .native
                             .catalogue("artist", id, 0)
@@ -201,7 +226,9 @@ impl Worker {
                             .or_else(|_| crate::artist::fetch(&request.spotify.client, id))
                             .ok();
                     }
-                    if let Some(id) = request.key.strip_prefix("album:") {
+                    if let Some(id) = request.key.strip_prefix("album:")
+                        && info.album_details.is_none()
+                    {
                         info.album_details = request
                             .native
                             .catalogue("album", id, 0)
@@ -210,6 +237,7 @@ impl Worker {
                             .ok();
                     }
                 }
+                info = info.map(|info| crate::library_cache::save_info(&request.account, info));
                 if let Ok(tracks) =
                     fetch_tracks(&mut request.spotify, &request.native, &request.key, 0)
                 {
@@ -668,10 +696,9 @@ impl Backend {
             }
             Command::RetryAudio => self.start_audio()?,
             Command::BrowseInfo { key, generation } => {
-                let mut info = self
-                    .api()?
-                    .browse_info(&key)
-                    .unwrap_or_else(|_| BrowseInfo {
+                let account = self.profile.id.clone();
+                let mut info =
+                    crate::library_cache::info(&account, &key).unwrap_or_else(|| BrowseInfo {
                         key: key.clone(),
                         ..BrowseInfo::default()
                     });
@@ -680,6 +707,7 @@ impl Backend {
                     info: Box::new(info.clone()),
                 });
                 if let Some(id) = key.strip_prefix("artist:") {
+                    let mut api = self.api()?.background();
                     let id = id.to_owned();
                     let native = self.native_controls.clone();
                     let client = self.client.clone();
@@ -693,18 +721,35 @@ impl Backend {
                                     crate::catalogue::base_info(&entity, "artist", &id)
                                 {
                                     info = base;
+                                    publish_browse_info(
+                                        &events,
+                                        &context,
+                                        &account,
+                                        generation,
+                                        info.clone(),
+                                    );
                                 }
                                 crate::artist::from_entity(&entity, &id)
                             })
-                            .or_else(|_| crate::artist::fetch(&client, &id))
+                            .or_else(|_| {
+                                if info.title.is_empty()
+                                    && let Ok(base) = api.browse_info(&info.key)
+                                {
+                                    info = base;
+                                    publish_browse_info(
+                                        &events,
+                                        &context,
+                                        &account,
+                                        generation,
+                                        info.clone(),
+                                    );
+                                }
+                                crate::artist::fetch(&client, &id)
+                            })
                         {
                             let mut info = info;
                             info.overview = Some(overview);
-                            let _ = events.send(Event::BrowseInfo {
-                                generation,
-                                info: Box::new(info),
-                            });
-                            context.request_repaint();
+                            publish_browse_info(&events, &context, &account, generation, info);
                         }
                     });
                 } else if let Some(id) = key.strip_prefix("playlist:") {
@@ -714,14 +759,11 @@ impl Backend {
                     let context = self.context.clone();
                     thread::spawn(move || {
                         if let Ok(info) = native.playlist_info(&id) {
-                            let _ = events.send(Event::BrowseInfo {
-                                generation,
-                                info: Box::new(info),
-                            });
-                            context.request_repaint();
+                            publish_browse_info(&events, &context, &account, generation, info);
                         }
                     });
                 } else if let Some(id) = key.strip_prefix("album:") {
+                    let mut api = self.api()?.background();
                     let id = id.to_owned();
                     let native = self.native_controls.clone();
                     let client = self.client.clone();
@@ -739,6 +781,9 @@ impl Backend {
                                 as usize;
                             let mut offset =
                                 entity["tracksV2"]["items"].as_array().map_or(0, Vec::len);
+                            let mut preview = info.clone();
+                            preview.album_details = Some(details.clone());
+                            publish_browse_info(&events, &context, &account, generation, preview);
                             while offset > 0 && offset < total && offset < 5000 {
                                 let Ok(page) = native.catalogue("album", &id, offset) else {
                                     break;
@@ -760,9 +805,24 @@ impl Backend {
                             details.complete_duration = offset >= total;
                             details
                         });
-                        if let Ok(mut details) =
-                            desktop.or_else(|_| crate::album::fetch(&client, &id))
-                        {
+                        if let Ok(mut details) = desktop.or_else(|_| {
+                            if info.title.is_empty()
+                                && let Ok(base) = api.browse_info(&info.key)
+                            {
+                                info = base;
+                                publish_browse_info(
+                                    &events,
+                                    &context,
+                                    &account,
+                                    generation,
+                                    info.clone(),
+                                );
+                            }
+                            crate::album::fetch(&client, &id)
+                        }) {
+                            let mut preview = info.clone();
+                            preview.album_details = Some(details.clone());
+                            publish_browse_info(&events, &context, &account, generation, preview);
                             if let Some(artist_id) = info
                                 .album
                                 .as_ref()
@@ -778,28 +838,23 @@ impl Backend {
                             }
                             let mut info = info;
                             info.album_details = Some(details);
-                            let _ = events.send(Event::BrowseInfo {
-                                generation,
-                                info: Box::new(info),
-                            });
-                            context.request_repaint();
+                            publish_browse_info(&events, &context, &account, generation, info);
                         }
                     });
                 }
             }
             Command::ArtistTracks {
+                account,
                 generation,
                 mut info,
             } => {
+                if self.profile.id != account {
+                    return Ok(());
+                }
                 if let Some(overview) = info.overview.as_mut() {
                     let mut statuses = Vec::new();
                     {
                         let api = self.api()?;
-                        for item in &mut overview.popular {
-                            if let Ok(track) = api.track(&item.track.uri) {
-                                item.track = track;
-                            }
-                        }
                         let uris: Vec<_> = overview
                             .popular
                             .iter()
@@ -911,6 +966,20 @@ struct PrefetchRequest {
     native: NativeControls,
     account: String,
     key: String,
+}
+fn publish_browse_info(
+    events: &mpsc::Sender<Event>,
+    context: &Notifier,
+    account: &str,
+    generation: u64,
+    info: BrowseInfo,
+) {
+    let info = crate::library_cache::save_info(account, info);
+    let _ = events.send(Event::BrowseInfo {
+        generation,
+        info: Box::new(info),
+    });
+    context.request_repaint();
 }
 struct FactsRequest {
     spotify: Spotify,

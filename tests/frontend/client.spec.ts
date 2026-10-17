@@ -53,6 +53,17 @@ test("playing on another device does not silently redirect local Play", async ({
     .toBe("native");
 });
 
+test("artist links show the artist immediately while metadata is pending", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.locator(".player-bar .artist-link").first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Test artist",
+  );
+  await expect(page.locator(".skeleton-rows")).toHaveCount(0);
+});
+
 async function startClient(page: Page, initialRoute = "liked") {
   await page.route("https://artwork.example.test/**", (route) =>
     route.fulfill({

@@ -1,11 +1,11 @@
 use crate::model::{Album, Artwork, Copyright};
 use anyhow::Result;
 use reqwest::blocking::Client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct AlbumDetails {
     pub streams: HashMap<String, u64>,
     pub duration_ms: u64,

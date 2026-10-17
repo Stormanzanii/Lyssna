@@ -3,7 +3,7 @@ use crate::model::{Album, Artist, Artwork, Track};
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::blocking::Client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ArtistOverview {
     pub monthly_listeners: Option<u64>,
     pub followers: Option<u64>,
@@ -24,7 +24,7 @@ pub struct ArtistOverview {
     pub source_url: String,
     pub fetched_at: u64,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PopularTrack {
     pub track: Track,
     pub streams: Option<u64>,

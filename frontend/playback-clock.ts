@@ -36,6 +36,7 @@ export class PlaybackClock {
     const stalled = !this.advancing || (native && time - this.anchoredAt > 500);
     const repeated =
       native &&
+      observedAt - this.observedAt >= 150 &&
       this.track === playback.item?.uri &&
       this.revision === revision &&
       this.playing === playback.is_playing &&

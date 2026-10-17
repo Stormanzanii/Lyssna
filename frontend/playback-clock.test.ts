@@ -85,3 +85,12 @@ it("keeps remote playback moving between polls and applies a remote seek", () =>
   clock.observe({ ...playback, progress_ms: 500 }, 5000, 0, 5000, 5000, false);
   expect(clock.read(5000)).toBe(500);
 });
+it("keeps moving when a correction and ordinary tick report the same packet", () => {
+  const clock = new PlaybackClock();
+  clock.observe(playback, 0, 0, 0, 0);
+  const update = { ...playback, progress_ms: 1250 };
+  clock.observe(update, 250, 0, 250, 250);
+  const before = clock.read(251);
+  clock.observe(update, 251, 0, 251, 251);
+  expect(clock.read(267)).toBeGreaterThan(before);
+});

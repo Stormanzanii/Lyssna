@@ -986,7 +986,9 @@ test("timed syllables lift independently and font choices apply separately", asy
     .first()
     .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform));
   expect(restingLetter.m42).toBeGreaterThan(0);
-  expect(restingLetter.a).toBeLessThan(1);
+  // Resting letters shrink only vertically, so no gaps open between them.
+  expect(restingLetter.a).toBe(1);
+  expect(restingLetter.d).toBeLessThan(1);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -1723,4 +1725,69 @@ test("narrow Canvas lyrics stack the title above the lyrics", async ({
     )
     .toBeLessThan(4);
   await page.screenshot({ path: "target/diagnostics/canvas-narrow.png" });
+});
+
+test("unsung split words keep their syllables together", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const line = (start: number, words: [string, number, number][]) => ({
+      text: words.map(([text]) => text).join(""),
+      start_ms: start,
+      end_ms: words.at(-1)![2],
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: words.map(([text, start_ms, end_ms]) => ({
+        text,
+        start_ms,
+        end_ms,
+      })),
+    });
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          line(1000, [["Ladies", 1000, 1600]]),
+          line(5000, [
+            ["gen", 5000, 5300],
+            ["tle", 5300, 5600],
+            ["men", 5600, 6600],
+          ]),
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1200,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const pieces = page.locator(".lyrics-page .lyric-line").nth(1);
+  await expect(pieces.locator(".lyric-syllable")).toHaveCount(3);
+  const boxes = await pieces
+    .locator(".lyric-syllable")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().toJSON()),
+    );
+  for (let index = 1; index < boxes.length; index++)
+    expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
+      0.5,
+    );
+  // The whole word still rests smaller than full size.
+  expect(
+    await pieces
+      .locator(".lyric-word")
+      .evaluate(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).a,
+      ),
+  ).toBeLessThan(1);
 });

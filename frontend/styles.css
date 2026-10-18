@@ -1874,6 +1874,8 @@ small {
   white-space: pre-wrap;
   max-width: 100%;
   overflow-wrap: anywhere;
+  transform: scale(var(--word-scale, 1));
+  transform-origin: center 65%;
 }
 .lyric-word-group {
   white-space: normal;
@@ -1888,7 +1890,7 @@ small {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   transform: translateY(calc(var(--syllable-lift, 0) * 1em))
-    scale(var(--syllable-scale, 1));
+    scale(var(--syllable-scale-x, 1), var(--syllable-scale, 1));
   transform-origin: center 65%;
 }
 .lyric-syllable.glowing {
@@ -1962,7 +1964,7 @@ small {
 .lyric-letter {
   display: inline-block;
   transform: translateY(calc(var(--letter-lift, 0) * 1em))
-    scale(var(--letter-scale, 1));
+    scale(var(--letter-scale-x, 1), var(--letter-scale, 1));
   transform-origin: center 65%;
 }
 .lyric-letter.glowing {

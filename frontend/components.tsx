@@ -649,20 +649,42 @@ const LyricWords = memo(function LyricWords({
     <>
       {groups.map((group, index) => {
         const whitespace = group[0].text.match(/^\s+/u)?.[0] ?? "";
+        const emphasized = group.map((word, part) => {
+          const text =
+            part === 0 ? word.text.slice(whitespace.length) : word.text;
+          return (
+            !reduceMotion &&
+            word.end_ms - word.start_ms >= 1000 &&
+            Array.from(text).length <= 32 &&
+            !/[\s\u0590-\u08ff]/u.test(text)
+          );
+        });
+        // A one-piece word scales as a block. Split or held words shrink as a
+        // whole while unsung; their pieces only widen when popping, so no gaps
+        // open between syllables or letters.
+        const whole = group.length === 1 && !emphasized[0];
+        const rest = syllableMotion(
+          group[0].start_ms,
+          group.at(-1)!.end_ms,
+          time,
+        ).scale;
         return (
           <span key={index} className="lyric-word-group">
             {whitespace}
-            <span className="lyric-word">
+            <span
+              className="lyric-word"
+              style={
+                {
+                  "--word-scale": reduceMotion || whole ? 1 : Math.min(1, rest),
+                } as CSSProperties
+              }
+            >
               {group.map((word, part) => {
                 const text =
                   part === 0 ? word.text.slice(whitespace.length) : word.text;
                 const letters = Array.from(text);
                 const motion = syllableMotion(word.start_ms, word.end_ms, time);
-                const emphasis =
-                  !reduceMotion &&
-                  word.end_ms - word.start_ms >= 1000 &&
-                  letters.length <= 32 &&
-                  !/[\s\u0590-\u08ff]/u.test(text);
+                const emphasis = emphasized[part];
                 // Held syllables move letter by letter instead of as a block.
                 const still = reduceMotion || emphasis;
                 const glowing = !still && motion.glow > 0.01;
@@ -675,6 +697,11 @@ const LyricWords = memo(function LyricWords({
                         "--word-progress": `${motion.fill * 120 - 20}%`,
                         "--syllable-lift": still ? 0 : motion.lift,
                         "--syllable-scale": still ? 1 : motion.scale,
+                        "--syllable-scale-x": still
+                          ? 1
+                          : whole
+                            ? motion.scale
+                            : Math.max(1, motion.scale),
                         "--syllable-glow": glowing ? motion.glow : 0,
                       } as CSSProperties
                     }
@@ -696,6 +723,7 @@ const LyricWords = memo(function LyricWords({
                                 {
                                   "--letter-lift": motion.lift,
                                   "--letter-scale": motion.scale,
+                                  "--letter-scale-x": Math.max(1, motion.scale),
                                   "--letter-glow": motion.glow,
                                   "--word-progress": `${motion.fill * 120 - 20}%`,
                                 } as CSSProperties

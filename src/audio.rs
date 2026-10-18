@@ -79,6 +79,7 @@ impl Sink for AudioSink {
         self.queued.load(Ordering::Acquire) == 0
     }
     fn start(&mut self) -> SinkResult<()> {
+        self.discard_old_audio();
         if self.sink.is_none() {
             let mut stream = OutputStreamBuilder::open_default_stream().map_err(|_| {
                 SinkError::ConnectionRefused("Cannot open default audio device".into())
@@ -93,6 +94,12 @@ impl Sink for AudioSink {
     fn stop(&mut self) -> SinkResult<()> {
         if let Some(sink) = &self.sink {
             sink.stop();
+        }
+        Ok(())
+    }
+    fn pause(&mut self) -> SinkResult<()> {
+        if let Some(sink) = &self.sink {
+            sink.pause();
         }
         Ok(())
     }
@@ -206,6 +213,70 @@ impl Source for QueuedPacket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pause_retains_ready_audio_until_resume_without_new_packets() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let (sink, mut output) = rodio::Sink::new();
+        sink.append(QueuedPacket::new(
+            vec![0.25; MAX_SAMPLES],
+            buffer.queued.clone(),
+        ));
+        audio.sink = Some(sink);
+        assert_eq!(output.next(), Some(0.25));
+        audio.pause().unwrap();
+        for _ in 0..4410 {
+            output.next();
+        }
+        let held = buffer.queued.load(Ordering::Relaxed);
+        assert!(
+            held > 0,
+            "Pausing discarded audio already ready for unpause"
+        );
+        for _ in 0..44100 {
+            assert_eq!(output.next(), Some(0.0));
+        }
+        assert_eq!(buffer.queued.load(Ordering::Relaxed), held);
+        audio.start().unwrap();
+        assert!(
+            (0..882).any(|_| output.next() == Some(0.25)),
+            "Unpause waited for a new decoded packet"
+        );
+        audio.stop().unwrap();
+        for _ in 0..4410 {
+            output.next();
+        }
+        assert!(
+            audio.is_empty(),
+            "Stop must discard audio retained by Pause"
+        );
+    }
+    #[test]
+    fn seek_while_paused_clears_retained_audio_before_resuming() {
+        let buffer = AudioBuffer::default();
+        let flush = Arc::new(AtomicBool::new(false));
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(flush.clone(), ready, buffer.clone());
+        let (sink, mut output) = rodio::Sink::new();
+        sink.append(QueuedPacket::new(
+            vec![0.25; MAX_SAMPLES],
+            buffer.queued.clone(),
+        ));
+        audio.sink = Some(sink);
+        audio.pause().unwrap();
+        for _ in 0..4410 {
+            output.next();
+        }
+        assert!(!audio.is_empty());
+        flush.store(true, Ordering::Release);
+        audio.start().unwrap();
+        assert!(
+            (0..4410).all(|_| output.next() != Some(0.25)),
+            "Seek replayed audio from before the pause"
+        );
+        assert!(audio.is_empty());
+    }
     #[test]
     fn eof_waits_for_last_spoken_sample() {
         let buffer = AudioBuffer::default();

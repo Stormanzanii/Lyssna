@@ -995,6 +995,7 @@ async fn run(
     let mut volume_sync: Option<(u8, std::time::Instant)> = None;
     let mut volume_guard: Option<(u8, std::time::Instant)> = None;
     let mut pending_seek: Option<(String, u64)> = None;
+    let mut paused_position: Option<(String, u64)> = None;
     let mut narrating = false;
     let mut resume_preparation = Box::pin(tokio::time::timeout(
         Duration::from_secs(8),
@@ -1039,7 +1040,7 @@ async fn run(
                     }
                     intent.request(matches!(action,PlayerAction::Play(None)));
                 }else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
@@ -1051,12 +1052,29 @@ async fn run(
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
-                    Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;loaded.store(false,Ordering::Release);},
-                    Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;intent.reset();emit(NativeEvent::Stopped);},
-                    Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
-                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {audio_playing=true;intent.acknowledge_track(&track_id.to_uri(),true);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(true), seeked: false });},
-                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {audio_playing=false;intent.acknowledge_track(&track_id.to_uri(),false);emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: position_ms.into(), playing: Some(false), seeked: pending_seek.take().is_some() });},
-                    Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
+                    Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;paused_position=None;loaded.store(false,Ordering::Release);},
+                    Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;paused_position=None;intent.reset();emit(NativeEvent::Stopped);},
+                    Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
+                        let uri = track_id.to_uri();
+                        let position_ms = paused_position.take().filter(|(track, _)| track == &uri)
+                            .map_or(u64::from(position_ms), |(_, position)| position);
+                        audio_playing = true;
+                        intent.acknowledge_track(&uri, true);
+                        emit(NativeEvent::Position { uri, position_ms, playing: Some(true), seeked: false });
+                    },
+                    Some(PlayerEvent::Paused { track_id, position_ms, .. }) => {
+                        let uri = track_id.to_uri();
+                        let seeked = pending_seek.take().is_some();
+                        let position_ms = u64::from(position_ms).saturating_sub(
+                            if seeked { 0 } else { audio_buffer.latency_ms() }
+                        );
+                        paused_position = Some((uri.clone(), position_ms));
+                        audio_playing = false;
+                        intent.acknowledge_track(&uri, false);
+                        emit(NativeEvent::Position { uri, position_ms, playing: Some(false), seeked });
+                    },
+                    Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{paused_position=Some((uri.clone(),position_ms.into()));emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: u64::from(position_ms).saturating_sub(audio_buffer.latency_ms()), playing: None, seeked: false });}},
                     Some(PlayerEvent::Unavailable { .. }) => {loaded.store(false,Ordering::Release);intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
                     None => break,

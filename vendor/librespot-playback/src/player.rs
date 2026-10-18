@@ -63,6 +63,7 @@ pub struct Player {
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum SinkStatus {
     Running,
+    Paused,
     Closed,
     TemporarilyClosed,
 }
@@ -1768,7 +1769,7 @@ impl PlayerInternal {
 
     fn ensure_sink_stopped(&mut self, temporarily: bool) {
         match self.sink_status {
-            SinkStatus::Running => {
+            SinkStatus::Running | SinkStatus::Paused => {
                 trace!("== Stopping sink ==");
                 match self.sink.stop() {
                     Ok(()) => {
@@ -1796,6 +1797,24 @@ impl PlayerInternal {
                 }
             }
             SinkStatus::Closed => (),
+        }
+    }
+
+    fn ensure_sink_paused(&mut self) {
+        if self.sink_status != SinkStatus::Running {
+            return;
+        }
+        match self.sink.pause() {
+            Ok(()) => {
+                self.sink_status = SinkStatus::Paused;
+                if let Some(callback) = &mut self.sink_event_callback {
+                    callback(SinkStatus::Paused);
+                }
+            }
+            Err(e) => {
+                error!("{e}");
+                self.ensure_sink_stopped(false);
+            }
         }
     }
 
@@ -1868,7 +1887,7 @@ impl PlayerInternal {
 
     fn handle_pause(&mut self) {
         match self.state {
-            PlayerState::Paused { .. } => self.ensure_sink_stopped(false),
+            PlayerState::Paused { .. } => self.ensure_sink_paused(),
             PlayerState::Playing {
                 ref track_id,
                 play_request_id,
@@ -1879,7 +1898,7 @@ impl PlayerInternal {
 
                 self.state.playing_to_paused();
 
-                self.ensure_sink_stopped(false);
+                self.ensure_sink_paused();
                 self.send_event(PlayerEvent::Paused {
                     track_id,
                     play_request_id,
@@ -2117,7 +2136,9 @@ impl PlayerInternal {
 
         self.send_event(PlayerEvent::PlayRequestIdChanged { play_request_id });
 
-        if !self.config.gapless {
+        // Gapless transitions may keep playing audio. A paused queue belongs
+        // to the old selection and must be cleared before an explicit load.
+        if !self.config.gapless || self.sink_status == SinkStatus::Paused {
             self.ensure_sink_stopped(play);
         }
 

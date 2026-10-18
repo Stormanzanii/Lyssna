@@ -34,6 +34,10 @@ pub trait Sink {
     fn stop(&mut self) -> SinkResult<()> {
         Ok(())
     }
+    /// Pause output, retaining prepared audio when the backend supports it.
+    fn pause(&mut self) -> SinkResult<()> {
+        self.stop()
+    }
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()>;
 }
 

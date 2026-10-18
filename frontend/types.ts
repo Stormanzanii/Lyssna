@@ -83,6 +83,7 @@ export interface Settings {
   canvas_lyrics?: boolean;
   floating_lyrics?: boolean;
   ui_font?: string;
+  ui_zoom_percent?: number;
   lyric_font?: string;
   volume_percent?: number;
   auto_download_updates: boolean;

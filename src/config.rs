@@ -22,6 +22,7 @@ pub struct Settings {
     pub canvas_lyrics: bool,
     pub floating_lyrics: bool,
     pub ui_font: String,
+    pub ui_zoom_percent: u16,
     pub lyric_font: String,
     pub volume_percent: u8,
     pub auto_download_updates: bool,
@@ -43,6 +44,7 @@ impl Default for Settings {
             canvas_lyrics: true,
             floating_lyrics: false,
             ui_font: String::new(),
+            ui_zoom_percent: 100,
             lyric_font: String::new(),
             volume_percent: 100,
             auto_download_updates: true,
@@ -85,6 +87,7 @@ impl Settings {
             settings.client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
         }
         settings.lyric_size = settings.lyric_size.clamp(18.0, 60.0);
+        settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         Ok(settings)
     }

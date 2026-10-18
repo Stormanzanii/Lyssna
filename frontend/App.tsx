@@ -108,6 +108,7 @@ import {
 } from "./library-order";
 import { FontSettings, fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { collectionTracks, genresFor } from "./collection";
+import { useAppZoom } from "./app-zoom";
 
 type Center = "browse" | "lyrics" | "settings";
 type EntityMenu = {
@@ -308,6 +309,11 @@ function App() {
       void call("save_settings", { settings });
     },
     [call],
+  );
+  useAppZoom(
+    state.settings.ui_zoom_percent ?? 100,
+    (percent) => updateSettings({ ui_zoom_percent: percent }),
+    notify,
   );
   const togglePin = useCallback(
     (playlist: Playlist) => {

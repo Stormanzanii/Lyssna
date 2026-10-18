@@ -1551,6 +1551,7 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
+        settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.save()?;
         snapshot.settings = settings;

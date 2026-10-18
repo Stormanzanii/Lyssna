@@ -974,8 +974,14 @@ test("timed syllables lift independently and font choices apply separately", asy
         (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
       ),
     );
-  expect(transforms[0]).toBeLessThan(-1);
-  expect(transforms[1]).toBe(0);
+  // "Hel" is rising; the held "lo" moves by letter and still rests low.
+  expect(transforms[0]).toBeLessThan(0);
+  const restingLetter = await page
+    .locator(".lyrics-page .lyric-letter")
+    .first()
+    .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform));
+  expect(restingLetter.m42).toBeGreaterThan(0);
+  expect(restingLetter.a).toBeLessThan(1);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -987,14 +993,18 @@ test("timed syllables lift independently and font choices apply separately", asy
       }),
     track.uri,
   );
+  const poppedLetter = await page
+    .locator(".lyrics-page .lyric-letter")
+    .first()
+    .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform));
+  expect(poppedLetter.m42).toBeLessThan(-1);
+  expect(poppedLetter.a).toBeGreaterThan(1.05);
   expect(
     await page
-      .locator(".lyrics-page .lyric-syllable")
-      .nth(1)
-      .evaluate(
-        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
-      ),
-  ).toBeLessThan(-1);
+      .locator(".lyrics-page .lyric-letter")
+      .first()
+      .evaluate((element) => getComputedStyle(element).filter),
+  ).toMatch(/drop-shadow\(rgba\(255, 255, 255, 0\.[1-9]/);
   await page.getByTitle("Settings", { exact: true }).click();
   await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
   await page

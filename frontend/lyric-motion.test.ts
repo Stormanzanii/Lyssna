@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import {
   stepScroll,
-  wordMotion,
+  syllableMotion,
+  POP,
   vocalGap,
   vocalGaps,
   letterMotion,
@@ -50,10 +51,30 @@ it("keeps scrolling stable through retargets and different display refresh rates
   });
   expect(Math.max(...results) - Math.min(...results)).toBeLessThan(0.001);
 });
-it("eases word lift continuously into and out of held syllables", () => {
-  expect(wordMotion(1000, 2000, 819)).toEqual({ lift: -0, scale: 1, glow: 0 });
-  expect(wordMotion(1000, 2000, 1600).scale).toBeCloseTo(1.075);
-  expect(wordMotion(1000, 2000, 2601).lift).toBeCloseTo(0);
+it("rests unsung syllables small and low, pops the sung one, then settles", () => {
+  const unsung = syllableMotion(1000, 2000, -Infinity);
+  expect(unsung).toMatchObject({ scale: POP.restScale, glow: 0, fill: 0 });
+  expect(unsung.lift).toBeGreaterThan(0);
+  const singing = syllableMotion(1000, 2000, 1700);
+  expect(singing.scale).toBeGreaterThan(1.04);
+  expect(singing.lift).toBeLessThan(-0.03);
+  expect(singing.glow).toBeGreaterThan(0.5);
+  const sung = syllableMotion(1000, 2000, Infinity);
+  expect(sung).toMatchObject({ scale: 1, lift: 0, glow: 0, fill: 1 });
+  expect(syllableMotion(1000, 2000, 2000 + POP.settleMs).scale).toBeCloseTo(1);
+});
+it("moves syllables continuously so lines flow without jumps", () => {
+  let previous = syllableMotion(1000, 1300, 700);
+  for (let time = 701; time <= 2000; time++) {
+    const next = syllableMotion(1000, 1300, time);
+    expect(Math.abs(next.scale - previous.scale)).toBeLessThan(0.004);
+    expect(Math.abs(next.lift - previous.lift)).toBeLessThan(0.003);
+    expect(Math.abs(next.glow - previous.glow)).toBeLessThan(0.03);
+    previous = next;
+  }
+  // The next syllable starts rising before this one finishes settling.
+  expect(syllableMotion(1000, 1300, 1350).scale).toBeGreaterThan(1);
+  expect(syllableMotion(1300, 1600, 1350).scale).toBeGreaterThan(POP.restScale);
 });
 it("shows waiting dots only in long gaps with no main or background vocals", () => {
   const line = (start_ms: number, end_ms: number, background = false) =>
@@ -64,10 +85,11 @@ it("shows waiting dots only in long gaps with no main or background vocals", () 
   expect(vocalGap(lines, 6500)).toEqual({ start: 6000, end: 10000, after: 1 });
   expect(vocalGap(lines, 10000)).toBeUndefined();
 });
-it("staggers held-word letter bounce and settles every letter at its original size", () => {
+it("staggers held-word letter pops and settles every letter at full size", () => {
   const first = letterMotion(1000, 4000, 1400, 0, 4);
   const last = letterMotion(1000, 4000, 1400, 3, 4);
   expect(first.lift).toBeLessThan(last.lift);
+  expect(first.scale).toBeGreaterThan(last.scale);
   expect(first.fill).toBeGreaterThan(last.fill);
   for (let index = 0; index < 4; index++)
     expect(letterMotion(1000, 4000, 5000, index, 4).scale).toBeCloseTo(1);

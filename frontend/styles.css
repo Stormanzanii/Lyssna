@@ -1818,23 +1818,32 @@ small {
   white-space: pre-wrap;
   max-width: 100%;
   overflow-wrap: anywhere;
-  transform: translateY(calc(var(--word-lift, 0) * 1em))
-    scaleY(var(--word-scale, 1));
-  transform-origin: center 70%;
-  text-shadow: 0 0 14px rgb(245 234 255 / var(--word-glow, 0));
 }
 .lyric-word-group {
   white-space: normal;
 }
+/* Unsung syllables rest slightly small and low; the sung one pops up and
+   glows, then settles at full size. The glow is a drop shadow, painted behind
+   the gradient-filled text so it does not wash the letters out. LyricWords
+   sets it only while a syllable glows. */
 .lyric-syllable {
   display: inline-block;
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   transform: translateY(calc(var(--syllable-lift, 0) * 1em))
-    scaleY(var(--syllable-scale, 1));
-  transform-origin: center 75%;
-  text-shadow: 0 0 14px rgb(245 234 255 / var(--syllable-glow, 0));
+    scale(var(--syllable-scale, 1));
+  transform-origin: center 65%;
+}
+.lyric-syllable.glowing {
+  filter: drop-shadow(
+    0 0 calc(0.06em + 0.16em * var(--syllable-glow))
+      rgb(255 255 255 / calc(var(--syllable-glow) * 0.75))
+  );
+}
+.lyric-line.active .lyric-syllable,
+.lyric-line.active .lyric-letter {
+  will-change: transform;
 }
 .lyric-wait {
   transition:
@@ -1897,9 +1906,14 @@ small {
 .lyric-letter {
   display: inline-block;
   transform: translateY(calc(var(--letter-lift, 0) * 1em))
-    scaleY(var(--letter-scale, 1));
-  transform-origin: center 70%;
-  text-shadow: 0 0 14px rgb(245 234 255 / var(--letter-glow, 0));
+    scale(var(--letter-scale, 1));
+  transform-origin: center 65%;
+}
+.lyric-letter.glowing {
+  filter: drop-shadow(
+    0 0 calc(0.08em + 0.26em * var(--letter-glow))
+      rgb(255 255 255 / calc(var(--letter-glow) * 0.9))
+  );
 }
 .lyric-translation,
 .lyric-romanization {

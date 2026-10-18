@@ -80,42 +80,77 @@ export function stepScroll(spring: ScrollSpring, seconds: number): number {
   spring.velocity = (spring.velocity - frequency * combined * seconds) * decay;
   return spring.position;
 }
-export function wordMotion(start: number, end: number, time: number) {
-  if (time < 0) return { lift: -0, scale: 1, glow: 0 };
-  // A longer rise and release keeps neighbouring syllables overlapping, so
-  // motion flows across a line instead of pulsing word by word.
-  const phase = Math.max(
-    0,
-    Math.min(1, (time - start + 180) / (Math.max(160, end - start) + 560)),
+export interface SyllableMotion {
+  /** Vertical offset in em; negative is up. */
+  lift: number;
+  scale: number;
+  /** Glow strength, 0 to 1. */
+  glow: number;
+  /** Share of the syllable already sung, 0 to 1. */
+  fill: number;
+}
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+const ease = (value: number) => {
+  const x = clamp01(value);
+  return x * x * (3 - 2 * x);
+};
+/** Shape of a syllable's pop: unsung text rests a little smaller and lower,
+ * the sung syllable rises past full size, and it settles at full size once
+ * sung, so the boundary between sung and unsung stays visible. Modelled on
+ * Spicy Lyrics' resting scale of 0.95 and its rise-peak-settle curves. */
+export const POP = {
+  restScale: 0.95,
+  restLift: 0.02,
+  peakScale: 1.06,
+  peakLift: -0.045,
+  letterPeakScale: 1.16,
+  letterPeakLift: -0.07,
+  settleMs: 420,
+};
+/** Motion for a syllable at `time`. Pass -Infinity for unsung lines and
+ * Infinity for sung ones. The rise starts slightly early and the settle runs
+ * past the end, so neighbouring syllables overlap and the line flows. */
+export function syllableMotion(
+  start: number,
+  end: number,
+  time: number,
+  peakScale = POP.peakScale,
+  peakLift = POP.peakLift,
+): SyllableMotion {
+  const duration = Math.max(1, end - start);
+  const rise = ease((time - start + 60) / Math.max(140, duration * 0.7 + 60));
+  const settle = ease((time - end) / POP.settleMs);
+  const peak = (rest: number, top: number, sung: number) =>
+    rest + (top - rest) * rise + (sung - (rest + (top - rest) * rise)) * settle;
+  const glowIn = ease((time - start + 40) / Math.max(90, duration * 0.15));
+  const glowOut = ease(
+    (time - start - duration * 0.6) / (duration * 0.4 + POP.settleMs),
   );
-  const envelope = Math.sin(phase * Math.PI) ** 2;
   return {
-    lift: -0.045 * envelope,
-    scale: 1 + 0.075 * envelope,
-    glow: 0.42 * envelope,
+    lift: peak(POP.restLift, peakLift, 0),
+    scale: peak(POP.restScale, peakScale, 1),
+    glow: glowIn * (1 - glowOut),
+    fill: clamp01((time - start) / duration),
   };
 }
+/** Letters of a held syllable rise one after another across its duration. */
 export function letterMotion(
   start: number,
   end: number,
   time: number,
   index: number,
   count: number,
-) {
-  if (time < 0) return { lift: 0, scale: 1, glow: 0, fill: 0 };
-  const slot = Math.max(1, (end - start - 250) / Math.max(1, count));
+): SyllableMotion {
+  const slot = Math.max(1, (end - start) / Math.max(1, count));
   const letterStart = start + index * slot;
-  const phase = Math.max(
-    0,
-    Math.min(1, (time - letterStart + 40) / (slot + 300)),
+  const motion = syllableMotion(
+    letterStart,
+    letterStart + Math.max(slot, 220),
+    time,
+    POP.letterPeakScale,
+    POP.letterPeakLift,
   );
-  const envelope = Math.sin(phase * Math.PI) ** 2;
-  return {
-    lift: -0.035 * envelope,
-    scale: 1 + 0.06 * envelope,
-    glow: 0.34 * envelope,
-    fill: Math.max(0, Math.min(1, (time - letterStart) / slot)),
-  };
+  return { ...motion, fill: clamp01((time - letterStart) / slot) };
 }
 /** Preserve per-syllable timing while keeping split words in one layout box. */
 export function wordGroups(words: Word[]): Word[][] {

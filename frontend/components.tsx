@@ -32,7 +32,7 @@ import type {
   Line,
 } from "./types";
 import type { AppState } from "./state";
-import { activeLines, progress } from "./state";
+import { activeLines } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
 import { useCreatorProfile } from "./creator-profile";
@@ -40,10 +40,12 @@ import {
   stepScroll,
   vocalGaps,
   type VocalGap,
-  wordMotion,
+  syllableMotion,
   letterMotion,
   wordGroups,
   vocalGap,
+  vocalEnd,
+  POP,
   type ScrollSpring,
 } from "./lyric-motion";
 
@@ -524,9 +526,11 @@ export function LyricsDisplay({
                     time={
                       playing ||
                       (positionMs >= line.start_ms &&
-                        positionMs <= line.end_ms + 450)
+                        positionMs <= vocalEnd(line) + POP.settleMs)
                         ? positionMs
-                        : -1
+                        : positionMs < line.start_ms
+                          ? -Infinity
+                          : Infinity
                     }
                     reduceMotion={settings.reduce_motion}
                   />
@@ -635,6 +639,7 @@ const LyricWords = memo(function LyricWords({
   reduceMotion,
 }: {
   line: Line;
+  /** Song time for the active line; -Infinity before it, Infinity after. */
   time: number;
   reduceMotion: boolean;
 }) {
@@ -644,53 +649,33 @@ const LyricWords = memo(function LyricWords({
     <>
       {groups.map((group, index) => {
         const whitespace = group[0].text.match(/^\s+/u)?.[0] ?? "";
-        const motion = wordMotion(
-          group[0].start_ms,
-          group.at(-1)!.end_ms,
-          time,
-        );
-        const held = group.some((word) => word.end_ms - word.start_ms >= 1000);
-        const split = group.length > 1;
         return (
           <span key={index} className="lyric-word-group">
             {whitespace}
-            <span
-              className="lyric-word"
-              style={
-                {
-                  "--word-lift": reduceMotion || split ? 0 : motion.lift,
-                  "--word-scale":
-                    reduceMotion || split
-                      ? 1
-                      : 1 + (motion.scale - 1) * (held ? 0.4 : 1),
-                  "--word-glow": reduceMotion ? 0 : motion.glow,
-                } as CSSProperties
-              }
-            >
+            <span className="lyric-word">
               {group.map((word, part) => {
                 const text =
                   part === 0 ? word.text.slice(whitespace.length) : word.text;
                 const letters = Array.from(text);
-                const syllable = wordMotion(word.start_ms, word.end_ms, time);
+                const motion = syllableMotion(word.start_ms, word.end_ms, time);
                 const emphasis =
                   !reduceMotion &&
                   word.end_ms - word.start_ms >= 1000 &&
                   letters.length <= 32 &&
                   !/[\s\u0590-\u08ff]/u.test(text);
+                // Held syllables move letter by letter instead of as a block.
+                const still = reduceMotion || emphasis;
+                const glowing = !still && motion.glow > 0.01;
                 return (
                   <span
                     key={part}
-                    className={`lyric-syllable ${emphasis ? "emphasis" : ""}`}
+                    className={`lyric-syllable ${emphasis ? "emphasis" : ""} ${glowing ? "glowing" : ""}`}
                     style={
                       {
-                        "--word-progress": `${progress(word.start_ms, word.end_ms, time) * 120 - 20}%`,
-                        "--syllable-lift":
-                          split && !reduceMotion ? syllable.lift * 1.6 : 0,
-                        "--syllable-scale":
-                          split && !reduceMotion
-                            ? 1 + (syllable.scale - 1) * 0.8
-                            : 1,
-                        "--syllable-glow": reduceMotion ? 0 : motion.glow,
+                        "--word-progress": `${motion.fill * 120 - 20}%`,
+                        "--syllable-lift": still ? 0 : motion.lift,
+                        "--syllable-scale": still ? 1 : motion.scale,
+                        "--syllable-glow": glowing ? motion.glow : 0,
                       } as CSSProperties
                     }
                   >
@@ -706,12 +691,11 @@ const LyricWords = memo(function LyricWords({
                           return (
                             <span
                               key={index}
-                              className="lyric-letter"
+                              className={`lyric-letter ${motion.glow > 0.01 ? "glowing" : ""}`}
                               style={
                                 {
-                                  "--letter-lift": motion.lift * 0.5,
-                                  "--letter-scale":
-                                    1 + (motion.scale - 1) * 0.5,
+                                  "--letter-lift": motion.lift,
+                                  "--letter-scale": motion.scale,
                                   "--letter-glow": motion.glow,
                                   "--word-progress": `${motion.fill * 120 - 20}%`,
                                 } as CSSProperties

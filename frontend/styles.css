@@ -1701,6 +1701,62 @@ small {
   max-width: 100%;
   text-align: left;
 }
+/* Stacked lyrics header for narrow lyric views, chosen from the page's own
+   width so a wide window with both side panels open also stacks. */
+.lyrics-page.narrow {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 18px 8% 0;
+}
+.lyrics-page.narrow .lyrics-album {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  column-gap: 15px;
+  text-align: left;
+  padding: 8px 0 5px;
+  align-items: center;
+}
+.lyrics-page.narrow .lyrics-album > .cover,
+.lyrics-page.narrow .lyrics-album > .dj-art {
+  grid-row: 1/4;
+  width: 56px;
+  height: 56px;
+  margin: 0;
+}
+.lyrics-page.narrow .lyrics-title {
+  margin: 0;
+  align-self: end;
+}
+.lyrics-page.narrow .lyrics-album {
+  /* Keep the header text clear of the floating lyrics toolbar. */
+  padding-right: 170px;
+}
+.lyrics-page.narrow .lyrics-title:not(.scrolling) .marquee-content,
+.lyrics-page.narrow .lyrics-artists:not(.scrolling) .marquee-content {
+  margin-inline: 0;
+}
+.lyrics-page.narrow .lyrics-title .song-title {
+  font-size: 20px;
+}
+.lyrics-page.narrow .lyrics-artists {
+  font-size: 14px;
+  margin: 2px 0 0;
+  align-self: start;
+}
+.lyrics-page.narrow .lyrics-album-name {
+  display: none;
+}
+.lyrics-page.narrow .lyrics-body {
+  height: 100%;
+}
+.lyrics-page.narrow + .lyrics-toolbar {
+  top: 8px;
+  right: 8px;
+}
+.lyrics-page.narrow .lyrics-message {
+  padding-top: 30px;
+}
 .lyrics-body {
   height: 100%;
   min-width: 0;
@@ -2704,60 +2760,6 @@ input[type="range"]:hover {
   .now-playing-scroll {
     padding: 15px;
   }
-  .lyrics-page {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 0;
-    padding: 18px 8% 0;
-  }
-  .lyrics-album {
-    display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
-    column-gap: 15px;
-    text-align: left;
-    padding: 8px 0 5px;
-    align-items: center;
-  }
-  .lyrics-album > .cover,
-  .lyrics-album > .dj-art {
-    grid-row: 1/4;
-    width: 56px;
-    height: 56px;
-    margin: 0;
-  }
-  .lyrics-title {
-    margin: 0;
-    align-self: end;
-  }
-  .lyrics-album {
-    /* Keep the header text clear of the floating lyrics toolbar. */
-    padding-right: 170px;
-  }
-  .lyrics-title:not(.scrolling) .marquee-content,
-  .lyrics-artists:not(.scrolling) .marquee-content {
-    margin-inline: 0;
-  }
-  .lyrics-title .song-title {
-    font-size: 20px;
-  }
-  .lyrics-artists {
-    font-size: 14px;
-    margin: 2px 0 0;
-    align-self: start;
-  }
-  .lyrics-album-name {
-    display: none;
-  }
-  .lyrics-body {
-    height: 100%;
-  }
-  .lyrics-toolbar {
-    top: 8px;
-    right: 8px;
-  }
-  .lyrics-page .lyrics-message {
-    padding-top: 30px;
-  }
   .player-bar {
     grid-template-columns: minmax(170px, 1fr) minmax(250px, 1.1fr) minmax(
         200px,
@@ -2853,39 +2855,6 @@ input[type="range"]:hover {
   }
   .player-bar {
     grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.3fr) 160px;
-  }
-  .lyrics-page {
-    grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr);
-    grid-template-rows: 1fr;
-    gap: 5%;
-    padding: 0 5%;
-  }
-  .lyrics-album {
-    display: block;
-    text-align: left;
-    padding-right: 0;
-  }
-  .lyrics-album > .cover,
-  .lyrics-album > .dj-art {
-    width: 100%;
-    height: auto;
-    grid-row: auto;
-  }
-  .lyrics-title {
-    margin-top: 18px;
-  }
-  .lyrics-title .song-title {
-    font-size: 27px;
-  }
-  .lyrics-artists {
-    font-size: 16px;
-    margin-top: 7px;
-  }
-  .lyrics-album-name {
-    display: block;
-  }
-  .lyrics-toolbar {
-    top: 14px;
   }
 }
 /* Spotify-style Canvas: video bleeds to the panel edges behind the header,
@@ -3039,6 +3008,35 @@ input[type="range"]:hover {
 }
 .canvas-lyrics .lyrics-body {
   padding-bottom: 0;
+}
+/* Narrow Canvas view: the video becomes the header thumbnail, the title sits
+   beside it, and the blurred backdrop fills the page evenly. */
+.lyrics-page.narrow.canvas-lyrics .lyrics-album {
+  position: relative;
+  height: auto;
+  display: grid;
+}
+.lyrics-page.narrow.canvas-lyrics .lyrics-album > .cover.lyrics-canvas-cover {
+  position: relative;
+  top: auto;
+  width: 56px;
+  height: 56px;
+  aspect-ratio: 1;
+  mask-image: none;
+  z-index: auto;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px #0006;
+}
+.lyrics-page.narrow.canvas-lyrics .lyrics-canvas-cover::after {
+  display: none;
+}
+.lyrics-page.narrow.canvas-lyrics .lyrics-title,
+.lyrics-page.narrow.canvas-lyrics .lyrics-artists {
+  position: static;
+  max-width: none;
+}
+.lyrics-page.narrow.canvas-lyrics::after {
+  background: linear-gradient(#0004, #0006);
 }
 .floating-lyrics {
   position: relative;

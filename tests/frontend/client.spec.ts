@@ -294,6 +294,33 @@ async function startClient(page: Page, initialRoute = "liked") {
   else await expect(page.locator(".track-row")).toHaveCount(50);
 }
 
+// Plays a short recorded purple video as the current track's Canvas.
+async function emitCanvas(page: Page) {
+  await page.evaluate(async (uri) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#7547c2";
+    context.fillRect(0, 0, 64, 64);
+    const recorder = new MediaRecorder(canvas.captureStream(2));
+    const parts: BlobPart[] = [];
+    const url = await new Promise<string>((resolve) => {
+      recorder.ondataavailable = (event) => parts.push(event.data);
+      recorder.onstop = () =>
+        resolve(
+          URL.createObjectURL(new Blob(parts, { type: recorder.mimeType })),
+        );
+      recorder.start();
+      setTimeout(() => recorder.stop(), 300);
+    });
+    (window as any).__clientTest.emit({ type: "canvas", uri, url });
+    (window as any).__clientTest.emit({
+      type: "provider_configured",
+      kind: "spicy",
+    });
+  }, track.uri);
+}
+
 test("sidebar preserves pins and changes recents only after manual playback", async ({
   page,
 }) => {
@@ -858,29 +885,7 @@ test("Canvas defaults on, floating lyrics are optional, with sharp video left an
     mimeType: "application/xml",
     buffer: Buffer.from("<tt/>"),
   });
-  await page.evaluate(async (uri) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 64;
-    const context = canvas.getContext("2d")!;
-    context.fillStyle = "#7547c2";
-    context.fillRect(0, 0, 64, 64);
-    const recorder = new MediaRecorder(canvas.captureStream(2));
-    const parts: BlobPart[] = [];
-    const url = await new Promise<string>((resolve) => {
-      recorder.ondataavailable = (event) => parts.push(event.data);
-      recorder.onstop = () =>
-        resolve(
-          URL.createObjectURL(new Blob(parts, { type: recorder.mimeType })),
-        );
-      recorder.start();
-      setTimeout(() => recorder.stop(), 300);
-    });
-    (window as any).__clientTest.emit({ type: "canvas", uri, url });
-    (window as any).__clientTest.emit({
-      type: "provider_configured",
-      kind: "spicy",
-    });
-  }, track.uri);
+  await emitCanvas(page);
   await page.getByTitle("Settings", { exact: true }).click();
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
   await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
@@ -1675,4 +1680,47 @@ test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {
       .locator(".lyric-preview .lyric-wait:not([aria-hidden=true])")
       .evaluate((row) => getComputedStyle(row).overflow),
   ).toBe("visible");
+});
+
+test("narrow Canvas lyrics stack the title above the lyrics", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1300, height: 820 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await emitCanvas(page);
+  await expect(page.locator(".lyrics-page.narrow.canvas-lyrics")).toBeVisible();
+  await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
+  const cover = (await page.locator(".lyrics-canvas-cover").boundingBox())!;
+  expect(cover.width).toBeCloseTo(56, 0);
+  const artists = (await page
+    .locator(".lyrics-page .lyrics-artists")
+    .boundingBox())!;
+  const lyrics = (await page
+    .locator(".lyrics-page .lyric-scroll")
+    .boundingBox())!;
+  expect(artists.y + artists.height).toBeLessThanOrEqual(lyrics.y + 1);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const view = document
+            .querySelector(".lyrics-page .lyric-scroll")!
+            .getBoundingClientRect();
+          const line = document
+            .querySelector(".lyrics-page .lyric-line.active")!
+            .getBoundingClientRect();
+          return Math.abs(
+            line.top + line.height / 2 - (view.top + view.height / 2),
+          );
+        }),
+      { timeout: 5_000 },
+    )
+    .toBeLessThan(4);
+  await page.screenshot({ path: "target/diagnostics/canvas-narrow.png" });
 });

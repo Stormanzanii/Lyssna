@@ -753,10 +753,28 @@ export function DJPresentation({ playing }: { playing: boolean }) {
     </div>
   );
 }
+/** Lyric views narrower than this stack a small header above the lyrics. */
+const NARROW_LYRICS_PX = 760;
+function useNarrowLyrics() {
+  const page = useRef<HTMLElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const element = page.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setNarrow(entry.contentRect.width < NARROW_LYRICS_PX),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [page, narrow] as const;
+}
 function DJLyricsPage({ state }: { state: AppState }) {
+  const [page, narrow] = useNarrowLyrics();
   return (
     <section
-      className={`lyrics-page dj-view ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
+      ref={page}
+      className={`lyrics-page dj-view ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
     >
       <Ambience
         image={DJ_COVER}
@@ -805,6 +823,7 @@ function SongLyricsPage({
   const current = usePosition(state) + state.settings.lyric_offset_ms,
     track = state.playback.item;
   const backdrop = useRef<HTMLCanvasElement>(null);
+  const [page, narrow] = useNarrowLyrics();
   const [canvasPlaying, setCanvasPlaying] = useState(false);
   const motionAllowed =
     !state.settings.reduce_motion &&
@@ -822,7 +841,8 @@ function SongLyricsPage({
   );
   return (
     <section
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
+      ref={page}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
     >
       {(!canvas || !canvasPlaying) && (
         <Ambience

@@ -111,6 +111,7 @@ enum PlayerCommand {
     },
     Preload {
         track_id: SpotifyUri,
+        position_ms: u32,
     },
     SetNarration {
         track_id: SpotifyUri,
@@ -597,7 +598,15 @@ impl Player {
     }
 
     pub fn preload(&self, track_id: SpotifyUri) {
-        self.command(PlayerCommand::Preload { track_id });
+        self.preload_at(track_id, 0);
+    }
+
+    /// Prepare a saved listening position without starting or taking over playback.
+    pub fn preload_at(&self, track_id: SpotifyUri, position_ms: u32) {
+        self.command(PlayerCommand::Preload {
+            track_id,
+            position_ms,
+        });
     }
 
     /// Gives a track the DJ lines to speak around it the next time it loads,
@@ -764,16 +773,37 @@ struct PlayerLoadedTrackData {
     is_explicit: bool,
 }
 
+type TrackLoader = Pin<Box<dyn FusedFuture<Output = Result<PlayerLoadedTrackData, ()>> + Send>>;
+
 enum PlayerPreload {
     None,
     Loading {
         track_id: SpotifyUri,
-        loader: Pin<Box<dyn FusedFuture<Output = Result<PlayerLoadedTrackData, ()>> + Send>>,
+        position_ms: u32,
+        loader: TrackLoader,
     },
     Ready {
         track_id: SpotifyUri,
         loaded_track: Box<PlayerLoadedTrackData>,
     },
+}
+
+impl PlayerPreload {
+    fn take_loading(
+        &mut self,
+        requested: &SpotifyUri,
+        requested_position: u32,
+    ) -> Option<TrackLoader> {
+        if !matches!(self, Self::Loading { track_id, position_ms, .. }
+            if track_id == requested && *position_ms == requested_position)
+        {
+            return None;
+        }
+        match mem::replace(self, Self::None) {
+            Self::Loading { loader, .. } => Some(loader),
+            _ => unreachable!("Matching pending preload checked above"),
+        }
+    }
 }
 
 type Decoder = Box<dyn AudioDecoder + Send>;
@@ -1510,6 +1540,7 @@ impl Future for PlayerInternal {
             if let PlayerPreload::Loading {
                 ref mut loader,
                 ref track_id,
+                ..
             } = self.preload
             {
                 let track_id = track_id.clone();
@@ -2249,25 +2280,7 @@ impl PlayerInternal {
         });
 
         // Try to extract a pending loader from the preloading mechanism
-        let loader = if let PlayerPreload::Loading {
-            track_id: loaded_track_id,
-            ..
-        } = &self.preload
-        {
-            if (track_id == *loaded_track_id) && (position_ms == 0) {
-                let mut preload = PlayerPreload::None;
-                std::mem::swap(&mut preload, &mut self.preload);
-                if let PlayerPreload::Loading { loader, .. } = preload {
-                    Some(loader)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let loader = self.preload.take_loading(&track_id, position_ms);
 
         self.preload = PlayerPreload::None;
 
@@ -2286,7 +2299,7 @@ impl PlayerInternal {
         Ok(())
     }
 
-    fn handle_command_preload(&mut self, track_id: SpotifyUri) {
+    fn handle_command_preload(&mut self, track_id: SpotifyUri, position_ms: u32) {
         debug!("Preloading track");
         let mut preload_track = true;
         // check whether the track is already loaded somewhere or being loaded.
@@ -2329,9 +2342,10 @@ impl PlayerInternal {
 
         // schedule the preload of the current track if desired.
         if preload_track {
-            let loader = self.load_track(track_id.clone(), 0);
+            let loader = self.load_track(track_id.clone(), position_ms);
             self.preload = PlayerPreload::Loading {
                 track_id,
+                position_ms,
                 loader: Box::pin(loader),
             }
         }
@@ -2412,7 +2426,10 @@ impl PlayerInternal {
                 position_ms,
             } => self.handle_command_load(track_id, None, play, position_ms)?,
 
-            PlayerCommand::Preload { track_id } => self.handle_command_preload(track_id),
+            PlayerCommand::Preload {
+                track_id,
+                position_ms,
+            } => self.handle_command_preload(track_id, position_ms),
 
             PlayerCommand::Seek(position_ms) => self.handle_command_seek(position_ms)?,
 
@@ -2644,6 +2661,47 @@ impl Drop for PlayerInternal {
     }
 }
 
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+    use futures_util::FutureExt;
+
+    #[tokio::test]
+    async fn resume_reuses_only_the_matching_inflight_position_once() {
+        let track_id = SpotifyUri::from_uri("spotify:track:0000000000000000000001").unwrap();
+        let other = SpotifyUri::from_uri("spotify:track:0000000000000000000002").unwrap();
+        let (complete, pending) = oneshot::channel::<()>();
+        let mut preload = PlayerPreload::Loading {
+            track_id: track_id.clone(),
+            position_ms: 77000,
+            loader: Box::pin(pending.map(|_| Err(())).fuse()),
+        };
+        assert!(preload.take_loading(&other, 77000).is_none());
+        assert!(preload.take_loading(&track_id, 0).is_none());
+        let loader = preload
+            .take_loading(&track_id, 77000)
+            .expect("Resume must reuse the pending download");
+        assert!(preload.take_loading(&track_id, 77000).is_none());
+        complete.send(()).unwrap();
+        assert!(loader.await.is_err());
+    }
+
+    #[test]
+    fn preload_position_reaches_the_player_without_starting_playback() {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let player = Player {
+            commands: Some(sender),
+            thread_handle: None,
+        };
+        let track_id = SpotifyUri::from_uri("spotify:track:0000000000000000000001").unwrap();
+        player.preload_at(track_id.clone(), 77000);
+        assert!(
+            matches!(receiver.try_recv().unwrap(), PlayerCommand::Preload { track_id: actual, position_ms: 77000 } if actual == track_id)
+        );
+        assert!(receiver.try_recv().is_err());
+    }
+}
+
 impl fmt::Debug for PlayerCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -2658,9 +2716,14 @@ impl fmt::Debug for PlayerCommand {
                 .field(&play)
                 .field(&position_ms)
                 .finish(),
-            PlayerCommand::Preload { track_id } => {
-                f.debug_tuple("Preload").field(&track_id).finish()
-            }
+            PlayerCommand::Preload {
+                track_id,
+                position_ms,
+            } => f
+                .debug_tuple("Preload")
+                .field(&track_id)
+                .field(&position_ms)
+                .finish(),
             PlayerCommand::Play => f.debug_tuple("Play").finish(),
             PlayerCommand::Pause => f.debug_tuple("Pause").finish(),
             PlayerCommand::Stop => f.debug_tuple("Stop").finish(),

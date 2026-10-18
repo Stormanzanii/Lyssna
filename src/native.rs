@@ -294,6 +294,7 @@ impl NativeControls {
             action,
             PlayerAction::Play(Some(_))
                 | PlayerAction::PlayUris { .. }
+                | PlayerAction::Resume { .. }
                 | PlayerAction::PlayContext { .. }
                 | PlayerAction::RestoreDJ { .. }
         );
@@ -385,24 +386,13 @@ mod dj_queue_tests {
     }
 }
 
-fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
-    if matches!(
-        action,
-        PlayerAction::Play(Some(_))
-            | PlayerAction::PlayContext { .. }
-            | PlayerAction::RestoreDJ { .. }
-            | PlayerAction::PlayUris { .. }
-    ) || (!*active && matches!(action, PlayerAction::Play(None)))
-    {
-        spirc.activate()?;
-        *active = true;
-    }
+fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
     let options = |playing_track| LoadRequestOptions {
         start_playing: true,
         playing_track,
         ..LoadRequestOptions::default()
     };
-    match action {
+    Some(match action {
         PlayerAction::RestoreDJ {
             context,
             session_url,
@@ -410,48 +400,113 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
             track_uid,
             position_ms,
             relative_offset,
-        } => {
-            spirc.load(LoadRequest::from_context_uri(
-                context,
-                LoadRequestOptions {
-                    start_playing: true,
-                    seek_to: position_ms.min(u64::from(u32::MAX)) as u32,
-                    playing_track: Some(track_uid.filter(|uid| !uid.is_empty()).map_or_else(
-                        || PlayingTrack::Uri(track.clone()),
-                        |uid| PlayingTrack::UidOrUri {
-                            uid,
-                            uri: track.clone(),
-                        },
-                    )),
-                    session_url,
-                    relative_offset,
-                    ..LoadRequestOptions::default()
-                },
-            ))?;
-        }
-        PlayerAction::Play(None) => {
-            spirc.play()?;
-        }
+        } => LoadRequest::from_context_uri(
+            context.clone(),
+            LoadRequestOptions {
+                start_playing: true,
+                seek_to: (*position_ms).min(u64::from(u32::MAX)) as u32,
+                playing_track: Some(track_uid.clone().filter(|uid| !uid.is_empty()).map_or_else(
+                    || PlayingTrack::Uri(track.clone()),
+                    |uid| PlayingTrack::UidOrUri {
+                        uid,
+                        uri: track.clone(),
+                    },
+                )),
+                session_url: session_url.clone(),
+                relative_offset: *relative_offset,
+                ..LoadRequestOptions::default()
+            },
+        ),
         PlayerAction::Play(Some(uri)) => {
-            spirc.load(LoadRequest::from_tracks(
-                vec![uri],
-                options(Some(PlayingTrack::Index(0))),
-            ))?;
+            LoadRequest::from_tracks(vec![uri.clone()], options(Some(PlayingTrack::Index(0))))
         }
-        PlayerAction::PlayContext { context, offset } => {
-            spirc.load(LoadRequest::from_context_uri(
-                context,
-                options(offset.map(PlayingTrack::Uri)),
-            ))?;
-        }
-        PlayerAction::PlayUris { uris, offset } => {
-            spirc.load(LoadRequest::from_tracks(
-                uris,
-                options(Some(PlayingTrack::Index(
-                    offset.min(u32::MAX as usize) as u32
-                ))),
-            ))?;
-        }
+        PlayerAction::PlayContext { context, offset } => LoadRequest::from_context_uri(
+            context.clone(),
+            options(offset.clone().map(PlayingTrack::Uri)),
+        ),
+        PlayerAction::PlayUris { uris, offset } => LoadRequest::from_tracks(
+            uris.clone(),
+            options(Some(PlayingTrack::Index(
+                (*offset).min(u32::MAX as usize) as u32
+            ))),
+        ),
+        PlayerAction::Resume {
+            uris,
+            offset,
+            position_ms,
+        } => LoadRequest::from_tracks(
+            uris.clone(),
+            LoadRequestOptions {
+                seek_to: (*position_ms).min(u64::from(u32::MAX)) as u32,
+                ..options(Some(PlayingTrack::Index(
+                    (*offset).min(u32::MAX as usize) as u32
+                )))
+            },
+        ),
+        _ => return None,
+    })
+}
+
+struct PreparedResume {
+    uri: librespot_core::SpotifyUri,
+    position_ms: u32,
+    narration: Option<librespot_playback::narration::Narration>,
+}
+
+fn saved_context_track<'a>(
+    saved: &crate::resume::LastPlayed,
+    context: &'a librespot_protocol::context::Context,
+) -> Option<&'a librespot_protocol::context_track::ContextTrack> {
+    let tracks = || context.pages.iter().flat_map(|page| &page.tracks);
+    let uid = saved.dj_context.as_ref()?.track_uid.as_deref();
+    tracks()
+        .find(|track| track.uri.as_ref() == Some(&saved.track.uri) && track.uid.as_deref() == uid)
+        .or_else(|| tracks().find(|track| track.uri.as_ref() == Some(&saved.track.uri)))
+}
+
+async fn prepare_resume(
+    session: &Session,
+    saved: Option<crate::resume::LastPlayed>,
+) -> Option<PreparedResume> {
+    let saved = saved?;
+    let uri = librespot_core::SpotifyUri::from_uri(&saved.track.uri).ok()?;
+    let narration = if let Some(context) = &saved.dj_context {
+        let context = session
+            .spclient()
+            .get_context_url(context.session_url.as_deref()?)
+            .await
+            .ok()?;
+        let track = saved_context_track(&saved, &context)?;
+        let narration: librespot_playback::narration::Narration = track
+            .metadata
+            .iter()
+            .filter(|(key, _)| key.starts_with("narration."))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        (!narration.is_empty()).then_some(narration)
+    } else {
+        None
+    };
+    Some(PreparedResume {
+        uri,
+        position_ms: saved.position_ms.min(u64::from(u32::MAX)) as u32,
+        narration,
+    })
+}
+
+fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
+    if let Some(request) = load_request(&action) {
+        spirc.activate()?;
+        *active = true;
+        spirc.load(request)?;
+        return Ok(());
+    }
+    if !*active && matches!(action, PlayerAction::Play(None)) {
+        spirc.activate()?;
+        *active = true;
+    }
+    match action {
+        PlayerAction::Play(None) => spirc.play()?,
         PlayerAction::Pause => spirc.pause()?,
         PlayerAction::Next => spirc.next()?,
         PlayerAction::Previous => spirc.prev()?,
@@ -469,6 +524,7 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
         PlayerAction::Transfer(_) | PlayerAction::Enqueue(_) => {
             anyhow::bail!("This command requires Spotify's Web API")
         }
+        _ => unreachable!("Load requests handled before transport commands"),
     }
     Ok(())
 }
@@ -939,8 +995,24 @@ async fn run(
     let mut volume_guard: Option<(u8, std::time::Instant)> = None;
     let mut pending_seek: Option<(String, u64)> = None;
     let mut narrating = false;
+    let mut resume_preparation = Box::pin(tokio::time::timeout(
+        Duration::from_secs(8),
+        prepare_resume(&session, crate::resume::load(account)),
+    ));
+    let mut resume_prepared = false;
     loop {
         tokio::select! {
+            prepared = &mut resume_preparation, if !resume_prepared => {
+                resume_prepared = true;
+                // The native command loop owns the player. Late preparation cannot
+                // replace a selection or narration after the user starts playback.
+                if !active && !loaded.load(Ordering::Acquire)
+                    && let Ok(Some(prepared)) = prepared
+                {
+                    local_player.set_narration(prepared.uri.clone(), prepared.narration);
+                    local_player.preload_at(prepared.uri, prepared.position_ms);
+                }
+            }
             Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri();let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
             _=intent_tick.tick()=>{},
             _=dj_prewarm.tick(),if audio_playing=>{let _=spirc.prewarm_dj();},
@@ -966,7 +1038,7 @@ async fn run(
                     }
                     intent.request(matches!(action,PlayerAction::Play(None)));
                 }else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
@@ -1101,6 +1173,77 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
 mod tests {
     use super::*;
     use std::cell::Cell;
+    #[test]
+    fn saved_queue_load_starts_at_saved_position_without_a_followup_seek() {
+        let queue: Vec<String> = vec!["spotify:track:first".into(), "spotify:track:second".into()];
+        let action = crate::resume::restore_action(&queue[1], &queue, 77000);
+        let request = load_request(&action).unwrap();
+        assert!(request.start_playing);
+        assert_eq!(request.seek_to, 77000);
+        assert!(matches!(
+            request.playing_track,
+            Some(PlayingTrack::Index(1))
+        ));
+        let request = load_request(&crate::resume::restore_action(
+            "spotify:track:other",
+            &queue,
+            u64::MAX,
+        ))
+        .unwrap();
+        assert_eq!(request.seek_to, u32::MAX);
+        assert!(matches!(
+            request.playing_track,
+            Some(PlayingTrack::Index(0))
+        ));
+        assert!(load_request(&PlayerAction::Pause).is_none());
+    }
+    #[test]
+    fn resume_preparation_cannot_use_another_tracks_narration_from_a_stale_uid() {
+        use librespot_protocol::{
+            context::Context, context_page::ContextPage, context_track::ContextTrack,
+        };
+        let mut saved = crate::resume::LastPlayed {
+            track: crate::model::Track {
+                uri: "spotify:track:saved".into(),
+                ..Default::default()
+            },
+            position_ms: 77000,
+            played_at: 1,
+            queue: vec![],
+            dj_context: Some(crate::resume::DJContext {
+                uri: crate::home::DJ_URI.into(),
+                session_url: None,
+                track_uid: Some("old-uid".into()),
+            }),
+        };
+        let context = Context {
+            pages: vec![ContextPage {
+                tracks: vec![
+                    ContextTrack {
+                        uri: Some("spotify:track:other".into()),
+                        uid: Some("old-uid".into()),
+                        ..Default::default()
+                    },
+                    ContextTrack {
+                        uri: Some(saved.track.uri.clone()),
+                        uid: Some("new-uid".into()),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            saved_context_track(&saved, &context)
+                .unwrap()
+                .uid
+                .as_deref(),
+            Some("new-uid")
+        );
+        saved.track.uri = "spotify:track:missing".into();
+        assert!(saved_context_track(&saved, &context).is_none());
+    }
     #[test]
     fn mono_dj_mp3_decodes_into_both_output_channels() {
         use librespot_playback::decoder::{AudioDecoder, AudioPacket, SymphoniaDecoder};

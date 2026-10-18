@@ -410,6 +410,9 @@ impl Spotify {
                 "play",
                 Some(json!({"uris": uris, "offset": {"position": offset}})),
             ),
+            PlayerAction::Resume { .. } => {
+                anyhow::bail!("Saved-position resume requires native playback")
+            }
             PlayerAction::Pause => (Method::PUT, "pause", None),
             PlayerAction::Next => (Method::POST, "next", None),
             PlayerAction::Previous => (Method::POST, "previous", None),
@@ -557,6 +560,12 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
 
 #[derive(Clone)]
 pub enum PlayerAction {
+    /// Load the saved queue directly at its listening position.
+    Resume {
+        uris: Vec<String>,
+        offset: usize,
+        position_ms: u64,
+    },
     /// Restore a paged DJ session before resuming or advancing its queue.
     RestoreDJ {
         context: String,

@@ -110,7 +110,8 @@ static QUEUES: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
     let queue = match action {
-        crate::api::PlayerAction::PlayUris { uris, .. } => uris.clone(),
+        crate::api::PlayerAction::PlayUris { uris, .. }
+        | crate::api::PlayerAction::Resume { uris, .. } => uris.clone(),
         crate::api::PlayerAction::Play(Some(uri)) => vec![uri.clone()],
         _ => return,
     };
@@ -119,16 +120,16 @@ pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
         queues.insert(account.into(), queue.into_iter().take(100).collect());
     }
 }
-pub fn restore_action(uri: &str, queue: &[String]) -> crate::api::PlayerAction {
-    if let Some(offset) = queue.iter().position(|entry| entry == uri)
-        && queue.len() > 1
-    {
-        return crate::api::PlayerAction::PlayUris {
-            uris: queue.to_vec(),
-            offset,
-        };
+pub fn restore_action(uri: &str, queue: &[String], position_ms: u64) -> crate::api::PlayerAction {
+    let (uris, offset) = queue
+        .iter()
+        .position(|entry| entry == uri)
+        .map_or_else(|| (vec![uri.into()], 0), |offset| (queue.to_vec(), offset));
+    crate::api::PlayerAction::Resume {
+        uris,
+        offset,
+        position_ms,
     }
-    crate::api::PlayerAction::Play(Some(uri.into()))
 }
 pub fn queue(account: &str) -> Vec<String> {
     QUEUES
@@ -330,10 +331,10 @@ mod tests {
             "spotify:track:third".into(),
         ];
         assert!(
-            matches!(restore_action(&queue[1],&queue),crate::api::PlayerAction::PlayUris{uris,offset:1}if uris==queue)
+            matches!(restore_action(&queue[1],&queue,77000),crate::api::PlayerAction::Resume{uris,offset:1,position_ms:77000}if uris==queue)
         );
         assert!(
-            matches!(restore_action("spotify:track:other",&queue),crate::api::PlayerAction::Play(Some(uri))if uri=="spotify:track:other")
+            matches!(restore_action("spotify:track:other",&queue,45000),crate::api::PlayerAction::Resume{uris,offset:0,position_ms:45000}if uris==["spotify:track:other"])
         );
     }
     #[test]

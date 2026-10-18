@@ -26,6 +26,10 @@ The native clock stops advancing after 500 ms without a fresh observation. Repea
 
 Desktop output defaults to This computer. Incoming playback updates do not change the selected output; other devices remain selectable in the device menu. Native Play restores the saved or current song when the connection has no loaded track, including after reconnects and unrelated transport commands. Stopped playback clears that loaded state. Saved sign-in checks show a locked startup screen instead of briefly mounting first-run setup.
 
+Saved-song resume loads the queue and saved position in one native request. After audio sign-in, the saved track is prepared at that position without activating this device or starting playback. DJ preparation reads the existing session and matches the saved track occurrence; it does not consume a fresh selection. Matching pending audio downloads are reused. Late preparation cannot replace a playback selection. Play can still wait on Spotify when preparation has not finished.
+
+Live Windows resume checks on 2026-10-18 measured 161 ms after three seconds of idle preparation, 648 ms when Play followed native readiness immediately, and 791 ms for a prepared DJ resume. Earlier saved-position startup samples took 1,079–1,829 ms; ordinary resume first started at zero before a second seek. The updated checks started at the saved position, kept playback paused throughout idle preparation, and produced an unmuted Windows audio-session signal. These samples use one machine/account and do not guarantee network latency.
+
 Native connection readiness and failures are retained until the matching account completes sign-in. A connection established before the profile check finishes can then accept Play without requiring a manual reconnect. Play retries a failed native connection while preserving the pending selection.
 
 Optional Web API playback polling cannot cancel the authenticated audio session during startup. Closed native control channels trigger reconnection on Play even if the earlier readiness event was never delivered.

@@ -61,7 +61,6 @@ pub struct Snapshot {
 }
 struct Inner {
     home_generation: std::sync::atomic::AtomicU64,
-    resume_seek: Mutex<Option<(String, u64)>>,
     snapshot: Mutex<Snapshot>,
     commands: mpsc::Sender<Command>,
     lyrics: mpsc::Sender<LyricCommand>,
@@ -248,7 +247,6 @@ impl Desktop {
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
             home_generation: std::sync::atomic::AtomicU64::new(0),
-            resume_seek: Mutex::new(None),
             snapshot: Mutex::new(Snapshot {
                 narrating: false,
                 canvas_url: None,
@@ -875,13 +873,6 @@ impl Desktop {
                                         false,
                                     );
                                 }
-                                if playing == Some(true)
-                                    && let Ok(mut pending) = pump.resume_seek.lock()
-                                    && pending.as_ref().is_some_and(|(track, _)| track == &uri)
-                                    && let Some((_, position)) = pending.take()
-                                {
-                                    let _ = pump.controls.send(PlayerAction::Seek(position));
-                                }
                                 emit(
                                     json!({"type":"native_position","uri":uri,"position_ms":position_ms,"playing":playing,"seeked":seeked,"observed_at":snapshot.observed_at}),
                                 );
@@ -1379,16 +1370,6 @@ fn player(
         let mut snapshot = lock(&state.0.snapshot)?;
         ensure!(snapshot.profile.is_some(), "Sign in first");
         let mut action = request.action()?;
-        if matches!(
-            action,
-            PlayerAction::Play(Some(_))
-                | PlayerAction::PlayUris { .. }
-                | PlayerAction::PlayContext { .. }
-                | PlayerAction::Next
-                | PlayerAction::Previous
-        ) {
-            *lock(&state.0.resume_seek)? = None;
-        }
         let native_context = matches!(request.command.as_str(), "dj" | "play_home");
         let local = native_context
             || targets_local_device(
@@ -1431,7 +1412,6 @@ fn player(
             )
         {
             action = restored;
-            *lock(&state.0.resume_seek)? = None;
         }
         if local
             && matches!(action, PlayerAction::Play(None))
@@ -1452,11 +1432,11 @@ fn player(
                         .map(|item| item.uri.clone())
                         .collect()
                 });
-            action = crate::resume::restore_action(&track.uri, &queue);
-            *lock(&state.0.resume_seek)? = Some((
-                track.uri.clone(),
+            action = crate::resume::restore_action(
+                &track.uri,
+                &queue,
                 snapshot.playback.progress_ms.unwrap_or_default(),
-            ));
+            );
         }
         if local && !matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
             if matches!(action, PlayerAction::Next | PlayerAction::Previous) {
@@ -1494,6 +1474,7 @@ fn player(
                     matches!(
                         action,
                         PlayerAction::Play(_)
+                            | PlayerAction::Resume { .. }
                             | PlayerAction::PlayUris { .. }
                             | PlayerAction::PlayContext { .. }
                             | PlayerAction::RestoreDJ { .. }

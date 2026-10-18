@@ -591,6 +591,13 @@ pub struct NativeMessage {
 
 /// Spotify Connect name of this computer's player, unique per PC so the Web
 /// API device list can be matched even when its IDs differ from librespot's.
+/// Audible position when playback starts. A resume reuses the position
+/// recorded at pause; otherwise subtract queued audio, as position updates do,
+/// so lyrics don't start ahead of the sound and then pull back.
+fn playing_position(decoded_ms: u32, queued_ms: u64, resumed: Option<u64>) -> u64 {
+    resumed.unwrap_or_else(|| u64::from(decoded_ms).saturating_sub(queued_ms))
+}
+
 pub fn device_name() -> String {
     let host = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
@@ -1057,8 +1064,8 @@ async fn run(
                     Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
                         let uri = track_id.to_uri();
-                        let position_ms = paused_position.take().filter(|(track, _)| track == &uri)
-                            .map_or(u64::from(position_ms), |(_, position)| position);
+                        let resumed = paused_position.take().filter(|(track, _)| track == &uri).map(|(_, position)| position);
+                        let position_ms = playing_position(position_ms, audio_buffer.latency_ms(), resumed);
                         audio_playing = true;
                         intent.acknowledge_track(&uri, true);
                         emit(NativeEvent::Position { uri, position_ms, playing: Some(true), seeked: false });
@@ -1190,6 +1197,12 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn playing_position_matches_audible_audio() {
+        assert_eq!(super::playing_position(10_000, 400, None), 9_600);
+        assert_eq!(super::playing_position(200, 400, None), 0);
+        assert_eq!(super::playing_position(10_000, 400, Some(8_000)), 8_000);
+    }
     use super::*;
     use std::cell::Cell;
     #[test]

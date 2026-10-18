@@ -20,7 +20,9 @@ import {
   Library,
   LoaderCircle,
   Maximize2,
-  Menu,
+  PanelRight,
+  CirclePlus,
+  CircleCheck,
   Mic2,
   Minus,
   MoreHorizontal,
@@ -50,6 +52,7 @@ import {
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
+import { Logo } from "./brand";
 import {
   emptyState,
   reducer,
@@ -908,10 +911,7 @@ function App() {
     >
       <header className="topbar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region aria-label="SpotiFlex">
-          <span />
-          <span />
-          <span />
-          <span />
+          <Logo size={30} />
         </div>
         <div className="history-buttons">
           <button className="icon-button" title="Go back" onClick={back}>
@@ -2467,7 +2467,11 @@ function PlayerBar({
               title="Save to Liked Songs"
               onClick={() => onSave(track)}
             >
-              {saved ? <Check size={17} /> : <Plus size={17} />}
+              {saved ? (
+                <CircleCheck size={19} fill="currentColor" stroke="#000" />
+              ) : (
+                <CirclePlus size={19} />
+              )}
             </button>
           </>
         ) : (
@@ -2488,14 +2492,14 @@ function PlayerBar({
               })
             }
           >
-            <Shuffle size={17} />
+            <Shuffle size={20} />
           </button>
           <button
             className="icon-button"
             title="Previous song"
             onClick={() => onPlayer({ command: "previous" })}
           >
-            <SkipBack size={19} fill="currentColor" />
+            <SkipBack size={21} fill="currentColor" />
           </button>
           <button
             className="play-toggle"
@@ -2505,11 +2509,11 @@ function PlayerBar({
             disabled={!track}
           >
             {state.pending ? (
-              <LoaderCircle className="spin" size={21} />
+              <LoaderCircle className="spin" size={20} />
             ) : state.playback.is_playing ? (
-              <Pause size={21} fill="currentColor" />
+              <Pause size={20} fill="currentColor" />
             ) : (
-              <Play size={21} fill="currentColor" />
+              <Play size={20} fill="currentColor" />
             )}
           </button>
           <button
@@ -2517,7 +2521,7 @@ function PlayerBar({
             title="Next song"
             onClick={() => onPlayer({ command: "next" })}
           >
-            <SkipForward size={19} fill="currentColor" />
+            <SkipForward size={21} fill="currentColor" />
           </button>
           <button
             className={`icon-button ${state.playback.repeat_state !== "off" && state.playback.repeat_state ? "active" : ""}`}
@@ -2536,9 +2540,9 @@ function PlayerBar({
             }
           >
             {state.playback.repeat_state === "track" ? (
-              <Repeat1 size={17} />
+              <Repeat1 size={20} />
             ) : (
-              <Repeat size={17} />
+              <Repeat size={20} />
             )}
           </button>
         </div>
@@ -2578,20 +2582,20 @@ function PlayerBar({
           title="Lyrics"
           onClick={onLyrics}
         >
-          <Mic2 size={18} />
+          <Mic2 size={19} />
         </button>
         <button className="icon-button" title="Queue" onClick={onQueue}>
-          <ListMusic size={19} />
+          <ListMusic size={20} />
         </button>
         <button className="icon-button" title="Devices" onClick={onDevices}>
-          <Speaker size={18} />
+          <Speaker size={19} />
         </button>
         <button
           className={`icon-button ${sidebarActive ? "active" : ""}`}
           title="Now playing"
           onClick={onSidebar}
         >
-          <Menu size={18} />
+          <PanelRight size={19} />
         </button>
         <button
           className="icon-button volume-button"
@@ -2602,7 +2606,7 @@ function PlayerBar({
             volumeControl.finish();
           }}
         >
-          {volume ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          {volume ? <Volume2 size={20} /> : <VolumeX size={20} />}
         </button>
         <input
           className="volume-range"
@@ -2661,10 +2665,7 @@ function Setup({
         }}
       >
         <div className="setup-logo">
-          <span />
-          <span />
-          <span />
-          <span />
+          <Logo size={44} />
         </div>
         <span className="premium-badge">Spotify Premium required</span>
         <h1 id="setup-title">Make yourself at home.</h1>

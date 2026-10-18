@@ -13,15 +13,15 @@ import { LyricsCanvas } from "./canvas-lyrics";
 import { FloatingLyrics } from "./floating-lyrics";
 import {
   Music2,
-  Plus,
-  Check,
   Maximize2,
   Upload,
   RotateCw,
   Mic2,
   ArrowUpRight,
-  Headphones,
+  CirclePlus,
+  CircleCheck,
 } from "lucide-react";
+import { DJArtwork, DJ_COVER } from "./brand";
 import type {
   Album,
   Artist,
@@ -407,13 +407,15 @@ export function LyricsDisplay({
       const cover = container
         .closest(".lyrics-page")
         ?.querySelector(".lyrics-album>.cover");
-      const coverBox = cover?.getBoundingClientRect();
+      const coverBox = cover?.getBoundingClientRect(),
+        box = container.getBoundingClientRect();
+      // Align with the cover only when it sits beside the lyrics; narrow
+      // layouts stack a small cover above them, so centre in the view.
+      const beside = !!coverBox && coverBox.right <= box.left + 1;
       const focus = compact
-        ? 56
-        : coverBox
-          ? coverBox.top +
-            coverBox.height / 2 -
-            container.getBoundingClientRect().top
+        ? Math.min(72, container.clientHeight * 0.25)
+        : beside
+          ? coverBox.top + coverBox.height / 2 - box.top
           : container.clientHeight / 2;
       container.style.setProperty("--lead-top", `${focus}px`);
       const lastLine = lines.current.at(-1),
@@ -490,7 +492,7 @@ export function LyricsDisplay({
         onTouchStart={browse}
         style={
           {
-            "--lyric-size": `${compact ? 28 : Math.round(settings.lyric_size * 1.6)}px`,
+            "--lyric-size": `${compact ? 24 : Math.round(settings.lyric_size * 1.6)}px`,
           } as CSSProperties
         }
       >
@@ -755,13 +757,7 @@ type Links = {
   onAlbum: (album: Album) => void;
   onArtist: (artist: Artist) => void;
 };
-export function DJArtwork() {
-  return (
-    <div className="dj-art" aria-label="DJ artwork">
-      <Headphones aria-hidden="true" />
-    </div>
-  );
-}
+export { DJArtwork };
 export function DJPresentation({ playing }: { playing: boolean }) {
   return (
     <div className="dj-presentation">
@@ -773,11 +769,38 @@ export function DJPresentation({ playing }: { playing: boolean }) {
     </div>
   );
 }
+function DJLyricsPage({ state }: { state: AppState }) {
+  return (
+    <section
+      className={`lyrics-page dj-view ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
+    >
+      <Ambience
+        image={DJ_COVER}
+        reduceMotion={state.settings.reduce_motion}
+        animate={state.playback.is_playing}
+      />
+      <div className="lyrics-album">
+        <DJArtwork />
+        <div className="lyrics-title">
+          <span className="song-title">DJ</span>
+        </div>
+        <div className="lyrics-artists">
+          {state.playback.is_playing ? "Speaking…" : "Paused"}
+        </div>
+      </div>
+      <div className="lyrics-body dj-lyrics-message" role="status">
+        <h2>Lyrics aren't available while the DJ talks</h2>
+        <p>
+          Your DJ is setting up what plays next. Lyrics return when the next
+          song starts.
+        </p>
+      </div>
+    </section>
+  );
+}
 export function LyricsPage(props: Parameters<typeof SongLyricsPage>[0]) {
   return props.state.narrating ? (
-    <section className="lyrics-page dj-view">
-      <DJPresentation playing={props.state.playback.is_playing} />
-    </section>
+    <DJLyricsPage state={props.state} />
   ) : (
     <SongLyricsPage {...props} />
   );
@@ -1053,7 +1076,28 @@ export function NowPlaying({
   if (state.narrating)
     return (
       <aside className="now-playing dj-view">
-        <DJPresentation playing={state.playback.is_playing} />
+        <Ambience
+          image={DJ_COVER}
+          reduceMotion={state.settings.reduce_motion}
+        />
+        <div className="now-playing-scroll">
+          <div className="section-heading">
+            <h2>Now playing</h2>
+          </div>
+          <DJArtwork />
+          <div className="now-track">
+            <div className="now-track-text">
+              <span className="song-title">DJ</span>
+              <div className="now-artists">
+                {state.playback.is_playing ? "Speaking…" : "Paused"}
+              </div>
+            </div>
+          </div>
+          <p className="dj-note">
+            Your DJ picks music for you and talks between sets. Song details
+            return when the next track starts.
+          </p>
+        </div>
       </aside>
     );
   // Spotify's Canvas layout: the video fills the panel top edge to edge with
@@ -1121,7 +1165,11 @@ export function NowPlaying({
                 title={saved ? "Saved to Liked Songs" : "Save to Liked Songs"}
                 onClick={() => onSave(track)}
               >
-                {saved ? <Check size={20} /> : <Plus size={20} />}
+                {saved ? (
+                  <CircleCheck size={24} fill="currentColor" stroke="#000" />
+                ) : (
+                  <CirclePlus size={24} />
+                )}
               </button>
             </div>
             {showLyricsPreview && state.lyrics && (

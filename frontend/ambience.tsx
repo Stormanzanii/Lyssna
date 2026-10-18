@@ -3,14 +3,17 @@ import Kawarp from "@kawarp/core";
 import type { Track } from "./types";
 export const Ambience = memo(function Ambience({
   track,
+  image,
   reduceMotion = false,
   animate = false,
 }: {
   track?: Track;
+  /** Artwork URL used instead of the track's album art. */
+  image?: string;
   reduceMotion?: boolean;
   animate?: boolean;
 }) {
-  const source = track?.album.images?.[0]?.url ?? "",
+  const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
     renderer = useRef<Kawarp | null>(null),
     resume = useRef<(() => void) | null>(null),

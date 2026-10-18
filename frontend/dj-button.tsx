@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { DJArtwork } from "./components";
+import { DJArtwork } from "./brand";
 
 export function DJButton({
   onRefresh,

@@ -1500,3 +1500,169 @@ test("song title resolves native album metadata before navigating", async ({
     )
     .toBe(true);
 });
+
+// Explicit track with 30 synced lines; the first line starts at 10 s.
+async function playLyricTrack(page: Page, playing = true) {
+  await page.evaluate((playing) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "library",
+      playlists: Array.from({ length: 12 }, (_, index) => ({
+        id: `${index}123456789abcdefghijk`.slice(0, 22),
+        name: [
+          "Certified Jammers",
+          "Songs to be synced",
+          "MY FAV GD SONGS",
+          "The Scientist",
+          "PARANOID",
+          "CHING CHONG",
+        ][index % 6],
+        images: [{ url: "https://artwork.example.test/cover.svg" }],
+        owner: { id: "x", display_name: "Stormanzani" },
+        collaborative: false,
+      })),
+    });
+    host.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: playing,
+        progress_ms: 3000,
+        shuffle_state: false,
+        repeat_state: "off",
+        device: {
+          name: "SpotiFlex (test)",
+          id: "local-device",
+          is_active: true,
+        },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          explicit: true,
+          artists: [
+            { id: "a", name: "Juice WRLD" },
+            { id: "b", name: "Marshmello" },
+          ],
+          album: {
+            id: "0123456789abcdefghijkl",
+            name: "Album",
+            images: [{ url: "https://artwork.example.test/cover.svg" }],
+          },
+          duration_ms: 180000,
+          is_local: false,
+        },
+      },
+    });
+    host.emit({
+      type: "lyrics",
+      uri: "spotify:track:0123456789abcdefghijkl",
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: Array.from({ length: 30 }, (_, index) => ({
+          text: `I am just a lyric line number ${index + 1}`,
+          start_ms: 10000 + index * 3000,
+          end_ms: 13000 + index * 3000,
+          translation: "",
+          romanization: "",
+          background: false,
+          opposite: false,
+          words: [],
+        })),
+      },
+    });
+  }, playing);
+}
+test("stacked lyrics centre the active line in the lyric view", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 760 });
+  await startClient(page);
+  await playLyricTrack(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "native_position",
+      uri: "spotify:track:0123456789abcdefghijkl",
+      position_ms: 31_500,
+      playing: true,
+      observed_at: Date.now(),
+    }),
+  );
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const offset = () =>
+    page.evaluate(() => {
+      const view = document
+        .querySelector(".lyrics-page .lyric-scroll")!
+        .getBoundingClientRect();
+      const line = document
+        .querySelector(".lyrics-page .lyric-line.active")!
+        .getBoundingClientRect();
+      return Math.abs(
+        line.top + line.height / 2 - (view.top + view.height / 2),
+      );
+    });
+  await expect.poll(offset, { timeout: 5_000 }).toBeLessThan(4);
+});
+
+test("explicit badges centre on the capitals beside them", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const offsets = await page.evaluate(() =>
+    [...document.querySelectorAll(".explicit-badge")].map((badge) => {
+      const link = badge.parentElement!.querySelector(".artist-link")!;
+      const marker = document.createElement("span");
+      marker.style.cssText =
+        "display:inline-block;width:0;height:0;vertical-align:baseline";
+      link.after(marker);
+      const baseline = marker.getBoundingClientRect().top;
+      marker.remove();
+      const context = document.createElement("canvas").getContext("2d")!;
+      context.font = getComputedStyle(link).font;
+      const cap = context.measureText("H").actualBoundingBoxAscent;
+      const box = badge.getBoundingClientRect();
+      return Math.abs((box.top + box.bottom) / 2 - baseline + cap / 2);
+    }),
+  );
+  expect(offsets.length).toBeGreaterThan(1);
+  for (const offset of offsets) expect(offset).toBeLessThan(1);
+});
+
+test("DJ lyrics show the DJ cover and explain missing lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "narration", active: true }),
+  );
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const lyrics = page.locator(".lyrics-page.dj-view");
+  await expect(lyrics.locator(".lyrics-album .dj-art img")).toBeVisible();
+  await expect(lyrics.locator(".ambience")).toHaveCount(1);
+  await expect(lyrics).toContainText(
+    "Lyrics aren't available while the DJ talks",
+  );
+  await expect(page.locator(".now-playing.dj-view .dj-art img")).toBeVisible();
+});
+
+test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const card = await page.locator(".lyric-preview").boundingBox();
+  const dots = page.locator(
+    ".lyric-preview .lyric-wait:not([aria-hidden=true]) i",
+  );
+  await expect(dots).toHaveCount(3);
+  for (const dot of await dots.all()) {
+    const box = (await dot.boundingBox())!;
+    expect(box.x).toBeGreaterThan(card!.x + 8);
+    expect(box.y).toBeGreaterThan(card!.y + 40);
+  }
+  expect(
+    await page
+      .locator(".lyric-preview .lyric-wait:not([aria-hidden=true])")
+      .evaluate((row) => getComputedStyle(row).overflow),
+  ).toBe("visible");
+});

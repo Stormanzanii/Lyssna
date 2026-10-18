@@ -2,7 +2,6 @@ import { memo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Headphones,
   Heart,
   LoaderCircle,
   Play,
@@ -15,6 +14,7 @@ import type {
   Playlist,
 } from "./types";
 import { Cover } from "./components";
+import { DJ_COVER } from "./brand";
 import "./HomePage.css";
 
 function Shelf({
@@ -181,9 +181,7 @@ export const HomePage = memo(function HomePage({
           onClick={dj}
           disabled={!ready}
         >
-          <div className="dj-cover">
-            <Headphones size={26} />
-          </div>
+          <img className="dj-cover" src={DJ_COVER} alt="" draggable={false} />
           <div>
             <strong>DJ</strong>
             <span>Music picked for you</span>

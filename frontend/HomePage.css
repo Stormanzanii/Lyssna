@@ -44,11 +44,7 @@
 .home-quick-links .quick-tile > .cover,
 .home-quick-links .quick-tile > .liked-cover,
 .dj-cover {
-  width: 56px;
-  height: 56px;
-  flex-shrink: 0;
-  border-radius: 6px 0 0 6px;
-  box-shadow: 0 4px 14px #0006;
+  display: block;
 }
 .home-quick-links .quick-tile > .liked-cover svg {
   width: 22px;

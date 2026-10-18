@@ -56,9 +56,9 @@ it("rests unsung syllables small and low, pops the sung one, then settles", () =
   expect(unsung).toMatchObject({ scale: POP.restScale, glow: 0, fill: 0 });
   expect(unsung.lift).toBeGreaterThan(0);
   const singing = syllableMotion(1000, 2000, 1700);
-  expect(singing.scale).toBeGreaterThan(1.04);
-  expect(singing.lift).toBeLessThan(-0.03);
-  expect(singing.glow).toBeGreaterThan(0.5);
+  expect(singing.scale).toBeCloseTo(POP.peakScale);
+  expect(singing.lift).toBeCloseTo(POP.peakLift);
+  expect(singing.glow).toBeGreaterThan(0.9);
   const sung = syllableMotion(1000, 2000, Infinity);
   expect(sung).toMatchObject({ scale: 1, lift: 0, glow: 0, fill: 1 });
   expect(syllableMotion(1000, 2000, 2000 + POP.settleMs).scale).toBeCloseTo(1);
@@ -72,6 +72,10 @@ it("moves syllables continuously so lines flow without jumps", () => {
     expect(Math.abs(next.glow - previous.glow)).toBeLessThan(0.03);
     previous = next;
   }
+  // The pop peaks soon after the syllable starts, not at its end.
+  expect(syllableMotion(1000, 2000, 1220).scale).toBeCloseTo(POP.peakScale);
+  // Small travel: under a twentieth of the line height.
+  expect(POP.restLift - POP.peakLift).toBeLessThan(0.05);
   // The next syllable starts rising before this one finishes settling.
   expect(syllableMotion(1000, 1300, 1350).scale).toBeGreaterThan(1);
   expect(syllableMotion(1300, 1600, 1350).scale).toBeGreaterThan(POP.restScale);

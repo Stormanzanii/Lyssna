@@ -99,13 +99,17 @@ const ease = (value: number) => {
  * sung, so the boundary between sung and unsung stays visible. Modelled on
  * Spicy Lyrics' resting scale of 0.95 and its rise-peak-settle curves. */
 export const POP = {
-  restScale: 0.95,
-  restLift: 0.02,
-  peakScale: 1.06,
-  peakLift: -0.045,
-  letterPeakScale: 1.16,
-  letterPeakLift: -0.07,
-  settleMs: 420,
+  restScale: 0.96,
+  restLift: 0.01,
+  peakScale: 1.03,
+  peakLift: -0.022,
+  letterPeakScale: 1.08,
+  letterPeakLift: -0.04,
+  /** The rise leads the syllable slightly and peaks soon after it starts,
+   * matching the sung attack instead of trailing it. */
+  leadMs: 50,
+  riseMs: 220,
+  settleMs: 300,
 };
 /** Motion for a syllable at `time`. Pass -Infinity for unsung lines and
  * Infinity for sung ones. The rise starts slightly early and the settle runs
@@ -118,14 +122,15 @@ export function syllableMotion(
   peakLift = POP.peakLift,
 ): SyllableMotion {
   const duration = Math.max(1, end - start);
-  const rise = ease((time - start + 60) / Math.max(140, duration * 0.7 + 60));
+  const rise = ease(
+    (time - start + POP.leadMs) /
+      (Math.min(POP.riseMs, Math.max(90, duration * 0.6)) + POP.leadMs),
+  );
   const settle = ease((time - end) / POP.settleMs);
   const peak = (rest: number, top: number, sung: number) =>
     rest + (top - rest) * rise + (sung - (rest + (top - rest) * rise)) * settle;
-  const glowIn = ease((time - start + 40) / Math.max(90, duration * 0.15));
-  const glowOut = ease(
-    (time - start - duration * 0.6) / (duration * 0.4 + POP.settleMs),
-  );
+  const glowIn = ease((time - start + POP.leadMs) / (POP.leadMs + 90));
+  const glowOut = ease((time - end + 60) / (POP.settleMs + 60));
   return {
     lift: peak(POP.restLift, peakLift, 0),
     scale: peak(POP.restScale, peakScale, 1),

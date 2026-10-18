@@ -191,6 +191,7 @@ impl NativeControls {
             matches!(
                 kind,
                 ExtensionKind::CANVAS_V1
+                    | ExtensionKind::TRACK_V4
                     | ExtensionKind::CANVAZ
                     | ExtensionKind::STREAM_COUNT
                     | ExtensionKind::ARTIST_V4
@@ -1265,6 +1266,57 @@ mod tests {
         }
         assert!(frames > 0);
         assert!(audible);
+    }
+    #[test]
+    fn album_resolution_reads_track_metadata_through_the_native_channel() {
+        use librespot_protocol::{
+            extension_kind::ExtensionKind,
+            metadata::{Album as WireAlbum, Track as WireTrack},
+        };
+        use protobuf::Message;
+        let wire = WireTrack {
+            gid: Some(vec![1; 16]),
+            name: Some("Song".into()),
+            duration: Some(180000),
+            album: protobuf::MessageField::some(WireAlbum {
+                gid: Some(vec![2; 16]),
+                name: Some("Album".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let uri = librespot_core::SpotifyId::from_raw(&[1; 16])
+            .unwrap()
+            .to_base62();
+        let controls = NativeControls::default();
+        let (sender, _commands) = async_channel::unbounded_channel();
+        let (metadata, mut requests) = async_channel::unbounded_channel::<MetadataRead>();
+        *controls.0.lock().unwrap() = Some(ControlConnection {
+            account: "listener".into(),
+            status: Arc::default(),
+            session: Arc::default(),
+            volume: Arc::new(AtomicU32::new(u32::MAX)),
+            sender,
+            ready: Arc::new(AtomicBool::new(true)),
+            loaded: Arc::new(AtomicBool::new(false)),
+            playlists: None,
+            metadata: Some(metadata),
+        });
+        let service = thread::spawn(move || {
+            if let Some(request) = requests.blocking_recv() {
+                assert_eq!(request.kind, ExtensionKind::TRACK_V4);
+                request
+                    .reply
+                    .send(Ok(wire.write_to_bytes().unwrap()))
+                    .unwrap();
+            }
+        });
+        let result = controls.track(&format!("spotify:track:{uri}"));
+        drop(controls);
+        service.join().unwrap();
+        let track = result.expect("Album resolution must reach native track metadata");
+        assert_eq!(track.album.name, "Album");
+        assert!(track.album.id.is_some());
     }
     #[test]
     fn extended_track_metadata_keeps_album_links() {

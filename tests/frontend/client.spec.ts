@@ -1361,7 +1361,7 @@ test("lyrics wrap at narrow widths; countdown and unsung syllables follow song t
       .locator(".lyric-syllable")
       .last()
       .evaluate((element) => element.style.getPropertyValue("--word-progress")),
-  ).toBe("-20%");
+  ).toBe("-12%");
   expect(
     await page
       .locator(".lyric-line.active")

@@ -101,10 +101,10 @@ const ease = (value: number) => {
 export const POP = {
   restScale: 0.96,
   restLift: 0.01,
-  peakScale: 1.03,
-  peakLift: -0.022,
-  letterPeakScale: 1.08,
-  letterPeakLift: -0.04,
+  peakScale: 1.045,
+  peakLift: -0.03,
+  letterPeakScale: 1.1,
+  letterPeakLift: -0.05,
   /** The rise leads the syllable slightly and peaks soon after it starts,
    * matching the sung attack instead of trailing it. */
   leadMs: 50,

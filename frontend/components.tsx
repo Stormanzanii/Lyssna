@@ -694,7 +694,7 @@ const LyricWords = memo(function LyricWords({
                     className={`lyric-syllable ${emphasis ? "emphasis" : ""} ${glowing ? "glowing" : ""}`}
                     style={
                       {
-                        "--word-progress": `${motion.fill * 120 - 20}%`,
+                        "--word-progress": `${motion.fill * 112 - 12}%`,
                         "--syllable-lift": still ? 0 : motion.lift,
                         "--syllable-scale": still ? 1 : motion.scale,
                         "--syllable-scale-x": still
@@ -725,7 +725,7 @@ const LyricWords = memo(function LyricWords({
                                   "--letter-scale": motion.scale,
                                   "--letter-scale-x": Math.max(1, motion.scale),
                                   "--letter-glow": motion.glow,
-                                  "--word-progress": `${motion.fill * 120 - 20}%`,
+                                  "--word-progress": `${motion.fill * 112 - 12}%`,
                                 } as CSSProperties
                               }
                             >

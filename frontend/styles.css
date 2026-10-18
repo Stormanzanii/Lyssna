@@ -1896,7 +1896,7 @@ small {
 .lyric-syllable.glowing {
   filter: drop-shadow(
     0 0 calc(0.06em + 0.16em * var(--syllable-glow))
-      rgb(255 255 255 / calc(var(--syllable-glow) * 0.75))
+      rgb(255 255 255 / calc(var(--syllable-glow) * 0.85))
   );
 }
 .lyric-line.active .lyric-syllable,
@@ -1955,8 +1955,8 @@ small {
   background: linear-gradient(
     90deg,
     #fff var(--word-progress),
-    #e5e5e565 calc(var(--word-progress) + 20%),
-    #e5e5e565
+    #e5e5e552 calc(var(--word-progress) + 12%),
+    #e5e5e552
   );
   background-clip: text;
   -webkit-background-clip: text;

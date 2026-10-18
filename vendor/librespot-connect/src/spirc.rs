@@ -134,6 +134,7 @@ enum SpircCommand {
     SetPosition(u32),
     SetVolume(u16),
     Activate,
+    PrewarmDJ,
     Transfer(Option<TransferRequest>),
     Load(LoadRequest),
     AddToQueue(SpotifyUri),
@@ -468,6 +469,10 @@ impl Spirc {
     pub fn activate(&self) -> Result<(), Error> {
         Ok(self.commands.send(SpircCommand::Activate)?)
     }
+    /// Prepare one unheard DJ set and its speech without activating this device.
+    pub fn prewarm_dj(&self) -> Result<(), Error> {
+        Ok(self.commands.send(SpircCommand::PrewarmDJ)?)
+    }
 
     /// Acquires the control as active connect device over the transfer flow.
     ///
@@ -750,6 +755,10 @@ impl SpircTask {
     async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
         trace!("Received SpircCommand::{cmd:?}");
         match cmd {
+            SpircCommand::PrewarmDJ => {
+                self.context_resolver.prewarm_dj();
+                return Ok(());
+            }
             SpircCommand::Shutdown => {
                 trace!("Received SpircCommand::Shutdown");
                 self.handle_pause();

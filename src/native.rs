@@ -927,11 +927,14 @@ async fn run(
     }
     ready.store(true, Ordering::Release);
     emit(NativeEvent::Ready(session.device_id().to_owned()));
+    let _ = spirc.prewarm_dj();
     tokio::pin!(task);
     let mut active = false;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
     let mut intent_tick = tokio::time::interval(Duration::from_millis(20));
+    let mut dj_prewarm = tokio::time::interval(Duration::from_secs(300));
+    dj_prewarm.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut volume_sync: Option<(u8, std::time::Instant)> = None;
     let mut volume_guard: Option<(u8, std::time::Instant)> = None;
     let mut pending_seek: Option<(String, u64)> = None;
@@ -940,6 +943,7 @@ async fn run(
         tokio::select! {
             Some(request)=metadata.recv()=>{let session=session.clone();tokio::spawn(async move{let result=async {let uri=librespot_core::SpotifyUri::from_uri(&request.uri)?;let bytes=if matches!(request.kind,librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4|librespot_protocol::extension_kind::ExtensionKind::ALBUM_V4){let kind=if request.kind==librespot_protocol::extension_kind::ExtensionKind::ARTIST_V4{"artist"}else{"album"};let id=request.uri.rsplit(":").next().context("Missing catalogue ID")?;let data=crate::catalogue::page(&session,kind,id,request.offset).await?;serde_json::to_vec(&data)?.into()}else if request.kind==librespot_protocol::extension_kind::ExtensionKind::CANVAS_V1{let text=uri.to_uri();let mut body=vec![10,(text.len()+2)as u8,10,text.len()as u8];body.extend_from_slice(text.as_bytes());session.spclient().request(&reqwest::Method::POST,"/canvaz-cache/v0/canvases",None,Some(&body)).await?}else{session.spclient().get_metadata(request.kind,&uri).await?};anyhow::ensure!(bytes.len()<=1_000_000,"Metadata response too large");Ok::<_,anyhow::Error>(bytes.to_vec())};let result=tokio::time::timeout(Duration::from_secs(8),result).await.map_err(|_|"Metadata request timed out".to_owned()).and_then(|value|value.map_err(|error|error.to_string()));let _=request.reply.send(result);});}
             _=intent_tick.tick()=>{},
+            _=dj_prewarm.tick(),if audio_playing=>{let _=spirc.prewarm_dj();},
             Some(())=audible_seeks.recv()=>{if let Some((uri,position_ms))=pending_seek.take(){emit(NativeEvent::Position{uri,position_ms,playing:Some(audio_playing),seeked:true});}}
             Some(request)=playlists.recv()=>{
                 let session=session.clone();

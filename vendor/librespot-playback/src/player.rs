@@ -1053,7 +1053,16 @@ impl PlayerTrackLoader {
         position_ms: u32,
         narration: Option<Narration>,
     ) -> Option<PlayerLoadedTrackData> {
-        let mut loaded = self.load_bare_track(track_uri, position_ms).await?;
+        let music = async { self.load_bare_track(track_uri, position_ms).await.ok_or(()) };
+        let speech = async {
+            if !self.config.passthrough
+                && let Some(narration) = narration.as_ref()
+            {
+                narration::prefetch(&self.session, narration, position_ms).await;
+            }
+            Ok::<(), ()>(())
+        };
+        let (mut loaded, ()) = tokio::try_join!(music, speech).ok()?;
         // Passthrough hands on raw Ogg packets, which decoded lines can't sit between.
         if let Some(narration) = narration.filter(|_| !self.config.passthrough) {
             let config = resolve_auto_normalisation(&self.config, self.normalise_as_album);

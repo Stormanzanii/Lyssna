@@ -3,7 +3,7 @@
 //! friends); Spotify synthesizes it on request, and the line plays before or
 //! after its track. The output adapter blends speech/music boundaries.
 
-use std::{collections::HashMap, io::Cursor, time::Duration};
+use std::{collections::HashMap, io::Cursor};
 
 use librespot_core::Session;
 use symphonia::core::probe::Hint;
@@ -16,10 +16,6 @@ use crate::{
 
 /// A track's `narration.*` metadata, as its context entry carries it.
 pub type Narration = HashMap<String, String>;
-
-/// Bounds synthesis plus download. The line is a nicety; the track must not
-/// wait on it indefinitely.
-const TIMEOUT: Duration = Duration::from_secs(8);
 
 /// Spotify's loudness target, and the levels DJ declares for its own lines,
 /// used when a line arrives without them.
@@ -78,6 +74,29 @@ fn has_script(narration: &Narration, kind: &str) -> bool {
         .is_some_and(|ssml| !ssml.is_empty())
 }
 
+/// Prepare upcoming DJ speech without starting playback or loading a track.
+pub async fn prefetch(session: &Session, narration: &Narration, position_ms: u32) {
+    let intro = if position_ms == 0 {
+        if has_script(narration, "intro") {
+            Some("intro")
+        } else {
+            Some("jump")
+        }
+    } else {
+        None
+    };
+    tokio::join!(
+        async {
+            if let Some(kind) = intro {
+                let _ = crate::narration_cache::line(session, narration, kind).await;
+            }
+        },
+        async {
+            let _ = crate::narration_cache::line(session, narration, "outro").await;
+        }
+    );
+}
+
 async fn line(
     session: &Session,
     config: &PlayerConfig,
@@ -95,22 +114,7 @@ async fn line(
             .unwrap_or_default()
     };
 
-    let spclient = session.spclient();
-    let fetch = spclient.get_narration(field("ssml"), field("voice"), field("tts_provider"));
-    let mp3 = match tokio::time::timeout(TIMEOUT, fetch).await {
-        Ok(Ok(mp3)) => mp3,
-        Ok(Err(e)) => {
-            warn!("DJ {kind} line unavailable, skipping it: {e}");
-            return None;
-        }
-        Err(_) => {
-            warn!(
-                "DJ {kind} line took over {}s, skipping it",
-                TIMEOUT.as_secs()
-            );
-            return None;
-        }
-    };
+    let mp3 = crate::narration_cache::line(session, narration, kind).await?;
 
     let mut hint = Hint::new();
     hint.with_extension("mp3");

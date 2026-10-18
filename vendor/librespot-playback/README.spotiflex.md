@@ -7,3 +7,5 @@ License: MIT, copyright 2015 Paul Lietar. The upstream license is included as `L
 Playback and Connect are vendored. Other librespot crates remain pinned to the same revision. The manifest replaces workspace inheritance and relative dependency paths with explicit package metadata and dependencies resolved by the application's patches.
 
 SpotiFlex changes tag decoded narration packets. Its audio sink can identify speech when samples reach playback, without treating buffering or paused music as narration. Preserve this marker when updating the vendored crate.
+
+Speech downloads use a bounded, account-scoped memory cache with shared pending requests. Music loading and speech preparation run concurrently. Short failure reuse prevents a failed speculative download from immediately adding another synthesis timeout.

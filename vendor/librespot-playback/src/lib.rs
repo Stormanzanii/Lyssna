@@ -13,6 +13,7 @@ pub mod dither;
 mod local_file;
 pub mod mixer;
 pub mod narration;
+mod narration_cache;
 mod narration_mix;
 pub mod player;
 mod symphonia_util;

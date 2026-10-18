@@ -132,6 +132,7 @@ impl From<ContextResolverError> for Error {
 }
 
 pub struct ContextResolver {
+    dj: crate::dj_cache::DjCache,
     session: Session,
     queue: VecDeque<ResolveContext>,
     unavailable_contexts: HashMap<ResolveContext, Instant>,
@@ -146,6 +147,7 @@ const RETRY_UNAVAILABLE: Duration = Duration::from_secs(3600);
 impl ContextResolver {
     pub fn new(session: Session) -> Self {
         Self {
+            dj: crate::dj_cache::DjCache::new(session.clone()),
             session,
             queue: VecDeque::new(),
             unavailable_contexts: HashMap::new(),
@@ -183,6 +185,9 @@ impl ContextResolver {
         }
 
         self.queue.push_back(resolve)
+    }
+    pub fn prewarm_dj(&self) {
+        self.dj.prepare(None);
     }
 
     pub fn add_list(&mut self, resolve: Vec<ResolveContext>) {
@@ -228,6 +233,11 @@ impl ContextResolver {
 
         match next.update {
             ContextType::Default => {
+                if let Some(mut context) = self.dj.take(resolve_uri, next.fresh).await {
+                    context.uri = Some(next.context_uri().to_owned());
+                    context.url = Some(format!("context://{}", next.context_uri()));
+                    return Ok(context);
+                }
                 let mut ctx = if resolve_uri.starts_with("hm://") {
                     // the next page of a context that streams in pages
                     self.session
@@ -281,6 +291,9 @@ impl ContextResolver {
                 if let Ok(ctx) = ctx.as_mut() {
                     ctx.uri = Some(next.context_uri().to_string());
                     ctx.url = ctx.uri.as_ref().map(|s| format!("context://{s}"));
+                    if next.fresh && resolve_uri == crate::dj_cache::DJ_URI {
+                        self.dj.prepare(Some(ctx.clone()));
+                    }
                 }
 
                 ctx

@@ -8,9 +8,8 @@ pub const ICON_BARS: [(f32, f32); 4] = [(0.2, 0.17), (0.4, 0.37), (0.6, 0.25), (
 pub const ICON_BAR_HALF_WIDTH: f32 = 0.078;
 /// Corner radius of the legacy in-app tile, in unit coordinates.
 pub const ICON_RADIUS: f32 = 0.24;
-/// Vertical bar gradient, top to bottom. The background stays transparent.
-pub const ICON_TOP: [u8; 3] = [30, 215, 96];
-pub const ICON_BOTTOM: [u8; 3] = [24, 178, 228];
+/// Bar colour. The background stays transparent.
+pub const ICON_COLOR: [u8; 3] = [255, 255, 255];
 
 fn icon_rounded_box(x: f32, y: f32, half_x: f32, half_y: f32, radius: f32) -> f32 {
     let qx = x.abs() - half_x + radius;
@@ -44,13 +43,7 @@ pub fn icon_rgba(size: u32) -> Vec<u8> {
                 }
             }
             let coverage = bars / (samples * samples) as f32;
-            let t = ((py as f32 + 0.5) / size as f32 - 0.13) / 0.74;
-            let t = t.clamp(0.0, 1.0);
-            for channel in 0..3 {
-                let value = ICON_TOP[channel] as f32
-                    + (ICON_BOTTOM[channel] as f32 - ICON_TOP[channel] as f32) * t;
-                pixels.push(value.round() as u8);
-            }
+            pixels.extend_from_slice(&ICON_COLOR);
             pixels.push((coverage * 255.0).round() as u8);
         }
     }

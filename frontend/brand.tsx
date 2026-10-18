@@ -18,12 +18,6 @@ export function Logo({ size = 28 }: { size?: number }) {
       viewBox="0 0 100 100"
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="logo-gradient" x1="0" y1="0.13" x2="0" y2="0.87">
-          <stop offset="0" stopColor="#1ed760" />
-          <stop offset="1" stopColor="#18b2e4" />
-        </linearGradient>
-      </defs>
       {BARS.map(([x, half]) => (
         <rect
           key={x}
@@ -32,7 +26,7 @@ export function Logo({ size = 28 }: { size?: number }) {
           width={BAR_HALF_WIDTH * 200}
           height={half * 200}
           rx={BAR_HALF_WIDTH * 100}
-          fill="url(#logo-gradient)"
+          fill="#fff"
         />
       ))}
     </svg>

@@ -306,6 +306,10 @@ impl Desktop {
         if restore {
             inner.commands.send(Command::Restore(settings.client_id))?;
         }
+        let speech_startup = inner.clone();
+        thread::spawn(move || {
+            let _ = crate::dj::voice::warm_up(&speech_startup.stopped);
+        });
         let pump = inner.clone();
         thread::spawn(move || {
             let emit = |value: Value| {

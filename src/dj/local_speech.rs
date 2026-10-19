@@ -208,8 +208,12 @@ pub(super) fn decode(
     let mut state = model
         .create_state()
         .context("Speech recognition could not start")?;
+    // Give short utterances context at both boundaries without clipping consonants.
+    let mut padded = vec![0.0; 8_000];
+    padded.extend_from_slice(samples);
+    padded.resize(padded.len() + 8_000, 0.0);
     state
-        .full(parameters, samples)
+        .full(parameters, &padded)
         .context("Speech recognition did not complete")?;
     check(&cancelled)?;
     let mut text = String::new();
@@ -263,6 +267,16 @@ mod tests {
         let mut progress = Vec::new();
         assert!(prepare(&cancelled, &mut |event| progress.push(event)).is_err());
         assert!(progress.is_empty());
+    }
+
+    #[test]
+    #[ignore = "Loads the cached local model; no microphone"]
+    fn startup_warmup_and_voice_requests_share_one_model() {
+        let cancelled = AtomicBool::new(false);
+        super::super::voice::warm_up(&cancelled).unwrap();
+        let first = prepare(&cancelled, &mut |_| {}).unwrap();
+        let second = prepare(&cancelled, &mut |_| {}).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[test]

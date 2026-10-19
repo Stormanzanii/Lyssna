@@ -2,6 +2,8 @@
 mod context;
 #[cfg(windows)]
 mod local_speech;
+#[cfg(windows)]
+mod microphone;
 pub mod requests;
 pub mod transport;
 pub mod voice;

@@ -16,7 +16,7 @@ export const Ambience = memo(function Ambience({
   const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
     renderer = useRef<Kawarp | null>(null),
-    resume = useRef<(() => void) | null>(null),
+    resume = useRef<((settleMs?: number) => void) | null>(null),
     motion = useRef({ animate, reduceMotion });
   motion.current = { animate, reduceMotion };
   useEffect(() => {
@@ -41,6 +41,9 @@ export const Ambience = memo(function Ambience({
     renderer.current = engine;
     let frame = 0,
       last = 0,
+      // Still ambience keeps drawing until this time so artwork crossfades,
+      // which run on the wall clock, finish instead of freezing at the start.
+      settle = 0,
       visible = true,
       disposed = false;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)"),
@@ -51,8 +54,10 @@ export const Ambience = memo(function Ambience({
         motion.current.animate &&
         !motion.current.reduceMotion &&
         !reduced.matches;
+    const settling = () =>
+      !disposed && visible && !document.hidden && performance.now() < settle;
     const tick = (time: number) => {
-      if (!allowed()) return;
+      if (!allowed() && !settling()) return;
       if (time - last >= 1000 / 30) {
         engine.renderFrame();
         last = time;
@@ -65,9 +70,12 @@ export const Ambience = memo(function Ambience({
       engine.start();
       engine.stop();
       engine.renderFrame();
-      if (allowed()) frame = requestAnimationFrame(tick);
+      if (allowed() || settling()) frame = requestAnimationFrame(tick);
     };
-    resume.current = restart;
+    resume.current = (settleMs = 0) => {
+      settle = Math.max(settle, performance.now() + settleMs);
+      restart();
+    };
     const resize = () => {
       const box = canvas.getBoundingClientRect(),
         scale = Math.min(
@@ -105,10 +113,11 @@ export const Ambience = memo(function Ambience({
   useEffect(() => {
     if (!source) return;
     let cancelled = false;
-    void renderer.current
+    const engine = renderer.current;
+    void engine
       ?.loadImage(source)
       .then(() => {
-        if (!cancelled) resume.current?.();
+        if (!cancelled) resume.current?.(engine.transitionDuration + 100);
       })
       .catch(() => {});
     return () => {

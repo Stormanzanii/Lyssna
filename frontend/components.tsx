@@ -1111,6 +1111,7 @@ export function NowPlaying({
         <Ambience
           image={DJ_COVER}
           reduceMotion={state.settings.reduce_motion}
+          animate={state.playback.is_playing}
         />
         <div className="now-playing-scroll">
           <div className="section-heading">
@@ -1145,7 +1146,11 @@ export function NowPlaying({
   );
   return (
     <aside className={`now-playing ${canvas ? "has-canvas" : ""}`}>
-      <Ambience track={track} reduceMotion={state.settings.reduce_motion} />
+      <Ambience
+        track={track}
+        reduceMotion={state.settings.reduce_motion}
+        animate={state.playback.is_playing}
+      />
       <div className="now-playing-scroll">
         {!canvas && heading}
         {track ? (

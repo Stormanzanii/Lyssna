@@ -21,6 +21,8 @@ const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000
 
 #[derive(Clone, Default)]
 pub struct AudioBuffer {
+    #[cfg(test)]
+    output_started: Arc<Mutex<Option<std::time::Instant>>>,
     queued: Arc<AtomicUsize>,
     narration: Arc<AtomicBool>,
     generation: Arc<AtomicUsize>,
@@ -32,8 +34,16 @@ impl AudioBuffer {
         if let Ok(mut pending) = self.target.lock() {
             *pending = target;
             self.generation.fetch_add(1, Ordering::AcqRel);
+            #[cfg(test)]
+            if let Ok(mut started) = self.output_started.lock() {
+                *started = None;
+            }
             self.narration.store(false, Ordering::Release);
         }
+    }
+    #[cfg(test)]
+    pub(crate) fn output_started(&self) -> Option<std::time::Instant> {
+        *self.output_started.lock().ok()?
     }
     fn select_track(&self, uri: Option<&str>) -> Option<usize> {
         let mut target = self.target.lock().ok()?;
@@ -87,6 +97,19 @@ impl AudioSink {
         self.mixer = Some(mixer);
         self
     }
+    pub fn prepare_output(&mut self) -> SinkResult<()> {
+        if self.sink.is_none() {
+            let mut stream = OutputStreamBuilder::open_default_stream().map_err(|_| {
+                SinkError::ConnectionRefused("Cannot open default audio device".into())
+            })?;
+            stream.log_on_drop(false);
+            self.sink = Some(rodio::Sink::connect_new(stream.mixer()));
+            self.stream = Some(stream);
+            #[cfg(windows)]
+            let _ = configure_session_identity();
+        }
+        Ok(())
+    }
     #[cfg(test)]
     pub(crate) fn test_output(&mut self) -> impl Source<Item = f32> + use<> {
         let (sink, output) = rodio::Sink::new();
@@ -123,16 +146,7 @@ impl Sink for AudioSink {
     }
     fn start(&mut self) -> SinkResult<()> {
         self.discard_old_audio();
-        if self.sink.is_none() {
-            let mut stream = OutputStreamBuilder::open_default_stream().map_err(|_| {
-                SinkError::ConnectionRefused("Cannot open default audio device".into())
-            })?;
-            stream.log_on_drop(false);
-            self.sink = Some(rodio::Sink::connect_new(stream.mixer()));
-            self.stream = Some(stream);
-            #[cfg(windows)]
-            let _ = configure_session_identity();
-        }
+        self.prepare_output()?;
         self.sink.as_ref().unwrap().play();
         Ok(())
     }
@@ -183,6 +197,8 @@ impl Sink for AudioSink {
 }
 
 struct QueuedPacket {
+    #[cfg(test)]
+    output_started: Option<Arc<Mutex<Option<std::time::Instant>>>>,
     generation: usize,
     active_generation: Option<Arc<AtomicUsize>>,
     marker_applied: bool,
@@ -202,6 +218,10 @@ impl QueuedPacket {
         let mut packet = Self::new(samples, buffer.queued);
         packet.generation = buffer.generation.load(Ordering::Acquire);
         packet.active_generation = Some(buffer.generation);
+        #[cfg(test)]
+        {
+            packet.output_started = Some(buffer.output_started);
+        }
         packet.marker = Some((buffer.narration, narration));
         packet.volume = volume;
         packet
@@ -212,6 +232,8 @@ impl QueuedPacket {
         );
         queued.fetch_add(samples.len(), Ordering::Relaxed);
         Self {
+            #[cfg(test)]
+            output_started: None,
             generation: 0,
             active_generation: None,
             marker: None,
@@ -233,6 +255,12 @@ impl Iterator for QueuedPacket {
             .is_none_or(|generation| generation.load(Ordering::Acquire) == self.generation);
         if sample.is_some() {
             if !self.marker_applied && current {
+                #[cfg(test)]
+                if let Some(started) = &self.output_started
+                    && let Ok(mut started) = started.lock()
+                {
+                    started.get_or_insert_with(std::time::Instant::now);
+                }
                 if let Some((marker, narration)) = &self.marker {
                     marker.store(*narration, Ordering::Release);
                 }

@@ -835,6 +835,12 @@ impl SpircTask {
         if let PlayerEvent::TrackChanged { audio_item } = event {
             self.connect_state.update_duration(audio_item.duration_ms);
             self.update_state = true;
+            if self
+                .connect_state
+                .current_track(|track| track.uri == audio_item.track_id.to_uri())
+            {
+                self.handle_preload_next_track();
+            }
             return Ok(());
         }
 

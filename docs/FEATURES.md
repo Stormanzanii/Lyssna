@@ -2,6 +2,8 @@
 
 The reference projects are [Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-lyrics/tree/dev) and [Spotify Plus](https://github.com/iPixelGalaxy/spotify-plus). Their JavaScript extensions are not loaded into SpotiFlex. The desktop uses a Tauri/React interface backed by Rust services; the optional egui interface remains available.
 
+See [implementation batches](ROADMAP.md) for the order of the remaining work. The Remaining column includes missing features and live checks; it does not imply that every item has a supported implementation path.
+
 | Area | Implemented | Remaining |
 | --- | --- | --- |
 | Login | Mandatory setup modal; Premium notice; developer Client ID; separate audio PKCE; browser callbacks; state validation; cancellation before browser launch; refresh; account-bound OS credential storage; sign-out | Broader sign-in recovery UX |
@@ -24,6 +26,8 @@ Controls for modifying Spotify's own web menus, Spicetify developer tools, and i
 Playback regression tests reproduce buffer starvation during a 150 ms producer scheduling gap and a two-second lyric rewind after delayed decoder feedback. The output queue now retains 250 ms of audio, native position observations subtract queued output latency, and backward drift corrections preserve forward lyric motion. Explicit backward seeks still apply immediately. These checks do not establish audible playback quality on another computer.
 
 Song selection, Next and Previous invalidate old queued samples immediately, before Spotify Connect responds. Decoder track identity prevents a superseded selection from becoming audible; automatic transitions retain gapless output. State uploads remain ordered and coalesce while local transport commands continue. Regression tests cover old buffered audio, rapid selections, same-song restarts, stale seek feedback and delayed uploads. Live listening still needs confirmation.
+
+Startup metadata and audio keys reuse bounded five-minute caches owned by the current player session. Audio opening and key retrieval overlap; direct selections begin preparing before Connect finishes routing them. The next queued song preloads as soon as the current decoder is ready, and audio-output initialization overlaps connection setup. A live Windows timing run measured a 486 ms first selection and 104 ms median for subsequent sequential selections; the previous baseline median was 595 ms. A separate skip run improved from 431 ms to 58 ms median. These measure the first sample consumed by the output pipeline, excluding physical speaker latency; network conditions still affect uncached starts. Opt-in tests are `live_track_start_latency` and `live_skip_start_latency`, which use saved sign-in and play six short selections.
 
 Windows icons share the same logo geometry across the executable, window and legacy UI. The ICO includes alpha and AND transparency masks for consumers that ignore alpha. Native audio sessions explicitly expose the executable icon and SpotiFlex name to volume controllers. Tests validate every bundled icon size; Stream Deck display still needs manual confirmation.
 

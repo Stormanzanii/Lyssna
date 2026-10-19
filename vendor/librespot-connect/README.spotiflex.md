@@ -9,3 +9,5 @@ The manifest replaces workspace inheritance and relative dependency paths with e
 SpotiFlex prepares one unheard DJ set in memory without activating playback. Fresh DJ starts and matching next-page requests consume it once; saved-session restores keep their own track and position. Preparing speech ahead of the selection avoids serial context and synthesis delays.
 
 Playback-state uploads run concurrently with local transport commands. One upload remains in flight while later snapshots coalesce to the newest state; uploads remain ordered, and disconnect drains them before marking the device inactive.
+
+The next queued track preloads when the current decoder becomes ready. A stale track-change event cannot start this prefetch. Narration metadata still reaches the player before its preload command.

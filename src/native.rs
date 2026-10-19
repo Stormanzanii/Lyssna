@@ -423,6 +423,23 @@ fn selected_track(action: &PlayerAction) -> Option<String> {
     }
 }
 
+fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUri, u32)> {
+    let (uri, position) = match action {
+        PlayerAction::Play(Some(uri)) => (uri.as_str(), 0),
+        PlayerAction::PlayUris { uris, offset } => (uris.get(*offset)?.as_str(), 0),
+        PlayerAction::Resume {
+            uris,
+            offset,
+            position_ms,
+        } => (
+            uris.get(*offset)?.as_str(),
+            (*position_ms).min(u64::from(u32::MAX)) as u32,
+        ),
+        _ => return None,
+    };
+    Some((librespot_core::SpotifyUri::from_uri(uri).ok()?, position))
+}
+
 fn remember_player_queue(account: &str, event: PlayerEvent) {
     let PlayerEvent::SetQueue {
         context_uri,
@@ -1065,14 +1082,14 @@ async fn run(
         session.clone(),
         Box::new(librespot_playback::mixer::NoOpVolume),
         move || {
-            Box::new(
-                crate::audio::AudioSink::new(
-                    sink_flush.clone(),
-                    seek_ready.clone(),
-                    sink_buffer.clone(),
-                )
-                .with_mixer(sink_mixer.clone()),
+            let mut sink = crate::audio::AudioSink::new(
+                sink_flush.clone(),
+                seek_ready.clone(),
+                sink_buffer.clone(),
             )
+            .with_mixer(sink_mixer.clone());
+            let _ = sink.prepare_output();
+            Box::new(sink)
         },
     );
     let mut player_events = player.get_player_event_channel();
@@ -1183,6 +1200,9 @@ async fn run(
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
                 if let PlayerAction::PreparedDJ{cancelled,..}=&action && cancelled.load(Ordering::Acquire){continue;}
+                if let Some((uri, position)) = preload_selection(&action) {
+                    local_player.preload_at(uri, position);
+                }
                 if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){
                     if matches!(action,PlayerAction::Play(None))&&!active{
                         if spirc.activate().is_err(){loaded.store(false,Ordering::Release);emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into()));continue;}
@@ -1518,6 +1538,136 @@ mod tests {
         assert!(track.album.id.is_some());
         assert!(track.album.uri.starts_with("spotify:album:"));
         assert_eq!(track.album.name, "Album");
+    }
+
+    #[test]
+    fn direct_selection_preloads_the_requested_position_without_starting_dj() {
+        let uri = "spotify:track:0000000000000000000001".to_owned();
+        let action = PlayerAction::Resume {
+            uris: vec![uri.clone()],
+            offset: 0,
+            position_ms: 77000,
+        };
+        let (actual, position) = preload_selection(&action).unwrap();
+        assert_eq!(actual.to_uri(), uri);
+        assert_eq!(position, 77000);
+        assert!(
+            preload_selection(&PlayerAction::PlayContext {
+                context: crate::home::DJ_URI.into(),
+                offset: None
+            })
+            .is_none()
+        );
+        assert!(preload_selection(&PlayerAction::Next).is_none());
+    }
+
+    #[test]
+    #[ignore = "Measures live Spotify starts using saved sign-in and the default audio output"]
+    fn live_track_start_latency() {
+        measure_live_track_starts(false, 500);
+    }
+
+    #[test]
+    #[ignore = "Measures live Spotify skips using saved sign-in and the default audio output"]
+    fn live_skip_start_latency() {
+        measure_live_track_starts(true, 150);
+    }
+
+    fn measure_live_track_starts(use_skips: bool, median_budget_ms: u128) {
+        use std::time::Instant;
+        let settings = crate::config::Settings::load().expect("Settings unavailable");
+        let tokens = crate::auth::Tokens::load(&settings.client_id)
+            .ok()
+            .flatten()
+            .expect("Saved sign-in required");
+        let account = tokens
+            .profile
+            .as_ref()
+            .expect("Saved profile required")
+            .id
+            .clone();
+        let saved = crate::resume::load(&account).expect("Saved listening queue required");
+        let mut uris = Vec::new();
+        for uri in saved.queue.iter().chain(std::iter::once(&saved.track.uri)) {
+            if uri.starts_with("spotify:track:") && !uris.contains(uri) {
+                uris.push(uri.clone());
+            }
+            if uris.len() == 3 {
+                break;
+            }
+        }
+        assert!(uris.len() >= 2, "Choose a playlist before measuring starts");
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start(account, 1, events, Default::default(), controls.clone());
+        let deadline = Instant::now() + Duration::from_secs(50);
+        loop {
+            assert!(Instant::now() < deadline, "Native connection timed out");
+            match receive.recv_timeout(Duration::from_millis(100)) {
+                Ok(NativeMessage {
+                    event: NativeEvent::Ready(_),
+                    ..
+                }) => break,
+                Ok(NativeMessage {
+                    event: NativeEvent::Error(_),
+                    ..
+                }) => panic!("Native connection failed"),
+                _ => {}
+            }
+        }
+        let buffer = controls
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .audio_buffer
+            .clone();
+        let mut timings = Vec::new();
+        for index in 0..6 {
+            while receive.try_recv().is_ok() {}
+            let requested = Instant::now();
+            let action = if use_skips && index % uris.len() != 0 {
+                PlayerAction::Next
+            } else {
+                PlayerAction::PlayUris {
+                    uris: uris.clone(),
+                    offset: index % uris.len(),
+                }
+            };
+            assert!(controls.send(action).is_ok());
+            loop {
+                if let Some(started) = buffer.output_started() {
+                    let elapsed = started.saturating_duration_since(requested).as_millis();
+                    println!("selection {} first output: {} ms", index + 1, elapsed);
+                    if index > 0 && (!use_skips || index % uris.len() != 0) {
+                        timings.push(elapsed);
+                    }
+                    break;
+                }
+                assert!(
+                    requested.elapsed() < Duration::from_secs(15),
+                    "Track start timed out"
+                );
+                if let Ok(NativeMessage {
+                    event: NativeEvent::Error(_) | NativeEvent::ControlError(_),
+                    ..
+                }) = receive.recv_timeout(Duration::from_millis(10))
+                {
+                    panic!("Native playback failed");
+                }
+            }
+            thread::sleep(Duration::from_millis(400));
+        }
+        let _ = controls.send(PlayerAction::Pause);
+        drop(player);
+        timings.sort_unstable();
+        let median = timings[timings.len() / 2];
+        println!("warm median first output: {} ms", median);
+        assert!(
+            median < median_budget_ms,
+            "Warm track starts exceed the latency target"
+        );
     }
 
     #[test]

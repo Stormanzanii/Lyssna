@@ -71,6 +71,7 @@ pub enum SinkStatus {
 pub type SinkEventCallback = Box<dyn Fn(SinkStatus) + Send>;
 
 struct PlayerInternal {
+    load_cache: Arc<crate::load_cache::LoadCache>,
     session: Session,
     config: PlayerConfig,
     commands: mpsc::UnboundedReceiver<PlayerCommand>,
@@ -531,6 +532,7 @@ impl Player {
                 create_local_file_lookup(config.local_file_directories.as_slice());
 
             let internal = PlayerInternal {
+                load_cache: Arc::default(),
                 session,
                 config,
                 commands: cmd_rx,
@@ -1020,6 +1022,7 @@ impl PlayerState {
 }
 
 struct PlayerTrackLoader {
+    load_cache: Arc<crate::load_cache::LoadCache>,
     session: Session,
     config: PlayerConfig,
     local_file_lookup: Arc<LocalFileLookup>,
@@ -1141,18 +1144,32 @@ impl PlayerTrackLoader {
             }
         };
 
-        let audio_item = match AudioItem::get_file(&self.session, track_uri).await {
-            Ok(audio) => match self.find_available_alternative(audio).await {
-                Some(audio) => audio,
-                None => {
-                    warn!("spotify:track:<{}> is not available", track_id.to_base62());
+        let cache_uri = track_uri.clone();
+        let cached = self
+            .load_cache
+            .metadata
+            .get(&cache_uri, Instant::now())
+            .filter(|item| !(item.is_explicit && self.session.filter_explicit_content()));
+        let audio_item = if let Some(item) = cached {
+            item
+        } else {
+            let item = match AudioItem::get_file(&self.session, track_uri).await {
+                Ok(audio) => match self.find_available_alternative(audio).await {
+                    Some(audio) => audio,
+                    None => {
+                        warn!("spotify:track:<{}> is not available", track_id.to_base62());
+                        return None;
+                    }
+                },
+                Err(e) => {
+                    error!("Unable to load audio item: {e:?}");
                     return None;
                 }
-            },
-            Err(e) => {
-                error!("Unable to load audio item: {e:?}");
-                return None;
-            }
+            };
+            self.load_cache
+                .metadata
+                .insert(cache_uri, item.clone(), Instant::now());
+            item
         };
 
         info!(
@@ -1213,9 +1230,21 @@ impl PlayerTrackLoader {
         // This is only a loop to be able to reload the file if an error occurred
         // while opening a cached file.
         loop {
-            let encrypted_file = AudioFile::open(&self.session, file_id, bytes_per_second);
+            let key_request = async {
+                let cache_key = (track_id, file_id);
+                if let Some(key) = self.load_cache.keys.get(&cache_key, Instant::now()) {
+                    return Ok(key);
+                }
+                let key = self.session.audio_key().request(track_id, file_id).await?;
+                self.load_cache.keys.insert(cache_key, key, Instant::now());
+                Ok::<_, Error>(key)
+            };
+            let (encrypted_file, key) = tokio::join!(
+                AudioFile::open(&self.session, file_id, bytes_per_second),
+                key_request,
+            );
 
-            let encrypted_file = match encrypted_file.await {
+            let encrypted_file = match encrypted_file {
                 Ok(encrypted_file) => encrypted_file,
                 Err(e) => {
                     error!("Unable to load encrypted file: {e:?}");
@@ -1230,7 +1259,7 @@ impl PlayerTrackLoader {
             // Not all audio files are encrypted. If we can't get a key, try loading the track
             // without decryption. If the file was encrypted after all, the decoder will fail
             // parsing and bail out, so we should be safe from outputting ear-piercing noise.
-            let key = match self.session.audio_key().request(track_id, file_id).await {
+            let key = match key {
                 Ok(key) => Some(key),
                 Err(e) => {
                     warn!("Unable to load key, continuing without decryption: {e}");
@@ -2461,7 +2490,11 @@ impl PlayerInternal {
 
             PlayerCommand::Stop => self.handle_player_stop(),
 
-            PlayerCommand::SetSession(session) => self.session = session,
+            PlayerCommand::SetSession(session) => {
+                self.session = session;
+                self.load_cache = Arc::default();
+                self.preload = PlayerPreload::None;
+            }
 
             PlayerCommand::AddEventSender(sender) => self.event_senders.push(sender),
 
@@ -2612,6 +2645,7 @@ impl PlayerInternal {
         // future to work with.
 
         let loader = PlayerTrackLoader {
+            load_cache: self.load_cache.clone(),
             session: self.session.clone(),
             config: self.config.clone(),
             local_file_lookup: self.local_file_lookup.clone(),

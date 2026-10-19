@@ -10,4 +10,6 @@ SpotiFlex changes tag decoded narration packets. Its audio sink can identify spe
 
 The sink receives track identity before playback events or decoded samples. SpotiFlex uses this boundary to discard interrupted selections while keeping automatic track transitions gapless.
 
+Each player owns bounded five-minute metadata and audio-key caches in memory. New sessions clear them. Audio opening and key retrieval overlap; failures are never cached, and keys are never written to disk.
+
 Speech downloads use a bounded, account-scoped memory cache with shared pending requests. Music loading and speech preparation run concurrently. Short failure reuse prevents a failed speculative download from immediately adding another synthesis timeout.

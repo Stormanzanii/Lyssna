@@ -496,11 +496,13 @@ impl ConnectState {
     }
 
     /// Sends the connect state for the connect session to the remote server
-    pub async fn send_state(&self, session: &Session) -> SpClientResult {
-        session
-            .spclient()
-            .put_connect_state_request(&self.request)
-            .await
+    pub fn send_state(
+        &self,
+        session: &Session,
+    ) -> impl std::future::Future<Output = SpClientResult> + Send + 'static {
+        let session = session.clone();
+        let request = self.request.clone();
+        async move { session.spclient().put_connect_state_request(&request).await }
     }
 }
 

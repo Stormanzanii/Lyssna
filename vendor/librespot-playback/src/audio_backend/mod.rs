@@ -24,6 +24,8 @@ pub trait Open {
 }
 
 pub trait Sink {
+    /// Identify the decoder before its samples reach the output queue.
+    fn set_track(&mut self, _track_id: &librespot_core::SpotifyUri) {}
     /// Whether all submitted PCM has been consumed. Legacy backends may complete immediately.
     fn is_empty(&self) -> bool {
         true

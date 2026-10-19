@@ -14,6 +14,7 @@ mod model;
 mod shuffle_vec;
 mod spirc;
 mod state;
+mod state_updates;
 
 pub use model::*;
 pub use spirc::*;

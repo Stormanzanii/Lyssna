@@ -8,4 +8,6 @@ Playback and Connect are vendored. Other librespot crates remain pinned to the s
 
 SpotiFlex changes tag decoded narration packets. Its audio sink can identify speech when samples reach playback, without treating buffering or paused music as narration. Preserve this marker when updating the vendored crate.
 
+The sink receives track identity before playback events or decoded samples. SpotiFlex uses this boundary to discard interrupted selections while keeping automatic track transitions gapless.
+
 Speech downloads use a bounded, account-scoped memory cache with shared pending requests. Music loading and speech preparation run concurrently. Short failure reuse prevents a failed speculative download from immediately adding another synthesis timeout.

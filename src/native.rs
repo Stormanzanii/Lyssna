@@ -49,6 +49,7 @@ pub enum NativeEvent {
 }
 
 struct ControlConnection {
+    audio_buffer: crate::audio::AudioBuffer,
     account: String,
     status: Arc<Mutex<Option<NativeEvent>>>,
     session: Arc<Mutex<Option<Session>>>,
@@ -72,6 +73,7 @@ struct PlaylistRead {
     reply: mpsc::Sender<std::result::Result<Vec<crate::model::Track>, String>>,
 }
 struct PlaybackServices<'a> {
+    audio_buffer: &'a crate::audio::AudioBuffer,
     commands: &'a mut async_channel::UnboundedReceiver<PlayerAction>,
     playlists: &'a mut async_channel::UnboundedReceiver<PlaylistRead>,
     metadata: &'a mut async_channel::UnboundedReceiver<MetadataRead>,
@@ -159,6 +161,7 @@ impl NativeControls {
             .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
             .context("Spotify account changed during DJ request")?;
         anyhow::ensure!(!cancelled.load(Ordering::Acquire), "DJ request cancelled");
+        connection.audio_buffer.interrupt(None);
         let start = context.start;
         connection
             .sender
@@ -393,11 +396,30 @@ impl NativeControls {
         if loading {
             connection.loaded.store(true, Ordering::Release);
         }
+        if loading || matches!(action, PlayerAction::Next | PlayerAction::Previous) {
+            connection.audio_buffer.interrupt(selected_track(&action));
+        }
         let result = connection.sender.send(action).map_err(|error| error.0);
         if loading && result.is_err() {
             connection.loaded.store(false, Ordering::Release);
         }
         result
+    }
+}
+
+fn selected_track(action: &PlayerAction) -> Option<String> {
+    match action {
+        PlayerAction::Play(Some(uri)) => Some(uri.clone()),
+        PlayerAction::PlayContext { offset, .. } => offset.clone(),
+        PlayerAction::RestoreDJ {
+            track,
+            relative_offset: 0,
+            ..
+        } => Some(track.clone()),
+        PlayerAction::PlayUris { uris, offset } | PlayerAction::Resume { uris, offset, .. } => {
+            uris.get(*offset).cloned()
+        }
+        _ => None,
     }
 }
 
@@ -897,6 +919,7 @@ impl NativePlayer {
         let ready = Arc::new(AtomicBool::new(false));
         let thread_ready = ready.clone();
         let loaded = Arc::new(AtomicBool::new(false));
+        let audio_buffer = crate::audio::AudioBuffer::default();
         let connection_status = Arc::new(Mutex::new(None));
         let (sender, mut commands) = async_channel::unbounded_channel();
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
@@ -908,6 +931,7 @@ impl NativePlayer {
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
+                audio_buffer: audio_buffer.clone(),
                 account: account.clone(),
                 status: connection_status.clone(),
                 session: shared_session.clone(),
@@ -965,6 +989,7 @@ impl NativePlayer {
                         &cancel,
                         &mut stopped,
                         PlaybackServices {
+                            audio_buffer: &audio_buffer,
                             commands: &mut commands,
                             playlists: &mut playlists,
                             metadata: &mut metadata,
@@ -1006,6 +1031,7 @@ async fn run(
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
     let PlaybackServices {
+        audio_buffer,
         commands,
         playlists,
         metadata,
@@ -1029,7 +1055,6 @@ async fn run(
     let flush_audio = Arc::new(AtomicBool::new(false));
     let sink_flush = flush_audio.clone();
     let (seek_ready, mut audible_seeks) = async_channel::unbounded_channel();
-    let audio_buffer = crate::audio::AudioBuffer::default();
     let sink_buffer = audio_buffer.clone();
     let sink_mixer = mixer.clone();
     let player = Player::new(
@@ -1165,7 +1190,7 @@ async fn run(
                     }
                     intent.request(matches!(action,PlayerAction::Play(None)));
                 }else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;intent.loading_track(selected_track(&action),std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
@@ -1441,6 +1466,7 @@ mod tests {
         let (sender, _commands) = async_channel::unbounded_channel();
         let (metadata, mut requests) = async_channel::unbounded_channel::<MetadataRead>();
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            audio_buffer: Default::default(),
             dj_requests: Default::default(),
             account: "listener".into(),
             status: Arc::default(),
@@ -1495,6 +1521,53 @@ mod tests {
     }
 
     #[test]
+    fn track_selection_and_skips_stop_old_audio_before_connect_responds() {
+        use librespot_playback::{audio_backend::Sink, convert::Converter, decoder::AudioPacket};
+
+        for action in [
+            PlayerAction::Play(Some("spotify:track:0123456789abcdefghijkl".into())),
+            PlayerAction::Next,
+            PlayerAction::Previous,
+        ] {
+            let buffer = crate::audio::AudioBuffer::default();
+            let (seek_ready, _) = async_channel::unbounded_channel();
+            let mut audio = crate::audio::AudioSink::new(
+                Arc::new(AtomicBool::new(false)),
+                seek_ready,
+                buffer.clone(),
+            );
+            let mut output = audio.test_output();
+            audio
+                .write(
+                    AudioPacket::Samples(vec![0.25; 22_050]),
+                    &mut Converter::new(None),
+                )
+                .unwrap();
+            assert_eq!(output.next(), Some(0.25));
+            let controls = NativeControls::default();
+            let (sender, _receiver) = async_channel::unbounded_channel();
+            *controls.0.lock().unwrap() = Some(ControlConnection {
+                audio_buffer: buffer.clone(),
+                dj_requests: Default::default(),
+                account: "listener".into(),
+                status: Arc::new(Mutex::new(Some(NativeEvent::Ready("device".into())))),
+                session: Arc::default(),
+                volume: Arc::new(AtomicU32::new(u32::MAX)),
+                sender,
+                ready: Arc::new(AtomicBool::new(true)),
+                loaded: Arc::new(AtomicBool::new(true)),
+                playlists: None,
+                metadata: None,
+            });
+            assert!(controls.send(action).is_ok());
+            assert!(
+                (0..1_764).all(|_| output.next() != Some(0.25)),
+                "Previous song remains audible after the UI selects another track"
+            );
+        }
+    }
+
+    #[test]
     fn transport_commands_do_not_claim_a_track_is_loaded() {
         let controls = NativeControls::default();
         let (sender, mut receiver) = async_channel::unbounded_channel();
@@ -1502,6 +1575,7 @@ mod tests {
         let loaded = Arc::new(AtomicBool::new(false));
         let status = Arc::new(Mutex::new(Some(NativeEvent::Ready("device".into()))));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            audio_buffer: Default::default(),
             dj_requests: Default::default(),
             account: "listener".into(),
             status: status.clone(),

@@ -2059,6 +2059,7 @@ impl PlayerInternal {
         start_playback: bool,
     ) {
         self.playing_narration = self.narrations.get(&track_id).cloned();
+        self.sink.set_track(&track_id);
         let audio_item = Box::new(loaded_track.audio_item.clone());
 
         self.send_event(PlayerEvent::TrackChanged { audio_item });

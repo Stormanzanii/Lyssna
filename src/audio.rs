@@ -8,7 +8,7 @@ use librespot_playback::{
 use rodio::{OutputStream, OutputStreamBuilder, Source};
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
@@ -23,8 +23,26 @@ const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000
 pub struct AudioBuffer {
     queued: Arc<AtomicUsize>,
     narration: Arc<AtomicBool>,
+    generation: Arc<AtomicUsize>,
+    target: Arc<Mutex<Option<String>>>,
 }
 impl AudioBuffer {
+    /// Silence old packets immediately, including while Connect is awaiting HTTP.
+    pub fn interrupt(&self, target: Option<String>) {
+        if let Ok(mut pending) = self.target.lock() {
+            *pending = target;
+            self.generation.fetch_add(1, Ordering::AcqRel);
+            self.narration.store(false, Ordering::Release);
+        }
+    }
+    fn select_track(&self, uri: Option<&str>) -> Option<usize> {
+        let mut target = self.target.lock().ok()?;
+        if target.as_deref().is_some_and(|wanted| Some(wanted) != uri) {
+            return None;
+        }
+        *target = None;
+        Some(self.generation.load(Ordering::Acquire))
+    }
     pub fn narrating(&self) -> bool {
         self.narration.load(Ordering::Acquire)
     }
@@ -43,6 +61,8 @@ pub struct AudioSink {
     flush: Arc<AtomicBool>,
     seek_ready: tokio::sync::mpsc::UnboundedSender<()>,
     awaiting_seek: bool,
+    generation: usize,
+    track_uri: Option<String>,
 }
 impl AudioSink {
     pub fn new(
@@ -51,6 +71,8 @@ impl AudioSink {
         buffer: AudioBuffer,
     ) -> Self {
         Self {
+            generation: buffer.generation.load(Ordering::Acquire),
+            track_uri: None,
             buffer: buffer.clone(),
             mixer: None,
             stream: None,
@@ -65,16 +87,37 @@ impl AudioSink {
         self.mixer = Some(mixer);
         self
     }
+    #[cfg(test)]
+    pub(crate) fn test_output(&mut self) -> impl Source<Item = f32> + use<> {
+        let (sink, output) = rodio::Sink::new();
+        self.sink = Some(sink);
+        output
+    }
     fn discard_old_audio(&mut self) {
         if self.flush.swap(false, Ordering::AcqRel)
             && let Some(sink) = &self.sink
         {
             sink.stop();
+            if let Some(generation) = self.buffer.select_track(self.track_uri.as_deref()) {
+                self.generation = generation;
+            }
             self.awaiting_seek = true;
         }
     }
 }
 impl Sink for AudioSink {
+    fn set_track(&mut self, track_id: &librespot_core::SpotifyUri) {
+        let uri = track_id.to_uri();
+        if let Some(generation) = self.buffer.select_track(Some(&uri)) {
+            if self.generation != generation
+                && let Some(sink) = &self.sink
+            {
+                sink.stop();
+            }
+            self.generation = generation;
+        }
+        self.track_uri = Some(uri);
+    }
     fn is_empty(&self) -> bool {
         self.queued.load(Ordering::Acquire) == 0
     }
@@ -114,7 +157,7 @@ impl Sink for AudioSink {
             .sink
             .as_ref()
             .ok_or_else(|| SinkError::NotConnected("Audio output not started".into()))?;
-        sink.append(QueuedPacket::with_output(
+        let mut packet = QueuedPacket::with_output(
             samples,
             self.buffer.clone(),
             narration,
@@ -122,7 +165,9 @@ impl Sink for AudioSink {
                 || Box::new(NoOpVolume) as Box<dyn VolumeGetter + Send>,
                 |mixer| mixer.get_soft_volume(),
             ),
-        ));
+        );
+        packet.generation = self.generation;
+        sink.append(packet);
         if self.awaiting_seek {
             self.awaiting_seek = false;
             let _ = self.seek_ready.send(());
@@ -136,6 +181,8 @@ impl Sink for AudioSink {
 }
 
 struct QueuedPacket {
+    generation: usize,
+    active_generation: Option<Arc<AtomicUsize>>,
     marker_applied: bool,
     marker: Option<(Arc<AtomicBool>, bool)>,
     volume: Box<dyn VolumeGetter + Send>,
@@ -151,6 +198,8 @@ impl QueuedPacket {
         volume: Box<dyn VolumeGetter + Send>,
     ) -> Self {
         let mut packet = Self::new(samples, buffer.queued);
+        packet.generation = buffer.generation.load(Ordering::Acquire);
+        packet.active_generation = Some(buffer.generation);
         packet.marker = Some((buffer.narration, narration));
         packet.volume = volume;
         packet
@@ -161,6 +210,8 @@ impl QueuedPacket {
         );
         queued.fetch_add(samples.len(), Ordering::Relaxed);
         Self {
+            generation: 0,
+            active_generation: None,
             marker: None,
             marker_applied: false,
             volume: Box::new(NoOpVolume),
@@ -174,8 +225,12 @@ impl Iterator for QueuedPacket {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
         let sample = self.samples.next();
+        let current = self
+            .active_generation
+            .as_ref()
+            .is_none_or(|generation| generation.load(Ordering::Acquire) == self.generation);
         if sample.is_some() {
-            if !self.marker_applied {
+            if !self.marker_applied && current {
                 if let Some((marker, narration)) = &self.marker {
                     marker.store(*narration, Ordering::Release);
                 }
@@ -183,7 +238,13 @@ impl Iterator for QueuedPacket {
             }
             self.queued.fetch_sub(1, Ordering::Relaxed);
         }
-        sample.map(|value| value * self.volume.attenuation_factor() as f32)
+        sample.map(|value| {
+            if current {
+                value * self.volume.attenuation_factor() as f32
+            } else {
+                0.0
+            }
+        })
     }
 }
 impl Drop for QueuedPacket {
@@ -213,6 +274,107 @@ impl Source for QueuedPacket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn track(number: usize) -> librespot_core::SpotifyUri {
+        librespot_core::SpotifyUri::from_uri(&format!("spotify:track:{number:022}")).unwrap()
+    }
+
+    #[test]
+    fn rapid_selection_silences_old_and_late_decoders_until_the_requested_track() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.25));
+        buffer.interrupt(Some(track(2).to_uri()));
+        buffer.interrupt(Some(track(3).to_uri()));
+        audio.set_track(&track(2));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        audio.set_track(&track(3));
+        audio
+            .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn natural_track_transitions_retain_gapless_audio() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer);
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.25));
+        audio.set_track(&track(2));
+        audio
+            .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..999).all(|_| output.next() == Some(0.25)));
+        assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn previous_restarting_the_same_song_resumes_after_the_seek_flush() {
+        let buffer = AudioBuffer::default();
+        let flush = Arc::new(AtomicBool::new(false));
+        let (ready, mut acknowledgments) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(flush.clone(), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.25));
+        buffer.interrupt(None);
+        assert_eq!(output.next(), Some(0.0));
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        flush.store(true, Ordering::Release);
+        audio
+            .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
+            .unwrap();
+        assert!(acknowledgments.try_recv().is_ok());
+        assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn stale_seek_cannot_unmute_a_song_after_another_is_selected() {
+        let buffer = AudioBuffer::default();
+        let flush = Arc::new(AtomicBool::new(false));
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(flush.clone(), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.25));
+        buffer.interrupt(Some(track(2).to_uri()));
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        flush.store(true, Ordering::Release);
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        audio.set_track(&track(2));
+        audio
+            .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
     #[test]
     fn pause_retains_ready_audio_until_resume_without_new_packets() {
         let buffer = AudioBuffer::default();

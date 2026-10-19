@@ -20,6 +20,8 @@
 
 Spotify Web API commands execute on a background worker. Browser authorization runs independently so an unfinished permission request cannot block that worker. Local audio play/pause reaches the native player independently of Spotify Connect HTTP notifications; a coalescer keeps the latest requested state until acknowledgement. View and connection generations discard stale results. Lyrics, Canvas, and artist sidebar statistics apply only to the matching current track URI.
 
+Explicit local track changes invalidate buffered samples before the command enters Spotify Connect. Each decoder identifies its track at the sink boundary; queued packets retain their output generation, so old or superseded selections remain silent while the requested track loads. Automatic transitions preserve their generation for gapless output. Connect state uploads are polled alongside transport commands, with one active upload and one latest pending snapshot. Disconnect drains pending snapshots before marking the device inactive.
+
 Artist banners and album play counts use read-only Spotify desktop catalogue queries authenticated inside Rust. Their persisted query identifiers were checked against Spotify's desktop web client; these internal interfaces can change. The public-page fallback retains available data, and missing counts remain unavailable. Canvas uses the native session's Canvas endpoint. The webview receives only a validated Spotify CDN URL and plays it muted; hidden, paused, or reduced-motion views stop the video.
 
 Creator profile dialogs frame only `https://spicylyrics.org`. Remote frames receive no Tauri capabilities. The service currently limits embedding to Spotify's origin, so the dialog explains the restriction and provides an external-browser link.

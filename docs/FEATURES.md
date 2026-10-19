@@ -23,6 +23,8 @@ Controls for modifying Spotify's own web menus, Spicetify developer tools, and i
 
 Playback regression tests reproduce buffer starvation during a 150 ms producer scheduling gap and a two-second lyric rewind after delayed decoder feedback. The output queue now retains 250 ms of audio, native position observations subtract queued output latency, and backward drift corrections preserve forward lyric motion. Explicit backward seeks still apply immediately. These checks do not establish audible playback quality on another computer.
 
+Song selection, Next and Previous invalidate old queued samples immediately, before Spotify Connect responds. Decoder track identity prevents a superseded selection from becoming audible; automatic transitions retain gapless output. State uploads remain ordered and coalesce while local transport commands continue. Regression tests cover old buffered audio, rapid selections, same-song restarts, stale seek feedback and delayed uploads. Live listening still needs confirmation.
+
 The native clock stops advancing after 500 ms without a fresh observation. Repeated song positions hold lyrics during narration or buffering. Remote playback retains its clock between Web API polls.
 
 Desktop output defaults to This computer. Incoming playback updates do not change the selected output; other devices remain selectable in the device menu. Native Play restores the saved or current song when the connection has no loaded track, including after reconnects and unrelated transport commands. Stopped playback clears that loaded state. Saved sign-in checks show a locked startup screen instead of briefly mounting first-run setup.

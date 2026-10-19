@@ -70,6 +70,7 @@ impl From<SpircError> for Error {
 }
 
 struct SpircTask {
+    state_updates: crate::state_updates::StateUpdates,
     resume_on_startup: bool,
     player: Arc<Player>,
     mixer: Arc<dyn Mixer>,
@@ -260,6 +261,7 @@ impl Spirc {
         let player_events = player.get_player_event_channel();
 
         let mut task = SpircTask {
+            state_updates: Default::default(),
             resume_on_startup,
             player,
             mixer,
@@ -519,6 +521,11 @@ impl SpircTask {
             let allow_context_resolving = !self.update_state && !self.update_volume;
 
             tokio::select! {
+                result = self.state_updates.next() => {
+                    if let Err(why) = result {
+                        error!("state upload failed: {why}");
+                    }
+                },
                 // startup of the dealer requires a connection_id, which is retrieved at the very beginning
                 connection_id_update = self.connection_id_update.next() => unwrap! {
                     connection_id_update,
@@ -1365,6 +1372,9 @@ impl SpircTask {
             .update_position_in_relation(self.now_ms());
         self.notify().await?;
 
+        // Finish queued active states before announcing that this device is inactive.
+        self.state_updates.flush().await?;
+
         self.connect_state.became_inactive(&self.session).await?;
 
         self.player
@@ -2107,10 +2117,10 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
-        self.connect_state
-            .send_state(&self.session)
-            .await
-            .map(|_| ())
+        let update = self.connect_state.send_state(&self.session);
+        self.state_updates
+            .push(async move { update.await.map(|_| ()) });
+        Ok(())
     }
 
     fn set_volume(&mut self, volume: u16) {

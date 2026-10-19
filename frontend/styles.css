@@ -1892,14 +1892,16 @@ small {
 /* Text outside the active line sits at full size so lines stay aligned. On
    the active line unsung syllables and held letters rest at 95% and slightly
    low; LyricAnimator eases them there and overrides scale and translate
-   while a line is sung or settling. A line's first syllable keeps its left
-   edge on the margin. */
+   while a line is sung or settling. Text scales from near its baseline, so a
+   resting piece of a split word sits level with a sung one. Pieces scale
+   from their joints and middle pieces keep full size, so no seam opens. A
+   line's first word keeps its left edge on the margin. */
 .lyric-syllable {
   display: inline-block;
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  transform-origin: center center;
+  transform-origin: center 75%;
 }
 .lyric-line.active .lyric-syllable {
   scale: 0.95;
@@ -1908,37 +1910,33 @@ small {
 .lyric-syllable.emphasis {
   display: inline-flex;
 }
-.lyric-syllable.joined-end {
-  transform-origin: left center;
+.lyric-syllable.joined-start {
+  transform-origin: right 75%;
 }
-/* Pieces of a split word that have more text after them keep full size, and
-   only the last piece scales, from its joint, so no seam opens inside the
-   word. They still lift and glow. */
-.lyric-syllable:is(.joined-start, .joined-middle),
-.lyric-syllable:is(.joined-start, .joined-middle) .lyric-letter {
+.lyric-syllable.joined-end {
+  transform-origin: left 75%;
+}
+.lyric-syllable.joined-middle,
+.lyric-syllable.joined-middle .lyric-letter {
   scale: none !important;
 }
 .lyric-line:not(.opposite)
   .lyric-main
   > .lyric-word-group:first-child
-  .lyric-syllable:first-child:not(.joined-end),
-.lyric-line:not(.opposite)
-  .lyric-main
-  > .lyric-word-group:first-child
-  .lyric-syllable:first-child:not(.joined-start)
-  .lyric-letter:first-child {
-  transform-origin: left center;
+  :is(
+    .lyric-syllable:first-child:not(.joined-start),
+    .lyric-syllable:first-child > .lyric-letter:first-child
+  ) {
+  transform-origin: left 75%;
 }
 .lyric-line.opposite
   .lyric-main
   > .lyric-word-group:last-child
-  .lyric-syllable:last-child:not(.joined-end),
-.lyric-line.opposite
-  .lyric-main
-  > .lyric-word-group:last-child
-  .lyric-syllable:last-child:not(.joined-end)
-  .lyric-letter:last-child {
-  transform-origin: right center;
+  :is(
+    .lyric-syllable:last-child:not(.joined-end),
+    .lyric-syllable:last-child > .lyric-letter:last-child
+  ) {
+  transform-origin: right 75%;
 }
 .lyric-line.active .lyric-syllable,
 .lyric-line.active .lyric-letter {
@@ -2013,7 +2011,7 @@ small {
 }
 .lyric-letter {
   display: inline-block;
-  transform-origin: center center;
+  transform-origin: center 75%;
 }
 .lyric-line.active .lyric-letter {
   scale: 0.95;

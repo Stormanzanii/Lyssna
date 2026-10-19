@@ -1946,3 +1946,30 @@ test("taskbar and media keys drive playback and see what is playing", async ({
       positionMs: 42_000,
     });
 });
+
+test("home quick tiles keep small square covers with a centred heart", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  const layout = await page.locator(".home-quick-links").evaluate((root) => {
+    const box = (selector: string) =>
+      root.querySelector(selector)!.getBoundingClientRect();
+    const tiles = [...root.querySelectorAll(".quick-tile")].map(
+      (tile) => tile.getBoundingClientRect().height,
+    );
+    const cover = box(".liked-cover"),
+      heart = box(".liked-cover svg"),
+      dj = box(".dj-cover");
+    return {
+      tiles,
+      dj: [dj.width, dj.height],
+      offset: [
+        heart.left + heart.width / 2 - (cover.left + cover.width / 2),
+        heart.top + heart.height / 2 - (cover.top + cover.height / 2),
+      ],
+    };
+  });
+  for (const height of layout.tiles) expect(height).toBeCloseTo(56, 0);
+  expect(layout.dj).toEqual([56, 56]);
+  for (const offset of layout.offset) expect(Math.abs(offset)).toBeLessThan(1);
+});

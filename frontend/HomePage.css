@@ -41,10 +41,15 @@
   opacity: 0.55;
   cursor: default;
 }
-.home-quick-links .quick-tile > .cover,
-.home-quick-links .quick-tile > .liked-cover,
-.dj-cover {
+.home-quick-links .quick-tile > :is(.cover, .liked-cover, .dj-cover) {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 6px 0 0 6px;
+}
+.home-quick-links .quick-tile > .dj-cover {
   display: block;
+  object-fit: cover;
 }
 .home-quick-links .quick-tile > .liked-cover svg {
   width: 22px;
@@ -70,9 +75,6 @@
 }
 .dj-cover {
   background: radial-gradient(circle at 30% 25%, #2c7bf2, #0b3f8f 70%);
-  color: #19e68c;
-  display: grid;
-  place-items: center;
 }
 .quick-tile-play {
   flex-shrink: 0;

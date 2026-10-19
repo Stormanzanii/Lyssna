@@ -25,13 +25,13 @@ impl std::fmt::Display for CoolingDown {
         if self.0 >= 3600 {
             write!(
                 f,
-                "Spotify catalogue limit reached. Retry in about {} hours. Native playback remains available.",
+                "Spotify Web API limit reached. Retry in about {} hours. Native playback remains available.",
                 self.0.div_ceil(3600)
             )
         } else {
             write!(
                 f,
-                "Spotify catalogue limit reached. Retry in {} seconds. Native playback remains available.",
+                "Spotify Web API limit reached. Retry in {} seconds. Native playback remains available.",
                 self.0
             )
         }

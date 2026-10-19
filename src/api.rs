@@ -21,6 +21,8 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Spotify {
+    #[cfg(test)]
+    request_probe: Option<Arc<std::sync::atomic::AtomicUsize>>,
     pub client: Client,
     pub client_id: String,
     pub tokens: Tokens,
@@ -33,6 +35,8 @@ impl Spotify {
     pub fn new(client: Client, client_id: String, tokens: Tokens) -> Self {
         let backoff = crate::api_backoff::Backoff::new(&client_id);
         Self {
+            #[cfg(test)]
+            request_probe: None,
             client,
             client_id,
             tokens,
@@ -42,6 +46,12 @@ impl Spotify {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn count_network_attempts(&mut self) -> Arc<std::sync::atomic::AtomicUsize> {
+        let probe = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        self.request_probe = Some(probe.clone());
+        probe
+    }
     pub fn background(&self) -> Self {
         let mut snapshot = self.clone();
         snapshot.background = true;
@@ -60,6 +70,11 @@ impl Spotify {
         query: &[(&str, String)],
         body: Option<Value>,
     ) -> Result<Value> {
+        #[cfg(test)]
+        if let Some(probe) = &self.request_probe {
+            probe.fetch_add(1, Ordering::Relaxed);
+            bail!("Network disabled by test request probe");
+        }
         ensure!(
             self.active.load(Ordering::Acquire),
             "Spotify session signed out"

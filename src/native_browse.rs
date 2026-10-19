@@ -186,6 +186,12 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
             .cloned()
             .collect::<Vec<_>>()
     };
+    resolve_tracks(session, &uris).await
+}
+
+pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result<Vec<Track>> {
+    ensure!(uris.len() <= 50, "Too many queued tracks");
+    let identity = session.username();
     let mut result = Vec::with_capacity(uris.len());
     for batch in uris.chunks(10) {
         let mut requests = tokio::task::JoinSet::new();

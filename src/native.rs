@@ -59,6 +59,7 @@ struct ControlConnection {
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
     loaded: Arc<AtomicBool>,
+    queue_snapshot: Arc<Mutex<Option<Vec<String>>>>,
     playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
     metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
 }
@@ -81,6 +82,7 @@ struct PlaybackServices<'a> {
     latest_volume: &'a AtomicU32,
     shared_session: &'a Mutex<Option<Session>>,
     loaded: &'a AtomicBool,
+    queue_snapshot: &'a Mutex<Option<Vec<String>>>,
 }
 
 /// Local transport commands never wait for the browsing/Web API worker.
@@ -88,6 +90,27 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    #[cfg(test)]
+    pub(crate) fn test_active(
+        account: &str,
+    ) -> (Self, async_channel::UnboundedReceiver<PlayerAction>) {
+        let (sender, receiver) = async_channel::unbounded_channel();
+        let controls = Self(Arc::new(Mutex::new(Some(ControlConnection {
+            audio_buffer: Default::default(),
+            account: account.into(),
+            status: Arc::new(Mutex::new(Some(NativeEvent::Ready("test-device".into())))),
+            session: Default::default(),
+            dj_requests: Default::default(),
+            volume: Arc::new(AtomicU32::new(100)),
+            sender,
+            ready: Arc::new(AtomicBool::new(true)),
+            loaded: Arc::new(AtomicBool::new(true)),
+            playlists: None,
+            metadata: None,
+            queue_snapshot: Arc::new(Mutex::new(Some(Vec::new()))),
+        }))));
+        (controls, receiver)
+    }
     pub fn connected_or_connecting(&self, account: &str) -> bool {
         self.0.lock().is_ok_and(|connection| {
             connection.as_ref().is_some_and(|connection| {
@@ -243,6 +266,32 @@ impl NativeControls {
             .enable_all()
             .build()?
             .block_on(crate::native_browse::playlist_info(&session, id))
+    }
+    pub fn queue(&self) -> Result<Vec<crate::model::Track>> {
+        let uris = {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native queue unavailable"))?;
+            let connection = connection
+                .as_ref()
+                .filter(|connection| connection.ready.load(Ordering::Acquire))
+                .context("Native audio is connecting")?;
+            connection
+                .queue_snapshot
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native queue unavailable"))?
+                .clone()
+                .context("Native queue is not ready")?
+        };
+        if uris.is_empty() {
+            return Ok(Vec::new());
+        }
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::native_browse::resolve_tracks(&session, &uris))
     }
     pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
         let session = self.session()?;
@@ -968,6 +1017,7 @@ impl NativePlayer {
         let ready = Arc::new(AtomicBool::new(false));
         let thread_ready = ready.clone();
         let loaded = Arc::new(AtomicBool::new(false));
+        let queue_snapshot = Arc::new(Mutex::new(None));
         let audio_buffer = crate::audio::AudioBuffer::default();
         let connection_status = Arc::new(Mutex::new(None));
         let (sender, mut commands) = async_channel::unbounded_channel();
@@ -989,6 +1039,7 @@ impl NativePlayer {
                 sender,
                 ready: ready.clone(),
                 loaded: loaded.clone(),
+                queue_snapshot: queue_snapshot.clone(),
                 playlists: Some(playlist_sender),
                 metadata: Some(metadata_sender),
             });
@@ -1057,6 +1108,7 @@ impl NativePlayer {
                                 latest_volume: &latest_volume,
                                 shared_session: &shared_session,
                                 loaded: &loaded,
+                                queue_snapshot: &queue_snapshot,
                             },
                             &thread_ready,
                             &emit,
@@ -1066,6 +1118,9 @@ impl NativePlayer {
                 );
                 thread_ready.store(false, Ordering::Release);
                 loaded.store(false, Ordering::Release);
+                if let Ok(mut queue) = queue_snapshot.lock() {
+                    *queue = None;
+                }
                 audio_buffer.interrupt(None);
                 if let Ok(mut session) = shared_session.lock() {
                     *session = None;
@@ -1114,6 +1169,7 @@ async fn run(
         latest_volume,
         shared_session,
         loaded,
+        queue_snapshot,
     } = channels;
     loaded.store(false, Ordering::Release);
     // Default session config uses the desktop client ID that issued the token.
@@ -1276,7 +1332,14 @@ async fn run(
             }
             event = player_events.recv() => {
                 match event {
-                    Some(event @ PlayerEvent::SetQueue{..})=>remember_player_queue(account,event),
+                    Some(event @ PlayerEvent::SetQueue{..})=>{
+                        if let PlayerEvent::SetQueue { next_tracks, .. } = &event
+                            && let Ok(mut queue) = queue_snapshot.lock()
+                        {
+                            *queue = Some(next_tracks.iter().take(50).map(|track| track.uri.clone()).collect());
+                        }
+                        remember_player_queue(account,event);
+                    },
                     Some(PlayerEvent::Loading{track_id,..})=>{loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
@@ -1561,6 +1624,7 @@ mod tests {
             loaded: Arc::new(AtomicBool::new(false)),
             playlists: None,
             metadata: Some(metadata),
+            queue_snapshot: Default::default(),
         });
         let service = thread::spawn(move || {
             if let Some(request) = requests.blocking_recv() {
@@ -1772,6 +1836,7 @@ mod tests {
                 loaded: Arc::new(AtomicBool::new(true)),
                 playlists: None,
                 metadata: None,
+                queue_snapshot: Default::default(),
             });
             assert!(controls.send(action).is_ok());
             assert!(
@@ -1856,12 +1921,36 @@ mod tests {
             started.elapsed()
         };
         wait(None);
+        let mut uris = vec![saved.track.uri];
+        for uri in saved.queue {
+            if uri.starts_with("spotify:track:") && !uris.contains(&uri) {
+                uris.push(uri);
+            }
+            if uris.len() == 3 {
+                break;
+            }
+        }
+        let expected_queue = uris[1..].to_vec();
         assert!(
             controls
-                .send(PlayerAction::Play(Some(saved.track.uri)))
+                .send(PlayerAction::PlayUris { uris, offset: 0 })
                 .is_ok()
         );
         wait(Some(true));
+        let queue = controls.queue().expect("Native queue unavailable");
+        assert!(
+            queue
+                .iter()
+                .map(|track| track.uri.clone())
+                .collect::<Vec<_>>()
+                == expected_queue,
+            "Native queue differs from the requested upcoming tracks"
+        );
+        assert!(
+            queue.iter().all(|track| !track.is_local),
+            "Native queue metadata failed to resolve"
+        );
+        println!("native queue: {} tracks in the expected order", queue.len());
         assert!(controls.send(PlayerAction::Pause).is_ok());
         wait(Some(false));
         assert!(controls.send(PlayerAction::Play(None)).is_ok());
@@ -1966,6 +2055,7 @@ mod tests {
             loaded: loaded.clone(),
             playlists: None,
             metadata: None,
+            queue_snapshot: Default::default(),
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
         assert!(controls.connected_or_connecting("listener"));

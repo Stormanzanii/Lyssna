@@ -542,6 +542,13 @@ impl Backend {
 
     fn refresh_library(&mut self) -> Result<()> {
         let api = self.spotify.as_mut().context("Sign in to Spotify first")?;
+        if api.cooling_down()
+            && let Some(playlists) = crate::library_cache::load(&self.profile.id)
+        {
+            self.library_refresh.next = Some(Instant::now() + Duration::from_secs(30));
+            self.emit(Event::Library(playlists));
+            return Ok(());
+        }
         let playlists = self
             .library_refresh
             .fetch(Instant::now(), || api.playlists())?;
@@ -598,6 +605,9 @@ impl Backend {
     }
 
     fn poll(&mut self) -> Result<()> {
+        if self.native_controls.has_track() || self.api()?.cooling_down() {
+            return Ok(());
+        }
         let observed = Instant::now();
         let playback = self.api()?.playback()?;
         self.emit(Event::Playback(Box::new(playback), observed));
@@ -942,15 +952,41 @@ impl Backend {
                     });
                     context.request_repaint();
                 });
-                let mut artists = Vec::new();
-                for artist in &track.artists {
-                    if let Some(id) = &artist.id
-                        && let Ok(artist) = self.api()?.artist(id)
-                    {
-                        artists.push(artist);
+                let local = self.native_controls.has_track();
+                let artists = if local {
+                    track
+                        .artists
+                        .iter()
+                        .map(|artist| {
+                            artist
+                                .id
+                                .as_ref()
+                                .and_then(|id| {
+                                    crate::library_cache::info(
+                                        &self.profile.id,
+                                        &format!("artist:{id}"),
+                                    )
+                                })
+                                .and_then(|info| info.artist)
+                                .unwrap_or_else(|| artist.clone())
+                        })
+                        .collect()
+                } else {
+                    let mut artists = Vec::new();
+                    for artist in &track.artists {
+                        if let Some(id) = &artist.id
+                            && let Ok(artist) = self.api()?.artist(id)
+                        {
+                            artists.push(artist);
+                        }
                     }
-                }
-                let queue = self.api()?.queue().unwrap_or_default();
+                    artists
+                };
+                let queue = if local {
+                    self.native_controls.queue().unwrap_or_default()
+                } else {
+                    self.api()?.queue().unwrap_or_default()
+                };
                 {
                     // Warm the next tracks' Canvas so skipping shows video at once.
                     let upcoming: Vec<String> = queue
@@ -1090,6 +1126,7 @@ fn fetch_live_tracks(
             "liked" => native
                 .playlist_tracks("liked", offset)
                 .or_else(|_| api.saved_tracks(offset)),
+            "queue" if native.has_track() => native.queue(),
             "queue" => api.queue(),
             _ => api.recent(),
         }
@@ -1116,6 +1153,72 @@ fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+    #[test]
+    fn local_song_details_do_not_spend_web_api_quota() {
+        let client = auth::http_client().unwrap();
+        let mut spotify = Spotify::new(
+            client.clone(),
+            "test-local-song-details".into(),
+            Tokens {
+                access_token: String::new(),
+                refresh_token: String::new(),
+                expires_at: u64::MAX,
+                scopes: String::new(),
+                profile: None,
+            },
+        );
+        let attempts = spotify.count_network_attempts();
+        let (native_controls, _native_commands) =
+            NativeControls::test_active("test-local-song-details");
+        let mut backend = Backend {
+            library_refresh: Default::default(),
+            facts: mpsc::sync_channel(1).0,
+            prefetch: mpsc::sync_channel(1).0,
+            native_controls,
+            spotify: Some(spotify),
+            native: None,
+            native_generation: 0,
+            client_id: "test-local-song-details".into(),
+            profile: Profile {
+                id: "test-local-song-details".into(),
+                ..Default::default()
+            },
+            client,
+            events: mpsc::channel().0,
+            native_events: mpsc::channel().0,
+            lyrics: mpsc::channel().0,
+            context: Default::default(),
+        };
+        for index in 0..3 {
+            backend
+                .handle(Command::PlayingDetails(Track {
+                    uri: format!("spotify:track:{index:022}"),
+                    artists: vec![crate::model::Artist {
+                        id: Some("invalid-test-artist".into()),
+                        name: "Test artist".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }))
+                .unwrap();
+        }
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "Local song changes must use native queue data rather than polling the Web API"
+        );
+        backend.poll().unwrap();
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 0);
+        backend.native_controls = NativeControls::default();
+        backend
+            .handle(Command::PlayingDetails(Track::default()))
+            .unwrap();
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "Remote playback retains its Web API queue lookup"
+        );
+    }
     #[test]
     fn a_failed_startup_library_fetch_is_retried_without_another_login() {
         let mut refresh = LibraryRefresh::default();

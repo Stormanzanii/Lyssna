@@ -55,7 +55,7 @@ protobuf = "3.7"
 # Taskbar thumbnail buttons and the system media session.
 [target.'cfg(windows)'.dependencies]
 souvlaki = { version = "0.8", default-features = false }
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Media_Audio", "Win32_Media_Speech", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]
 winresource = "0.1"

@@ -1,4 +1,6 @@
 //! Independently implemented DJ prompt wire format. See THIRD_PARTY_NOTICES.md.
+pub mod voice;
+
 use anyhow::{Result, ensure};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use serde::Deserialize;

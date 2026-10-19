@@ -14,6 +14,8 @@ pub mod desktop;
 pub mod home;
 pub mod library_cache;
 pub mod lyrics;
+#[cfg(feature = "desktop")]
+pub mod media;
 pub mod model;
 pub mod native;
 pub mod native_browse;

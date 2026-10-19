@@ -218,6 +218,12 @@ export type PlayerRequest = {
 };
 export type AppEvent =
   | { type: "narration"; active: boolean }
+  | {
+      /** A press on the taskbar buttons, media keys or the media flyout. */
+      type: "media_control";
+      action: "toggle" | "play" | "pause" | "next" | "previous" | "seek";
+      position_ms?: number | null;
+    }
   | { type: "home"; page: HomePage }
   | { type: "home_loading"; account: string }
   | { type: "home_error"; account: string; message: string }

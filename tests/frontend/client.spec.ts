@@ -1897,3 +1897,52 @@ test("clicking a lyric seeks once and leaves Space for play and pause", async ({
     seeks,
   );
 });
+
+test("taskbar and media keys drive playback and see what is playing", async ({
+  page,
+}) => {
+  await startClient(page);
+  const commands = () =>
+    page.evaluate((): { command: string; args: any }[] =>
+      (window as any).__clientTest.commands.map((call: any) => ({
+        command: call.command,
+        args: call.args,
+      })),
+    );
+  await expect
+    .poll(async () =>
+      (await commands())
+        .filter((call) => call.command === "media_state")
+        .map((call) => call.args.state.title),
+    )
+    .toContain("Timing test");
+  const press = (action: string, position_ms?: number) =>
+    page.evaluate(
+      ({ action, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "media_control",
+          action,
+          position_ms,
+        }),
+      { action, position_ms },
+    );
+  const requests = async () =>
+    (await commands())
+      .filter((call) => call.command === "player")
+      .map((call) => call.args.request);
+  await press("next");
+  await expect
+    .poll(async () => (await requests()).at(-1)?.command)
+    .toBe("next");
+  await press("toggle");
+  await expect
+    .poll(async () => (await requests()).at(-1)?.command)
+    .toMatch(/^(play|pause)$/);
+  await press("seek", 42_000);
+  await expect
+    .poll(async () => (await requests()).at(-1))
+    .toMatchObject({
+      command: "seek",
+      positionMs: 42_000,
+    });
+});

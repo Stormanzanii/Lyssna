@@ -1763,6 +1763,14 @@ fn app_update(action: String, state: State<'_, Desktop>) -> std::result::Result<
     };
     result().map_err(error)
 }
+/// Taskbar buttons and the system media session.
+struct Media(crate::media::Session);
+/// The frontend reports the current item so the taskbar buttons and the
+/// system media session match what is playing.
+#[tauri::command]
+fn media_state(state: crate::media::MediaState, app: tauri::AppHandle, media: State<'_, Media>) {
+    media.0.update(&app, state);
+}
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_window_state::StateFlags;
     let app = tauri::Builder::default()
@@ -1773,6 +1781,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         )
         .setup(|app| {
             app.manage(Desktop::start(app.handle().clone())?);
+            let handle = app.handle().clone();
+            let session = crate::media::Session::start(app.handle(), move |action| {
+                let position = match action {
+                    crate::media::MediaAction::Seek(position) => Some(position),
+                    _ => None,
+                };
+                let _ = handle.emit(
+                    "spotiflex",
+                    json!({"type":"media_control","action":action.name(),"position_ms":position}),
+                );
+            });
+            app.manage(Media(session));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1798,7 +1818,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             open_link,
             open_creator_profile,
             resolve_album,
-            app_update
+            app_update,
+            media_state
         ])
         .build(tauri::generate_context!())?;
     app.run(|app, event| {

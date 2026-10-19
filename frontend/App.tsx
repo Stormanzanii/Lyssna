@@ -469,6 +469,43 @@ function App() {
     );
     play({ command: intent.wanted ? "play" : "pause" });
   }, [play]);
+  // Taskbar buttons, media keys and the Windows media flyout.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined,
+      disposed = false;
+    void subscribe((event) => {
+      if (event.type !== "media_control" || !stateRef.current.profile) return;
+      if (event.action === "toggle") toggle();
+      else if (event.action === "seek") {
+        if (event.position_ms != null)
+          play({ command: "seek", positionMs: event.position_ms });
+      } else play({ command: event.action });
+    }).then((stop) => (disposed ? stop() : (unlisten = stop)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [toggle, play]);
+  const item = state.playback.item;
+  useEffect(() => {
+    void rpc("media_state", {
+      state: {
+        title: state.narrating ? "DJ" : (item?.name ?? ""),
+        artists: item?.artists.map((artist) => artist.name).join(", ") ?? "",
+        album: item?.album.name ?? "",
+        cover: item?.album.images?.[0]?.url ?? "",
+        durationMs: item?.duration_ms ?? 0,
+        positionMs: Math.round(state.playback.progress_ms ?? 0),
+        playing: state.playback.is_playing,
+        loaded: !!item,
+      },
+    }).catch(() => {});
+  }, [
+    item?.uri,
+    state.narrating,
+    state.playback.is_playing,
+    state.clock_revision,
+  ]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       // Only typing keeps Space and Escape; a focused button or slider still

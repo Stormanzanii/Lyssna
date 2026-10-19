@@ -454,6 +454,9 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case "toast_clear":
       return { ...state, toast: undefined };
+    case "media_control":
+      // App handles these through the playback commands.
+      return state;
     case "update":
       return {
         ...state,

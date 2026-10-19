@@ -1044,6 +1044,7 @@ async fn dj_voice(
     account: String,
     id: String,
     state: State<'_, Desktop>,
+    app: tauri::AppHandle,
 ) -> std::result::Result<String, String> {
     let capture = {
         let snapshot = lock(&state.0.snapshot).map_err(error)?;
@@ -1053,12 +1054,19 @@ async fn dj_voice(
             &account,
         )
         .map_err(error)?;
-        state.0.dj_voice.reserve(id).map_err(error)?
+        state.0.dj_voice.reserve(id.clone()).map_err(error)?
     };
-    tauri::async_runtime::spawn_blocking(move || capture.transcribe())
-        .await
-        .map_err(|_| "Voice worker unavailable".to_owned())?
-        .map_err(error)
+    tauri::async_runtime::spawn_blocking(move || {
+        capture.transcribe_with_progress(|progress| {
+            let _ = app.emit(
+                "spotiflex-dj-voice",
+                json!({"account":account,"id":id,"level":progress.level,"speech":progress.speech}),
+            );
+        })
+    })
+    .await
+    .map_err(|_| "Voice worker unavailable".to_owned())?
+    .map_err(error)
 }
 #[tauri::command]
 fn dj_cancel(id: String, state: State<'_, Desktop>) {

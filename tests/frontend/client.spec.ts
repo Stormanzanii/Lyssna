@@ -104,16 +104,20 @@ async function startClient(page: Page, initialRoute = "liked") {
     ({ snapshot, track }) => {
       const host = window as any;
       const callbacks = new Map<number, Function>();
-      const handlers = new Map<number, number>();
+      const handlers = new Map<number, { event: string; handler: number }>();
       const commands: { command: string; args: any }[] = [];
       let serial = 0;
-      const emit = (payload: any) =>
-        handlers.forEach((handler) =>
-          callbacks.get(handler)?.({ event: "spotiflex", payload }),
+      const emitNamed = (event: string, payload: any) =>
+        handlers.forEach(
+          (handler) =>
+            handler.event === event &&
+            callbacks.get(handler.handler)?.({ event, payload }),
         );
+      const emit = (payload: any) => emitNamed("spotiflex", payload);
       host.__clientTest = {
         commands,
         emit,
+        emitVoice: (payload: any) => emitNamed("spotiflex-dj-voice", payload),
         pendingVoice: null,
         resolveVoice: null,
       };
@@ -147,7 +151,10 @@ async function startClient(page: Page, initialRoute = "liked") {
               uri: "spotify:album:abcdefghijklmnopqrstuv",
             };
           if (command === "plugin:event|listen") {
-            handlers.set(++serial, args.handler);
+            handlers.set(++serial, {
+              event: args.event,
+              handler: args.handler,
+            });
             return serial;
           }
           if (command === "plugin:event|unlisten") {
@@ -385,6 +392,80 @@ test("DJ voice submits after speech ends without filling text and rejects cancel
   ).toBe(1);
   await page.evaluate(() => (window as any).__clientTest.resolveDJRequest());
   await expect(page.getByRole("dialog", { name: "Ask DJ" })).toHaveCount(0);
+});
+
+test("DJ microphone bars follow real level events and ignore other captures", async ({
+  page,
+}) => {
+  await startClient(page);
+  await askDJ(page);
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  const meter = page.getByRole("meter", { name: "Microphone input" });
+  await expect(meter).toHaveAttribute("aria-valuenow", "0");
+  await expect(meter.locator("i")).toHaveCount(3);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const id = host.commands.find((c: any) => c.command === "dj_voice").args.id;
+    host.voiceId = id;
+    host.emitVoice({ id, account: "test-user", level: 75, speech: false });
+  });
+  await expect(meter).toHaveAttribute("aria-valuenow", "75");
+  await expect(page.getByText("Sound detected", { exact: true })).toBeVisible();
+  await expect
+    .poll(() =>
+      meter
+        .locator("i")
+        .first()
+        .evaluate((e) => e.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(3);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emitVoice({
+      id: "old-capture",
+      account: "test-user",
+      level: 99,
+      speech: true,
+    });
+    host.emitVoice({
+      id: host.voiceId,
+      account: "other-user",
+      level: 99,
+      speech: true,
+    });
+  });
+  await expect(meter).toHaveAttribute("aria-valuenow", "75");
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emitVoice({
+      id: host.voiceId,
+      account: "test-user",
+      level: 0,
+      speech: true,
+    });
+  });
+  await expect(meter).toHaveAttribute("aria-valuenow", "0");
+  await expect(page.getByText("Hearing speech", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(meter).toHaveCount(0);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emitVoice({
+      id: host.voiceId,
+      account: "test-user",
+      level: 100,
+      speech: true,
+    });
+    host.resolveVoice("Old request");
+  });
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) => c.command === "dj_request",
+      ),
+    ),
+  ).toBe(false);
+  await expect(meter).toHaveCount(0);
 });
 
 test("DJ dialog traps focus and closes on sign-out", async ({ page }) => {

@@ -34,6 +34,13 @@ pub struct Capture {
     cancelled: Arc<AtomicBool>,
 }
 
+/// UI meter data, without audio samples or recognized words.
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct Progress {
+    pub level: u8,
+    pub speech: bool,
+}
+
 impl VoiceCapture {
     /// Reserve before scheduling work so cancellation also covers queued captures.
     pub fn reserve(&self, id: String) -> Result<Capture> {
@@ -82,16 +89,21 @@ impl VoiceCapture {
 impl Capture {
     /// Blocking: call on a worker. Return recognized words after speech ends.
     pub fn transcribe(self) -> Result<String> {
+        self.transcribe_with_progress(|_| {})
+    }
+
+    pub fn transcribe_with_progress(self, report: impl FnMut(Progress)) -> Result<String> {
         ensure!(
             !self.cancelled.load(Ordering::Acquire),
             "Voice capture cancelled"
         );
         #[cfg(windows)]
         {
-            platform::recognize(&self.cancelled, None)
+            platform::recognize(&self.cancelled, None, report)
         }
         #[cfg(not(windows))]
         {
+            let _ = report;
             anyhow::bail!("Native voice input is available on Windows")
         }
     }
@@ -155,10 +167,13 @@ impl Utterance {
 }
 
 #[cfg(any(windows, test))]
-fn credible_speech(category: i8, engine_confidence: f32) -> bool {
-    // Tuned for Windows' installed dictation engine, not a probability estimate.
+fn credible_speech(category: i8, engine_confidence: f32, has_confident_word: bool) -> bool {
+    // A clear word can support a request containing unfamiliar artist names.
+    // Keep the phrase score as a fallback, not a probability estimate.
     // Engine scores are implementation-specific: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee125128(v=vs.85)
-    category >= 0 && engine_confidence.is_finite() && engine_confidence >= 0.65
+    category >= 0
+        && engine_confidence.is_finite()
+        && (engine_confidence >= 0.65 || has_confident_word)
 }
 
 #[cfg(windows)]
@@ -226,6 +241,7 @@ mod platform {
     pub(super) fn recognize(
         cancelled: &AtomicBool,
         file: Option<&std::path::Path>,
+        mut report: impl FnMut(Progress),
     ) -> Result<String> {
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok() }
             .context("Windows speech recognition could not start")?;
@@ -261,6 +277,7 @@ mod platform {
             let interest = (1_u64 << SPEI_RESERVED1.0)
                 | (1_u64 << SPEI_RESERVED2.0)
                 | (1_u64 << SPEI_HYPOTHESIS.0)
+                | (1_u64 << SPEI_SR_AUDIO_LEVEL.0)
                 | (1_u64 << SPEI_RECOGNITION.0)
                 | (1_u64 << SPEI_FALSE_RECOGNITION.0);
             context.SetInterest(interest, interest)?;
@@ -278,50 +295,83 @@ mod platform {
         let started = Instant::now();
         let deadline = started + Duration::from_secs(30);
         let mut utterance = Utterance::default();
+        let mut level = 0;
+        let mut received_audio = false;
+        let mut rejected_speech = false;
+        report(Progress {
+            level: 0,
+            speech: false,
+        });
         while Instant::now() < deadline {
             ensure!(
                 !cancelled.load(Ordering::Acquire),
                 "Voice capture cancelled"
             );
-            let mut event = Event(SPEVENT::default());
-            let mut fetched = 0;
-            unsafe { context.GetEvents(1, &mut event.0, &mut fetched) }?;
-            if fetched > 0 {
-                let event_id = event.0._bitfield & 0xffff;
-                let kind = (event.0._bitfield >> 16) & 0xffff;
-                if matches!(event_id, id if id==SPEI_RECOGNITION.0 || id==SPEI_HYPOTHESIS.0)
-                    && kind == SPET_LPARAM_IS_OBJECT.0
-                    && event.0.lParam.0 != 0
-                {
-                    let object = ManuallyDrop::new(unsafe {
-                        IUnknown::from_raw(event.0.lParam.0 as *mut _)
-                    });
-                    let result: ISpRecoResult = object.cast()?;
-                    let mut text = Text(PWSTR::null());
-                    unsafe { result.GetText(0, u32::MAX, true, &mut text.0, None) }?;
-                    let text = unsafe { text.0.to_string() }
-                        .context("Windows returned invalid speech text")?;
-                    ensure!(
-                        !cancelled.load(Ordering::Acquire),
-                        "Voice capture cancelled"
-                    );
-                    let phrase = Phrase(unsafe { result.GetPhrase() }?);
-                    if !phrase.0.is_null()
-                        && unsafe {
-                            credible_speech(
-                                (*phrase.0).Base.Rule.Confidence,
-                                (*phrase.0).Base.Rule.SREngineConfidence,
-                            )
-                        }
+            for _ in 0..64 {
+                let mut event = Event(SPEVENT::default());
+                let mut fetched = 0;
+                unsafe { context.GetEvents(1, &mut event.0, &mut fetched) }?;
+                if fetched == 0 {
+                    break;
+                }
+                if fetched > 0 {
+                    let event_id = event.0._bitfield & 0xffff;
+                    if event_id == SPEI_SR_AUDIO_LEVEL.0 {
+                        level = event.0.wParam.0.min(100) as u8;
+                        received_audio |= level > 0;
+                    }
+                    let kind = (event.0._bitfield >> 16) & 0xffff;
+                    if matches!(event_id, id if id==SPEI_RECOGNITION.0 || id==SPEI_HYPOTHESIS.0)
+                        && kind == SPET_LPARAM_IS_OBJECT.0
+                        && event.0.lParam.0 != 0
                     {
-                        if event_id == SPEI_RECOGNITION.0 {
-                            utterance.recognize(&text, Instant::now());
-                        } else {
-                            utterance.hypothesis(&text, Instant::now());
+                        let object = ManuallyDrop::new(unsafe {
+                            IUnknown::from_raw(event.0.lParam.0 as *mut _)
+                        });
+                        let result: ISpRecoResult = object.cast()?;
+                        let mut text = Text(PWSTR::null());
+                        unsafe { result.GetText(0, u32::MAX, true, &mut text.0, None) }?;
+                        let text = unsafe { text.0.to_string() }
+                            .context("Windows returned invalid speech text")?;
+                        ensure!(
+                            !cancelled.load(Ordering::Acquire),
+                            "Voice capture cancelled"
+                        );
+                        let phrase = Phrase(unsafe { result.GetPhrase() }?);
+                        if !phrase.0.is_null()
+                            && unsafe {
+                                credible_speech(
+                                    (*phrase.0).Base.Rule.Confidence,
+                                    (*phrase.0).Base.Rule.SREngineConfidence,
+                                    {
+                                        let phrase = &(*phrase.0).Base;
+                                        !phrase.pElements.is_null()
+                                            && phrase.Rule.ulFirstElement == 0
+                                            && phrase.Rule.ulCountOfElements <= 512
+                                            && (0..phrase.Rule.ulCountOfElements).any(|index| {
+                                                (*phrase.pElements.add(index as usize))
+                                                    .ActualConfidence
+                                                    >= 1 // SAPI high confidence
+                                            })
+                                    },
+                                )
+                            }
+                        {
+                            if event_id == SPEI_RECOGNITION.0 {
+                                utterance.recognize(&text, Instant::now());
+                            } else {
+                                utterance.hypothesis(&text, Instant::now());
+                            }
+                        } else if !text.trim().is_empty() {
+                            rejected_speech = true;
                         }
                     }
                 }
             }
+            report(Progress {
+                level,
+                speech: !utterance.text.is_empty(),
+            });
             // Ambient sound events never extend this speech-only deadline.
             if utterance.ready(Instant::now()) {
                 return Ok(utterance.text);
@@ -332,7 +382,19 @@ mod platform {
                     .last_activity
                     .is_none_or(|last| last.elapsed() >= Duration::from_millis(1200))
             {
-                anyhow::bail!("No clear speech detected. Try again or type your request");
+                if rejected_speech {
+                    anyhow::bail!(
+                        "Sound received, but speech was not recognized reliably. Check your Windows speech language and try again"
+                    );
+                }
+                if received_audio {
+                    anyhow::bail!(
+                        "Microphone input received, but no clear speech recognized. Try again or type your request"
+                    );
+                }
+                anyhow::bail!(
+                    "No microphone input detected. Check your Windows input device and microphone volume"
+                );
             }
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -373,15 +435,17 @@ mod platform {
             bytes.extend_from_slice(&noise.saturating_add(hum).to_le_bytes());
         }
         std::fs::write(path, bytes)?;
-        recognize(&AtomicBool::new(false), Some(path))
+        recognize(&AtomicBool::new(false), Some(path), |_| {})
     }
 
     #[cfg(test)]
     pub(super) fn synthetic_file_check() -> Result<String> {
-        use windows::{
-            Win32::Media::Audio::WAVEFORMATEX,
-            core::{GUID, w},
-        };
+        synthetic_request_check("Play some jazz music.")
+    }
+
+    #[cfg(test)]
+    pub(super) fn synthetic_request_check(request: &str) -> Result<String> {
+        use windows::{Win32::Media::Audio::WAVEFORMATEX, core::GUID};
         let path = std::path::Path::new("target/diagnostics/dj-voice-check.wav");
         std::fs::create_dir_all(path.parent().unwrap())?;
         {
@@ -418,12 +482,13 @@ mod platform {
                 unsafe { CoCreateInstance(&SpVoice, None, CLSCTX_INPROC_SERVER) }?;
             unsafe {
                 voice.SetOutput(&stream, false)?;
-                voice.Speak(w!("Play some jazz music."), SPF_DEFAULT.0 as u32, None)?;
+                let spoken: Vec<u16> = request.encode_utf16().chain(Some(0)).collect();
+                voice.Speak(PCWSTR(spoken.as_ptr()), SPF_DEFAULT.0 as u32, None)?;
             }
             drop(voice);
             unsafe { stream.Close() }?;
         }
-        recognize(&AtomicBool::new(false), Some(path))
+        recognize(&AtomicBool::new(false), Some(path), |_| {})
     }
 }
 
@@ -432,12 +497,35 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(windows)]
+    #[ignore = "Uses Windows speech synthesis and dictation only; no microphone"]
+    fn clear_requests_beyond_the_original_fixture_are_not_rejected() {
+        for request in [
+            "Play some rock music.",
+            "Play Rammstein.",
+            "Give me something energetic.",
+            "Surprise me.",
+        ] {
+            let result = platform::synthetic_request_check(request);
+            assert!(
+                result.is_ok(),
+                "Clear synthesized request rejected: {request}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
     fn uncertain_or_invalid_recognition_cannot_submit_or_extend_listening() {
         for confidence in [0.0, 0.41, 0.64, f32::NAN, f32::INFINITY] {
-            assert!(!credible_speech(0, confidence));
+            assert!(!credible_speech(0, confidence, false));
         }
-        assert!(!credible_speech(-1, 0.95));
-        assert!(credible_speech(0, 0.81));
+        assert!(!credible_speech(-1, 0.95, true));
+        assert!(credible_speech(0, 0.81, false));
+        assert!(
+            credible_speech(0, 0.29, true),
+            "Confident words must survive uncertain artist names"
+        );
+        assert!(!credible_speech(0, f32::NAN, true));
     }
 
     #[test]

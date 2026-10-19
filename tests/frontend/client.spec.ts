@@ -2402,3 +2402,19 @@ test("the app dims while a creator profile sheet is open", async ({ page }) => {
   await emit(false);
   await expect(page.locator(".creator-profile-dim")).toHaveCount(0);
 });
+
+test("a left click anywhere outside the song menu closes it", async ({
+  page,
+}) => {
+  await startClient(page);
+  for (const outside of [".player-bar", ".track-row >> nth=5"]) {
+    await page
+      .locator(".track-row .track-name")
+      .first()
+      .click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    const box = (await page.locator(outside).boundingBox())!;
+    await page.mouse.click(box.x + 8, box.y + box.height / 2);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  }
+});

@@ -2494,9 +2494,11 @@ input[type="range"]:hover {
 .song-menu > button:hover {
   background: #ffffff0b;
 }
+/* Covers the whole window so a left click anywhere outside an open menu,
+   including the header and player bar, closes it first. */
 .popover-dismiss {
   position: fixed;
-  inset: 60px 0 88px;
+  inset: 0;
   z-index: 40;
 }
 .modal-backdrop,

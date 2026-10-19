@@ -1740,6 +1740,15 @@ fn add_tracks(
         .send(Command::Add { playlist, tracks })
         .map_err(error)
 }
+/// Hides scrollbars in the creator profile sheet; wheel and touch scrolling
+/// still work.
+const HIDE_SCROLLBARS: &str = r#"(() => {
+  const style = document.createElement("style");
+  style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}";
+  const add = () => (document.head || document.documentElement).appendChild(style);
+  if (document.documentElement) add();
+  else document.addEventListener("DOMContentLoaded", add, { once: true });
+})();"#;
 #[tauri::command]
 async fn open_creator_profile(
     app: tauri::AppHandle,
@@ -1800,6 +1809,7 @@ async fn open_creator_profile(
                 .shadow(true)
                 .visible(false)
                 .parent(&main)?
+                .initialization_script(HIDE_SCROLLBARS)
                 .on_navigation(|url| {
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
                 })

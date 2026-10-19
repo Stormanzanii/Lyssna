@@ -1862,3 +1862,38 @@ test("restarting a song slides lyrics back to the start instead of crawling", as
   expect(midway).toBeLessThan(before);
   await expect.poll(scrollTop, { timeout: 900 }).toBeLessThan(50);
 });
+
+test("clicking a lyric seeks once and leaves Space for play and pause", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from(
+      '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0s" end="2s">Test</p></div></body></tt>',
+    ),
+  });
+  const requests = () =>
+    page.evaluate((): string[] =>
+      (window as any).__clientTest.commands
+        .filter((call: any) => call.command === "player")
+        .map((call: any) => call.args.request.command),
+    );
+  await page.locator(".lyrics-page .lyric-line").nth(3).click();
+  await expect.poll(requests).toContain("seek");
+  const seeks = (await requests()).filter((name) => name === "seek").length;
+  expect(
+    await page.evaluate(() =>
+      document.activeElement?.classList.contains("lyric-line"),
+    ),
+  ).toBe(false);
+  await page.keyboard.press("Space");
+  await expect
+    .poll(async () => (await requests()).at(-1))
+    .toMatch(/^(play|pause)$/);
+  expect((await requests()).filter((name) => name === "seek")).toHaveLength(
+    seeks,
+  );
+});

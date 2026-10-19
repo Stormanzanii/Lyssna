@@ -574,6 +574,9 @@ export function LyricsDisplay({
                   }
                 }}
                 disabled={!lyrics.synced}
+                // Clicking seeks without taking focus, so Space stays with
+                // play and pause.
+                onMouseDown={(event) => event.preventDefault()}
               >
                 <span className="lyric-main">
                   <LyricWords line={line} />

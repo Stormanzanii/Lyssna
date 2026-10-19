@@ -109,6 +109,17 @@ import {
 import { FontSettings, fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
+/** Inputs that take no typing, so Space still toggles playback. */
+const NON_TEXT_INPUTS = new Set([
+  "range",
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "color",
+  "file",
+]);
 
 type Center = "browse" | "lyrics" | "settings";
 type EntityMenu = {
@@ -460,9 +471,13 @@ function App() {
   }, [play]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      const editing = (event.target as HTMLElement)?.closest(
-        'input,textarea,select,[contenteditable="true"],button',
-      );
+      // Only typing keeps Space and Escape; a focused button or slider still
+      // leaves Space for play and pause.
+      const target = event.target as HTMLElement | null,
+        editing =
+          !!target?.closest('textarea,select,[contenteditable="true"]') ||
+          (target instanceof HTMLInputElement &&
+            !NON_TEXT_INPUTS.has(target.type));
       if (
         (event.ctrlKey || event.metaKey) &&
         ["k", "l"].includes(event.key.toLowerCase())

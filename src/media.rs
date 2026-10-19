@@ -130,8 +130,8 @@ mod windows_impl {
         THBF_DISABLED, THBF_ENABLED, THUMBBUTTON, TaskbarList,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateIconIndirect, GetSystemMetrics, HICON, ICONINFO, RegisterWindowMessageW, SM_CXSMICON,
-        WM_COMMAND,
+        CreateIconIndirect, DestroyIcon, GetSystemMetrics, HICON, ICON_BIG, ICONINFO,
+        RegisterWindowMessageW, SM_CXSMICON, SendMessageW, WM_COMMAND, WM_SETICON,
     };
     use windows::core::w;
 
@@ -152,6 +152,7 @@ mod windows_impl {
         list: Option<ITaskbarList3>,
         added: bool,
         icons: [HICON; 4],
+        app_icon: HICON,
         state: MediaState,
         created_message: u32,
     }
@@ -163,6 +164,31 @@ mod windows_impl {
     fn icon(kind: Glyph) -> HICON {
         let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.clamp(16, 64) as usize;
         let pixels = glyph(kind, size);
+        native_icon(size, &pixels)
+    }
+
+    fn app_icon() -> HICON {
+        let mut pixels = crate::app_icon::icon_rgba(64);
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            let alpha = u16::from(pixel[3]);
+            let red = pixel[0];
+            pixel[0] = (u16::from(pixel[2]) * alpha / 255) as u8;
+            pixel[1] = (u16::from(pixel[1]) * alpha / 255) as u8;
+            pixel[2] = (u16::from(red) * alpha / 255) as u8;
+        }
+        native_icon(64, &pixels)
+    }
+
+    fn native_icon(size: usize, pixels: &[u8]) -> HICON {
+        let stride = size.div_ceil(16) * 2;
+        let mut mask = vec![0; stride * size];
+        for y in 0..size {
+            for x in 0..size {
+                if pixels[(y * size + x) * 4 + 3] == 0 {
+                    mask[y * stride + x / 8] |= 0x80 >> (x % 8);
+                }
+            }
+        }
         unsafe {
             let color = CreateBitmap(
                 size as i32,
@@ -171,7 +197,7 @@ mod windows_impl {
                 32,
                 Some(pixels.as_ptr().cast()),
             );
-            let mask = CreateBitmap(size as i32, size as i32, 1, 1, None);
+            let mask = CreateBitmap(size as i32, size as i32, 1, 1, Some(mask.as_ptr().cast()));
             let info = ICONINFO {
                 fIcon: true.into(),
                 hbmMask: mask,
@@ -182,6 +208,16 @@ mod windows_impl {
             let _ = DeleteObject(color.into());
             let _ = DeleteObject(mask.into());
             icon
+        }
+    }
+
+    impl Drop for Taskbar {
+        fn drop(&mut self) {
+            unsafe {
+                for icon in self.icons.into_iter().chain([self.app_icon]) {
+                    let _ = DestroyIcon(icon);
+                }
+            }
         }
     }
 
@@ -295,7 +331,16 @@ mod windows_impl {
                 return Self;
             };
             let hwnd = HWND(raw.0 as _);
+            let app_icon = app_icon();
             unsafe {
+                // Setting an icon sends window messages synchronously. Do this
+                // before installing our subclass or borrowing its thread-local state.
+                SendMessageW(
+                    hwnd,
+                    WM_SETICON,
+                    Some(WPARAM(ICON_BIG as usize)),
+                    Some(LPARAM(app_icon.0 as isize)),
+                );
                 let _ = SetWindowSubclass(hwnd, Some(subclass), 1, 0);
             }
             TASKBAR.with_borrow_mut(|taskbar| {
@@ -304,6 +349,7 @@ mod windows_impl {
                     list: None,
                     added: false,
                     icons: [Glyph::Previous, Glyph::Play, Glyph::Pause, Glyph::Next].map(icon),
+                    app_icon,
                     state: MediaState::default(),
                     created_message: unsafe { RegisterWindowMessageW(w!("TaskbarButtonCreated")) },
                 };

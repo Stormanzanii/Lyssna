@@ -25,6 +25,8 @@ Playback regression tests reproduce buffer starvation during a 150 ms producer s
 
 Song selection, Next and Previous invalidate old queued samples immediately, before Spotify Connect responds. Decoder track identity prevents a superseded selection from becoming audible; automatic transitions retain gapless output. State uploads remain ordered and coalesce while local transport commands continue. Regression tests cover old buffered audio, rapid selections, same-song restarts, stale seek feedback and delayed uploads. Live listening still needs confirmation.
 
+Windows icons share the same logo geometry across the executable, window and legacy UI. The ICO includes alpha and AND transparency masks for consumers that ignore alpha. Native audio sessions explicitly expose the executable icon and SpotiFlex name to volume controllers. Tests validate every bundled icon size; Stream Deck display still needs manual confirmation.
+
 The native clock stops advancing after 500 ms without a fresh observation. Repeated song positions hold lyrics during narration or buffering. Remote playback retains its clock between Web API polls.
 
 Desktop output defaults to This computer. Incoming playback updates do not change the selected output; other devices remain selectable in the device menu. Native Play restores the saved or current song when the connection has no loaded track, including after reconnects and unrelated transport commands. Stopped playback clears that loaded state. Saved sign-in checks show a locked startup screen instead of briefly mounting first-run setup.

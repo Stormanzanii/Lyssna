@@ -130,6 +130,8 @@ impl Sink for AudioSink {
             stream.log_on_drop(false);
             self.sink = Some(rodio::Sink::connect_new(stream.mixer()));
             self.stream = Some(stream);
+            #[cfg(windows)]
+            let _ = configure_session_identity();
         }
         self.sink.as_ref().unwrap().play();
         Ok(())
@@ -269,6 +271,63 @@ impl Source for QueuedPacket {
     fn total_duration(&self) -> Option<Duration> {
         Some(self.duration)
     }
+}
+
+#[cfg(windows)]
+fn configure_session_identity() -> windows::core::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::{
+        Win32::{
+            Foundation::RPC_E_CHANGED_MODE,
+            Media::Audio::{
+                DEVICE_STATE_ACTIVE, IAudioSessionControl2, IAudioSessionManager2,
+                IMMDeviceEnumerator, MMDeviceEnumerator, eRender,
+            },
+            System::Com::{
+                CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
+            },
+        },
+        core::{Interface, PCWSTR, w},
+    };
+    struct Apartment(bool);
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { CoUninitialize() };
+            }
+        }
+    }
+    let Ok(executable) = std::env::current_exe() else {
+        return Ok(());
+    };
+    let mut icon = executable.into_os_string();
+    icon.push(",0");
+    let icon: Vec<u16> = icon.encode_wide().chain(Some(0)).collect();
+    // Rodio/CPAL may already have initialized this thread's COM apartment.
+    let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    if initialized != RPC_E_CHANGED_MODE {
+        initialized.ok()?;
+    }
+    let _apartment = Apartment(initialized.is_ok());
+    unsafe {
+        let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        let endpoints = devices.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)?;
+        for index in 0..endpoints.GetCount()? {
+            let endpoint = endpoints.Item(index)?;
+            let Ok(manager) = endpoint.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else {
+                continue;
+            };
+            let sessions = manager.GetSessionEnumerator()?;
+            for index in 0..sessions.GetCount()? {
+                let session: IAudioSessionControl2 = sessions.GetSession(index)?.cast()?;
+                if session.GetProcessId()? == std::process::id() {
+                    session.SetIconPath(PCWSTR(icon.as_ptr()), std::ptr::null())?;
+                    session.SetDisplayName(w!("SpotiFlex"), std::ptr::null())?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

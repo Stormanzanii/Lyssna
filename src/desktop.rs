@@ -1942,6 +1942,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_icon(tauri::image::Image::new_owned(
+                    crate::app_icon::icon_rgba(64),
+                    64,
+                    64,
+                ))?;
+            }
             app.manage(Desktop::start(app.handle().clone())?);
             let handle = app.handle().clone();
             let session = crate::media::Session::start(app.handle(), move |action| {

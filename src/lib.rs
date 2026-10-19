@@ -3,6 +3,8 @@ pub mod api;
 pub mod api_backoff;
 #[cfg(feature = "legacy-ui")]
 pub mod app;
+#[path = "ui/icon_pixels.rs"]
+pub mod app_icon;
 pub mod artist;
 mod audio;
 pub mod auth;

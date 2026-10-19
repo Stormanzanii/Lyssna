@@ -2,7 +2,7 @@
 
 pub mod art;
 pub mod emoji;
-pub mod icon_pixels;
+pub use crate::app_icon as icon_pixels;
 pub mod icons;
 pub mod lyrics_view;
 pub mod motion;

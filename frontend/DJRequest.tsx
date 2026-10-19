@@ -10,12 +10,14 @@ export function DJRequest({
 }: {
   account: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (transcript?: string) => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"voice" | "request" | null>(null);
   const [error, setError] = useState("");
+  const [heard, setHeard] = useState("");
   const active = useRef<string | null>(null);
+  const voiceDialog = useRef(crypto.randomUUID());
   const live = useRef(true);
   const dialog = useRef<HTMLElement>(null);
   const meterListener = useRef<(() => void) | null>(null);
@@ -37,6 +39,7 @@ export function DJRequest({
   };
   useEffect(() => {
     live.current = true;
+    void rpc("dj_prepare", { account }).catch(() => {});
     const previous = document.activeElement as HTMLElement | null;
     return () => {
       live.current = false;
@@ -44,6 +47,9 @@ export function DJRequest({
       active.current = null;
       meterListener.current?.();
       meterListener.current = null;
+      void rpc("dj_release_voice", { dialog: voiceDialog.current }).catch(
+        () => {},
+      );
       if (id) void rpc("dj_cancel", { id }).catch(() => {});
       previous?.focus();
     };
@@ -89,6 +95,7 @@ export function DJRequest({
   const listen = async () => {
     const id = crypto.randomUUID();
     active.current = id;
+    setHeard("");
     setBusy("voice");
     setError("");
     setMeter({
@@ -134,10 +141,15 @@ export function DJRequest({
         }));
       });
       if (!live.current || active.current !== id) return;
-      const transcript = await rpc<string>("dj_voice", { account, id });
+      const transcript = await rpc<string>("dj_voice", {
+        account,
+        id,
+        dialog: voiceDialog.current,
+      });
       dispose();
       if (meterListener.current === dispose) meterListener.current = null;
       if (live.current && active.current === id) {
+        setHeard(transcript);
         setBusy("request");
         await rpc("dj_request", {
           account,
@@ -147,7 +159,7 @@ export function DJRequest({
         });
         if (live.current && active.current === id) {
           active.current = null;
-          onSuccess();
+          onSuccess(transcript);
           onClose();
         }
       }
@@ -224,6 +236,11 @@ export function DJRequest({
         {error && (
           <p role="alert" className="dj-request-error">
             {error}
+          </p>
+        )}
+        {heard && (
+          <p className="dj-heard" role="status">
+            Heard: “{heard}”
           </p>
         )}
         {busy && (

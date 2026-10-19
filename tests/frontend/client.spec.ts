@@ -390,6 +390,9 @@ test("DJ voice submits after speech ends without filling text and rejects cancel
       ),
     )
     .toMatchObject({ text: "Play acoustic folk", input: "voice" });
+  await expect(
+    page.getByText("Heard: “Play acoustic folk”", { exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () =>
@@ -400,6 +403,9 @@ test("DJ voice submits after speech ends without filling text and rejects cancel
   ).toBe(1);
   await page.evaluate(() => (window as any).__clientTest.resolveDJRequest());
   await expect(page.getByRole("dialog", { name: "Ask DJ" })).toHaveCount(0);
+  await expect(
+    page.getByText("DJ heard: “Play acoustic folk”", { exact: true }),
+  ).toBeVisible();
 });
 
 test("DJ microphone bars follow real level events and ignore other captures", async ({
@@ -474,6 +480,55 @@ test("DJ microphone bars follow real level events and ignore other captures", as
     ),
   ).toBe(false);
   await expect(meter).toHaveCount(0);
+});
+
+test("Ask DJ prewarms requests without starting capture and releases its model on close", async ({
+  page,
+}) => {
+  await startClient(page);
+  await askDJ(page);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) =>
+          c.command === "dj_prepare" && c.args.account === "test-user",
+      ),
+    ),
+  ).toBe(true);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) => c.command === "dj_voice",
+      ),
+    ),
+  ).toBe(false);
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  const dialog = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands.find(
+        (c: any) => c.command === "dj_voice",
+      ).args.dialog,
+  );
+  await page.getByRole("button", { name: "Close DJ request" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((c: any) => c.command === "dj_release_voice")
+          .map((c: any) => c.args.dialog),
+      ),
+    )
+    .toContain(dialog);
+  await page.evaluate(() =>
+    (window as any).__clientTest.resolveVoice("Do not submit after close"),
+  );
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) => c.command === "dj_request",
+      ),
+    ),
+  ).toBe(false);
 });
 
 test("DJ waits for local speech setup before inviting the user to speak", async ({

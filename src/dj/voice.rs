@@ -52,17 +52,15 @@ pub enum Stage {
     Transcribing,
 }
 
-/// Run once during startup; the decoder cache also serves later voice requests.
-pub fn warm_up(cancelled: &AtomicBool) -> Result<()> {
+pub fn release_model(dialog: &str) {
     #[cfg(windows)]
     {
-        super::local_speech::prepare(cancelled, &mut |_| {})?;
+        super::local_speech::release(dialog);
     }
     #[cfg(not(windows))]
     {
-        let _ = cancelled;
+        let _ = dialog;
     }
-    Ok(())
 }
 
 impl VoiceCapture {
@@ -117,6 +115,22 @@ impl Capture {
     }
 
     pub fn transcribe_with_progress(self, report: impl FnMut(Progress)) -> Result<String> {
+        self.transcribe_with_vocabulary("", report)
+    }
+
+    pub fn transcribe_with_vocabulary(
+        self,
+        vocabulary: &str,
+        report: impl FnMut(Progress),
+    ) -> Result<String> {
+        self.transcribe_in_dialog(vocabulary, "", report)
+    }
+    pub fn transcribe_in_dialog(
+        self,
+        vocabulary: &str,
+        dialog: &str,
+        report: impl FnMut(Progress),
+    ) -> Result<String> {
         ensure!(
             !self.cancelled.load(Ordering::Acquire),
             "Voice capture cancelled"
@@ -124,13 +138,24 @@ impl Capture {
         #[cfg(windows)]
         {
             let mut report = report;
-            let model = super::local_speech::prepare(&self.cancelled, &mut report)?;
+            let model =
+                super::local_speech::prepare_for_dialog(&self.cancelled, dialog, &mut report)?;
             let audio = super::microphone::capture(&self.cancelled, &mut report)?;
-            super::local_speech::decode(&model, &audio, self.cancelled.clone(), &mut report)
+            if vocabulary.is_empty() {
+                super::local_speech::decode(&model, &audio, self.cancelled.clone(), &mut report)
+            } else {
+                super::local_speech::decode_with_vocabulary(
+                    &model,
+                    &audio,
+                    self.cancelled.clone(),
+                    vocabulary,
+                    &mut report,
+                )
+            }
         }
         #[cfg(not(windows))]
         {
-            let _ = report;
+            let _ = (report, vocabulary, dialog);
             anyhow::bail!("Native voice input is available on Windows")
         }
     }
@@ -154,6 +179,31 @@ fn valid_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+/// Vocabulary comes only from the current account's music; no spelling substitutions.
+pub fn artist_vocabulary<'a>(names: impl Iterator<Item = &'a str>) -> String {
+    let mut unique = std::collections::HashSet::new();
+    let mut result = String::new();
+    for name in names.take(256) {
+        let name = name.trim();
+        if name.is_empty()
+            || name.len() > 96
+            || name.chars().any(char::is_control)
+            || !unique.insert(name.to_lowercase())
+        {
+            continue;
+        }
+        let additional = name.len() + usize::from(!result.is_empty()) * 2;
+        if result.len() + additional > 384 {
+            continue;
+        }
+        if !result.is_empty() {
+            result.push_str(", ");
+        }
+        result.push_str(name);
+    }
+    result
 }
 
 #[cfg(all(windows, test))]
@@ -214,6 +264,12 @@ mod platform {
     }
     #[cfg(test)]
     pub(super) fn synthetic_request_check(request: &str) -> Result<String> {
+        synthetic_request_with_vocabulary(request, "")
+    }
+    pub(super) fn synthetic_request_with_vocabulary(
+        request: &str,
+        vocabulary: &str,
+    ) -> Result<String> {
         use windows::{Win32::Media::Audio::WAVEFORMATEX, core::GUID};
         let path = std::path::Path::new("target/diagnostics/dj-voice-check.wav");
         std::fs::create_dir_all(path.parent().unwrap())?;
@@ -260,13 +316,70 @@ mod platform {
         let cancelled = Arc::new(AtomicBool::new(false));
         let model = super::super::local_speech::prepare(&cancelled, &mut |_| {})?;
         let audio = super::super::microphone::from_samples(&read_pcm(path)?, 16_000)?;
-        super::super::local_speech::decode(&model, &audio, cancelled, &mut |_| {})
+        super::super::local_speech::decode_with_vocabulary(
+            &model,
+            &audio,
+            cancelled,
+            vocabulary,
+            &mut |_| {},
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn artist_vocabulary_is_bounded_deduplicated_and_ignores_control_characters() {
+        let names = [
+            "  Example Artist  ",
+            "EXAMPLE ARTIST",
+            "Second Artist",
+            "bad\nname",
+            "",
+        ];
+        assert_eq!(
+            artist_vocabulary(names.into_iter()),
+            "Example Artist, Second Artist"
+        );
+        let names = (0..256)
+            .map(|index| format!("Artist {index}"))
+            .collect::<Vec<_>>();
+        assert!(artist_vocabulary(names.iter().map(String::as_str)).len() <= 384);
+    }
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "Uses local synthesis and speech recognition, never the microphone"]
+    fn artist_hints_preserve_names_without_overriding_the_request() {
+        let vocabulary = artist_vocabulary(
+            ["Ariana Grande", "Dua Lipa", "Tame Impala", "Rammstein"].into_iter(),
+        );
+        for artist in [
+            "Ariana Grande",
+            "Dua Lipa",
+            "Tame Impala",
+            "Rammstein",
+            "Billie Eilish",
+            "Taylor Swift",
+        ] {
+            let result = platform::synthetic_request_with_vocabulary(
+                &format!("Play {artist}."),
+                &vocabulary,
+            )
+            .unwrap();
+            assert!(
+                result.to_lowercase().contains(&artist.to_lowercase()),
+                "Hinted recognition changed artist: {artist}: {result}"
+            );
+        }
+        let result =
+            platform::synthetic_request_with_vocabulary("Play some jazz music.", &vocabulary)
+                .unwrap();
+        assert!(
+            result.to_lowercase().contains("jazz"),
+            "Artist hints overrode a genre request: {result}"
+        );
+    }
 
     #[test]
     #[cfg(windows)]
@@ -278,6 +391,7 @@ mod tests {
             "Dua Lipa",
             "Taylor Swift",
             "Rammstein",
+            "Tame Impala",
         ] {
             let recognized = platform::synthetic_request_check(&format!("Play {artist}."))
                 .expect("Artist request rejected");

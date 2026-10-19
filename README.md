@@ -22,7 +22,7 @@ cargo build --release --locked
 .\target\release\spotiflex.exe
 ```
 
-Voice recognition preloads a verified 190 MB English model once at app startup, downloading missing weights in the background. Recognition runs locally. The UI waits for preparation before opening Windows Default microphone and shows when it starts listening. Microphone audio stays in memory and is never uploaded; the recognized request is sent to Spotify automatically after speech ends.
+Voice recognition loads a verified 190 MB English model when microphone input is requested and releases it when Ask DJ closes. Missing weights download once and remain on disk. Recognition runs locally. The UI waits for preparation before opening Windows Default microphone and shows when it starts listening. Microphone audio stays in memory and is never uploaded; the recognized request is sent to Spotify automatically after speech ends.
 
 ## First sign-in
 

@@ -306,10 +306,6 @@ impl Desktop {
         if restore {
             inner.commands.send(Command::Restore(settings.client_id))?;
         }
-        let speech_startup = inner.clone();
-        thread::spawn(move || {
-            let _ = crate::dj::voice::warm_up(&speech_startup.stopped);
-        });
         let pump = inner.clone();
         thread::spawn(move || {
             let emit = |value: Value| {
@@ -1015,6 +1011,17 @@ fn bootstrap(state: State<'_, Desktop>) -> std::result::Result<Snapshot, String>
         .map_err(error)
 }
 #[tauri::command]
+fn dj_prepare(account: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    let snapshot = lock(&state.0.snapshot).map_err(error)?;
+    crate::dj::requests::authorize(
+        snapshot.profile.as_ref().map(|p| p.id.as_str()),
+        snapshot.native_ready,
+        &account,
+    )
+    .map_err(error)?;
+    state.0.controls.prewarm_dj_request(&account).map_err(error)
+}
+#[tauri::command]
 async fn dj_request(
     account: String,
     id: String,
@@ -1047,10 +1054,11 @@ async fn dj_request(
 async fn dj_voice(
     account: String,
     id: String,
+    dialog: String,
     state: State<'_, Desktop>,
     app: tauri::AppHandle,
 ) -> std::result::Result<String, String> {
-    let capture = {
+    let (capture, vocabulary) = {
         let snapshot = lock(&state.0.snapshot).map_err(error)?;
         crate::dj::requests::authorize(
             snapshot.profile.as_ref().map(|p| p.id.as_str()),
@@ -1058,10 +1066,23 @@ async fn dj_voice(
             &account,
         )
         .map_err(error)?;
-        state.0.dj_voice.reserve(id.clone()).map_err(error)?
+        let vocabulary = crate::dj::voice::artist_vocabulary(
+            snapshot
+                .playback
+                .item
+                .iter()
+                .flat_map(|track| &track.artists)
+                .chain(&snapshot.details.artists)
+                .chain(snapshot.tracks.iter().flat_map(|track| &track.artists))
+                .map(|artist| artist.name.as_str()),
+        );
+        (
+            state.0.dj_voice.reserve(id.clone()).map_err(error)?,
+            vocabulary,
+        )
     };
     tauri::async_runtime::spawn_blocking(move || {
-        capture.transcribe_with_progress(|progress| {
+        capture.transcribe_in_dialog(&vocabulary,&dialog,|progress| {
             let _ = app.emit(
                 "spotiflex-dj-voice",
                 json!({"account":account,"id":id,"level":progress.level,"speech":progress.speech,"stage":progress.stage,"percent":progress.percent}),
@@ -1071,6 +1092,12 @@ async fn dj_voice(
     .await
     .map_err(|_| "Voice worker unavailable".to_owned())?
     .map_err(error)
+}
+#[tauri::command]
+async fn dj_release_voice(dialog: String) -> std::result::Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || crate::dj::voice::release_model(&dialog))
+        .await
+        .map_err(|_| "Voice cleanup unavailable".to_owned())
 }
 #[tauri::command]
 fn dj_cancel(id: String, state: State<'_, Desktop>) {
@@ -1876,7 +1903,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             dj_request,
+            dj_prepare,
             dj_voice,
+            dj_release_voice,
             dj_cancel,
             home,
             bootstrap,

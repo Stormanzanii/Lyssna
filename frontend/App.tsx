@@ -2021,7 +2021,9 @@ function App() {
           key={state.profile.id}
           account={state.profile.id}
           onClose={() => setDJRequest(false)}
-          onSuccess={() => notify("DJ request sent")}
+          onSuccess={(transcript) =>
+            notify(transcript ? `DJ heard: “${transcript}”` : "DJ request sent")
+          }
         />
       )}
       <PlayerBar

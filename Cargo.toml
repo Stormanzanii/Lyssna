@@ -78,6 +78,10 @@ librespot-protocol = { git = "https://github.com/School-User/librespot.git", rev
 [profile.dev]
 debug = 1
 
+# Model verification hashes 190 MB on each on-demand load.
+[profile.dev.package.sha2]
+opt-level = 3
+
 [patch."https://github.com/School-User/librespot.git"]
 librespot-connect = { path = "vendor/librespot-connect" }
 librespot-playback = { path = "vendor/librespot-playback" }

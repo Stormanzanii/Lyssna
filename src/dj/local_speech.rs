@@ -17,7 +17,11 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 const MODEL_BYTES: u64 = 190_098_681;
 const MODEL_HASH: &str = "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30";
 const MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/c521a4b02f422512d734391fdf08bb08c0862f68/ggml-small.en-q5_1.bin";
-static MODEL: OnceLock<Mutex<Option<Arc<WhisperContext>>>> = OnceLock::new();
+static MODEL: OnceLock<Mutex<Option<LoadedModel>>> = OnceLock::new();
+struct LoadedModel {
+    model: Arc<WhisperContext>,
+    dialog: String,
+}
 
 fn check(cancelled: &AtomicBool) -> Result<()> {
     ensure!(
@@ -138,8 +142,29 @@ fn path(cancelled: &AtomicBool, report: &mut impl FnMut(Progress)) -> Result<Pat
     Ok(path)
 }
 
+#[cfg(test)]
 pub(super) fn prepare(
     cancelled: &AtomicBool,
+    report: &mut impl FnMut(Progress),
+) -> Result<Arc<WhisperContext>> {
+    prepare_for_dialog(cancelled, "", report)
+}
+
+pub(super) fn release(dialog: &str) {
+    let old = MODEL.get().and_then(|cache| {
+        let mut cache = cache.lock().ok()?;
+        if cache.as_ref().is_some_and(|entry| entry.dialog == dialog) {
+            cache.take()
+        } else {
+            None
+        }
+    });
+    drop(old);
+}
+
+pub(super) fn prepare_for_dialog(
+    cancelled: &AtomicBool,
+    dialog: &str,
     report: &mut impl FnMut(Progress),
 ) -> Result<Arc<WhisperContext>> {
     whisper_rs::install_logging_hooks();
@@ -148,8 +173,9 @@ pub(super) fn prepare(
         .lock()
         .map_err(|_| anyhow::anyhow!("Speech recognition unavailable"))?;
     check(cancelled)?;
-    if let Some(model) = cache.as_ref() {
-        return Ok(model.clone());
+    if let Some(loaded) = cache.as_mut() {
+        loaded.dialog = dialog.into();
+        return Ok(loaded.model.clone());
     }
     report(Progress {
         stage: Stage::Preparing,
@@ -163,7 +189,10 @@ pub(super) fn prepare(
             .context("Local speech model could not load")?,
     );
     check(cancelled)?;
-    *cache = Some(model.clone());
+    *cache = Some(LoadedModel {
+        model: model.clone(),
+        dialog: dialog.into(),
+    });
     Ok(model)
 }
 
@@ -171,6 +200,16 @@ pub(super) fn decode(
     model: &WhisperContext,
     samples: &[f32],
     cancelled: Arc<AtomicBool>,
+    report: &mut impl FnMut(Progress),
+) -> Result<String> {
+    decode_with_vocabulary(model, samples, cancelled, "", report)
+}
+
+pub(super) fn decode_with_vocabulary(
+    model: &WhisperContext,
+    samples: &[f32],
+    cancelled: Arc<AtomicBool>,
+    vocabulary: &str,
     report: &mut impl FnMut(Progress),
 ) -> Result<String> {
     check(&cancelled)?;
@@ -193,6 +232,9 @@ pub(super) fn decode(
     );
     parameters.set_language(Some("en"));
     parameters.set_no_context(true);
+    if !vocabulary.is_empty() {
+        parameters.set_initial_prompt(vocabulary);
+    }
     parameters.set_print_special(false);
     parameters.set_print_progress(false);
     parameters.set_print_realtime(false);
@@ -271,12 +313,22 @@ mod tests {
 
     #[test]
     #[ignore = "Loads the cached local model; no microphone"]
-    fn startup_warmup_and_voice_requests_share_one_model() {
+    fn model_is_reused_in_a_dialog_then_released_by_its_owner() {
         let cancelled = AtomicBool::new(false);
-        super::super::voice::warm_up(&cancelled).unwrap();
-        let first = prepare(&cancelled, &mut |_| {}).unwrap();
-        let second = prepare(&cancelled, &mut |_| {}).unwrap();
+        release("");
+        let load_started = std::time::Instant::now();
+        let first = prepare_for_dialog(&cancelled, "current", &mut |_| {}).unwrap();
+        eprintln!("Model load: {} ms", load_started.elapsed().as_millis());
+        let second = prepare_for_dialog(&cancelled, "current", &mut |_| {}).unwrap();
         assert!(Arc::ptr_eq(&first, &second));
+        release("old-dialog");
+        assert!(MODEL.get().unwrap().lock().unwrap().is_some());
+        let weak = Arc::downgrade(&first);
+        release("current");
+        assert!(MODEL.get().unwrap().lock().unwrap().is_none());
+        drop(first);
+        drop(second);
+        assert!(weak.upgrade().is_none());
     }
 
     #[test]

@@ -111,6 +111,8 @@ import {
 import { FontSettings, fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
+/** Lyrics use Inter unless the user picks a lyrics font. */
+const DEFAULT_LYRIC_FONT = '"Inter Variable", "Segoe UI", sans-serif';
 /** Inputs that take no typing, so Space still toggles playback. */
 const NON_TEXT_INPUTS = new Set([
   "range",
@@ -920,8 +922,7 @@ function App() {
         {
           fontFamily: fontFamily(state.settings.ui_font),
           "--lyric-font":
-            fontFamily(state.settings.lyric_font || state.settings.ui_font) ||
-            "inherit",
+            fontFamily(state.settings.lyric_font) || DEFAULT_LYRIC_FONT,
         } as CSSProperties
       }
       onDragOver={(event) => event.preventDefault()}

@@ -20,6 +20,7 @@ import {
   ArrowUpRight,
   CirclePlus,
   CircleCheck,
+  X,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
 import type {
@@ -1344,6 +1345,72 @@ export function NowPlaying({
             <p>Pick a song to make yourself at home.</p>
           </div>
         )}
+      </div>
+    </aside>
+  );
+}
+
+/** The play queue, shown in the right panel in place of Now playing. */
+export function QueuePanel({
+  state,
+  onPlayer,
+  onClose,
+}: {
+  state: AppState;
+  onPlayer: (request: PlayerRequest) => void;
+  onClose: () => void;
+}) {
+  const track = state.playback.item,
+    queue = state.details.queue;
+  const row = (item: Track, current = false) => (
+    <button
+      className={`next-track queue-row ${current ? "current" : ""}`}
+      onClick={
+        current
+          ? undefined
+          : () => onPlayer({ command: "play", uri: item.uri, track: item })
+      }
+      disabled={current}
+    >
+      <Cover images={item.album.images} />
+      <div>
+        <Marquee text={item.name} reduceMotion={state.settings.reduce_motion}>
+          {item.name}
+        </Marquee>
+        <span>{artistNames(item)}</span>
+      </div>
+    </button>
+  );
+  return (
+    <aside className="now-playing queue-panel">
+      <Ambience
+        track={track}
+        reduceMotion={state.settings.reduce_motion}
+        animate={state.playback.is_playing}
+      />
+      <div className="now-playing-scroll">
+        <div className="section-heading">
+          <h2>Queue</h2>
+          <button className="icon-button" onClick={onClose} title="Close queue">
+            <X size={18} />
+          </button>
+        </div>
+        {track && !state.narrating && (
+          <section className="queue-section">
+            <h3>Now playing</h3>
+            {row(track, true)}
+          </section>
+        )}
+        <section className="queue-section">
+          <h3>Next up</h3>
+          {queue.length ? (
+            queue.map((item, index) => (
+              <Fragment key={`${item.uri}-${index}`}>{row(item)}</Fragment>
+            ))
+          ) : (
+            <p className="queue-empty">Nothing is queued yet.</p>
+          )}
+        </section>
       </div>
     </aside>
   );

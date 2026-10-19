@@ -82,6 +82,7 @@ import {
   LyricsPage,
   Marquee,
   NowPlaying,
+  QueuePanel,
   DJPresentation,
   DJArtwork,
   TrackTitle,
@@ -145,6 +146,15 @@ function App() {
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
   const [sidebar, setSidebar] = useState(true);
+  // The right panel shows Now playing or the queue.
+  const [panel, setPanel] = useState<"now" | "queue">("now");
+  const toggleQueue = () => {
+    if (sidebar && panel === "queue") setPanel("now");
+    else {
+      setPanel("queue");
+      setSidebar(true);
+    }
+  };
   const [rightWidth, setRightWidth] = useState(360);
   const [target, setTarget] = useState("native");
   const [deviceMenu, setDeviceMenu] = useState(false);
@@ -2012,17 +2022,25 @@ function App() {
         {sidebar && (
           <>
             <div className="panel-resizer" onPointerDown={resizeRight} />
-            <NowPlaying
-              state={state}
-              onPlayer={play}
-              onAlbum={openAlbum}
-              onArtist={openArtist}
-              onLyrics={() => setCenter("lyrics")}
-              onQueue={() => navigate("queue")}
-              onFollow={follow}
-              onSave={save}
-              showLyricsPreview={center !== "lyrics"}
-            />
+            {panel === "queue" ? (
+              <QueuePanel
+                state={state}
+                onPlayer={play}
+                onClose={() => setPanel("now")}
+              />
+            ) : (
+              <NowPlaying
+                state={state}
+                onPlayer={play}
+                onAlbum={openAlbum}
+                onArtist={openArtist}
+                onLyrics={() => setCenter("lyrics")}
+                onQueue={() => setPanel("queue")}
+                onFollow={follow}
+                onSave={save}
+                showLyricsPreview={center !== "lyrics"}
+              />
+            )}
           </>
         )}
       </div>
@@ -2045,15 +2063,22 @@ function App() {
         onArtist={openArtist}
         onSave={save}
         onLyrics={() => setCenter(center === "lyrics" ? "browse" : "lyrics")}
-        onQueue={() => navigate("queue")}
+        onQueue={toggleQueue}
         onDevices={() => {
           setDeviceMenu(!deviceMenu);
           void call("refresh");
         }}
-        onSidebar={() => setSidebar(!sidebar)}
+        onSidebar={() => {
+          if (sidebar && panel === "queue") setPanel("now");
+          else {
+            setSidebar(!sidebar);
+            setPanel("now");
+          }
+        }}
         onFullscreen={() => void fullscreen()}
         lyricsActive={center === "lyrics"}
-        sidebarActive={sidebar}
+        queueActive={sidebar && panel === "queue"}
+        sidebarActive={sidebar && panel === "now"}
       />
       {deviceMenu && (
         <div className="device-menu popover">
@@ -2471,6 +2496,7 @@ function PlayerBar({
   onFullscreen,
   lyricsActive,
   sidebarActive,
+  queueActive,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
@@ -2486,6 +2512,7 @@ function PlayerBar({
   onFullscreen: () => void;
   lyricsActive: boolean;
   sidebarActive: boolean;
+  queueActive: boolean;
 }) {
   const current = usePosition(state),
     track = state.playback.item;
@@ -2674,7 +2701,11 @@ function PlayerBar({
         >
           <Mic2 size={19} />
         </button>
-        <button className="icon-button" title="Queue" onClick={onQueue}>
+        <button
+          className={`icon-button ${queueActive ? "active" : ""}`}
+          title="Queue"
+          onClick={onQueue}
+        >
           <ListMusic size={20} />
         </button>
         <button className="icon-button" title="Devices" onClick={onDevices}>

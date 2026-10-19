@@ -2341,3 +2341,50 @@ test("home quick tiles keep small square covers with a centred heart", async ({
   expect(layout.dj).toEqual([56, 56]);
   for (const offset of layout.offset) expect(Math.abs(offset)).toBeLessThan(1);
 });
+
+test("the queue opens in the right panel in place of Now playing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate((track) => {
+    (window as any).__clientTest.emit({
+      type: "playing_details",
+      uri: track.uri,
+      details: {
+        artists: track.artists,
+        queue: [
+          { ...track, uri: "spotify:track:upnext", name: "Up next song" },
+        ],
+      },
+    });
+  }, track);
+  const rows = await page.locator(".track-row").count();
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const panel = page.locator(".queue-panel");
+  await expect(panel).toBeVisible();
+  await expect(page.locator(".now-playing:not(.queue-panel)")).toHaveCount(0);
+  await expect(panel).toContainText("Up next song");
+  await expect(panel).toContainText("Timing test");
+  // The main area keeps its page.
+  await expect(page.locator(".track-row")).toHaveCount(rows);
+  await panel.getByText("Up next song").click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((call: any) => call.command === "player")
+            .at(-1)?.args.request.uri,
+      ),
+    )
+    .toBe("spotify:track:upnext");
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator(".now-playing")).toBeVisible();
+});

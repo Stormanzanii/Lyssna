@@ -1535,6 +1535,42 @@ small {
   white-space: nowrap;
   margin-top: 5px;
 }
+/* Queue panel: rows share the Now playing card's next-track layout. */
+.queue-section {
+  margin-bottom: 18px;
+}
+.queue-section > h3 {
+  margin: 0 10px 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.queue-row {
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.queue-row:not(:disabled):hover {
+  background: #ffffff14;
+}
+.queue-row:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.queue-row > .cover {
+  width: 44px;
+  height: 44px;
+}
+.queue-row .marquee {
+  font-size: 15px;
+}
+.queue-row.current .marquee {
+  font-weight: 700;
+}
+.queue-empty {
+  color: #e1e1e1b0;
+  font-size: 13px;
+  margin: 4px 10px;
+}
 .playing-on {
   display: flex;
   gap: 10px;

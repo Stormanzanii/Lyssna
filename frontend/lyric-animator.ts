@@ -19,16 +19,10 @@ interface Syllable extends Piece {
   end: number;
   letters: Piece[];
 }
-const STYLES = [
-  "scale",
-  "translate",
-  "--gradient-position",
-  "--glow-blur",
-  "--glow-opacity",
-];
-const piece = (element: HTMLElement, letter: boolean): Piece => ({
+const STYLES = ["scale", "translate", "--gradient-position", "--glow"];
+const piece = (element: HTMLElement): Piece => ({
   element,
-  springs: new SyllableSprings(letter),
+  springs: new SyllableSprings(),
   written: new Map(),
 });
 function write(target: Piece, property: string, value: string) {
@@ -89,13 +83,13 @@ export class LyricAnimator {
     return Array.from(nodes, (node, part) => {
       const emphasis = node.classList.contains("emphasis");
       return {
-        ...piece(node, false),
+        ...piece(node),
         start: words[part].start_ms,
         end: words[part].end_ms - (emphasis ? MOTION.emphasisTailMs : 0),
         letters: emphasis
           ? Array.from(
               node.querySelectorAll<HTMLElement>(".lyric-letter"),
-              (letter) => piece(letter, true),
+              (letter) => piece(letter),
             )
           : [],
       };
@@ -107,27 +101,25 @@ export class LyricAnimator {
     seconds: number,
     glow: [blur: number, opacity: number] | undefined,
   ) {
-    if (glow || !this.reduceMotion)
-      write(target, "--gradient-position", `${goal.gradient}%`);
+    if (glow) write(target, "--gradient-position", `${goal.gradient}%`);
     if (this.reduceMotion) return;
     const motion = target.springs.step(goal, seconds);
     write(target, "scale", motion.scale.toFixed(4));
     write(target, "translate", `0 ${motion.lift.toFixed(4)}em`);
-    if (glow) {
-      write(
-        target,
-        "--glow-blur",
-        `${(4 + glow[0] * motion.glow).toFixed(2)}px`,
-      );
-      write(
-        target,
-        "--glow-opacity",
-        `${Math.min(100, Math.max(0, motion.glow * glow[1])).toFixed(1)}%`,
-      );
-    }
+    if (!glow) return;
+    const radius = 4 + glow[0] * motion.glow,
+      opacity = Math.min(100, Math.max(0, motion.glow * glow[1]));
+    write(
+      target,
+      "--glow",
+      `0 0 ${radius.toFixed(2)}px rgb(255 255 255 / ${opacity.toFixed(1)}%)`,
+    );
   }
   private step(seconds: number): boolean {
-    const time = this.time;
+    const time = this.time,
+      // Springs trail their goals, so syllables aim slightly ahead of the
+      // voice; line timing itself stays exact.
+      ahead = time + MOTION.leadMs;
     let moving = false;
     this.lyrics.lines.forEach((line, index) => {
       if (!line.words.length) return;
@@ -145,7 +137,7 @@ export class LyricAnimator {
       this.live.set(index, syllables);
       let awake = false;
       for (const syllable of syllables) {
-        const goal = wordGoal(syllable.start, syllable.end, time);
+        const goal = wordGoal(syllable.start, syllable.end, ahead);
         // Held words move as a block while their letters carry the fill and
         // glow.
         this.apply(
@@ -157,7 +149,7 @@ export class LyricAnimator {
         letterGoals(
           syllable.start,
           syllable.end,
-          time,
+          ahead,
           syllable.letters.length,
         ).forEach((goal, letter) =>
           this.apply(syllable.letters[letter], goal, seconds, [12, 185]),

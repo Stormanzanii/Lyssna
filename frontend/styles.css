@@ -1800,9 +1800,9 @@ small {
 .lyric-spacer {
   height: var(--lead-top, 40px);
 }
-/* Text outside the active line has a transparent fill
-   and shows only its white text-shadow, so a shadow blur blurs the glyphs
-   without a filter. Unsung text is fainter than sung text. */
+/* Every line paints its text with the same gradient fill, so a line ending
+   or starting only fades opacity and blur; nothing swaps paint modes. Unsung
+   text is fainter than sung text. */
 .lyric-line {
   --sung-alpha: 0.85;
   --unsung-alpha: 0.5;
@@ -1819,11 +1819,14 @@ small {
   margin: 0;
   transform: none;
   transform-origin: left center;
+  --line-fill: -20%;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 var(--blur) rgb(255 255 255 / var(--unsung-alpha));
   opacity: 0.51;
-  transition: opacity 0.2s cubic-bezier(0.61, 1, 0.88, 1);
+  filter: blur(calc(var(--blur) / 2));
+  transition:
+    opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1),
+    filter 0.5s cubic-bezier(0.61, 1, 0.88, 1);
 }
 .lyrics-page .lyric-line {
   font-size: clamp(23px, 3.6cqw, var(--lyric-size));
@@ -1844,14 +1847,16 @@ small {
   --blur: 0px !important;
 }
 .lyric-line.past {
+  --line-fill: 100%;
   opacity: 0.497;
-  text-shadow: 0 0 var(--blur) rgb(255 255 255 / var(--sung-alpha));
 }
 .lyric-line.active {
   opacity: 1;
-  text-shadow: none;
 }
-.lyric-line.active .lyric-plain {
+.lyric-plain {
+  -webkit-text-fill-color: rgb(255 255 255 / var(--unsung-alpha));
+}
+.lyric-line:is(.active, .past) .lyric-plain {
   -webkit-text-fill-color: rgb(255 255 255 / var(--sung-alpha));
 }
 .lyric-main {
@@ -1884,15 +1889,11 @@ small {
 .lyric-word-group {
   white-space: normal;
 }
-/* Unsung text rests at 95% and slightly low; sung text sits at full size.
-   Lines not yet reached shrink whole words, so split words keep no gaps. On
-   the active line each syllable and held letter rests on its own, and
-   LyricAnimator overrides scale and translate while a line is sung or
-   settling. Pieces of one word scale away from each other. */
-.lyric-line:not(.active, .past) .lyric-word {
-  scale: 0.95;
-  translate: 0 0.01em;
-}
+/* Text outside the active line sits at full size so lines stay aligned. On
+   the active line unsung syllables and held letters rest at 95% and slightly
+   low; LyricAnimator eases them there and overrides scale and translate
+   while a line is sung or settling. Pieces of one word scale away from each
+   other, and a line's first syllable keeps its left edge on the margin. */
 .lyric-syllable {
   display: inline-block;
   max-width: 100%;
@@ -1912,6 +1913,26 @@ small {
 }
 .lyric-syllable.joined-end {
   transform-origin: left center;
+}
+.lyric-line:not(.opposite)
+  .lyric-main
+  > .lyric-word-group:first-child
+  .lyric-syllable:first-child,
+.lyric-line:not(.opposite)
+  .lyric-main
+  > .lyric-word-group:first-child
+  .lyric-letter:first-child {
+  transform-origin: left center;
+}
+.lyric-line.opposite
+  .lyric-main
+  > .lyric-word-group:last-child
+  .lyric-syllable:last-child,
+.lyric-line.opposite
+  .lyric-main
+  > .lyric-word-group:last-child
+  .lyric-letter:last-child {
+  transform-origin: right center;
 }
 .lyric-line.active .lyric-syllable,
 .lyric-line.active .lyric-letter {
@@ -1963,21 +1984,22 @@ small {
 .reduce-motion .lyric-wait i {
   animation: none;
 }
-/* The active line fills each syllable, or each letter of a held word, with
-   a gradient whose 20% soft edge sweeps across as it is sung. The glow is a
-   white text-shadow over the fill. */
-.lyric-line.active .lyric-syllable:not(.emphasis),
-.lyric-line.active .lyric-letter {
+/* Each syllable, or each letter of a held word, is filled with a gradient
+   whose 20% soft edge sweeps across as it is sung. LyricAnimator sets the
+   edge and a white glow while a line is sung or settling; other text rests
+   fully unsung or fully sung. */
+.lyric-syllable:not(.emphasis),
+.lyric-letter {
   background-image: linear-gradient(
     90deg,
-    rgb(255 255 255 / var(--sung-alpha)) var(--gradient-position, -20%),
+    rgb(255 255 255 / var(--sung-alpha))
+      var(--gradient-position, var(--line-fill)),
     rgb(255 255 255 / var(--unsung-alpha))
-      calc(var(--gradient-position, -20%) + 20%)
+      calc(var(--gradient-position, var(--line-fill)) + 20%)
   );
   background-clip: text;
   -webkit-background-clip: text;
-  text-shadow: 0 0 var(--glow-blur, 4px)
-    rgb(255 255 255 / var(--glow-opacity, 0%));
+  text-shadow: var(--glow, none);
 }
 .lyric-line.active:hover .lyric-syllable:not(.emphasis),
 .lyric-line.active:hover .lyric-letter {
@@ -2152,8 +2174,8 @@ small {
 }
 .static-lyrics .lyric-line {
   --blur: 0px;
+  --line-fill: 100%;
   opacity: 1;
-  text-shadow: 0 0 0 rgb(255 255 255 / var(--sung-alpha));
 }
 .reduce-motion .lyric-line {
   --blur: 0px !important;

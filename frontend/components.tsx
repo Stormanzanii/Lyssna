@@ -43,6 +43,7 @@ import {
   wordGroups,
   vocalGap,
   isEmphasis,
+  vocalEnd,
   lineBlur,
   type ScrollSpring,
 } from "./lyric-motion";
@@ -522,7 +523,7 @@ export function LyricsDisplay({
                   lines.current[index] = element;
                 }}
                 key={`${line.start_ms}-${index}`}
-                className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${index < primary ? "past" : ""}`}
+                className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${!playing && positionMs >= vocalEnd(line) ? "past" : ""}`}
                 style={
                   {
                     "--blur": `${compact || playing ? 0 : lineBlur(distance)}px`,

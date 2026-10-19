@@ -209,6 +209,10 @@ export const MOTION = {
   sungLetterGlow: 0.2,
   /** Held words finish their letters this much before the word ends. */
   emphasisTailMs: 250,
+  /** Syllable goals lead song time by this much. The scale spring takes about
+   * a quarter second to rise, and the fill shows nothing until its soft edge
+   * enters the syllable, so goals sampled on time land behind the voice. */
+  leadMs: 90,
   blurPerLine: 1.25,
   maxBlur: 1.25 * 5.465,
 } as const;
@@ -297,24 +301,18 @@ export function letterGoals(
     return goal;
   });
 }
-/** Springs for one syllable or letter, starting where unsung text rests. */
+/** Springs for one syllable or letter. They start at full size and level,
+ * where text outside the active line rests, and ease into the active line's
+ * resting shape. */
 export class SyllableSprings {
   scale: Spring;
   lift: Spring;
   glow: Spring;
-  constructor(letter = false) {
+  constructor() {
     const { scale, lift, glow } = MOTION.springs;
-    this.scale = new Spring(
-      (letter ? MOTION.letterScale : MOTION.scale)(0),
-      scale[0],
-      scale[1],
-    );
-    this.lift = new Spring(
-      letter ? MOTION.letterLift(0) * 2 : MOTION.lift(0),
-      lift[0],
-      lift[1],
-    );
-    this.glow = new Spring(MOTION.glow(0), glow[0], glow[1]);
+    this.scale = new Spring(1, scale[0], scale[1]);
+    this.lift = new Spring(0, lift[0], lift[1]);
+    this.glow = new Spring(0, glow[0], glow[1]);
   }
   step(goal: SyllableGoal, seconds: number) {
     this.scale.goal = goal.scale;

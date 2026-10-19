@@ -986,16 +986,19 @@ test("timed syllables lift independently and font choices apply separately", asy
     });
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
     letter = page.locator(".lyrics-page .lyric-letter").first();
-  // "Hel" is rising; the held "lo" moves by letter and still rests low.
+  // "Hel" is rising; the held "lo" moves by letter and eases down to rest
+  // small and low.
   await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
-  expect((await motion(letter)).lift).toBeGreaterThan(0);
-  expect((await motion(letter)).scale).toBeCloseTo(0.95);
+  await expect.poll(async () => (await motion(letter)).lift).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await motion(letter)).scale)
+    .toBeLessThan(0.96);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
         type: "native_position",
         uri,
-        position_ms: 2100,
+        position_ms: 2000,
         playing: false,
         observed_at: Date.now(),
       }),
@@ -1779,10 +1782,15 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
       0.5,
     );
-  // The whole word still rests smaller than full size.
-  expect(
-    await pieces
-      .locator(".lyric-word")
-      .evaluate((element) => parseFloat(getComputedStyle(element).scale)),
-  ).toBeLessThan(1);
+  // Lines not yet reached rest at full size, so they share the left margin.
+  const lefts = await page
+    .locator(".lyrics-page .lyric-line .lyric-main")
+    .evaluateAll((elements) =>
+      elements.map(
+        (element) =>
+          element.querySelector(".lyric-syllable")!.getBoundingClientRect()
+            .left,
+      ),
+    );
+  expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(0.5);
 });

@@ -20,89 +20,192 @@ use std::{
 const PLAYLIST: &str = "/playlist/v2/playlist/37i9dQZF1EYkqdzj48dyYq";
 const ITEMS: &str = "audio-track, audio-episode, video-episode, audiobook";
 
+#[derive(Clone, Default)]
+pub struct Requests(Arc<RequestState>);
+#[derive(Default)]
+struct RequestState {
+    client: std::sync::OnceLock<Client>,
+    ready: tokio::sync::Mutex<Option<Bootstrap>>,
+}
+struct Bootstrap {
+    current: SelectedListContent,
+    created: std::time::Instant,
+    owner: String,
+}
+impl Bootstrap {
+    fn fresh(&self, now: std::time::Instant) -> bool {
+        now.saturating_duration_since(self.created) < Duration::from_secs(45)
+    }
+}
+fn take_ready(
+    slot: &mut Option<Bootstrap>,
+    owner: &str,
+    now: std::time::Instant,
+) -> Option<SelectedListContent> {
+    slot.take()
+        .filter(|value| value.owner == owner && value.fresh(now))
+        .map(|value| value.current)
+}
+impl Requests {
+    fn client(&self) -> Result<Client> {
+        if let Some(client) = self.0.client.get() {
+            return Ok(client.clone());
+        }
+        let client = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(20))
+            .build()?;
+        let _ = self.0.client.set(client);
+        Ok(self
+            .0
+            .client
+            .get()
+            .context("DJ connection unavailable")?
+            .clone())
+    }
+    async fn bootstrap(&self, session: &Session, cancelled: &AtomicBool) -> Result<Bootstrap> {
+        let client = self.client()?;
+        let initial = request(&client, session, Method::GET, PLAYLIST, None, cancelled).await?;
+        let next = next_action(&initial).context("Spotify did not offer DJ initialization")?;
+        let current = signal(&client, session, &initial, next, cancelled).await?;
+        ensure!(
+            prompt_action(&current).is_some(),
+            "Spotify has not enabled DJ requests for this account"
+        );
+        Ok(Bootstrap {
+            current,
+            created: std::time::Instant::now(),
+            owner: session.username(),
+        })
+    }
+    pub async fn warm_up(&self, session: &Session) -> Result<()> {
+        let mut slot = self.0.ready.lock().await;
+        if slot.as_ref().is_some_and(|value| {
+            value.owner == session.username() && value.fresh(std::time::Instant::now())
+        }) {
+            return Ok(());
+        }
+        *slot = Some(self.bootstrap(session, &AtomicBool::new(false)).await?);
+        Ok(())
+    }
+    pub async fn prepare(
+        &self,
+        session: &Session,
+        prompt: Prompt,
+        cancelled: &AtomicBool,
+    ) -> Result<Prepared> {
+        tokio::select! {
+            result=self.prepare_inner(session,prompt,cancelled)=>result,
+            _=async{while !cancelled.load(Ordering::Acquire){tokio::time::sleep(Duration::from_millis(25)).await;}}=>anyhow::bail!("DJ request cancelled"),
+        }
+    }
+}
+
 pub async fn prepare(
     session: &Session,
     prompt: Prompt,
     cancelled: &AtomicBool,
 ) -> Result<Prepared> {
-    tokio::select! {
-        result=prepare_inner(session,prompt,cancelled)=>result,
-        _=async {while !cancelled.load(Ordering::Acquire){tokio::time::sleep(Duration::from_millis(25)).await;}}=>anyhow::bail!("DJ request cancelled"),
-    }
+    Requests::default()
+        .prepare(session, prompt, cancelled)
+        .await
 }
-async fn prepare_inner(
-    session: &Session,
-    prompt: Prompt,
-    cancelled: &AtomicBool,
-) -> Result<Prepared> {
-    let client = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(20))
-        .build()?;
-    check(cancelled)?;
-    let initial = request(&client, session, Method::GET, PLAYLIST, None, cancelled).await?;
-    let next = initial
-        .contents
-        .as_ref()
-        .and_then(|c| {
-            c.available_signals
-                .iter()
-                .find(|s| s.identifier == "list-next-page")
+impl Requests {
+    async fn prepare_inner(
+        &self,
+        session: &Session,
+        prompt: Prompt,
+        cancelled: &AtomicBool,
+    ) -> Result<Prepared> {
+        let client = self.client()?;
+        check(cancelled)?;
+        let mut slot = self.0.ready.lock().await;
+        let cached = take_ready(&mut slot, &session.username(), std::time::Instant::now());
+        let ready = match cached {
+            Some(value) => value,
+            None => self.bootstrap(session, cancelled).await?.current,
+        };
+        drop(slot);
+        let mut action = prompt_action(&ready)
+            .context("Spotify has not enabled DJ requests for this account")?;
+        action.client_payload = prompt.parameters()?.into_bytes();
+        let reply = signal(&client, session, &ready, action, cancelled).await?;
+        check(cancelled)?;
+        let source = Arc::new(Source {
+            session: session.clone(),
+            client: client.clone(),
+            prefix: {
+                use base64::Engine;
+                let mut bytes = [0u8; 18];
+                getrandom::fill(&mut bytes)
+                    .map_err(|_| anyhow::anyhow!("DJ session ID unavailable"))?;
+                format!(
+                    "hm://spotiflex-dj/{}/",
+                    base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(bytes)
+                )
+            },
+            state: tokio::sync::Mutex::new(Pages {
+                current: reply,
+                seen: HashSet::new(),
+                index: 0,
+                cached: None,
+                failed: false,
+            }),
+        });
+        let uri = format!("{}0", source.prefix);
+        let page = source.load(&uri).await?;
+        let text = prompt.text.clone();
+        let account = session.username();
+        let (page, start) = tokio::task::spawn_blocking(move || {
+            let mut page = page;
+            let start = super::variety::apply(&text, &account, &mut page.tracks);
+            (page, start)
         })
-        .context("Spotify did not offer DJ initialization")?
-        .clone();
-    let ready = signal(&client, session, &initial, next, cancelled).await?;
-    let mut action =
-        prompt_action(&ready).context("Spotify has not enabled DJ requests for this account")?;
-    action.client_payload = prompt.parameters()?.into_bytes();
-    let reply = signal(&client, session, &ready, action, cancelled).await?;
-    check(cancelled)?;
-    let source = Arc::new(Source {
-        session: session.clone(),
-        prefix: {
-            use base64::Engine;
-            let mut bytes = [0u8; 18];
-            getrandom::fill(&mut bytes)
-                .map_err(|_| anyhow::anyhow!("DJ session ID unavailable"))?;
-            format!(
-                "hm://spotiflex-dj/{}/",
-                base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(bytes)
-            )
-        },
-        state: tokio::sync::Mutex::new(Pages {
-            current: reply,
-            seen: HashSet::new(),
-            index: 0,
-            cached: None,
-            failed: false,
-        }),
-    });
-    let uri = format!("{}0", source.prefix);
-    let page = source.load(&uri).await?;
-    check(cancelled)?;
-    ensure!(
-        !page.tracks.is_empty(),
-        "Spotify has not prepared tracks for this request yet"
-    );
-    let context = PlayContext {
-        uri: Some(crate::home::DJ_URI.into()),
-        pages: vec![page],
-        metadata: [("spotiflex.dj_request".into(), "true".into())].into(),
-        ..Default::default()
-    };
-    Ok(Prepared {
-        context,
-        provider: source,
-    })
+        .await
+        .context("DJ song selection unavailable")?;
+        if let Some((_, cached)) = &mut source.state.lock().await.cached {
+            *cached = page.clone();
+        }
+        check(cancelled)?;
+        ensure!(
+            !page.tracks.is_empty(),
+            "Spotify has not prepared tracks for this request yet"
+        );
+        if let Some(track) = page.tracks.first() {
+            let narration = track
+                .metadata
+                .iter()
+                .filter(|(key, _)| key.starts_with("narration."))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            let speech_session = session.clone();
+            session.spawn(async move {
+                librespot_playback::narration::prefetch(&speech_session, &narration, 0).await;
+            });
+        }
+        let context = PlayContext {
+            uri: Some(crate::home::DJ_URI.into()),
+            pages: vec![page],
+            metadata: [("spotiflex.dj_request".into(), "true".into())].into(),
+            ..Default::default()
+        };
+        Ok(Prepared {
+            context,
+            provider: source,
+            start,
+        })
+    }
 }
 
 #[derive(Clone)]
 pub struct Prepared {
     pub context: PlayContext,
     pub provider: Arc<dyn ContextPageProvider>,
+    pub(crate) start: Option<super::variety::Selection>,
 }
 struct Source {
     session: Session,
+    client: Client,
     prefix: String,
     state: tokio::sync::Mutex<Pages>,
 }
@@ -133,13 +236,9 @@ impl Source {
         );
         // A failed mutation has an unknown outcome. Never retry its signal automatically.
         state.failed = true;
-        let client = Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(20))
-            .build()?;
         let action = next_action(&state.current).context("DJ session has ended")?;
         let reply = signal(
-            &client,
+            &self.client,
             &self.session,
             &state.current,
             action,
@@ -304,6 +403,40 @@ async fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn warmed_setup_is_single_use_account_scoped_and_expires() {
+        let now = std::time::Instant::now();
+        let make = || {
+            Some(Bootstrap {
+                current: Default::default(),
+                created: now,
+                owner: "alice".into(),
+            })
+        };
+        let mut slot = make();
+        assert!(take_ready(&mut slot, "alice", now + Duration::from_secs(44)).is_some());
+        assert!(take_ready(&mut slot, "alice", now).is_none());
+        assert!(take_ready(&mut make(), "bob", now).is_none());
+        assert!(take_ready(&mut make(), "alice", now + Duration::from_secs(45)).is_none());
+    }
+    #[tokio::test]
+    async fn cancelling_before_submission_preserves_unconsumed_setup() {
+        let session = Session::new(Default::default(), None);
+        let requests = Requests::default();
+        *requests.0.ready.lock().await = Some(Bootstrap {
+            current: Default::default(),
+            created: std::time::Instant::now(),
+            owner: String::new(),
+        });
+        let prompt = super::super::Prompt::new("jazz", super::super::PromptInput::Text).unwrap();
+        assert!(
+            requests
+                .prepare(&session, prompt, &AtomicBool::new(true))
+                .await
+                .is_err()
+        );
+        assert!(requests.0.ready.lock().await.is_some());
+    }
     #[test]
     fn prompt_uses_advertised_item_data_and_preserves_server_bytes() {
         use librespot_protocol::playlist4_external::{Item, ItemAttributes, ListItems};

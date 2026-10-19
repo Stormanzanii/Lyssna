@@ -52,6 +52,7 @@ struct ControlConnection {
     account: String,
     status: Arc<Mutex<Option<NativeEvent>>>,
     session: Arc<Mutex<Option<Session>>>,
+    dj_requests: crate::dj::transport::Requests,
     volume: Arc<AtomicU32>,
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
@@ -84,13 +85,8 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
-    pub fn request_dj(
-        &self,
-        account: &str,
-        prompt: crate::dj::Prompt,
-        cancelled: Arc<AtomicBool>,
-    ) -> Result<()> {
-        let session = {
+    pub fn prewarm_dj_request(&self, account: &str) -> Result<()> {
+        let (session, requests) = {
             let connection = self
                 .0
                 .lock()
@@ -99,24 +95,61 @@ impl NativeControls {
                 .as_ref()
                 .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
                 .context("Connect native audio before asking DJ")?;
-            connection
+            let session = connection
                 .session
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
                 .clone()
-                .context("Native session unavailable")?
+                .context("Native session unavailable")?;
+            (session, connection.dj_requests.clone())
         };
-        let context = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?
-            .block_on(async {
-                tokio::time::timeout(
-                    Duration::from_secs(65),
-                    crate::dj::transport::prepare(&session, prompt, &cancelled),
-                )
-                .await
-                .context("DJ request timed out")?
-            })?;
+        session.spawn({
+            let session = session.clone();
+            async move {
+                let _ = requests.warm_up(&session).await;
+            }
+        });
+        Ok(())
+    }
+    pub fn request_dj(
+        &self,
+        account: &str,
+        prompt: crate::dj::Prompt,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<()> {
+        let (session, requests) = {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native audio unavailable"))?;
+            let connection = connection
+                .as_ref()
+                .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
+                .context("Connect native audio before asking DJ")?;
+            let session = connection
+                .session
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
+                .clone()
+                .context("Native session unavailable")?;
+            (session, connection.dj_requests.clone())
+        };
+        let (ready, result) = mpsc::sync_channel(1);
+        let prepare_session = session.clone();
+        let prepare_cancelled = cancelled.clone();
+        session.spawn(async move {
+            let prepared = tokio::time::timeout(
+                Duration::from_secs(65),
+                requests.prepare(&prepare_session, prompt, &prepare_cancelled),
+            )
+            .await
+            .context("DJ request timed out")
+            .and_then(|result| result);
+            let _ = ready.send(prepared);
+        });
+        let context = result
+            .recv_timeout(Duration::from_secs(66))
+            .context("DJ request worker unavailable")??;
         let connection = self
             .0
             .lock()
@@ -126,6 +159,7 @@ impl NativeControls {
             .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
             .context("Spotify account changed during DJ request")?;
         anyhow::ensure!(!cancelled.load(Ordering::Acquire), "DJ request cancelled");
+        let start = context.start;
         connection
             .sender
             .send(PlayerAction::PreparedDJ {
@@ -135,6 +169,9 @@ impl NativeControls {
             })
             .map_err(|_| anyhow::anyhow!("Native audio disconnected"))?;
         connection.loaded.store(true, Ordering::Release);
+        if let Some(start) = start {
+            start.remember();
+        }
         Ok(())
     }
     pub fn connection_event(&self, account: Option<&str>) -> Option<NativeEvent> {
@@ -874,6 +911,7 @@ impl NativePlayer {
                 account: account.clone(),
                 status: connection_status.clone(),
                 session: shared_session.clone(),
+                dj_requests: Default::default(),
                 volume: latest_volume.clone(),
                 sender,
                 ready: ready.clone(),
@@ -1403,6 +1441,7 @@ mod tests {
         let (sender, _commands) = async_channel::unbounded_channel();
         let (metadata, mut requests) = async_channel::unbounded_channel::<MetadataRead>();
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            dj_requests: Default::default(),
             account: "listener".into(),
             status: Arc::default(),
             session: Arc::default(),
@@ -1463,6 +1502,7 @@ mod tests {
         let loaded = Arc::new(AtomicBool::new(false));
         let status = Arc::new(Mutex::new(Some(NativeEvent::Ready("device".into()))));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            dj_requests: Default::default(),
             account: "listener".into(),
             status: status.clone(),
             session: Arc::default(),

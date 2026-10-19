@@ -6,6 +6,7 @@ mod local_speech;
 mod microphone;
 pub mod requests;
 pub mod transport;
+pub(crate) mod variety;
 pub mod voice;
 
 use anyhow::{Result, ensure};

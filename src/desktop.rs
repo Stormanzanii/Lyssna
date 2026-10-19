@@ -60,6 +60,8 @@ pub struct Snapshot {
     observed_at: u64,
 }
 struct Inner {
+    dj_requests: crate::dj::requests::Requests,
+    dj_voice: crate::dj::voice::VoiceCapture,
     home_generation: std::sync::atomic::AtomicU64,
     snapshot: Mutex<Snapshot>,
     commands: mpsc::Sender<Command>,
@@ -247,6 +249,8 @@ impl Desktop {
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
             home_generation: std::sync::atomic::AtomicU64::new(0),
+            dj_requests: crate::dj::requests::Requests::default(),
+            dj_voice: crate::dj::voice::VoiceCapture::default(),
             snapshot: Mutex::new(Snapshot {
                 narrating: false,
                 canvas_url: None,
@@ -482,6 +486,8 @@ impl Desktop {
                             }
                         }
                         Event::SignedOut => {
+                            pump.dj_requests.cancel_all();
+                            pump.dj_voice.cancel_all();
                             if let Ok(mut queued) = pump.queued_native.lock() {
                                 *queued = None;
                             }
@@ -505,6 +511,8 @@ impl Desktop {
                             emit(json!({"type":"login_finished"}));
                         }
                         Event::NativeStarting(generation) => {
+                            pump.dj_requests.cancel_all();
+                            pump.dj_voice.cancel_all();
                             if let Ok(mut current) = pump.generation.lock() {
                                 *current = generation;
                             }
@@ -967,6 +975,8 @@ impl Desktop {
         Ok(Self(inner))
     }
     fn stop(&self) {
+        self.0.dj_requests.cancel_all();
+        self.0.dj_voice.cancel_all();
         if let Ok(mut snapshot) = self.0.snapshot.lock() {
             snapshot.settings.volume_percent = snapshot
                 .playback
@@ -1002,6 +1012,61 @@ fn bootstrap(state: State<'_, Desktop>) -> std::result::Result<Snapshot, String>
     lock(&state.0.snapshot)
         .map(|snapshot| snapshot.clone())
         .map_err(error)
+}
+#[tauri::command]
+async fn dj_request(
+    account: String,
+    id: String,
+    text: String,
+    input: crate::dj::PromptInput,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    let inner = state.0.clone();
+    let ticket = {
+        let snapshot = lock(&inner.snapshot).map_err(error)?;
+        crate::dj::requests::authorize(
+            snapshot.profile.as_ref().map(|p| p.id.as_str()),
+            snapshot.native_ready,
+            &account,
+        )
+        .map_err(error)?;
+        inner.dj_requests.reserve(&id).map_err(error)?
+    };
+    let prompt = crate::dj::Prompt::new(&text, input).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        inner
+            .controls
+            .request_dj(&account, prompt, ticket.cancelled.clone())
+    })
+    .await
+    .map_err(|_| "DJ worker unavailable".to_owned())?
+    .map_err(error)
+}
+#[tauri::command]
+async fn dj_voice(
+    account: String,
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<String, String> {
+    let capture = {
+        let snapshot = lock(&state.0.snapshot).map_err(error)?;
+        crate::dj::requests::authorize(
+            snapshot.profile.as_ref().map(|p| p.id.as_str()),
+            snapshot.native_ready,
+            &account,
+        )
+        .map_err(error)?;
+        state.0.dj_voice.reserve(id).map_err(error)?
+    };
+    tauri::async_runtime::spawn_blocking(move || capture.transcribe())
+        .await
+        .map_err(|_| "Voice worker unavailable".to_owned())?
+        .map_err(error)
+}
+#[tauri::command]
+fn dj_cancel(id: String, state: State<'_, Desktop>) {
+    state.0.dj_requests.cancel(&id);
+    state.0.dj_voice.cancel(&id);
 }
 #[tauri::command]
 fn prefetch_metadata(
@@ -1085,6 +1150,8 @@ fn cancel_sign_in(state: State<'_, Desktop>) {
 }
 #[tauri::command]
 fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    state.0.dj_requests.cancel_all();
+    state.0.dj_voice.cancel_all();
     if let Ok(cancelled) = state.0.login_cancelled.lock() {
         cancelled.store(true, Ordering::Relaxed);
     }
@@ -1366,6 +1433,9 @@ fn player(
     target: Option<String>,
     state: State<'_, Desktop>,
 ) -> std::result::Result<(), String> {
+    if !matches!(request.command.as_str(), "volume" | "shuffle" | "repeat") {
+        state.0.dj_requests.cancel_all();
+    }
     let result = || -> Result<()> {
         let mut snapshot = lock(&state.0.snapshot)?;
         ensure!(snapshot.profile.is_some(), "Sign in first");
@@ -1796,6 +1866,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            dj_request,
+            dj_voice,
+            dj_cancel,
             home,
             bootstrap,
             sign_in,

@@ -8,6 +8,7 @@ import {
   type CSSProperties,
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { DJRequest } from "./DJRequest";
 import {
   ArrowLeft,
   ArrowRight,
@@ -132,8 +133,10 @@ type EntityMenu = {
 const windowHandle = () => getCurrentWindow();
 
 function App() {
+  const [djRequest, setDJRequest] = useState(false);
   const [entityMenu, setEntityMenu] = useState<EntityMenu | null>(null);
   const [state, dispatch] = useReducer(reducer, emptyState);
+  useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
   const [query, setQuery] = useState("");
   const [libraryQuery, setLibraryQuery] = useState("");
@@ -2000,14 +2003,18 @@ function App() {
           </>
         )}
       </div>
+      {djRequest && state.profile && state.native_ready && (
+        <DJRequest
+          key={state.profile.id}
+          account={state.profile.id}
+          onClose={() => setDJRequest(false)}
+          onSuccess={() => notify("DJ request sent")}
+        />
+      )}
       <PlayerBar
         state={state}
         onPlayer={play}
-        onDJRequest={() =>
-          notify(
-            "DJ text and voice requests aren't available yet. Click DJ for a new selection.",
-          )
-        }
+        onDJRequest={() => setDJRequest(true)}
         onToggle={toggle}
         onAlbum={openAlbum}
         onArtist={openArtist}

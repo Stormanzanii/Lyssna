@@ -111,7 +111,12 @@ async function startClient(page: Page, initialRoute = "liked") {
         handlers.forEach((handler) =>
           callbacks.get(handler)?.({ event: "spotiflex", payload }),
         );
-      host.__clientTest = { commands, emit };
+      host.__clientTest = {
+        commands,
+        emit,
+        pendingVoice: null,
+        resolveVoice: null,
+      };
       host.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
         unregisterListener: (_: string, id: number) => handlers.delete(id),
       };
@@ -127,6 +132,10 @@ async function startClient(page: Page, initialRoute = "liked") {
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          if (command === "dj_voice")
+            return new Promise<string>((resolve) => {
+              host.__clientTest.resolveVoice = resolve;
+            });
           if (command === "resolve_album")
             return {
               ...track.album,
@@ -294,6 +303,105 @@ async function startClient(page: Page, initialRoute = "liked") {
   else await expect(page.locator(".track-row")).toHaveCount(50);
 }
 
+async function askDJ(page: Page) {
+  await page.getByRole("button", { name: "Refresh DJ", exact: true }).focus();
+  await page.keyboard.press("Shift+Enter");
+  await expect(page.getByRole("dialog", { name: "Ask DJ" })).toBeVisible();
+}
+
+test("DJ sends arbitrary typed requests without opening the microphone", async ({
+  page,
+}) => {
+  await startClient(page);
+  await askDJ(page);
+  await page
+    .getByRole("textbox", { name: "DJ request", exact: true })
+    .fill("Energetic 2000s rock, then calm ambient music");
+  await page.getByRole("button", { name: "Send to DJ", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Ask DJ" })).toHaveCount(0);
+  const commands = await page.evaluate(
+    () => (window as any).__clientTest.commands,
+  );
+  expect(commands.filter((c: any) => c.command === "dj_voice")).toHaveLength(0);
+  expect(
+    commands.find((c: any) => c.command === "dj_request").args,
+  ).toMatchObject({
+    account: "test-user",
+    input: "text",
+    text: "Energetic 2000s rock, then calm ambient music",
+  });
+  expect(commands.filter((c: any) => c.command === "dj_cancel")).toHaveLength(
+    0,
+  );
+});
+
+test("DJ voice requires review and discards late transcripts after cancellation", async ({
+  page,
+}) => {
+  await startClient(page);
+  await askDJ(page);
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.evaluate(() =>
+    (window as any).__clientTest.resolveVoice("Do not apply this old result"),
+  );
+  await expect(
+    page.getByRole("textbox", { name: "DJ request", exact: true }),
+  ).toHaveValue("");
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  await page.evaluate(() =>
+    (window as any).__clientTest.resolveVoice("Play acoustic folk"),
+  );
+  await expect(
+    page.getByRole("textbox", { name: "DJ request", exact: true }),
+  ).toHaveValue("Play acoustic folk");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (c: any) => c.command === "dj_request",
+        ).length,
+    ),
+  ).toBe(0);
+  await page.getByRole("button", { name: "Send to DJ", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.find(
+            (c: any) => c.command === "dj_request",
+          )?.args,
+      ),
+    )
+    .toMatchObject({ text: "Play acoustic folk", input: "voice" });
+});
+
+test("DJ dialog traps focus and closes on sign-out", async ({ page }) => {
+  await startClient(page);
+  await askDJ(page);
+  await page.getByRole("button", { name: "Close DJ request" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "Use microphone" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Close DJ request" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  await expect(page.getByRole("dialog", { name: "Ask DJ" })).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) => c.command === "dj_cancel",
+      ),
+    ),
+  ).toBe(true);
+});
+
 // Plays a short recorded purple video as the current track's Canvas.
 async function emitCanvas(page: Page) {
   await page.evaluate(async (uri) => {
@@ -453,21 +561,16 @@ test("player DJ button requests a fresh DJ selection on every click", async ({
     .toBe(2);
 });
 
-test("holding DJ explains request availability without refreshing", async ({
-  page,
-}) => {
+test("holding DJ opens requests without refreshing", async ({ page }) => {
   await startClient(page);
   await page.clock.install();
   const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
   await button.hover();
   await page.mouse.down();
   await page.clock.runFor(600);
-  await expect(
-    page.getByText(
-      "DJ text and voice requests aren't available yet. Click DJ for a new selection.",
-      { exact: true },
-    ),
-  ).toBeVisible({ timeout: 1000 });
+  await expect(page.getByRole("dialog", { name: "Ask DJ" })).toBeVisible({
+    timeout: 1000,
+  });
   await page.mouse.up();
   expect(
     await page.evaluate(
@@ -478,6 +581,7 @@ test("holding DJ explains request availability without refreshing", async ({
         ).length,
     ),
   ).toBe(0);
+  await page.getByRole("button", { name: "Close DJ request" }).click();
   await button.click();
   await expect
     .poll(() =>

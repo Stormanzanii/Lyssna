@@ -84,6 +84,59 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn request_dj(
+        &self,
+        account: &str,
+        prompt: crate::dj::Prompt,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<()> {
+        let session = {
+            let connection = self
+                .0
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native audio unavailable"))?;
+            let connection = connection
+                .as_ref()
+                .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
+                .context("Connect native audio before asking DJ")?;
+            connection
+                .session
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
+                .clone()
+                .context("Native session unavailable")?
+        };
+        let context = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                tokio::time::timeout(
+                    Duration::from_secs(65),
+                    crate::dj::transport::prepare(&session, prompt, &cancelled),
+                )
+                .await
+                .context("DJ request timed out")?
+            })?;
+        let connection = self
+            .0
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native audio unavailable"))?;
+        let connection = connection
+            .as_ref()
+            .filter(|c| c.account == account && c.ready.load(Ordering::Acquire))
+            .context("Spotify account changed during DJ request")?;
+        anyhow::ensure!(!cancelled.load(Ordering::Acquire), "DJ request cancelled");
+        connection
+            .sender
+            .send(PlayerAction::PreparedDJ {
+                context: Box::new(context.context),
+                provider: context.provider,
+                cancelled,
+            })
+            .map_err(|_| anyhow::anyhow!("Native audio disconnected"))?;
+        connection.loaded.store(true, Ordering::Release);
+        Ok(())
+    }
     pub fn connection_event(&self, account: Option<&str>) -> Option<NativeEvent> {
         let account = account?;
         let connection = self.0.lock().ok()?;
@@ -294,6 +347,7 @@ impl NativeControls {
         let loading = matches!(
             action,
             PlayerAction::Play(Some(_))
+                | PlayerAction::PreparedDJ { .. }
                 | PlayerAction::PlayUris { .. }
                 | PlayerAction::Resume { .. }
                 | PlayerAction::PlayContext { .. }
@@ -322,27 +376,31 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
     else {
         return;
     };
-    let context =
-        if context_uri == crate::home::DJ_URI || context_uri.starts_with("spotify:lexicon:") {
-            let queue = prev_tracks
-                .iter()
-                .rev()
-                .take(33)
-                .rev()
-                .chain(std::iter::once(&track))
-                .chain(next_tracks.iter().take(66))
-                .filter(|track| track.uri.starts_with("spotify:track:"))
-                .map(|track| track.uri.clone())
-                .collect();
-            crate::resume::remember_native_queue(account, queue);
-            Some(crate::resume::DJContext {
+    let context = if context_uri == crate::home::DJ_URI
+        || context_uri.starts_with("spotify:lexicon:")
+        || context_uri == librespot_connect::REQUESTED_DJ_CONTEXT
+    {
+        let queue = prev_tracks
+            .iter()
+            .rev()
+            .take(33)
+            .rev()
+            .chain(std::iter::once(&track))
+            .chain(next_tracks.iter().take(66))
+            .filter(|track| track.uri.starts_with("spotify:track:"))
+            .map(|track| track.uri.clone())
+            .collect();
+        crate::resume::remember_native_queue(account, queue);
+        (context_uri != librespot_connect::REQUESTED_DJ_CONTEXT).then_some(
+            crate::resume::DJContext {
                 uri: context_uri,
                 session_url,
                 track_uid,
-            })
-        } else {
-            None
-        };
+            },
+        )
+    } else {
+        None
+    };
     crate::resume::remember_dj_context(account, &track.uri, context);
 }
 
@@ -384,6 +442,15 @@ mod dj_queue_tests {
             crate::resume::restore_dj_action(account, current, 77000, &PlayerAction::Next)
                 .is_none()
         );
+        // Native request pages cannot be reopened through the legacy DJ URL.
+        remember_player_queue(
+            account,
+            event(librespot_connect::REQUESTED_DJ_CONTEXT.into(), None),
+        );
+        assert!(
+            crate::resume::restore_dj_action(account, current, 77000, &PlayerAction::Play(None))
+                .is_none()
+        );
     }
 }
 
@@ -394,6 +461,18 @@ fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
         ..LoadRequestOptions::default()
     };
     Some(match action {
+        PlayerAction::PreparedDJ {
+            context, provider, ..
+        } => LoadRequest::from_context_uri(
+            crate::home::DJ_URI.into(),
+            LoadRequestOptions {
+                prepared_context: Some(context.clone()),
+                page_provider: Some(provider.clone()),
+                start_playing: true,
+                playing_track: Some(PlayingTrack::Index(0)),
+                ..LoadRequestOptions::default()
+            },
+        ),
         PlayerAction::RestoreDJ {
             context,
             session_url,
@@ -1040,6 +1119,7 @@ async fn run(
             }
             _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
             Some(action) = commands.recv() => {
+                if let PlayerAction::PreparedDJ{cancelled,..}=&action && cancelled.load(Ordering::Acquire){continue;}
                 if matches!(action,PlayerAction::Play(None)|PlayerAction::Pause){
                     if matches!(action,PlayerAction::Play(None))&&!active{
                         if spirc.activate().is_err(){loaded.store(false,Ordering::Release);emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into()));continue;}
@@ -1047,7 +1127,7 @@ async fn run(
                     }
                     intent.request(matches!(action,PlayerAction::Play(None)));
                 }else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;let target=match &action{PlayerAction::Play(Some(uri))=>Some(uri.clone()),PlayerAction::PlayContext{offset,..}=>offset.clone(),PlayerAction::RestoreDJ{track,relative_offset:0,..}=>Some(track.clone()),PlayerAction::PlayUris{uris,offset}|PlayerAction::Resume{uris,offset,..}=>uris.get(*offset).cloned(),_=>None};intent.loading_track(target,std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }

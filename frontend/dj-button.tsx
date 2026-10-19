@@ -24,8 +24,15 @@ export function DJButton({
   return (
     <button
       className="icon-button dj-refresh"
-      title="Refresh DJ. Text and voice requests unavailable."
+      title="Click to refresh DJ. Hold or press Shift+Enter to ask DJ."
       aria-label="Refresh DJ"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.shiftKey && !event.repeat) {
+          event.preventDefault();
+          clear();
+          callbacks.current.onHold();
+        }
+      }}
       onPointerDown={(event) => {
         if (event.button !== 0 || !event.isPrimary) return;
         clear();

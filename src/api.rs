@@ -402,7 +402,7 @@ impl Spotify {
                     None => json!({"context_uri": context}),
                 }),
             ),
-            PlayerAction::RestoreDJ { .. } => {
+            PlayerAction::RestoreDJ { .. } | PlayerAction::PreparedDJ { .. } => {
                 anyhow::bail!("DJ session restore requires native playback")
             }
             PlayerAction::PlayUris { uris, offset } => (
@@ -560,6 +560,11 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
 
 #[derive(Clone)]
 pub enum PlayerAction {
+    PreparedDJ {
+        context: Box<librespot_protocol::context::Context>,
+        provider: std::sync::Arc<dyn librespot_connect::ContextPageProvider>,
+        cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    },
     /// Load the saved queue directly at its listening position.
     Resume {
         uris: Vec<String>,

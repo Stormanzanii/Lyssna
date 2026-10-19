@@ -4,6 +4,26 @@ use crate::{
 
 use std::ops::Deref;
 
+/// Internal queue identity: requested DJ queues resume as music, not legacy DJ sessions.
+pub const REQUESTED_DJ_CONTEXT: &str = "spotiflex:requested-dj";
+
+/// Asynchronous native context page result.
+pub type ContextPageFuture<'a> = std::pin::Pin<
+    Box<
+        dyn std::future::Future<
+                Output = Result<crate::protocol::context_page::ContextPage, crate::core::Error>,
+            > + Send
+            + 'a,
+    >,
+>;
+/// Native, account-bound paging for contexts the legacy context API cannot resolve.
+pub trait ContextPageProvider: std::fmt::Debug + Send + Sync {
+    /// Whether a page marker belongs to this provider.
+    fn owns(&self, uri: &str) -> bool;
+    /// Fetch an owned page, preserving mutation results across repeated reads.
+    fn page(&self, uri: String) -> ContextPageFuture<'_>;
+}
+
 /// Request for loading playback
 #[derive(Debug, Clone)]
 pub struct LoadRequest {
@@ -28,6 +48,10 @@ pub(super) enum PlayContext {
 /// The parameters for creating a load request
 #[derive(Debug, Default, Clone)]
 pub struct LoadRequestOptions {
+    /// Optional native source for subsequent context pages.
+    pub page_provider: Option<std::sync::Arc<dyn ContextPageProvider>>,
+    /// A freshly prepared context supplied by the native client.
+    pub prepared_context: Option<Box<crate::protocol::context::Context>>,
     /// Reopen an existing DJ session instead of generating another session.
     pub session_url: Option<String>,
     /// Select a track relative to `playing_track` after resolving all required pages.

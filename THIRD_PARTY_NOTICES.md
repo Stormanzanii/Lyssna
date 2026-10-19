@@ -32,6 +32,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+The native DJ list paging, advertised prompt handshake and auxiliary speech decoder are independently written from observed protocol fields and responses. No Spotify code, recordings, artwork or account response fixtures are distributed with this integration.
+
 ## librespot DJ implementation
 
 The Playback and Connect crates are vendored at the pinned revision below. Local changes mark narration packets and reconcile local resume events with published Connect state. Their MIT licenses are preserved in both vendor directories.

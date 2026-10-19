@@ -3186,3 +3186,11 @@ input[type="range"]:hover {
 .font-settings > .pill {
   margin: 10px 0 18px;
 }
+
+.dj-request-backdrop{position:fixed;inset:0;z-index:800;display:grid;place-items:center;background:#000a;backdrop-filter:blur(6px)}
+.dj-request-dialog{position:relative;width:min(520px,calc(100vw - 48px));padding:28px;border-radius:16px;background:#202020;box-shadow:0 24px 80px #0009;color:#fff}
+.dj-request-dialog h2{margin:0 0 12px;font-size:26px}.dj-request-dialog p{color:#bbb;line-height:1.5}
+.dj-request-close{position:absolute;right:16px;top:16px;background:transparent;border:0;color:#aaa;cursor:pointer}
+.dj-request-dialog textarea{display:block;width:100%;min-height:120px;resize:vertical;padding:14px;border:1px solid #555;border-radius:8px;background:#121212;color:white;font:inherit;box-sizing:border-box}
+.dj-request-dialog textarea:focus{outline:2px solid #1ed760}.dj-request-meta{display:flex;justify-content:space-between;gap:18px;margin-top:10px;font-size:12px;color:#aaa}
+.dj-request-actions{display:flex;align-items:center;gap:12px;margin-top:24px}.dj-request-actions button{display:flex;align-items:center;gap:8px;padding:11px 16px;border:0;border-radius:24px;background:#383838;color:white;cursor:pointer}.dj-request-actions button:last-of-type{background:#1ed760;color:#101010;font-weight:700}.dj-request-actions button:disabled{opacity:.45;cursor:default}.dj-request-error{color:#ff9696!important}

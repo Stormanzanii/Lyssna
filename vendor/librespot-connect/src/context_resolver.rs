@@ -37,6 +37,7 @@ pub(super) struct ResolveContext {
     /// Started by the listener rather than restored, so a session like DJ's
     /// begins with a set it hasn't played yet.
     fresh: bool,
+    prepared: bool,
 }
 
 impl ResolveContext {
@@ -47,6 +48,7 @@ impl ResolveContext {
             update: ContextType::Default,
             action: ContextAction::Append,
             fresh: false,
+            prepared: false,
         }
     }
 
@@ -68,6 +70,7 @@ impl ResolveContext {
             update,
             action,
             fresh: false,
+            prepared: false,
         }
     }
 
@@ -78,7 +81,14 @@ impl ResolveContext {
             update,
             action,
             fresh: false,
+            prepared: false,
         }
+    }
+
+    pub fn from_prepared(context: Context, update: ContextType, action: ContextAction) -> Self {
+        let mut value = Self::from_context(context, update, action);
+        value.prepared = true;
+        value
     }
 
     /// the uri which should be used to resolve the context, might not be the context uri
@@ -132,6 +142,7 @@ impl From<ContextResolverError> for Error {
 }
 
 pub struct ContextResolver {
+    page_provider: Option<std::sync::Arc<dyn crate::ContextPageProvider>>,
     dj: crate::dj_cache::DjCache,
     session: Session,
     queue: VecDeque<ResolveContext>,
@@ -147,6 +158,7 @@ const RETRY_UNAVAILABLE: Duration = Duration::from_secs(3600);
 impl ContextResolver {
     pub fn new(session: Session) -> Self {
         Self {
+            page_provider: None,
             dj: crate::dj_cache::DjCache::new(session.clone()),
             session,
             queue: VecDeque::new(),
@@ -189,6 +201,15 @@ impl ContextResolver {
     pub fn prewarm_dj(&self) {
         self.dj.prepare(None);
     }
+    pub fn clear_prepared_dj(&self) {
+        self.dj.clear();
+    }
+    pub fn set_page_provider(
+        &mut self,
+        provider: Option<std::sync::Arc<dyn crate::ContextPageProvider>>,
+    ) {
+        self.page_provider = provider;
+    }
 
     pub fn add_list(&mut self, resolve: Vec<ResolveContext>) {
         for resolve in resolve {
@@ -230,6 +251,28 @@ impl ContextResolver {
         recent_track_uri: impl Fn() -> Vec<String>,
     ) -> Result<Context, Error> {
         let (next, resolve_uri, _) = self.find_next().ok_or(ContextResolverError::NoNext)?;
+
+        if next.prepared
+            && let Resolve::Context(context) = &next.resolve
+        {
+            return Ok(context.clone());
+        }
+        if let Some(provider) = &self.page_provider
+            && provider.owns(resolve_uri)
+        {
+            return provider
+                .page(resolve_uri.to_owned())
+                .await
+                .map(|page| Context {
+                    uri: Some(next.context_uri().to_owned()),
+                    pages: vec![page],
+                    ..Default::default()
+                });
+        }
+        // A detached native page must never reach the network's legacy resolver.
+        if resolve_uri.starts_with("hm://spotiflex-dj/") {
+            return Err(Error::failed_precondition("DJ request session ended"));
+        }
 
         match next.update {
             ContextType::Default => {
@@ -337,7 +380,9 @@ impl ContextResolver {
                 .map(|_| None),
             ContextAction::Replace => {
                 let remaining = state.update_context(context, next.update);
-                if let Resolve::Context(ref ctx) = next.resolve {
+                if !next.prepared
+                    && let Resolve::Context(ref ctx) = next.resolve
+                {
                     state.merge_context(ctx.pages.clone().pop());
                 }
 
@@ -418,5 +463,73 @@ impl ContextResolver {
         state.update_queue_revision();
 
         true
+    }
+}
+
+#[cfg(test)]
+mod native_page_tests {
+    use super::*;
+    use crate::protocol::{context_page::ContextPage, context_track::ContextTrack};
+    use crate::{ContextPageFuture, ContextPageProvider};
+    #[derive(Debug)]
+    struct Pages;
+    impl ContextPageProvider for Pages {
+        fn owns(&self, uri: &str) -> bool {
+            uri == "hm://spotiflex-dj/test/1"
+        }
+        fn page(&self, _: String) -> ContextPageFuture<'_> {
+            Box::pin(async {
+                Ok(ContextPage {
+                    tracks: vec![ContextTrack {
+                        uri: Some("spotify:track:requested".into()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                })
+            })
+        }
+    }
+    #[tokio::test]
+    async fn prepared_music_and_owned_pages_bypass_legacy_network_resolution() {
+        let mut resolver = ContextResolver::new(Session::new(Default::default(), None));
+        let context = Context {
+            uri: Some(crate::dj_cache::DJ_URI.into()),
+            pages: vec![ContextPage {
+                tracks: vec![ContextTrack {
+                    uri: Some("spotify:track:0123456789abcdefghijkl".into()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        resolver.add(ResolveContext::from_prepared(
+            context.clone(),
+            ContextType::Default,
+            ContextAction::Replace,
+        ));
+        assert_eq!(resolver.get_next_context(Vec::new).await.unwrap(), context);
+        let mut state =
+            ConnectState::new(Default::default(), &Session::new(Default::default(), None));
+        resolver.apply_next_context(&mut state, context).unwrap();
+        assert_eq!(
+            state
+                .get_context(ContextType::Default)
+                .unwrap()
+                .tracks
+                .len(),
+            1
+        );
+        resolver.clear();
+        resolver.set_page_provider(Some(std::sync::Arc::new(Pages)));
+        resolver.add(ResolveContext::append_context("hm://spotiflex-dj/test/1"));
+        assert_eq!(
+            resolver.get_next_context(Vec::new).await.unwrap().pages[0].tracks[0]
+                .uri
+                .as_deref(),
+            Some("spotify:track:requested")
+        );
+        resolver.set_page_provider(None);
+        assert!(resolver.get_next_context(Vec::new).await.is_err());
     }
 }

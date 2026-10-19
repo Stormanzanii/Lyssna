@@ -728,7 +728,14 @@ impl SpircTask {
             })
             .collect();
 
-        let context_uri = self.connect_state.context_uri().clone();
+        let context_uri = if state_player
+            .context_metadata
+            .contains_key("spotiflex.dj_request")
+        {
+            crate::REQUESTED_DJ_CONTEXT.to_owned()
+        } else {
+            self.connect_state.context_uri().clone()
+        };
 
         self.player.emit_set_queue_event_with_session(
             context_uri,
@@ -1166,6 +1173,8 @@ impl SpircTask {
                     LoadRequest {
                         context,
                         options: LoadRequestOptions {
+                            page_provider: None,
+                            prepared_context: None,
                             session_url: None,
                             relative_offset: 0,
                             start_playing: true,
@@ -1410,13 +1419,17 @@ impl SpircTask {
         fallback_index: Option<usize>,
     ) -> Result<(), Error> {
         self.connect_state
-            .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
+            .reset_context(if cmd.prepared_context.is_some() {
+                ResetContext::Completely
+            } else if let PlayContext::Uri(ref uri) = cmd.context {
                 ResetContext::WhenDifferent(uri)
             } else {
                 ResetContext::Completely
             });
 
         self.connect_state.reset_options();
+        self.context_resolver
+            .set_page_provider(cmd.page_provider.clone());
 
         let autoplay = matches!(cmd.context_options, Some(LoadContextOptions::Autoplay));
         // Playing from the top rather than a chosen track starts a context afresh.
@@ -1567,7 +1580,10 @@ impl SpircTask {
 
         self.connect_state.set_active_context(update_context);
 
-        let saved_context = if let Some(url) = options.session_url.as_deref() {
+        let saved_context = if let Some(context) = options.prepared_context.as_ref() {
+            self.context_resolver.clear_prepared_dj();
+            Some((**context).clone())
+        } else if let Some(url) = options.session_url.as_deref() {
             self.session.spclient().get_context_url(url).await.ok()
         } else {
             None
@@ -1591,7 +1607,10 @@ impl SpircTask {
             && self
                 .connect_state
                 .get_context(update_context)
-                .is_ok_and(|ctx| ctx.metadata.contains_key(LEXICON_CONTEXT_URL));
+                .is_ok_and(|ctx| {
+                    ctx.metadata.contains_key(LEXICON_CONTEXT_URL)
+                        || ctx.metadata.contains_key("spotiflex.dj_request")
+                });
 
         if saved_context.is_none()
             && resumed
@@ -1610,7 +1629,7 @@ impl SpircTask {
                         .metadata
                         .insert(LEXICON_CONTEXT_URL.into(), url.clone());
                 }
-                self.context_resolver.add(ResolveContext::from_context(
+                self.context_resolver.add(ResolveContext::from_prepared(
                     context,
                     update_context,
                     ContextAction::Replace,

@@ -1,4 +1,7 @@
 //! Independently implemented DJ prompt wire format. See THIRD_PARTY_NOTICES.md.
+mod context;
+pub mod requests;
+pub mod transport;
 pub mod voice;
 
 use anyhow::{Result, ensure};

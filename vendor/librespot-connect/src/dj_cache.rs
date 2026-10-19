@@ -46,6 +46,11 @@ fn matches_request(prepared: &Prepared, uri: &str, fresh: bool) -> bool {
     (uri == DJ_URI && fresh) || uri == prepared.source
 }
 impl DjCache {
+    pub fn clear(&self) {
+        if let Ok(mut current) = self.current.lock() {
+            current.take();
+        }
+    }
     pub fn new(session: Session) -> Self {
         Self {
             session,

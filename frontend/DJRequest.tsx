@@ -247,7 +247,19 @@ export function DJRequest({
               aria-valuemax={100}
               aria-valuenow={Math.round(meter.level)}
             >
-              {[meter.peak, meter.level, meter.trail].map((level, index) => (
+              {[
+                meter.trail * 0.5,
+                meter.trail * 0.8,
+                meter.level * 0.6,
+                meter.peak * 0.8,
+                meter.level,
+                meter.peak,
+                meter.level * 0.9,
+                meter.peak * 0.7,
+                meter.trail,
+                meter.level * 0.5,
+                meter.trail * 0.6,
+              ].map((level, index) => (
                 <i
                   key={index}
                   aria-hidden="true"

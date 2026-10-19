@@ -410,7 +410,7 @@ test("DJ microphone bars follow real level events and ignore other captures", as
   await page.getByRole("button", { name: "Use microphone" }).click();
   const meter = page.getByRole("meter", { name: "Microphone input" });
   await expect(meter).toHaveAttribute("aria-valuenow", "0");
-  await expect(meter.locator("i")).toHaveCount(3);
+  await expect(meter.locator("i")).toHaveCount(11);
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
     const id = host.commands.find((c: any) => c.command === "dj_voice").args.id;
@@ -707,6 +707,40 @@ test("DJ speech replaces song metadata across player, Now playing and lyrics", a
   );
   await expect(page.locator(".player-song")).toContainText("Timing test");
   await expect(page.locator(".lyrics-page")).toContainText("Timing test");
+});
+
+test("holding hint appears at DJ startup and stays quiet during later segments", async ({
+  page,
+}) => {
+  await startClient(page);
+  await expect(
+    page.getByText("Hold the DJ button to ask for music.", { exact: true }),
+  ).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "narration", active: true }),
+  );
+  await expect(
+    page.getByText("Hold the DJ button to ask for music.", { exact: true }),
+  ).toBeVisible();
+  const first = await page.evaluate(() =>
+    localStorage.getItem("spotiflex.dj-hint.test-user"),
+  );
+  expect(Number(first)).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emit({ type: "notice", message: "Other notice", error: false });
+    host.emit({ type: "narration", active: false });
+  });
+  await expect(page.getByText("Other notice", { exact: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "narration", active: true }),
+  );
+  await expect(page.getByText("Other notice", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("spotiflex.dj-hint.test-user"),
+    ),
+  ).toBe(first);
 });
 test("player DJ button requests a fresh DJ selection on every click", async ({
   page,

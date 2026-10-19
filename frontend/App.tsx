@@ -9,6 +9,7 @@ import {
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DJRequest } from "./DJRequest";
+import { createDJReminder } from "./djHint";
 import {
   ArrowLeft,
   ArrowRight,
@@ -195,6 +196,18 @@ function App() {
       dispatch({ type: "notice", message, error }),
     [],
   );
+  const djReminder = useMemo(
+    () =>
+      createDJReminder({
+        getItem: (key) => window.localStorage.getItem(key),
+        setItem: (key, value) => window.localStorage.setItem(key, value),
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (state.narrating && state.profile && djReminder(state.profile.id))
+      notify("Hold the DJ button to ask for music.");
+  }, [state.narrating, state.profile, djReminder, notify]);
   const call = useCallback(
     async <T,>(
       command: string,

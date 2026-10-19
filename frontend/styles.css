@@ -3195,6 +3195,6 @@ input[type="range"]:hover {
 .dj-request-dialog textarea:focus{outline:2px solid #1ed760}.dj-request-meta{display:flex;justify-content:space-between;gap:18px;margin-top:10px;font-size:12px;color:#aaa}
 .dj-request-actions{display:flex;align-items:center;gap:12px;margin-top:24px}.dj-request-actions button{display:flex;align-items:center;gap:8px;padding:11px 16px;border:0;border-radius:24px;background:#383838;color:white;cursor:pointer}.dj-request-actions button:last-of-type{background:#1ed760;color:#101010;font-weight:700}.dj-request-actions button:disabled{opacity:.45;cursor:default}.dj-request-error{color:#ff9696!important}
 .dj-voice-feedback{display:flex;align-items:center;gap:12px;min-height:32px;color:#bbb;font-size:13px}
-.dj-voice-meter{display:flex;align-items:center;justify-content:center;gap:4px;width:28px;height:28px}
+.dj-voice-meter{display:flex;align-items:center;justify-content:center;gap:3px;width:74px;height:28px;flex-shrink:0}
 .dj-voice-meter i{display:block;width:4px;border-radius:1px;background:#fff;transition:height 70ms linear}
 @media(prefers-reduced-motion:reduce){.dj-voice-meter i{transition:none}}

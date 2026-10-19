@@ -269,6 +269,7 @@ impl Worker {
                 native: None,
                 native_controls: backend_controls,
                 native_generation: 0,
+                library_refresh: LibraryRefresh::default(),
                 client_id: String::new(),
                 profile: Profile::default(),
                 client,
@@ -312,6 +313,15 @@ impl Worker {
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+                if backend
+                    .spotify
+                    .as_ref()
+                    .is_some_and(|api| !api.cooling_down())
+                    && backend.library_refresh.due(Instant::now())
+                    && let Err(error) = backend.refresh_library()
+                {
+                    backend.emit(Event::Error(error.to_string()));
                 }
                 if backend
                     .spotify
@@ -401,6 +411,7 @@ impl Drop for Worker {
 }
 
 struct Backend {
+    library_refresh: LibraryRefresh,
     facts: mpsc::SyncSender<FactsRequest>,
     prefetch: mpsc::SyncSender<PrefetchRequest>,
     native_controls: NativeControls,
@@ -414,6 +425,21 @@ struct Backend {
     native_events: mpsc::Sender<NativeMessage>,
     lyrics: mpsc::Sender<LyricCommand>,
     context: Notifier,
+}
+
+#[derive(Default)]
+struct LibraryRefresh {
+    next: Option<Instant>,
+}
+impl LibraryRefresh {
+    fn due(&self, now: Instant) -> bool {
+        self.next.is_some_and(|next| now >= next)
+    }
+    fn fetch<T>(&mut self, now: Instant, fetch: impl FnOnce() -> Result<T>) -> Result<T> {
+        let result = fetch();
+        self.next = result.as_ref().err().map(|_| now + Duration::from_secs(30));
+        result
+    }
 }
 
 fn profile_for_session(
@@ -494,10 +520,8 @@ impl Backend {
         {
             self.emit(Event::Error(error.to_string()));
         }
-        let playlists = self.api()?.playlists();
-        match playlists {
-            Ok(playlists) => self.emit(Event::Library(playlists)),
-            Err(error) => self.emit(Event::Error(error.to_string())),
+        if let Err(error) = self.refresh_library() {
+            self.emit(Event::Error(error.to_string()));
         }
         if let Err(error) = self.poll() {
             self.emit(Event::Error(error.to_string()));
@@ -513,6 +537,16 @@ impl Backend {
 
     fn api(&mut self) -> Result<&mut Spotify> {
         self.spotify.as_mut().context("Sign in to Spotify first")
+    }
+
+    fn refresh_library(&mut self) -> Result<()> {
+        let api = self.spotify.as_mut().context("Sign in to Spotify first")?;
+        let playlists = self
+            .library_refresh
+            .fetch(Instant::now(), || api.playlists())?;
+        crate::library_cache::save(&self.profile.id, &playlists);
+        self.emit(Event::Library(playlists));
+        Ok(())
     }
 
     fn start_audio(&mut self) -> Result<()> {
@@ -602,6 +636,7 @@ impl Backend {
                 }
             }
             Command::Logout => {
+                self.library_refresh = LibraryRefresh::default();
                 self.native.take();
                 let audio_deleted = crate::native::forget_credentials(&self.profile.id);
                 if let Some(previous) = self.spotify.take() {
@@ -630,8 +665,7 @@ impl Backend {
                 }
             }
             Command::Library => {
-                let playlists = self.api()?.playlists()?;
-                self.emit(Event::Library(playlists));
+                self.refresh_library()?;
             }
             Command::Tracks {
                 key,
@@ -1073,6 +1107,31 @@ fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+    #[test]
+    fn a_failed_startup_library_fetch_is_retried_without_another_login() {
+        let mut refresh = LibraryRefresh::default();
+        let now = Instant::now();
+        let failure =
+            refresh.fetch::<Vec<Playlist>>(now, || anyhow::bail!("Temporary catalogue failure"));
+        assert!(failure.is_err());
+        assert!(!refresh.due(now + Duration::from_secs(1)));
+        assert!(
+            refresh.due(now + Duration::from_secs(30)),
+            "Missing library must schedule recovery"
+        );
+        let playlists = refresh
+            .fetch(now + Duration::from_secs(30), || {
+                Ok((0..36)
+                    .map(|index| Playlist {
+                        id: format!("playlist-{index}"),
+                        ..Default::default()
+                    })
+                    .collect::<Vec<_>>())
+            })
+            .unwrap();
+        assert_eq!(playlists.len(), 36);
+        assert!(!refresh.due(now + Duration::from_secs(60)));
+    }
     #[test]
     fn cached_profiles_only_restore_the_same_session_during_cooldown() {
         let cached = Profile {

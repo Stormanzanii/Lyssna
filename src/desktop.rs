@@ -526,9 +526,6 @@ impl Desktop {
                             );
                         }
                         Event::Library(playlists) => {
-                            if let Some(profile) = &snapshot.profile {
-                                crate::library_cache::save(&profile.id, &playlists);
-                            }
                             snapshot.playlists = playlists;
                             emit(json!({"type":"library","playlists":snapshot.playlists}));
                         }

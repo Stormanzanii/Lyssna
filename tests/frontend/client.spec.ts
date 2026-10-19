@@ -64,6 +64,40 @@ test("artist links show the artist immediately while metadata is pending", async
   await expect(page.locator(".skeleton-rows")).toHaveCount(0);
 });
 
+test("Connect retains registered speakers and transfers back to this computer", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "devices",
+      devices: [
+        { id: "registered-speaker", name: "Test Echo", is_active: false },
+      ],
+    }),
+  );
+  await page.getByTitle("Devices", { exact: true }).click();
+  await page.getByRole("button", { name: /Test Echo/ }).click();
+  await page.getByTitle("Devices", { exact: true }).click();
+  await page.getByRole("button", { name: /^This computer/ }).click();
+  const transfers = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter(
+        (entry: any) =>
+          entry.command === "player" &&
+          entry.args.request.command === "transfer",
+      )
+      .map((entry: any) => entry.args),
+  );
+  expect(transfers).toEqual([
+    {
+      request: { command: "transfer", uri: "registered-speaker" },
+      target: "registered-speaker",
+    },
+    { request: { command: "transfer", uri: "native" }, target: "native" },
+  ]);
+});
+
 test("audio output selection saves headphones and can return to system default", async ({
   page,
 }) => {
@@ -98,6 +132,86 @@ test("audio output selection saves headphones and can return to system default",
     .getByRole("button", { name: "Refresh outputs", exact: true })
     .click();
   await expect.poll(outputRequests).toBe(previousRequests + 1);
+  await page.getByRole("button", { name: "Test output", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (entry: any) => entry.command === "test_audio_output",
+          ).length,
+      ),
+    )
+    .toBe(1);
+});
+
+test("failed saved sign-in stays locked, supports retry and cancellable fresh sign-in", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ settings }) => {
+      const emit = (window as any).__clientTest.emit;
+      emit({ type: "signed_out" });
+      emit({
+        type: "settings",
+        settings: { ...settings, client_id: "0".repeat(32) },
+      });
+      emit({
+        type: "login_failed",
+        issue: {
+          message: "Cannot reach Spotify sign-in service",
+          retry_saved: true,
+        },
+      });
+    },
+    { settings: emptyState.settings },
+  );
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("alert")).toContainText("Cannot reach Spotify");
+  await expect(dialog).toContainText("Spotify Premium required");
+  await page.keyboard.press("Escape");
+  await page.locator(".setup-backdrop").click({ position: { x: 2, y: 2 } });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /close|skip/i })).toHaveCount(
+    0,
+  );
+  await dialog
+    .getByRole("button", { name: "Retry saved sign-in", exact: true })
+    .click();
+  await expect(
+    page.getByRole("status", { name: "Restoring session" }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "login_failed",
+      issue: {
+        message: "Spotify rejected the saved sign-in. Sign in again.",
+        retry_saved: false,
+      },
+    }),
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Retry saved sign-in", exact: true }),
+  ).toHaveCount(0);
+  await dialog
+    .getByRole("button", { name: "Sign in again", exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("button", { name: "Connecting…", exact: true }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole("button", { name: "Cancel sign-in", exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("button", { name: "Sign in with Spotify", exact: true }),
+  ).toBeEnabled();
+  await expect(dialog).toBeVisible();
+  const calls = await page.evaluate(() =>
+    (window as any).__clientTest.commands.map((entry: any) => entry.command),
+  );
+  expect(calls).toContain("retry_sign_in");
+  expect(calls).toContain("sign_in");
 });
 
 test("metadata menus stay off blank rows, backgrounds and player controls", async ({
@@ -174,6 +288,11 @@ async function startClient(page: Page, initialRoute = "liked") {
           commands.push({ command, args });
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
+          if (command === "test_audio_output") return true;
+          if (command === "cancel_sign_in") {
+            emit({ type: "login_finished" });
+            return;
+          }
           if (command === "dj_voice") {
             host.__clientTest.emitVoice({
               id: args.id,

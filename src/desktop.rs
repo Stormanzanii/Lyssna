@@ -44,6 +44,7 @@ pub struct Snapshot {
     provider_builtin: bool,
     provider_kind: Option<String>,
     login_pending: bool,
+    login_issue: Option<auth::LoginIssue>,
     can_follow: bool,
     lyrics: Option<Lyrics>,
     lyric_error: String,
@@ -274,6 +275,7 @@ impl Desktop {
                 provider_builtin: crate::provider::builtin_configured(),
                 provider_kind: crate::provider::kind(),
                 login_pending: restore,
+                login_issue: None,
                 can_follow: false,
                 lyrics: None,
                 lyric_error: String::new(),
@@ -434,6 +436,7 @@ impl Desktop {
                                 pump.home_generation.fetch_add(1, Ordering::SeqCst);
                             }
                             snapshot.profile = Some(profile.clone());
+                            snapshot.login_issue = None;
                             snapshot.login_pending = false;
                             snapshot.can_follow = auth::Tokens::load(&snapshot.settings.client_id)
                                 .ok()
@@ -492,6 +495,7 @@ impl Desktop {
                                 *queued = None;
                             }
                             snapshot.profile = None;
+                            snapshot.login_issue = None;
                             snapshot.login_pending = false;
                             snapshot.playlists.clear();
                             snapshot.home = None;
@@ -505,6 +509,14 @@ impl Desktop {
                             snapshot.details = PlayingDetails::default();
                             snapshot.tracks.clear();
                             emit(json!({"type":"signed_out"}));
+                        }
+                        Event::LoginFailed(issue) => {
+                            if !snapshot.login_pending {
+                                continue;
+                            }
+                            snapshot.login_issue = Some(issue.clone());
+                            snapshot.login_pending = false;
+                            emit(json!({"type":"login_failed","issue":issue}));
                         }
                         Event::LoginFinished => {
                             snapshot.login_pending = false;
@@ -914,6 +926,18 @@ impl Desktop {
                                 );
                             }
                         }
+                        NativeEvent::QueueChanged => {
+                            if let Some(track) = snapshot.playback.item.clone() {
+                                let _ = pump.commands.send(Command::PlayingDetails(track));
+                            }
+                            if snapshot.route == "queue" {
+                                let _ = pump.commands.send(Command::Tracks {
+                                    key: "queue".into(),
+                                    offset: 0,
+                                    generation: snapshot.generation,
+                                });
+                            }
+                        }
                     }
                 }
                 while let Ok(event) = worker.lyric_events.try_recv() {
@@ -1173,6 +1197,7 @@ fn sign_in(client_id: String, state: State<'_, Desktop>) -> std::result::Result<
         snapshot.settings.client_id = client_id.clone();
         snapshot.settings.save()?;
         snapshot.login_pending = true;
+        snapshot.login_issue = None;
         let mut old = lock(&state.0.login_cancelled)?;
         old.store(true, Ordering::Relaxed);
         *old = Arc::new(AtomicBool::new(false));
@@ -1210,10 +1235,36 @@ fn prefetch_canvas(uris: Vec<String>, state: State<'_, Desktop>) {
     }
 }
 #[tauri::command]
-fn cancel_sign_in(state: State<'_, Desktop>) {
+fn cancel_sign_in(app: tauri::AppHandle, state: State<'_, Desktop>) {
     if let Ok(cancelled) = state.0.login_cancelled.lock() {
         cancelled.store(true, Ordering::Relaxed);
     }
+    if let Ok(mut snapshot) = state.0.snapshot.lock() {
+        snapshot.login_pending = false;
+    }
+    let _ = app.emit("spotiflex", json!({"type":"login_finished"}));
+}
+#[tauri::command]
+fn retry_sign_in(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    let result = || -> Result<()> {
+        let mut snapshot = lock(&state.0.snapshot)?;
+        ensure!(
+            snapshot.profile.is_none() && !snapshot.login_pending,
+            "Sign-in already active"
+        );
+        ensure!(
+            config::valid_client_id(&snapshot.settings.client_id),
+            "Enter your Spotify Client ID first"
+        );
+        state
+            .0
+            .commands
+            .send(Command::Restore(snapshot.settings.client_id.clone()))?;
+        snapshot.login_pending = true;
+        snapshot.login_issue = None;
+        Ok(())
+    };
+    result().map_err(error)
 }
 #[tauri::command]
 fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
@@ -1488,7 +1539,11 @@ impl PlayerRequest {
                 );
                 PlayerAction::Repeat(repeat)
             }
-            "enqueue" => PlayerAction::Enqueue(self.uri.clone().context("Track URI missing")?),
+            "enqueue" => {
+                let uri = self.uri.clone().context("Track URI missing")?;
+                native::queue_uri(&uri)?;
+                PlayerAction::Enqueue(uri)
+            }
             "transfer" => PlayerAction::Transfer(self.uri.clone().context("Device missing")?),
             _ => anyhow::bail!("Unknown playback command"),
         })
@@ -1576,7 +1631,13 @@ fn player(
                 snapshot.playback.progress_ms.unwrap_or_default(),
             );
         }
-        if local && !matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
+        if local && action.supports_native() {
+            if matches!(action, PlayerAction::Enqueue(_)) {
+                ensure!(
+                    state.0.controls.has_track(),
+                    "Play a song on this computer before adding to its queue."
+                );
+            }
             if matches!(action, PlayerAction::Next | PlayerAction::Previous) {
                 *lock(&state.0.pending_track)? = None;
             }
@@ -1596,6 +1657,13 @@ fn player(
                         "Native audio disconnected. Reconnect native audio in Settings."
                     )
                 })?;
+                if matches!(action, PlayerAction::Enqueue(_)) {
+                    let _ = app.emit(
+                        "spotiflex",
+                        json!({"type":"notice","message":"Added to queue","error":false}),
+                    );
+                    return Ok(());
+                }
                 let _ = app.emit(
                     "spotiflex",
                     json!({"type":"native","ready":true,"status":snapshot.native_status}),
@@ -1666,7 +1734,27 @@ fn retry_audio(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::RetryAudio).map_err(error)
 }
 #[tauri::command]
+async fn test_audio_output(state: State<'_, Desktop>) -> std::result::Result<bool, String> {
+    let name = {
+        let snapshot = lock(&state.0.snapshot).map_err(error)?;
+        snapshot
+            .profile
+            .as_ref()
+            .context("Sign in first")
+            .map_err(error)?;
+        snapshot.settings.audio_output.clone()
+    };
+    tauri::async_runtime::spawn_blocking(move || crate::audio_output::test_sound(name))
+        .await
+        .map_err(error)?
+        .map_err(error)?;
+    Ok(true)
+}
+#[tauri::command]
 fn refresh(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
     state.0.commands.send(Command::Refresh).map_err(error)
 }
 #[tauri::command]
@@ -2037,6 +2125,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             bootstrap,
             sign_in,
             cancel_sign_in,
+            retry_sign_in,
             prefetch_canvas,
             prefetch_page,
             prefetch_metadata,
@@ -2044,6 +2133,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             browse,
             player,
             retry_audio,
+            test_audio_output,
             refresh,
             save_item,
             save_settings,

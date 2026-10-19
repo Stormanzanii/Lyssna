@@ -2071,7 +2071,7 @@ function App() {
         onQueue={toggleQueue}
         onDevices={() => {
           setDeviceMenu(!deviceMenu);
-          void call("refresh");
+          if (!deviceMenu) void call("refresh");
         }}
         onSidebar={() => {
           if (sidebar && panel === "queue") setPanel("now");
@@ -2091,6 +2091,11 @@ function App() {
           <button
             className={target === "native" ? "selected" : ""}
             onClick={() => {
+              if (target !== "native")
+                void call("player", {
+                  request: { command: "transfer", uri: "native" },
+                  target: "native",
+                });
               setTarget("native");
               setDeviceMenu(false);
             }}
@@ -2446,7 +2451,21 @@ function App() {
           state={state}
           onSignIn={(clientId) => {
             dispatch({ type: "login_pending" });
-            void call("sign_in", { clientId });
+            void rpc("sign_in", { clientId }).catch((error) =>
+              dispatch({
+                type: "login_failed",
+                issue: { message: String(error), retry_saved: false },
+              }),
+            );
+          }}
+          onRetry={() => {
+            dispatch({ type: "login_pending", restoring: true });
+            void rpc("retry_sign_in").catch((error) =>
+              dispatch({
+                type: "login_failed",
+                issue: { message: String(error), retry_saved: true },
+              }),
+            );
           }}
           onCancel={() => void call("cancel_sign_in")}
           onOpenDashboard={() =>
@@ -2767,11 +2786,13 @@ function PlayerBar({
 function Setup({
   state,
   onSignIn,
+  onRetry,
   onCancel,
   onOpenDashboard,
 }: {
   state: AppState;
   onSignIn: (id: string) => void;
+  onRetry: () => void;
   onCancel: () => void;
   onOpenDashboard: () => void;
 }) {
@@ -2794,11 +2815,28 @@ function Setup({
           <Logo size={44} />
         </div>
         <span className="premium-badge">Spotify Premium required</span>
-        <h1 id="setup-title">Make yourself at home.</h1>
+        <h1 id="setup-title">
+          {state.login_issue ? "Reconnect Spotify" : "Make yourself at home."}
+        </h1>
         <p>
           Connect your Spotify account to play your music and bring your lyrics
           to life.
         </p>
+        {state.login_issue && (
+          <div className="setup-recovery" role="alert">
+            <p>{state.login_issue.message}</p>
+            {state.login_issue.retry_saved &&
+              id === state.settings.client_id && (
+                <button
+                  className="pill"
+                  disabled={state.login_pending}
+                  onClick={onRetry}
+                >
+                  Retry saved sign-in
+                </button>
+              )}
+          </div>
+        )}
         <div className="setup-steps">
           <button className="text-link" onClick={onOpenDashboard}>
             1. Create an app in Spotify Developer Dashboard{" "}
@@ -2816,6 +2854,7 @@ function Setup({
             placeholder="32-character Spotify Client ID"
             autoComplete="off"
             spellCheck={false}
+            disabled={state.login_pending}
           />
         </div>
         <button
@@ -2832,6 +2871,8 @@ function Setup({
               <LoaderCircle size={18} className="spin" />
               Connecting…
             </>
+          ) : state.login_issue ? (
+            "Sign in again"
           ) : (
             "Sign in with Spotify"
           )}
@@ -2871,6 +2912,7 @@ function SettingsPage({
   const [lyricsKey, setLyricsKey] = useState("");
   const [audioOutputs, setAudioOutputs] = useState<string[] | null>(null);
   const [audioRefresh, setAudioRefresh] = useState(0);
+  const [testingOutput, setTestingOutput] = useState(false);
   useEffect(() => {
     if (!state.profile?.id) return;
     let active = true;
@@ -2886,6 +2928,20 @@ function SettingsPage({
       <h1>Settings</h1>
       <section>
         <h2>Your account</h2>
+        {state.login_issue && (
+          <div role="alert">
+            <p>{state.login_issue.message}</p>
+            <button
+              className="pill"
+              disabled={state.login_pending}
+              onClick={() =>
+                void onCall("sign_in", { clientId: state.settings.client_id })
+              }
+            >
+              Sign in again
+            </button>
+          </div>
+        )}
         <div className="setting-row">
           <div>
             <strong>{state.profile?.display_name || state.profile?.id}</strong>
@@ -2952,6 +3008,24 @@ function SettingsPage({
             onClick={() => setAudioRefresh((value) => value + 1)}
           >
             Refresh outputs
+          </button>
+        </div>
+        <div className="setting-row">
+          <span>Check the selected output with two quiet tones.</span>
+          <button
+            className="pill outline"
+            disabled={testingOutput}
+            onClick={async () => {
+              setTestingOutput(true);
+              try {
+                if (await onCall<boolean>("test_audio_output"))
+                  onNotice("Test sound sent to the selected output");
+              } finally {
+                setTestingOutput(false);
+              }
+            }}
+          >
+            {testingOutput ? "Playing test sound…" : "Test output"}
           </button>
         </div>
         <div className="setting-row">

@@ -37,8 +37,8 @@ use librespot_protocol::context_page::ContextPage;
 use protobuf::MessageField;
 use std::{
     future::Future,
-    sync::Arc,
     sync::atomic::{AtomicUsize, Ordering},
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
@@ -70,6 +70,7 @@ impl From<SpircError> for Error {
 }
 
 struct SpircTask {
+    devices: ConnectedDevices,
     state_updates: crate::state_updates::StateUpdates,
     resume_on_startup: bool,
     player: Arc<Player>,
@@ -117,6 +118,127 @@ struct SpircTask {
 }
 
 static SPIRC_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// Playback destination advertised by the signed-in account's Connect cluster.
+pub struct ConnectedDevice {
+    is_offline: bool,
+    /// Spotify Connect device identifier.
+    pub id: String,
+    /// User-visible device name.
+    pub name: String,
+    /// Whether this destination owns current playback.
+    pub is_active: bool,
+    /// Adjustable volume, or None for fixed-volume destinations.
+    pub volume_percent: Option<u8>,
+}
+
+/// Account-local device discovery supplied by the existing Connect subscription.
+#[derive(Clone, Default)]
+pub struct ConnectedDevices(Arc<Mutex<Vec<ConnectedDevice>>>);
+
+impl ConnectedDevices {
+    /// Return the latest complete device list without making a network request.
+    pub fn snapshot(&self) -> Vec<ConnectedDevice> {
+        self.0
+            .lock()
+            .map(|devices| devices.clone())
+            .unwrap_or_default()
+    }
+
+    fn update(&self, cluster: &Cluster) {
+        let mut devices: Vec<_> = cluster
+            .device
+            .iter()
+            .filter(|(id, device)| !id.is_empty() && device.can_play && !device.name.is_empty())
+            .map(|(id, device)| ConnectedDevice {
+                is_offline: device.is_offline,
+                id: id.clone(),
+                name: device.name.clone(),
+                is_active: id == &cluster.active_device_id,
+                volume_percent: (!device.capabilities.disable_volume)
+                    .then_some((device.volume.min(65535) * 100 / 65535) as u8),
+            })
+            .collect();
+        if let Ok(current) = self.0.lock() {
+            let remembered: Vec<_> = current
+                .iter()
+                .filter(|device| {
+                    device.is_offline && !devices.iter().any(|next| next.id == device.id)
+                })
+                .take(256)
+                .cloned()
+                .map(|mut device| {
+                    device.is_active = device.id == cluster.active_device_id;
+                    device
+                })
+                .collect();
+            devices.extend(remembered);
+        }
+        devices.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then(a.id.cmp(&b.id))
+        });
+        if let Ok(mut current) = self.0.lock() {
+            *current = devices;
+        }
+    }
+}
+
+#[cfg(test)]
+mod connected_device_tests {
+    use super::*;
+    use crate::protocol::connect::DeviceInfo;
+
+    #[test]
+    fn device_updates_keep_standby_speakers_and_filter_non_players() {
+        let devices = ConnectedDevices::default();
+        let mut cluster = Cluster {
+            active_device_id: "headphones".into(),
+            ..Default::default()
+        };
+        let active = DeviceInfo {
+            name: "Headphones".into(),
+            can_play: true,
+            volume: 65535,
+            ..Default::default()
+        };
+        cluster.device.insert("headphones".into(), active.clone());
+        cluster.device.insert(
+            "controller".into(),
+            DeviceInfo {
+                name: "Controller".into(),
+                ..Default::default()
+            },
+        );
+        cluster.device.insert(
+            "offline".into(),
+            DeviceInfo {
+                is_offline: true,
+                ..active.clone()
+            },
+        );
+        devices.update(&cluster);
+        let snapshot = devices.snapshot();
+        assert_eq!(snapshot.len(), 2);
+        assert_eq!(snapshot[0].id, "headphones");
+        assert!(snapshot[0].is_active);
+        assert_eq!(snapshot[0].volume_percent, Some(100));
+        assert_eq!(snapshot[1].id, "offline");
+        assert!(!snapshot[1].is_active);
+        cluster.device.clear();
+        devices.update(&cluster);
+        assert_eq!(
+            devices.snapshot().len(),
+            1,
+            "Live updates may omit registered standby speakers"
+        );
+        assert_eq!(devices.snapshot()[0].id, "offline");
+        assert!(ConnectedDevices::default().snapshot().is_empty());
+    }
+}
 
 #[derive(Debug)]
 enum SpircCommand {
@@ -178,10 +300,15 @@ fn automatic_restore_allowed(enabled: bool, cluster: &Cluster, session_id: &str)
 
 /// The spotify connect handle
 pub struct Spirc {
+    devices: ConnectedDevices,
     commands: mpsc::UnboundedSender<SpircCommand>,
 }
 
 impl Spirc {
+    /// Obtain this connection's independently readable device list.
+    pub fn devices(&self) -> ConnectedDevices {
+        self.devices.clone()
+    }
     /// Initializes a new spotify connect device
     ///
     /// The returned tuple consists out of a handle to the [`Spirc`] that
@@ -261,6 +388,7 @@ impl Spirc {
         let player_events = player.get_player_event_channel();
 
         let mut task = SpircTask {
+            devices: ConnectedDevices::default(),
             state_updates: Default::default(),
             resume_on_startup,
             player,
@@ -298,7 +426,10 @@ impl Spirc {
             spirc_id,
         };
 
-        let spirc = Spirc { commands: cmd_tx };
+        let spirc = Spirc {
+            commands: cmd_tx,
+            devices: task.devices.clone(),
+        };
 
         let initial_volume = task.connect_state.device_info().volume;
         task.connect_state.set_volume(0);
@@ -971,6 +1102,7 @@ impl SpircTask {
             }
         }
         .ok_or(SpircError::FailedDealerSetup)?;
+        self.devices.update(&cluster);
 
         debug!(
             "successfully put connect state for {} with connection-id {connection_id}",
@@ -1076,6 +1208,7 @@ impl SpircTask {
         );
 
         if let Some(cluster) = cluster_update.cluster.take() {
+            self.devices.update(&cluster);
             let became_inactive = self.connect_state.is_active()
                 && cluster.active_device_id != self.session.device_id();
             if became_inactive {

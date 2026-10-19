@@ -33,6 +33,7 @@ pub enum NativeEvent {
     Reconnecting(u64),
     Ready(String),
     Stopped,
+    QueueChanged,
     Track(Box<crate::model::Track>),
     Transport {
         shuffle: Option<bool>,
@@ -50,6 +51,7 @@ pub enum NativeEvent {
 }
 
 struct ControlConnection {
+    devices: Arc<Mutex<librespot_connect::ConnectedDevices>>,
     audio_buffer: crate::audio::AudioBuffer,
     account: String,
     status: Arc<Mutex<Option<NativeEvent>>>,
@@ -75,6 +77,7 @@ struct PlaylistRead {
     reply: mpsc::Sender<std::result::Result<Vec<crate::model::Track>, String>>,
 }
 struct PlaybackServices<'a> {
+    devices: &'a Mutex<librespot_connect::ConnectedDevices>,
     audio_buffer: &'a crate::audio::AudioBuffer,
     commands: &'a mut async_channel::UnboundedReceiver<PlayerAction>,
     playlists: &'a mut async_channel::UnboundedReceiver<PlaylistRead>,
@@ -105,6 +108,7 @@ impl NativeControls {
     ) -> (Self, async_channel::UnboundedReceiver<PlayerAction>) {
         let (sender, receiver) = async_channel::unbounded_channel();
         let controls = Self(Arc::new(Mutex::new(Some(ControlConnection {
+            devices: Default::default(),
             audio_buffer: Default::default(),
             account: account.into(),
             status: Arc::new(Mutex::new(Some(NativeEvent::Ready("test-device".into())))),
@@ -302,6 +306,41 @@ impl NativeControls {
             .build()?
             .block_on(crate::native_browse::resolve_tracks(&session, &uris))
     }
+    pub fn devices(&self) -> Result<Vec<crate::model::Device>> {
+        let connection = self
+            .0
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native devices unavailable"))?;
+        let connection = connection
+            .as_ref()
+            .filter(|connection| connection.ready.load(Ordering::Acquire))
+            .context("Native audio is connecting")?;
+        let devices = connection
+            .devices
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native devices unavailable"))?
+            .snapshot();
+        Ok(devices
+            .into_iter()
+            .map(|device| crate::model::Device {
+                id: Some(device.id),
+                name: device.name,
+                is_active: device.is_active,
+                volume_percent: device.volume_percent,
+            })
+            .collect())
+    }
+    pub fn transfer(&self, requested: &str) -> Result<()> {
+        let session = self.session()?;
+        let devices = self.devices()?;
+        let target = transfer_target(requested, session.device_id(), &devices)?;
+        tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
+            tokio::time::timeout(Duration::from_secs(15), session.spclient().transfer(session.device_id(), &target, None))
+                .await.map_err(|_| anyhow::anyhow!("Speaker connection timed out. Check its power and Spotify connection, then retry."))?
+                .map_err(|error| anyhow::anyhow!("Could not transfer playback ({}). Check the speaker's power and Spotify connection, then retry.", error.kind))?;
+            Ok(())
+        })
+    }
     pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
         let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()
@@ -437,7 +476,12 @@ impl NativeControls {
             .map_err(anyhow::Error::msg)
     }
     pub fn send(&self, action: PlayerAction) -> std::result::Result<(), PlayerAction> {
-        if matches!(action, PlayerAction::Transfer(_) | PlayerAction::Enqueue(_)) {
+        if let PlayerAction::Enqueue(uri) = &action
+            && queue_uri(uri).is_err()
+        {
+            return Err(action);
+        }
+        if !action.supports_native() {
             return Err(action);
         }
         let Ok(connection) = self.0.lock() else {
@@ -449,6 +493,10 @@ impl NativeControls {
         else {
             return Err(action);
         };
+        if matches!(action, PlayerAction::Enqueue(_)) && !connection.loaded.load(Ordering::Acquire)
+        {
+            return Err(action);
+        }
         if let PlayerAction::Volume(value) = action {
             connection
                 .volume
@@ -748,12 +796,54 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
             spirc.repeat(state == "context")?;
             spirc.repeat_track(state == "track")?;
         }
-        PlayerAction::Transfer(_) | PlayerAction::Enqueue(_) => {
+        PlayerAction::Enqueue(uri) => spirc.add_to_queue(queue_uri(&uri)?)?,
+        PlayerAction::Transfer(_) => {
             anyhow::bail!("This command requires Spotify's Web API")
         }
         _ => unreachable!("Load requests handled before transport commands"),
     }
     Ok(())
+}
+
+pub(crate) fn queue_uri(uri: &str) -> Result<librespot_core::SpotifyUri> {
+    let parsed = librespot_core::SpotifyUri::from_uri(uri)
+        .map_err(|_| anyhow::anyhow!("Choose a Spotify track or episode to add to queue"))?;
+    anyhow::ensure!(
+        matches!(
+            parsed,
+            librespot_core::SpotifyUri::Track { .. } | librespot_core::SpotifyUri::Episode { .. }
+        ),
+        "Choose a Spotify track or episode to add to queue"
+    );
+    Ok(parsed)
+}
+
+fn transfer_target(
+    requested: &str,
+    local: &str,
+    devices: &[crate::model::Device],
+) -> Result<String> {
+    let target = if requested == "native" {
+        local
+    } else {
+        requested
+    };
+    anyhow::ensure!(
+        !target.is_empty()
+            && target.len() <= 128
+            && target
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')),
+        "Invalid Spotify Connect destination"
+    );
+    anyhow::ensure!(
+        target == local
+            || devices
+                .iter()
+                .any(|device| device.id.as_deref() == Some(target)),
+        "Refresh devices before connecting to this speaker"
+    );
+    Ok(target.into())
 }
 
 fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<crate::model::Track> {
@@ -1033,6 +1123,7 @@ impl NativePlayer {
         let (playlist_sender, mut playlists) = async_channel::unbounded_channel();
         let (metadata_sender, mut metadata) = async_channel::unbounded_channel();
         let shared_session = Arc::new(Mutex::new(None));
+        let devices = Arc::new(Mutex::new(librespot_connect::ConnectedDevices::default()));
         let volume = crate::config::Settings::load()
             .map(|settings| settings.volume_percent.min(100))
             .unwrap_or(100);
@@ -1042,6 +1133,7 @@ impl NativePlayer {
         }
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
+                devices: devices.clone(),
                 audio_buffer: audio_buffer.clone(),
                 account: account.clone(),
                 status: connection_status.clone(),
@@ -1113,6 +1205,7 @@ impl NativePlayer {
                             &cancel,
                             &mut stopped,
                             PlaybackServices {
+                                devices: &devices,
                                 audio_buffer: &audio_buffer,
                                 commands: &mut commands,
                                 playlists: &mut playlists,
@@ -1175,6 +1268,7 @@ async fn run(
     emit: &impl Fn(NativeEvent),
 ) -> Outcome {
     let PlaybackServices {
+        devices,
         audio_buffer,
         commands,
         playlists,
@@ -1248,6 +1342,9 @@ async fn run(
             });
         }
     };
+    if let Ok(mut devices) = devices.lock() {
+        *devices = spirc.devices();
+    }
     if cancelled.load(Ordering::Relaxed) {
         session.shutdown();
         return Outcome::Stopped;
@@ -1352,6 +1449,7 @@ async fn run(
                             *queue = Some(next_tracks.iter().take(50).map(|track| track.uri.clone()).collect());
                         }
                         remember_player_queue(account,event);
+                        emit(NativeEvent::QueueChanged);
                     },
                     Some(PlayerEvent::Loading{track_id,..})=>{loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
@@ -1638,6 +1736,7 @@ mod tests {
         let (sender, _commands) = async_channel::unbounded_channel();
         let (metadata, mut requests) = async_channel::unbounded_channel::<MetadataRead>();
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            devices: Default::default(),
             audio_buffer: Default::default(),
             dj_requests: Default::default(),
             account: "listener".into(),
@@ -1850,6 +1949,7 @@ mod tests {
             let controls = NativeControls::default();
             let (sender, _receiver) = async_channel::unbounded_channel();
             *controls.0.lock().unwrap() = Some(ControlConnection {
+                devices: Default::default(),
                 audio_buffer: buffer.clone(),
                 dj_requests: Default::default(),
                 account: "listener".into(),
@@ -1990,6 +2090,153 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Uses saved native sign-in and briefly plays the selected song muted to verify native queue writes"]
+    fn live_native_queue_write_and_device_discovery() {
+        use std::time::Instant;
+        let settings = crate::config::Settings::load().unwrap();
+        let tokens = crate::auth::Tokens::load(&settings.client_id)
+            .unwrap()
+            .expect("Saved sign-in required");
+        let account = tokens.profile.expect("Saved profile required").id;
+        assert!(
+            load_credentials(&account).unwrap().is_some(),
+            "Saved native sign-in required"
+        );
+        let uri = crate::resume::load(&account)
+            .expect("Saved selection required")
+            .track
+            .uri;
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start(account, 1, events, Default::default(), controls.clone());
+        let deadline = Instant::now() + Duration::from_secs(80);
+        loop {
+            assert!(
+                Instant::now() < deadline,
+                "Native device discovery timed out"
+            );
+            if let Ok(devices) = controls.devices()
+                && devices.iter().any(|device| device.name == device_name())
+            {
+                println!(
+                    "Native discovery: {} available playback destinations",
+                    devices.len()
+                );
+                break;
+            }
+            if let Ok(NativeMessage {
+                event: NativeEvent::Authorizing | NativeEvent::Error(_),
+                ..
+            }) = receive.recv_timeout(Duration::from_millis(100))
+            {
+                panic!("Native discovery unexpectedly required fresh sign-in");
+            }
+        }
+        assert!(controls.send(PlayerAction::Volume(0)).is_ok());
+        assert!(controls.send(PlayerAction::Play(Some(uri.clone()))).is_ok());
+        loop {
+            assert!(
+                Instant::now() < deadline,
+                "Native playback did not become active"
+            );
+            if let Ok(NativeMessage {
+                event:
+                    NativeEvent::Position {
+                        playing: Some(true),
+                        ..
+                    },
+                ..
+            }) = receive.recv_timeout(Duration::from_millis(100))
+            {
+                break;
+            }
+        }
+        assert!(controls.send(PlayerAction::Enqueue(uri.clone())).is_ok());
+        loop {
+            assert!(
+                Instant::now() < deadline,
+                "Native enqueue did not update the queue"
+            );
+            if let Ok(NativeMessage {
+                event: NativeEvent::QueueChanged,
+                ..
+            }) = receive.recv_timeout(Duration::from_millis(100))
+            {
+                let queued = controls
+                    .0
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .queue_snapshot
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or_default();
+                if queued.contains(&uri) {
+                    assert!(
+                        controls
+                            .queue()
+                            .unwrap()
+                            .iter()
+                            .any(|track| track.uri == uri)
+                    );
+                    println!(
+                        "Native enqueue acknowledged; queue metadata resolved without Web API"
+                    );
+                    break;
+                }
+            }
+        }
+        if let Ok(name) = std::env::var("SPOTIFLEX_TEST_CONNECT_TARGET") {
+            let devices = controls.devices().unwrap();
+            let matching: Vec<_> = devices
+                .iter()
+                .filter(|device| device.name.to_lowercase().contains(&name.to_lowercase()))
+                .collect();
+            assert_eq!(matching.len(), 1, "Choose one unambiguous speaker name");
+            let target = matching[0].id.as_ref().unwrap().clone();
+            controls.transfer(&target).unwrap();
+            println!("Remote transfer request accepted; confirm speaker audio separately");
+            let hold = std::env::var("SPOTIFLEX_TEST_CONNECT_HOLD_SECONDS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(0)
+                .min(45);
+            thread::sleep(Duration::from_secs(hold));
+            while receive.try_recv().is_ok() {}
+            controls.transfer("native").unwrap();
+            assert!(
+                controls
+                    .send(PlayerAction::Volume(settings.volume_percent))
+                    .is_ok()
+            );
+            let until = std::time::Instant::now() + Duration::from_secs(20);
+            loop {
+                assert!(
+                    std::time::Instant::now() < until,
+                    "Local playback did not resume after returning"
+                );
+                if let Ok(NativeMessage {
+                    event:
+                        NativeEvent::Position {
+                            playing: Some(true),
+                            ..
+                        },
+                    ..
+                }) = receive.recv_timeout(Duration::from_millis(100))
+                {
+                    break;
+                }
+            }
+            println!("Local playback reported after native return transfer");
+            thread::sleep(Duration::from_secs(5));
+            let _ = controls.send(PlayerAction::Pause);
+        }
+        drop(player);
+    }
+
+    #[test]
     #[ignore = "Uses saved sign-in and deliberately disconnects one native session"]
     fn live_reconnect_recovers_without_another_browser_login() {
         let settings = crate::config::Settings::load().unwrap();
@@ -2069,6 +2316,7 @@ mod tests {
         let loaded = Arc::new(AtomicBool::new(false));
         let status = Arc::new(Mutex::new(Some(NativeEvent::Ready("device".into()))));
         *controls.0.lock().unwrap() = Some(ControlConnection {
+            devices: Default::default(),
             audio_buffer: Default::default(),
             dj_requests: Default::default(),
             account: "listener".into(),
@@ -2138,15 +2386,59 @@ mod tests {
     }
 
     #[test]
+    fn local_enqueue_uses_native_transport_without_interrupting_playback() {
+        let (controls, mut receiver) = NativeControls::test_active("test-native-enqueue");
+        let uri = "spotify:track:0000000000000000000001";
+        assert!(controls.send(PlayerAction::Enqueue(uri.into())).is_ok());
+        assert!(matches!(receiver.try_recv(), Ok(PlayerAction::Enqueue(queued)) if queued == uri));
+        assert!(controls.has_track());
+    }
+
+    #[test]
+    fn transfers_accept_only_known_destinations_and_the_local_alias() {
+        let devices = [crate::model::Device {
+            id: Some("registered-speaker".into()),
+            ..Default::default()
+        }];
+        assert_eq!(
+            transfer_target("native", "local-player", &devices).unwrap(),
+            "local-player"
+        );
+        assert_eq!(
+            transfer_target("registered-speaker", "local-player", &devices).unwrap(),
+            "registered-speaker"
+        );
+        assert!(transfer_target("unknown-speaker", "local-player", &devices).is_err());
+        assert!(transfer_target("../other-account", "local-player", &devices).is_err());
+    }
+
+    #[test]
+    fn an_inactive_player_cannot_silently_accept_queue_additions() {
+        let (controls, mut receiver) = NativeControls::test_active("test-native-enqueue");
+        controls
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .loaded
+            .store(false, Ordering::Release);
+        assert!(
+            controls
+                .send(PlayerAction::Enqueue(
+                    "spotify:track:0000000000000000000001".into()
+                ))
+                .is_err()
+        );
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
     fn remote_only_commands_keep_their_web_api_route() {
-        let controls = NativeControls::default();
+        let (controls, _receiver) = NativeControls::test_active("test-native-enqueue");
         assert!(matches!(
             controls.send(PlayerAction::Transfer("remote".into())),
             Err(PlayerAction::Transfer(_))
-        ));
-        assert!(matches!(
-            controls.send(PlayerAction::Enqueue("spotify:track:example".into())),
-            Err(PlayerAction::Enqueue(_))
         ));
     }
 

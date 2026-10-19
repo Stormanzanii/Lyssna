@@ -152,6 +152,7 @@ export interface BrowseInfo {
   albums: Album[];
 }
 export interface Snapshot {
+  login_issue?: { message: string; retry_saved: boolean } | null;
   narrating: boolean;
   home?: HomePage;
   home_loading: boolean;
@@ -218,6 +219,7 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }
   | { type: "narration"; active: boolean }
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }

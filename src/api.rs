@@ -617,6 +617,12 @@ pub enum PlayerAction {
     Transfer(String),
 }
 
+impl PlayerAction {
+    pub fn supports_native(&self) -> bool {
+        !matches!(self, Self::Transfer(_))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

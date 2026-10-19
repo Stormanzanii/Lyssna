@@ -106,6 +106,8 @@ pub struct SpotiFlex {
     pending_import: Option<String>,
     folder_name: String,
     login_pending: bool,
+    login_restoring: bool,
+    login_issue: Option<crate::auth::LoginIssue>,
     login_cancelled: Arc<AtomicBool>,
     loading: bool,
     more: bool,
@@ -191,6 +193,8 @@ impl SpotiFlex {
             pending_import: None,
             folder_name: String::new(),
             login_pending,
+            login_restoring: login_pending,
+            login_issue: None,
             login_cancelled: Arc::new(AtomicBool::new(false)),
             loading: false,
             more: false,
@@ -424,11 +428,17 @@ impl SpotiFlex {
                 | Event::Saved { .. }
                 | Event::TrackInfo { .. } => {}
                 Event::Session(profile) => {
+                    if !self.login_pending {
+                        continue;
+                    }
+                    self.login_issue = None;
+                    self.login_restoring = false;
                     self.profile = Some(profile);
                     self.native_status = "Connecting…".into();
                     self.navigate(self.view.clone());
                 }
                 Event::SignedOut => {
+                    self.login_issue = None;
                     self.profile = None;
                     self.playlists.clear();
                     self.tracks.clear();
@@ -446,7 +456,15 @@ impl SpotiFlex {
                     self.native_status = "Waiting for sign-in".into();
                     self.lyric_loading = false;
                 }
-                Event::LoginFinished => self.login_pending = false,
+                Event::LoginFinished => {
+                    self.login_pending = false;
+                    self.login_restoring = false;
+                }
+                Event::LoginFailed(issue) => {
+                    self.login_restoring = false;
+                    self.login_pending = false;
+                    self.login_issue = Some(issue);
+                }
                 Event::NativeStarting(generation) => {
                     self.native_generation = generation;
                     if self.selected_device == self.native_id {
@@ -532,6 +550,11 @@ impl SpotiFlex {
                     }
                 }
                 NativeEvent::Track(_) | NativeEvent::Narration(_) => {}
+                NativeEvent::QueueChanged => {
+                    if let Some(track) = self.playback.item.clone() {
+                        self.send(Command::PlayingDetails(track));
+                    }
+                }
                 NativeEvent::Stopped => self.playback.is_playing = false,
                 NativeEvent::Transport {
                     shuffle,
@@ -3395,19 +3418,30 @@ impl SpotiFlex {
                     if self.login_pending {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            ui.label("Finish sign-in in your browser…");
+                            ui.label(if self.login_restoring { "Restoring saved sign-in…" } else { "Finish sign-in in your browser…" });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("Cancel").clicked() {
+                                if !self.login_restoring && ui.button("Cancel").clicked() {
                                     self.login_cancelled.store(true, Ordering::Relaxed);
+                                    self.login_pending = false;
                                 }
                             });
                         });
                     } else {
+                        if let Some(issue) = self.login_issue.clone() {
+                            ui.colored_label(Color32::LIGHT_RED, issue.message);
+                            if issue.retry_saved && ui.button("Retry saved sign-in").clicked() {
+                                self.login_restoring = true;
+                                self.login_pending = true;
+                                self.login_issue = None;
+                                self.send(Command::Restore(self.settings.client_id.clone()));
+                            }
+                        }
                         let valid = config::valid_client_id(&self.settings.client_id);
                         let button = primary("Sign in with Spotify").min_size(vec2(width, 48.0));
                         if ui.add_enabled(valid, button).clicked() {
                             self.save_settings();
                             self.login_pending = true;
+                            self.login_issue = None;
                             self.login_cancelled = Arc::new(AtomicBool::new(false));
                             self.send(Command::Login(
                                 self.settings.client_id.clone(),

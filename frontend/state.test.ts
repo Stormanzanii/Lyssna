@@ -376,6 +376,41 @@ describe("personalized Home ownership", () => {
     expect(restored.home).toBeUndefined();
   });
 });
+describe("sign-in recovery", () => {
+  it("keeps a restore failure visible until retry or successful sign-in", () => {
+    const issue = {
+      message: "Cannot reach Spotify sign-in service",
+      retry_saved: true,
+    };
+    const failed = reducer(
+      {
+        ...emptyState,
+        booted: true,
+        restoring_session: true,
+        login_pending: true,
+      },
+      { type: "login_failed", issue },
+    );
+    expect(failed).toMatchObject({
+      login_pending: false,
+      restoring_session: false,
+      login_issue: issue,
+    });
+    expect(sessionScreen(failed)).toBe("setup");
+    expect(reducer(failed, { type: "toast_clear" }).login_issue).toEqual(issue);
+    const retried = reducer(failed, { type: "login_pending", restoring: true });
+    expect(retried.login_issue).toBeUndefined();
+    expect(sessionScreen(retried)).toBe("restoring");
+    const signedIn = reducer(failed, {
+      type: "session",
+      profile: { id: "account" },
+      can_follow: false,
+    });
+    expect(signedIn.login_issue).toBeUndefined();
+    expect(sessionScreen(signedIn)).toBe("client");
+  });
+});
+
 describe("starting DJ", () => {
   const signedIn = {
     ...emptyState,

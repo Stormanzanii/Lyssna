@@ -2648,6 +2648,22 @@ input[type="range"]:hover {
   font-size: 12px;
   margin: 17px 0 10px;
 }
+.setup-recovery {
+  padding: 14px;
+  margin: 18px 0;
+  border: 1px solid #62502d;
+  background: #29241a;
+  border-radius: 8px;
+  text-align: left;
+}
+.setup-recovery p {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.setup-dialog:has(.setup-recovery) {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
 .settings-page {
   height: 100%;
   overflow: auto;

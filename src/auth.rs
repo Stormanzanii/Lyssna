@@ -15,6 +15,54 @@ use url::Url;
 
 use crate::config::{REDIRECT_URI, valid_client_id};
 
+#[derive(Clone, Serialize)]
+pub struct LoginIssue {
+    pub message: String,
+    pub retry_saved: bool,
+}
+
+impl LoginIssue {
+    pub fn from_error(error: &anyhow::Error, restoring: bool) -> Self {
+        Self {
+            message: error.to_string(),
+            retry_saved: restoring && error.downcast_ref::<SignInRequired>().is_none(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum SignInRequired {
+    Rejected,
+    Damaged,
+}
+impl std::fmt::Display for SignInRequired {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Rejected => {
+                "Spotify rejected the saved sign-in. Check your Client ID, then sign in again."
+            }
+            Self::Damaged => "Saved Spotify sign-in is damaged. Sign in again to replace it.",
+        })
+    }
+}
+impl std::error::Error for SignInRequired {}
+
+fn token_status(status: reqwest::StatusCode, refreshing: bool) -> Result<()> {
+    if status.is_success() {
+        return Ok(());
+    }
+    if refreshing && matches!(status.as_u16(), 400 | 401 | 403) {
+        return Err(SignInRequired::Rejected.into());
+    }
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+        bail!("Spotify sign-in is temporarily unavailable. Wait a moment, then retry.");
+    }
+    bail!(
+        "Spotify token request failed (HTTP {}). Check Client ID and registered redirect URI, then sign in again.",
+        status.as_u16()
+    );
+}
+
 /// Match librespot's public audio OAuth client and its registered loopback.
 /// This is separate from the developer app's Web API login and uses PKCE.
 pub(crate) const AUDIO_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
@@ -304,11 +352,7 @@ fn exchange(
         .form(fields)
         .send()
         .map_err(|_| anyhow::anyhow!("Cannot reach Spotify sign-in service"))?;
-    ensure!(
-        response.status().is_success(),
-        "Spotify token request failed (HTTP {}). Check Client ID and registered redirect URI, then sign in again.",
-        response.status().as_u16()
-    );
+    token_status(response.status(), previous_refresh.is_some())?;
     let result: TokenResponse = response
         .json()
         .context("Spotify returned an invalid token response")?;
@@ -362,10 +406,11 @@ impl Tokens {
             return Ok(None);
         }
         match keyring::Entry::new("SpotiFlex/Spotify", client_id)?.get_password() {
-            Ok(value) => Ok(Some(
-                serde_json::from_str(&value)
-                    .context("Saved login is damaged; sign out and sign in again")?,
-            )),
+            Ok(value) => {
+                Ok(Some(serde_json::from_str(&value).map_err(|_| {
+                    anyhow::Error::new(SignInRequired::Damaged)
+                })?))
+            }
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(error).context("Cannot read saved Spotify login"),
         }
@@ -385,6 +430,20 @@ impl Tokens {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_distinguishes_rejected_credentials_from_temporary_service_failures() {
+        for status in [400, 401, 403, 429, 500, 503] {
+            let error = token_status(reqwest::StatusCode::from_u16(status).unwrap(), true)
+                .unwrap_err()
+                .context("Restore failed");
+            let issue = LoginIssue::from_error(&error, true);
+            assert_eq!(issue.retry_saved, status >= 429);
+            assert!(!LoginIssue::from_error(&error, false).retry_saved);
+        }
+        assert!(!LoginIssue::from_error(&SignInRequired::Damaged.into(), true).retry_saved);
+        assert!(token_status(reqwest::StatusCode::OK, true).is_ok());
+    }
 
     #[test]
     fn pkce_matches_rfc_7636_test_vector() {

@@ -160,7 +160,7 @@ export type Action =
   | { type: "navigate"; key: string; generation: number }
   | { type: "play_requested"; track: Track }
   | { type: "settings"; settings: AppState["settings"] }
-  | { type: "login_pending" }
+  | { type: "login_pending"; restoring?: boolean }
   | { type: "page_loading"; generation: number }
   | { type: "toast_clear" }
   | { type: "dj_requested" }
@@ -247,6 +247,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "session":
       return {
         ...state,
+        login_issue: undefined,
         restoring_session: false,
         narrating: state.profile?.id === action.profile.id && state.narrating,
         home:
@@ -278,7 +279,19 @@ export function reducer(state: AppState, action: Action): AppState {
         ? { ...state, home_loading: false, home_error: action.message }
         : state;
     case "login_pending":
-      return { ...state, login_pending: true };
+      return {
+        ...state,
+        login_pending: true,
+        login_issue: undefined,
+        restoring_session: !!action.restoring,
+      };
+    case "login_failed":
+      return {
+        ...state,
+        login_pending: false,
+        restoring_session: false,
+        login_issue: action.issue,
+      };
     case "login_finished":
       return { ...state, login_pending: false, restoring_session: false };
     case "native":

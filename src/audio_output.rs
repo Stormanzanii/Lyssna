@@ -156,9 +156,70 @@ impl OutputChoice {
     }
 }
 
+/// Quiet, bounded output check. This never changes the saved device choice.
+#[cfg(any(feature = "desktop", test))]
+pub(crate) fn test_sound(name: Option<String>) -> anyhow::Result<()> {
+    use rodio::Source;
+    use std::{
+        sync::atomic::{AtomicBool, Ordering},
+        time::{Duration, Instant},
+    };
+    static TESTING: AtomicBool = AtomicBool::new(false);
+    anyhow::ensure!(
+        TESTING
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok(),
+        "An audio output test is already playing"
+    );
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            TESTING.store(false, Ordering::Release);
+        }
+    }
+    let _reset = Reset;
+    anyhow::ensure!(
+        name.as_ref().is_none_or(|name| valid_name(name)),
+        "Invalid audio output"
+    );
+    let choice = OutputChoice::default();
+    let mut stream = choice.stream(name.as_deref(), 0).map_err(|_| {
+        anyhow::anyhow!(
+            "Cannot test the selected audio output. Refresh outputs and choose an available device."
+        )
+    })?;
+    stream.log_on_drop(false);
+    let sink = rodio::Sink::connect_new(stream.mixer());
+    for frequency in [440.0, 660.0] {
+        sink.append(
+            rodio::source::SineWave::new(frequency)
+                .take_duration(Duration::from_millis(350))
+                .amplify(0.04)
+                .delay(Duration::from_millis(400)),
+        );
+    }
+    let started = Instant::now();
+    while !sink.empty() && started.elapsed() < Duration::from_secs(3) {
+        anyhow::ensure!(
+            choice.take_issue() != Some(OutputIssue::Unavailable),
+            "Audio output disconnected during the test"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    anyhow::ensure!(sink.empty(), "Audio output did not consume the test sound");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "Plays two quiet tones on the saved output"]
+    fn live_saved_output_test_sound() {
+        let settings = crate::config::Settings::load().unwrap();
+        test_sound(settings.audio_output).unwrap();
+        println!("Two quiet tones consumed by the selected output");
+    }
     #[test]
     fn late_output_failures_cannot_replace_a_newer_selection() {
         let choice = OutputChoice::default();

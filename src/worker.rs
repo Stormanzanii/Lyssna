@@ -109,6 +109,7 @@ pub enum Event {
     Session(Profile),
     SignedOut,
     LoginFinished,
+    LoginFailed(auth::LoginIssue),
     NativeStarting(u64),
     Library(Vec<Playlist>),
     Tracks {
@@ -304,13 +305,18 @@ impl Worker {
                         {
                             continue;
                         }
+                        let restoring = matches!(command, Command::Restore(..));
                         let login =
                             matches!(command, Command::LoginResult { .. } | Command::Restore(..));
-                        if let Err(error) = backend.handle(command) {
-                            backend.emit(Event::Error(error.to_string()));
-                        }
-                        if login {
-                            backend.emit(Event::LoginFinished);
+                        match backend.handle(command) {
+                            Err(error) if login => {
+                                backend.emit(Event::LoginFailed(auth::LoginIssue::from_error(
+                                    &error, restoring,
+                                )));
+                            }
+                            Err(error) => backend.emit(Event::Error(error.to_string())),
+                            Ok(()) if login => backend.emit(Event::LoginFinished),
+                            Ok(()) => {}
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -581,6 +587,32 @@ impl Backend {
             PlayerAction::Transfer(id) => Some(id.clone()),
             _ => device,
         };
+        if let PlayerAction::Transfer(id) = &action
+            && matches!(
+                self.native_controls
+                    .connection_event(Some(&self.profile.id)),
+                Some(crate::native::NativeEvent::Ready(_))
+            )
+        {
+            return self.native_controls.transfer(id);
+        }
+        if action.supports_native()
+            && let Some(crate::native::NativeEvent::Ready(id)) = self
+                .native_controls
+                .connection_event(Some(&self.profile.id))
+            && requested
+                .as_deref()
+                .is_none_or(|requested| requested == id || requested == "native")
+        {
+            let queued = matches!(action, PlayerAction::Enqueue(_));
+            return self.native_controls.send(action).map_err(|_| {
+                anyhow::anyhow!(if queued {
+                    "Play a song on this computer before adding to its queue."
+                } else {
+                    "Native audio disconnected. Press Play to reconnect."
+                })
+            });
+        }
         for attempt in 0..4 {
             let devices = self.api()?.devices()?;
             let _ = self.events.send(Event::Devices(devices.clone()));
@@ -658,11 +690,15 @@ impl Backend {
                 audio_deleted?;
                 deleted?;
             }
-            Command::Refresh => {
-                self.poll()?;
-                let devices = self.api()?.devices()?;
-                self.emit(Event::Devices(devices));
-            }
+            Command::Refresh => match self.native_controls.devices() {
+                Ok(devices) => self.emit(Event::Devices(devices)),
+                Err(_) if self.api()?.cooling_down() => {}
+                Err(_) => {
+                    self.poll()?;
+                    let devices = self.api()?.devices()?;
+                    self.emit(Event::Devices(devices));
+                }
+            },
             Command::TrackInfo(uri) => {
                 if let Ok(track) = self
                     .native_controls
@@ -1168,7 +1204,7 @@ mod session_tests {
             },
         );
         let attempts = spotify.count_network_attempts();
-        let (native_controls, _native_commands) =
+        let (native_controls, mut native_commands) =
             NativeControls::test_active("test-local-song-details");
         let mut backend = Backend {
             library_refresh: Default::default(),
@@ -1208,6 +1244,22 @@ mod session_tests {
             "Local song changes must use native queue data rather than polling the Web API"
         );
         backend.poll().unwrap();
+        backend.handle(Command::Refresh).unwrap();
+        assert!(
+            backend
+                .player(PlayerAction::Transfer("test-device".into()), None)
+                .is_err()
+        );
+        backend
+            .player(
+                PlayerAction::Enqueue("spotify:track:0000000000000000000001".into()),
+                Some("test-device".into()),
+            )
+            .unwrap();
+        assert!(matches!(
+            native_commands.try_recv(),
+            Ok(PlayerAction::Enqueue(_))
+        ));
         assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 0);
         backend.native_controls = NativeControls::default();
         backend

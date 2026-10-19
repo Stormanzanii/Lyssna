@@ -1819,8 +1819,9 @@ async fn open_creator_profile(
             main.inner_size()?,
             main.scale_factor()?,
         );
-        let width = (f64::from(size.width) * 0.5).clamp(480. * scale, 960. * scale);
-        let height = (f64::from(size.height) * 0.7).clamp(400. * scale, 780. * scale);
+        // 1080 px keeps the profile page in its two-column layout.
+        let width = (f64::from(size.width) * 0.9).min(1080. * scale);
+        let height = (f64::from(size.height) * 0.9).min(800. * scale);
         window.set_size(tauri::PhysicalSize::new(width, height))?;
         window.set_position(tauri::PhysicalPosition::new(
             f64::from(origin.x) + (f64::from(size.width) - width) / 2.,

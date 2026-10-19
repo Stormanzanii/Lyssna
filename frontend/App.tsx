@@ -454,6 +454,7 @@ function App() {
         };
       if (request.track)
         dispatch({ type: "play_requested", track: request.track });
+      if (request.command === "dj") dispatch({ type: "dj_requested" });
       void call("player", { request, target });
     },
     [call, target, updateSettings],
@@ -487,6 +488,14 @@ function App() {
     );
     play({ command: intent.wanted ? "play" : "pause" });
   }, [play]);
+  useEffect(() => {
+    if (!state.dj_pending) return;
+    const timer = setTimeout(
+      () => dispatch({ type: "dj_pending_expired" }),
+      5000,
+    );
+    return () => clearTimeout(timer);
+  }, [state.dj_pending]);
   // Taskbar buttons, media keys and the Windows media flyout.
   useEffect(() => {
     let unlisten: (() => void) | undefined,

@@ -355,3 +355,31 @@ describe("personalized Home ownership", () => {
     expect(restored.home).toBeUndefined();
   });
 });
+describe("starting DJ", () => {
+  const signedIn = {
+    ...emptyState,
+    profile: { id: "account" },
+    native_ready: true,
+  };
+  it("shows DJ at once so the first queued song cannot flash up", () => {
+    const requested = reducer(signedIn, { type: "dj_requested" });
+    expect(requested.narrating).toBe(true);
+    // The old song stopping reports no narration; DJ stays up.
+    const quiet = reducer(requested, { type: "narration", active: false });
+    expect(quiet.narrating).toBe(true);
+    const speaking = reducer(quiet, { type: "narration", active: true });
+    expect(speaking).toMatchObject({ narrating: true, dj_pending: false });
+    // Once confirmed, narration ending returns to the song.
+    expect(
+      reducer(speaking, { type: "narration", active: false }).narrating,
+    ).toBe(false);
+    expect(reducer(speaking, { type: "dj_pending_expired" })).toBe(speaking);
+  });
+  it("falls back to the song when DJ never starts talking", () => {
+    const requested = reducer(signedIn, { type: "dj_requested" });
+    expect(reducer(requested, { type: "dj_pending_expired" }).narrating).toBe(
+      false,
+    );
+    expect(reducer(emptyState, { type: "dj_requested" }).narrating).toBe(false);
+  });
+});

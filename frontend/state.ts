@@ -82,6 +82,9 @@ export interface AppState extends Snapshot {
   pageError: string;
   clock_revision: number;
   pages: Record<string, CachedPage>;
+  /** DJ was just started and its narration has not been confirmed yet. The
+   * DJ view shows meanwhile, so the first queued song cannot flash up. */
+  dj_pending?: boolean;
 }
 export const emptyState: AppState = {
   narrating: false,
@@ -156,14 +159,29 @@ export type Action =
   | { type: "settings"; settings: AppState["settings"] }
   | { type: "login_pending" }
   | { type: "page_loading"; generation: number }
-  | { type: "toast_clear" };
+  | { type: "toast_clear" }
+  | { type: "dj_requested" }
+  | { type: "dj_pending_expired" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "narration":
+      // While DJ starts, a "not speaking" report from the old track must not
+      // drop the DJ view before the first narration begins.
+      if (!action.active && state.dj_pending) return state;
       return {
         ...state,
+        dj_pending: false,
         narrating: !!state.profile && state.native_ready && action.active,
       };
+    case "dj_requested":
+      return state.profile
+        ? { ...state, narrating: true, dj_pending: true }
+        : state;
+    case "dj_pending_expired":
+      // DJ never started talking; show whatever is playing.
+      return state.dj_pending
+        ? { ...state, dj_pending: false, narrating: false }
+        : state;
     case "track_facts":
       return state.profile
         ? { ...state, facts: { ...state.facts, ...action.facts } }

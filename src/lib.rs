@@ -7,6 +7,7 @@ pub mod app;
 pub mod app_icon;
 pub mod artist;
 mod audio;
+mod audio_output;
 pub mod auth;
 pub mod canvas;
 pub mod catalogue;

@@ -1685,10 +1685,31 @@ fn save_item(
         .map_err(error)
 }
 #[tauri::command]
+async fn audio_outputs(state: State<'_, Desktop>) -> std::result::Result<Vec<String>, String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(crate::audio_output::devices)
+        .await
+        .map_err(|_| "Audio output worker unavailable".to_owned())?
+        .map_err(error)
+}
+#[tauri::command]
 fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
+        let output_changed = settings.audio_output != snapshot.settings.audio_output;
+        if output_changed {
+            ensure!(snapshot.profile.is_some(), "Sign in first");
+            ensure!(
+                settings
+                    .audio_output
+                    .as_deref()
+                    .is_none_or(crate::audio_output::valid_name),
+                "Choose a valid audio output"
+            );
+        }
         settings.client_id = snapshot.settings.client_id.clone();
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
@@ -1696,6 +1717,12 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.save()?;
+        if output_changed && let Some(profile) = snapshot.profile.as_ref() {
+            state
+                .0
+                .controls
+                .set_audio_output(&profile.id, settings.audio_output.clone());
+        }
         snapshot.settings = settings;
         Ok(())
     };
@@ -2020,6 +2047,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             refresh,
             save_item,
             save_settings,
+            audio_outputs,
             configure_provider,
             configure_spicy_lyrics,
             retry_lyrics,

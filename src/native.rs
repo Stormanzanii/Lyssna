@@ -90,6 +90,15 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn set_audio_output(&self, account: &str, name: Option<String>) {
+        if let Ok(connection) = self.0.lock()
+            && let Some(connection) = connection
+                .as_ref()
+                .filter(|connection| connection.account == account)
+        {
+            connection.audio_buffer.output.request(name);
+        }
+    }
     #[cfg(test)]
     pub(crate) fn test_active(
         account: &str,
@@ -1028,6 +1037,9 @@ impl NativePlayer {
             .map(|settings| settings.volume_percent.min(100))
             .unwrap_or(100);
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
+        if let Ok(settings) = crate::config::Settings::load() {
+            audio_buffer.output.request(settings.audio_output);
+        }
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {
                 audio_buffer: audio_buffer.clone(),
@@ -1122,6 +1134,7 @@ impl NativePlayer {
                     *queue = None;
                 }
                 audio_buffer.interrupt(None);
+                audio_buffer.output.retire_stream();
                 if let Ok(mut session) = shared_session.lock() {
                     *session = None;
                 }
@@ -1398,6 +1411,18 @@ async fn run(
         {
             volume_sync = None;
             let _ = spirc.set_volume((u32::from(volume) * u32::from(u16::MAX) / 100) as u16);
+        }
+        if let Some(issue) = audio_buffer.output.take_issue() {
+            match issue {
+                crate::audio_output::OutputIssue::UsingDefault => emit(NativeEvent::ControlError(
+                    "Selected audio output is unavailable. Using the system default.".into(),
+                )),
+                crate::audio_output::OutputIssue::Unavailable => {
+                    intent.reset();
+                    local_player.pause();
+                    emit(NativeEvent::ControlError("No audio output is available. Connect speakers or headphones, then press Play.".into()));
+                }
+            }
         }
         if let Some(playing) = intent.next(audio_playing, std::time::Instant::now()) {
             // Local transport must not queue behind Spotify Connect HTTP notifications.

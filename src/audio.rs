@@ -5,7 +5,7 @@ use librespot_playback::{
     decoder::AudioPacket,
     mixer::{Mixer, NoOpVolume, VolumeGetter},
 };
-use rodio::{OutputStream, OutputStreamBuilder, Source};
+use rodio::{OutputStream, Source};
 use std::{
     sync::{
         Arc, Mutex,
@@ -21,6 +21,7 @@ const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000
 
 #[derive(Clone, Default)]
 pub struct AudioBuffer {
+    pub(crate) output: crate::audio_output::OutputChoice,
     #[cfg(test)]
     output_started: Arc<Mutex<Option<std::time::Instant>>>,
     queued: Arc<AtomicUsize>,
@@ -66,6 +67,7 @@ pub struct AudioSink {
     buffer: AudioBuffer,
     mixer: Option<Arc<dyn Mixer>>,
     stream: Option<OutputStream>,
+    applied_output: Option<u64>,
     sink: Option<rodio::Sink>,
     queued: Arc<AtomicUsize>,
     flush: Arc<AtomicBool>,
@@ -86,6 +88,7 @@ impl AudioSink {
             buffer: buffer.clone(),
             mixer: None,
             stream: None,
+            applied_output: None,
             sink: None,
             queued: buffer.queued,
             flush,
@@ -98,13 +101,10 @@ impl AudioSink {
         self
     }
     pub fn prepare_output(&mut self) -> SinkResult<()> {
-        if self.sink.is_none() {
-            let mut stream = OutputStreamBuilder::open_default_stream().map_err(|_| {
-                SinkError::ConnectionRefused("Cannot open default audio device".into())
-            })?;
-            stream.log_on_drop(false);
+        if let Some((stream, revision)) = self.buffer.output.open(self.applied_output)? {
             self.sink = Some(rodio::Sink::connect_new(stream.mixer()));
             self.stream = Some(stream);
+            self.applied_output = Some(revision);
             #[cfg(windows)]
             let _ = configure_session_identity();
         }
@@ -113,8 +113,13 @@ impl AudioSink {
     #[cfg(test)]
     pub(crate) fn test_output(&mut self) -> impl Source<Item = f32> + use<> {
         let (sink, output) = rodio::Sink::new();
-        self.sink = Some(sink);
+        self.install_test_sink(sink);
         output
+    }
+    #[cfg(test)]
+    fn install_test_sink(&mut self, sink: rodio::Sink) {
+        self.sink = Some(sink);
+        self.applied_output = Some(self.buffer.output.revision());
     }
     fn discard_old_audio(&mut self) {
         if self.flush.swap(false, Ordering::AcqRel)
@@ -163,6 +168,7 @@ impl Sink for AudioSink {
         Ok(())
     }
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
+        self.prepare_output()?;
         let narration = packet.is_narration();
         self.discard_old_audio();
         let samples = packet
@@ -189,6 +195,7 @@ impl Sink for AudioSink {
             let _ = self.seek_ready.send(());
         }
         while self.queued.load(Ordering::Relaxed) > MAX_SAMPLES {
+            self.prepare_output()?;
             self.discard_old_audio();
             thread::sleep(Duration::from_millis(2));
         }
@@ -472,7 +479,7 @@ mod tests {
             vec![0.25; MAX_SAMPLES],
             buffer.queued.clone(),
         ));
-        audio.sink = Some(sink);
+        audio.install_test_sink(sink);
         assert_eq!(output.next(), Some(0.25));
         audio.pause().unwrap();
         for _ in 0..4410 {
@@ -512,7 +519,7 @@ mod tests {
             vec![0.25; MAX_SAMPLES],
             buffer.queued.clone(),
         ));
-        audio.sink = Some(sink);
+        audio.install_test_sink(sink);
         audio.pause().unwrap();
         for _ in 0..4410 {
             output.next();
@@ -578,7 +585,7 @@ mod tests {
             AudioBuffer::default(),
         )
         .with_mixer(mixer.clone());
-        audio.sink = Some(sink);
+        audio.install_test_sink(sink);
         audio
             .write(
                 AudioPacket::Samples(vec![0.5; MAX_SAMPLES]),
@@ -615,7 +622,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        audio.sink = Some(sink);
+        audio.install_test_sink(sink);
         let producer_paused = paused.clone();
         let producer = thread::spawn(move || {
             let mut converter = Converter::new(None);

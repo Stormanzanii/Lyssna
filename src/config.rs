@@ -25,6 +25,7 @@ pub struct Settings {
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
     pub volume_percent: u8,
+    pub audio_output: Option<String>,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
 }
@@ -47,6 +48,7 @@ impl Default for Settings {
             ui_zoom_percent: 100,
             lyric_font: String::new(),
             volume_percent: 100,
+            audio_output: None,
             auto_download_updates: true,
             folders: Vec::new(),
         }
@@ -89,10 +91,19 @@ impl Settings {
         settings.lyric_size = settings.lyric_size.clamp(18.0, 60.0);
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        settings.audio_output = settings
+            .audio_output
+            .filter(|name| crate::audio_output::valid_name(name));
         Ok(settings)
     }
 
     pub fn save(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.audio_output
+                .as_deref()
+                .is_none_or(crate::audio_output::valid_name),
+            "Choose a valid audio output"
+        );
         anyhow::ensure!(self.library_order.len() <= 16, "Too many library accounts");
         for order in self.library_order.values() {
             anyhow::ensure!(

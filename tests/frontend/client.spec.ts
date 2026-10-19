@@ -64,6 +64,42 @@ test("artist links show the artist immediately while metadata is pending", async
   await expect(page.locator(".skeleton-rows")).toHaveCount(0);
 });
 
+test("audio output selection saves headphones and can return to system default", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Settings", { exact: true }).click();
+  const output = page.getByRole("combobox", {
+    name: "Audio output",
+    exact: true,
+  });
+  await expect(output.locator("option")).toHaveCount(3);
+  await output.selectOption("Test headphones");
+  await expect(output).toHaveValue("Test headphones");
+  const savedOutput = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings.audio_output,
+    );
+  await expect.poll(savedOutput).toBe("Test headphones");
+  await output.selectOption("");
+  await expect.poll(savedOutput).toBe(null);
+  const outputRequests = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "audio_outputs",
+        ).length,
+    );
+  const previousRequests = await outputRequests();
+  await page
+    .getByRole("button", { name: "Refresh outputs", exact: true })
+    .click();
+  await expect.poll(outputRequests).toBe(previousRequests + 1);
+});
+
 test("metadata menus stay off blank rows, backgrounds and player controls", async ({
   page,
 }) => {
@@ -136,6 +172,8 @@ async function startClient(page: Page, initialRoute = "liked") {
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          if (command === "audio_outputs")
+            return ["Test speakers", "Test headphones"];
           if (command === "dj_voice") {
             host.__clientTest.emitVoice({
               id: args.id,

@@ -87,6 +87,7 @@ export interface Settings {
   lyric_font?: string;
   volume_percent?: number;
   auto_download_updates: boolean;
+  audio_output?: string | null;
   folders: Folder[];
 }
 export interface Word {

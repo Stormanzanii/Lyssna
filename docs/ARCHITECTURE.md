@@ -8,7 +8,7 @@
 | `api.rs` | Authenticated Spotify calls, origin validation, 401 refresh, rate-limit cooldown, pagination, playlist writes |
 | `model.rs` | Spotify data and ordered duplicate-free playlist additions |
 | `native.rs` | Separate Tokio runtime, librespot session, Connect registration, Rodio player, timestamped player events, shutdown |
-| `audio.rs`, `playback_intent.rs` | Bounded audio buffering, seek acknowledgments, and latest-intent play/pause transitions |
+| `audio.rs`, `audio_output.rs`, `playback_intent.rs` | Bounded audio buffering, versioned output-device selection, seek acknowledgments, and latest-intent play/pause transitions |
 | `catalogue.rs`, `artist.rs`, `album.rs`, `canvas.rs` | Read-only desktop catalogue queries, bounded public-page fallback, banner and play-count parsing, validated Canvas media URLs |
 | `lyrics.rs` | Independent lyric model, LRC/TTML parsing, imports, per-provider disk cache |
 | `provider.rs` | Credential-store host configuration, HTTPS validation, query protocol, bounded packed-data decoding |

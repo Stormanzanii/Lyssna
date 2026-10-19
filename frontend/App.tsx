@@ -2869,6 +2869,18 @@ function SettingsPage({
 }) {
   const [consent, setConsent] = useState(false);
   const [lyricsKey, setLyricsKey] = useState("");
+  const [audioOutputs, setAudioOutputs] = useState<string[] | null>(null);
+  const [audioRefresh, setAudioRefresh] = useState(0);
+  useEffect(() => {
+    if (!state.profile?.id) return;
+    let active = true;
+    void onCall<string[]>("audio_outputs").then((outputs) => {
+      if (active && Array.isArray(outputs)) setAudioOutputs(outputs);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall, state.profile?.id, audioRefresh]);
   return (
     <div className="settings-page">
       <h1>Settings</h1>
@@ -2906,6 +2918,42 @@ function SettingsPage({
       </section>
       <section>
         <h2>Playback</h2>
+        <label className="setting-row">
+          <span>
+            <strong>Audio output</strong>
+            <p>Choose speakers or headphones for this computer.</p>
+          </span>
+          <select
+            aria-label="Audio output"
+            value={state.settings.audio_output || ""}
+            onChange={(event) =>
+              onSettings({ audio_output: event.target.value || null })
+            }
+          >
+            <option value="">System default</option>
+            {state.settings.audio_output &&
+              !audioOutputs?.includes(state.settings.audio_output) && (
+                <option value={state.settings.audio_output}>
+                  {state.settings.audio_output}
+                  {audioOutputs ? " (unavailable)" : ""}
+                </option>
+              )}
+            {audioOutputs?.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="setting-row">
+          <span>New headphones or speakers connected?</span>
+          <button
+            className="pill outline"
+            onClick={() => setAudioRefresh((value) => value + 1)}
+          >
+            Refresh outputs
+          </button>
+        </div>
         <div className="setting-row">
           <div>
             <strong>Native audio</strong>

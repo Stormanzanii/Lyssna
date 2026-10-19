@@ -118,6 +118,7 @@ export const emptyState: AppState = {
     floating_lyrics: false,
     ui_font: "",
     lyric_font: "",
+    audio_output: null,
     auto_download_updates: true,
     folders: [],
   },

@@ -1060,7 +1060,7 @@ async fn dj_voice(
         capture.transcribe_with_progress(|progress| {
             let _ = app.emit(
                 "spotiflex-dj-voice",
-                json!({"account":account,"id":id,"level":progress.level,"speech":progress.speech}),
+                json!({"account":account,"id":id,"level":progress.level,"speech":progress.speech,"stage":progress.stage,"percent":progress.percent}),
             );
         })
     })

@@ -35,10 +35,21 @@ pub struct Capture {
 }
 
 /// UI meter data, without audio samples or recognized words.
-#[derive(Clone, Copy, serde::Serialize)]
+#[derive(Clone, Copy, Default, serde::Serialize)]
 pub struct Progress {
     pub level: u8,
     pub speech: bool,
+    pub stage: Stage,
+    pub percent: u8,
+}
+
+#[derive(Clone, Copy, Default, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stage {
+    Preparing,
+    #[default]
+    Listening,
+    Transcribing,
 }
 
 impl VoiceCapture {
@@ -99,7 +110,10 @@ impl Capture {
         );
         #[cfg(windows)]
         {
-            platform::recognize(&self.cancelled, None, report)
+            let mut report = report;
+            let model = super::local_speech::prepare(&self.cancelled, &mut report)?;
+            let audio = platform::capture(&self.cancelled, None, &mut report)?;
+            super::local_speech::decode(&model, &audio, self.cancelled.clone(), &mut report)
         }
         #[cfg(not(windows))]
         {
@@ -238,11 +252,57 @@ mod platform {
         }
     }
 
-    pub(super) fn recognize(
+    fn retained_audio(result: &ISpRecoResult) -> Result<Vec<f32>> {
+        let stream = unsafe { result.GetAudio(0, u32::MAX) }.context("Speech audio unavailable")?;
+        let mut format_id = windows::core::GUID::zeroed();
+        // Windows writes this output even though its generated pointer is const.
+        let format = unsafe { stream.GetFormat(std::ptr::addr_of_mut!(format_id)) }?;
+        let supported = !format.is_null()
+            && unsafe {
+                (*format).wFormatTag == 1
+                    && (*format).nSamplesPerSec == 16000
+                    && (*format).nChannels == 1
+                    && (*format).wBitsPerSample == 16
+            };
+        unsafe {
+            CoTaskMemFree(Some(format.cast()));
+        }
+        ensure!(supported, "Unsupported speech audio format");
+        let mut bytes = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let mut read = 0;
+            unsafe {
+                stream.Read(
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len() as u32,
+                    Some(&mut read),
+                )
+            }
+            .ok()?;
+            if read == 0 {
+                break;
+            }
+            ensure!(
+                bytes.len() + read as usize <= 16_000 * 30 * 2,
+                "Speech recording too long"
+            );
+            bytes.extend_from_slice(&buffer[..read as usize]);
+        }
+        ensure!(bytes.len() % 2 == 0, "Incomplete speech audio");
+        Ok(bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| f32::from(i16::from_le_bytes([b[0], b[1]])) / 32768.0)
+            .collect())
+    }
+
+    pub(super) fn capture(
         cancelled: &AtomicBool,
         file: Option<&std::path::Path>,
         mut report: impl FnMut(Progress),
-    ) -> Result<String> {
+    ) -> Result<Vec<f32>> {
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok() }
             .context("Windows speech recognition could not start")?;
         let _apartment = Apartment;
@@ -271,6 +331,17 @@ mod platform {
                 .context("Microphone unavailable. Check Windows microphone permissions")?;
         }
         let context = unsafe { recognizer.0.CreateRecoContext() }?;
+        let wave_format = windows::Win32::Media::Audio::WAVEFORMATEX {
+            wFormatTag: 1,
+            nChannels: 1,
+            nSamplesPerSec: 16000,
+            nAvgBytesPerSec: 32000,
+            nBlockAlign: 2,
+            wBitsPerSample: 16,
+            cbSize: 0,
+        };
+        let wave_id = windows::core::GUID::from_u128(0xc31adbae_527f_4ff5_a230_f62bb61ff70c);
+        unsafe { context.SetAudioOptions(SPAO_RETAIN_AUDIO, &wave_id, &wave_format) }?;
         let grammar = unsafe { context.CreateGrammar(1) }?;
         unsafe {
             // SPFEI includes these two validation bits in every event mask.
@@ -298,9 +369,11 @@ mod platform {
         let mut level = 0;
         let mut received_audio = false;
         let mut rejected_speech = false;
+        let mut samples = Vec::new();
         report(Progress {
             level: 0,
             speech: false,
+            ..Default::default()
         });
         while Instant::now() < deadline {
             ensure!(
@@ -358,6 +431,12 @@ mod platform {
                             }
                         {
                             if event_id == SPEI_RECOGNITION.0 {
+                                let audio = retained_audio(&result)?;
+                                ensure!(
+                                    samples.len() + audio.len() <= 16_000 * 30,
+                                    "Speech recording too long"
+                                );
+                                samples.extend(audio);
                                 utterance.recognize(&text, Instant::now());
                             } else {
                                 utterance.hypothesis(&text, Instant::now());
@@ -371,10 +450,12 @@ mod platform {
             report(Progress {
                 level,
                 speech: !utterance.text.is_empty(),
+                ..Default::default()
             });
             // Ambient sound events never extend this speech-only deadline.
             if utterance.ready(Instant::now()) {
-                return Ok(utterance.text);
+                ensure!(!samples.is_empty(), "No speech audio captured");
+                return Ok(samples);
             }
             if utterance.text.is_empty()
                 && started.elapsed() >= Duration::from_secs(8)
@@ -382,6 +463,9 @@ mod platform {
                     .last_activity
                     .is_none_or(|last| last.elapsed() >= Duration::from_millis(1200))
             {
+                if !samples.is_empty() {
+                    return Ok(samples);
+                }
                 if rejected_speech {
                     anyhow::bail!(
                         "Sound received, but speech was not recognized reliably. Check your Windows speech language and try again"
@@ -402,10 +486,10 @@ mod platform {
             !cancelled.load(Ordering::Acquire),
             "Voice capture cancelled"
         );
-        if utterance.text.is_empty() {
+        if samples.is_empty() {
             anyhow::bail!("No speech detected. Try again or type your request")
         }
-        Ok(utterance.text)
+        Ok(samples)
     }
 
     #[cfg(test)]
@@ -435,7 +519,10 @@ mod platform {
             bytes.extend_from_slice(&noise.saturating_add(hum).to_le_bytes());
         }
         std::fs::write(path, bytes)?;
-        recognize(&AtomicBool::new(false), Some(path), |_| {})
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let model = super::super::local_speech::prepare(&cancelled, &mut |_| {})?;
+        let audio = capture(&cancelled, Some(path), |_| {})?;
+        super::super::local_speech::decode(&model, &audio, cancelled, &mut |_| {})
     }
 
     #[cfg(test)]
@@ -488,13 +575,37 @@ mod platform {
             drop(voice);
             unsafe { stream.Close() }?;
         }
-        recognize(&AtomicBool::new(false), Some(path), |_| {})
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let model = super::super::local_speech::prepare(&cancelled, &mut |_| {})?;
+        let audio = capture(&cancelled, Some(path), |_| {})?;
+        super::super::local_speech::decode(&model, &audio, cancelled, &mut |_| {})
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "Uses Windows synthesis and dictation; no microphone or Spotify requests"]
+    fn artist_requests_preserve_the_requested_artist() {
+        for artist in [
+            "Ariana Grande",
+            "Billie Eilish",
+            "Dua Lipa",
+            "Taylor Swift",
+            "Rammstein",
+        ] {
+            let recognized = platform::synthetic_request_check(&format!("Play {artist}."))
+                .expect("Artist request rejected");
+            let normalized = recognized.to_lowercase();
+            assert!(
+                normalized.contains(&artist.to_lowercase()),
+                "Artist changed during recognition: {artist}: {recognized}"
+            );
+        }
+    }
 
     #[test]
     #[cfg(windows)]

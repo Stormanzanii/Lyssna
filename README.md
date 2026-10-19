@@ -6,7 +6,7 @@ This is an initial implementation of the core client. Full parity with both refe
 
 ## Run
 
-On Windows, install Rust, Node.js 24, WebView2, and the Visual Studio C++ build tools, then run:
+On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, CMake and LLVM (including libclang). Put CMake on PATH and set `LIBCLANG_PATH` to the directory containing `libclang.dll` if LLVM is not discoverable. Then run:
 
 ```powershell
 npm ci
@@ -21,6 +21,8 @@ npm run build
 cargo build --release --locked
 .\target\release\spotiflex.exe
 ```
+
+Voice recognition downloads a verified 190 MB English model on first use. After setup, recognition runs locally. The UI waits for setup before opening the microphone and shows when it starts listening. Microphone audio stays in memory and is never uploaded; the recognized request is sent to Spotify automatically after speech ends.
 
 ## First sign-in
 

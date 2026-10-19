@@ -24,6 +24,8 @@ export function DJRequest({
     peak: 0,
     trail: 0,
     speech: false,
+    stage: "listening",
+    percent: 0,
   });
   const count = Array.from(text.trim()).length;
   const cancel = () => {
@@ -89,7 +91,14 @@ export function DJRequest({
     active.current = id;
     setBusy("voice");
     setError("");
-    setMeter({ level: 0, peak: 0, trail: 0, speech: false });
+    setMeter({
+      level: 0,
+      peak: 0,
+      trail: 0,
+      speech: false,
+      stage: "preparing",
+      percent: 0,
+    });
     let unlisten: (() => void) | undefined;
     const dispose = () => {
       unlisten?.();
@@ -102,6 +111,8 @@ export function DJRequest({
         account: string;
         level: number;
         speech: boolean;
+        stage?: string;
+        percent?: number;
       }>("spotiflex-dj-voice", ({ payload }) => {
         if (
           !live.current ||
@@ -118,6 +129,8 @@ export function DJRequest({
           peak: Math.max(level, previous.peak * 0.85),
           trail: previous.trail * 0.55 + level * 0.45,
           speech: payload.speech,
+          stage: payload.stage || "listening",
+          percent: payload.percent || 0,
         }));
       });
       if (!live.current || active.current !== id) return;
@@ -216,11 +229,15 @@ export function DJRequest({
         {busy && (
           <p role="status">
             {busy === "voice"
-              ? "Listening… Speak, then pause to send (30 seconds max)."
+              ? meter.stage === "preparing"
+                ? `Preparing local speech recognition… ${meter.percent ? `${meter.percent}%` : ""}`
+                : meter.stage === "transcribing"
+                  ? "Recognizing your request…"
+                  : "Listening… Speak, then pause to send (30 seconds max)."
               : "DJ is preparing your request…"}
           </p>
         )}
-        {busy === "voice" && (
+        {busy === "voice" && meter.stage === "listening" && (
           <div className="dj-voice-feedback">
             <div
               className="dj-voice-meter"

@@ -1,5 +1,7 @@
 //! Independently implemented DJ prompt wire format. See THIRD_PARTY_NOTICES.md.
 mod context;
+#[cfg(windows)]
+mod local_speech;
 pub mod requests;
 pub mod transport;
 pub mod voice;

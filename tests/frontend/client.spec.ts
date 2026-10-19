@@ -136,10 +136,18 @@ async function startClient(page: Page, initialRoute = "liked") {
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
-          if (command === "dj_voice")
+          if (command === "dj_voice") {
+            host.__clientTest.emitVoice({
+              id: args.id,
+              account: args.account,
+              level: 0,
+              speech: false,
+              stage: "listening",
+            });
             return new Promise<string>((resolve) => {
               host.__clientTest.resolveVoice = resolve;
             });
+          }
           if (command === "dj_request" && host.__clientTest.holdDJRequest)
             return new Promise<void>((resolve) => {
               host.__clientTest.resolveDJRequest = resolve;
@@ -466,6 +474,73 @@ test("DJ microphone bars follow real level events and ignore other captures", as
     ),
   ).toBe(false);
   await expect(meter).toHaveCount(0);
+});
+
+test("DJ waits for local speech setup before inviting the user to speak", async ({
+  page,
+}) => {
+  await startClient(page);
+  await askDJ(page);
+  await page.getByRole("button", { name: "Use microphone" }).click();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const id = host.commands.find((c: any) => c.command === "dj_voice").args.id;
+    host.voiceId = id;
+    host.emitVoice({
+      id,
+      account: "test-user",
+      level: 0,
+      speech: false,
+      stage: "preparing",
+      percent: 37,
+    });
+  });
+  await expect(page.getByRole("status")).toHaveText(
+    "Preparing local speech recognition… 37%",
+  );
+  await expect(
+    page.getByRole("meter", { name: "Microphone input" }),
+  ).toHaveCount(0);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emitVoice({
+      id: host.voiceId,
+      account: "test-user",
+      level: 30,
+      speech: true,
+      stage: "listening",
+    });
+  });
+  await expect(
+    page.getByRole("meter", { name: "Microphone input" }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emitVoice({
+      id: host.voiceId,
+      account: "test-user",
+      level: 0,
+      speech: false,
+      stage: "transcribing",
+    });
+  });
+  await expect(page.getByRole("status")).toHaveText(
+    "Recognizing your request…",
+  );
+  await expect(
+    page.getByRole("meter", { name: "Microphone input" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.evaluate(() =>
+    (window as any).__clientTest.resolveVoice("Old voice request"),
+  );
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (c: any) => c.command === "dj_request",
+      ),
+    ),
+  ).toBe(false);
 });
 
 test("DJ dialog traps focus and closes on sign-out", async ({ page }) => {

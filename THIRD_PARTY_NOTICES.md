@@ -1,5 +1,57 @@
 # Third-party notices
 
+Local speech recognition uses [whisper-rs](https://codeberg.org/tazz4843/whisper-rs) (Unlicense), [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT), and [OpenAI Whisper](https://github.com/openai/whisper) model weights (MIT). The pinned quantized English model is distributed by [the whisper.cpp model repository](https://huggingface.co/ggerganov/whisper.cpp). Model weights are downloaded into application data, verified against a pinned SHA-256, and are not tracked in this repository. Microphone audio is processed locally.
+
+## whisper.cpp
+
+MIT License
+
+Copyright (c) 2023-2024 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+## OpenAI Whisper model
+
+MIT License
+
+Copyright (c) 2022 OpenAI
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
 ## Spotify mobile protocol investigation
 
 DJ request research uses read-only inspection of the user's installed Spotify Android package (`com.spotify.music`, version code `147346334`, APK SHA-256 `C26E20A8CE9DB36FD0B6021542C75ABCAF4E923557B8A21058B502E295D62928`). The Spotify application is proprietary. Inspection is limited to app code and package metadata; private app data and credentials are not read. The APK and analysis output remain local ignored artifacts. No Spotify implementation code or assets are included in SpotiFlex from this inspection. Any integration must be independently written and its observed behavior verified.

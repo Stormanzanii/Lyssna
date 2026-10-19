@@ -544,9 +544,11 @@ export function LyricsDisplay({
         onWheel={browse}
         onTouchStart={browse}
         style={
-          {
-            "--lyric-size": `${compact ? 24 : Math.round(settings.lyric_size * 1.6)}px`,
-          } as CSSProperties
+          compact
+            ? undefined
+            : ({
+                "--lyric-size": `${Math.round(settings.lyric_size * 1.6)}px`,
+              } as CSSProperties)
         }
       >
         <div className="lyric-spacer" />

@@ -2120,7 +2120,8 @@ small {
   color: #f1f1f1b0;
 }
 .lyric-preview {
-  height: 360px;
+  height: 420px;
+  container-type: inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -2153,11 +2154,13 @@ small {
   padding-block: 0;
 }
 .compact .lyric-scroll {
+  /* Compact lyrics grow with their card so they stay readable. */
+  --lyric-size: clamp(26px, 8.5cqw, 34px);
   padding-top: 0;
   padding-inline: 10px;
 }
 .compact .lyric-line {
-  padding: 2px 0;
+  padding: 3px 0;
   font-size: var(--lyric-size);
   letter-spacing: -0.5px;
   filter: none;

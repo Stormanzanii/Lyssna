@@ -829,6 +829,14 @@ test("imported lyrics keep artwork and ambience in place, without a duplicate pr
   const cards = page.locator(".now-playing .now-card");
   await expect(cards.first()).toHaveClass(/lyric-preview/);
   await expect(cards.nth(1)).toHaveClass(/artist-card/);
+  // Card lyrics scale with the card and stay readable.
+  const size = await cards
+    .first()
+    .locator(".lyric-line")
+    .first()
+    .evaluate((line) => parseFloat(getComputedStyle(line).fontSize));
+  expect(size).toBeGreaterThanOrEqual(26);
+  expect(size).toBeLessThanOrEqual(34);
 });
 
 test("album pages retain play counts, release date and licensing", async ({

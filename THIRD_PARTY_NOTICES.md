@@ -4,6 +4,8 @@
 
 DJ request research uses read-only inspection of the user's installed Spotify Android package (`com.spotify.music`, version code `147346334`, APK SHA-256 `C26E20A8CE9DB36FD0B6021542C75ABCAF4E923557B8A21058B502E295D62928`). The Spotify application is proprietary. Inspection is limited to app code and package metadata; private app data and credentials are not read. The APK and analysis output remain local ignored artifacts. No Spotify implementation code or assets are included in SpotiFlex from this inspection. Any integration must be independently written and its observed behavior verified.
 
+The matching public ARM64 APK split and Windows Spotify 1.3.3.264 protocol schemas were also inspected locally. The DJ prompt encoder is an independent Rust implementation of observed field numbers and input values; no Spotify implementation code or assets were copied. [go-librespot](https://github.com/devgianlu/go-librespot/tree/bd3fa74), licensed under GPL-3.0, was consulted for playlist signal interoperability; its implementation was not copied.
+
 ## Kawarp
 
 Album-cover ambience uses @kawarp/core 1.3.1 (https://github.com/better-lyrics/kawarp), the renderer used by the Spicy Lyrics reference. Its license follows.

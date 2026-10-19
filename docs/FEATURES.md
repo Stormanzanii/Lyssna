@@ -57,6 +57,8 @@ Narration transition tests cover stereo fade direction, speech labels during ove
 
 The player DJ button distinguishes click from a 500 ms hold. Click refreshes the DJ selection. Hold shows an availability notice and suppresses refresh on release. Text/voice request transport remains unimplemented; the hold gesture does not record or submit audio. Cancelling a hold prevents delayed actions, and keyboard refresh remains available.
 
+Native DJ prompt validation and encoding are implemented independently from the interface. Typed text and reviewed voice transcripts share a bounded UTF-8 protobuf payload with distinct input types. Empty requests, more than 500 characters and unsupported control characters are rejected. Tests cover both input types and Unicode byte lengths. Live session metadata reports interaction enabled for the tested account, but the playlist signal route rejected submission with HTTP 412. Successful prompt submission and microphone input are not yet implemented.
+
 Native reconnect stays idle until playback is requested. A same-song takeover claims the local device before accepting decoder positions; the UI starts a new clock observation even when loading and playing events arrive together. Regression tests reproduce the prior 1:17 display against audio at 0:01.2.
 
 DJ transitions duck music under speech rather than fading the final words to silence. Music rises after the spoken line ends. End-of-track waits for submitted PCM to drain before advancing, preserving buffered narration tails. Synthetic audio tests cover audible final syllables and output completion; the revised transitions still need live listening confirmation.

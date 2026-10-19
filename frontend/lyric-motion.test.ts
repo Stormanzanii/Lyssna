@@ -1,11 +1,14 @@
 import { expect, it } from "vitest";
 import {
+  MOTION,
+  Spring,
+  letterGoals,
+  lineBlur,
+  naturalSpline,
   stepScroll,
-  syllableMotion,
-  POP,
   vocalGap,
   vocalGaps,
-  letterMotion,
+  wordGoal,
 } from "./lyric-motion";
 import type { Line } from "./types";
 it("puts interlude dots on the side of the upcoming singer", () => {
@@ -51,34 +54,69 @@ it("keeps scrolling stable through retargets and different display refresh rates
   });
   expect(Math.max(...results) - Math.min(...results)).toBeLessThan(0.001);
 });
-it("rests unsung syllables small and low, pops the sung one, then settles", () => {
-  const unsung = syllableMotion(1000, 2000, -Infinity);
-  expect(unsung).toMatchObject({ scale: POP.restScale, glow: 0, fill: 0 });
-  expect(unsung.lift).toBeGreaterThan(0);
-  const singing = syllableMotion(1000, 2000, 1700);
-  expect(singing.scale).toBeCloseTo(POP.peakScale);
-  expect(singing.lift).toBeCloseTo(POP.peakLift);
-  expect(singing.glow).toBeGreaterThan(0.9);
-  const sung = syllableMotion(1000, 2000, Infinity);
-  expect(sung).toMatchObject({ scale: 1, lift: 0, glow: 0, fill: 1 });
-  expect(syllableMotion(1000, 2000, 2000 + POP.settleMs).scale).toBeCloseTo(1);
+it("passes curves through their points without kinks", () => {
+  const curve = naturalSpline([
+    [0, 0.95],
+    [0.7, 1.0505],
+    [1, 1],
+  ]);
+  expect(curve(0)).toBeCloseTo(0.95);
+  expect(curve(0.7)).toBeCloseTo(1.0505);
+  expect(curve(1)).toBeCloseTo(1);
+  for (let x = 0.001; x <= 1; x += 0.001)
+    expect(Math.abs(curve(x) - curve(x - 0.001))).toBeLessThan(0.001);
 });
-it("moves syllables continuously so lines flow without jumps", () => {
-  let previous = syllableMotion(1000, 1300, 700);
-  for (let time = 701; time <= 2000; time++) {
-    const next = syllableMotion(1000, 1300, time);
-    expect(Math.abs(next.scale - previous.scale)).toBeLessThan(0.004);
-    expect(Math.abs(next.lift - previous.lift)).toBeLessThan(0.003);
-    expect(Math.abs(next.glow - previous.glow)).toBeLessThan(0.03);
-    previous = next;
-  }
-  // The pop peaks soon after the syllable starts, not at its end.
-  expect(syllableMotion(1000, 2000, 1220).scale).toBeCloseTo(POP.peakScale);
-  // Small travel: under a twentieth of the line height.
-  expect(POP.restLift - POP.peakLift).toBeLessThan(0.05);
-  // The next syllable starts rising before this one finishes settling.
-  expect(syllableMotion(1000, 1300, 1350).scale).toBeGreaterThan(1);
-  expect(syllableMotion(1300, 1600, 1350).scale).toBeGreaterThan(POP.restScale);
+it("settles springs at their goal regardless of frame rate", () => {
+  const finals = [30, 60, 144].map((rate) => {
+    const spring = new Spring(0.95, 0.88, 0.64);
+    spring.goal = 1;
+    for (let frame = 0; frame < rate / 2; frame++) spring.step(1 / rate);
+    const quarter = spring.position;
+    for (let frame = 0; frame < rate * 4; frame++) spring.step(1 / rate);
+    expect(spring.asleep).toBe(true);
+    expect(spring.position).toBeCloseTo(1);
+    return quarter;
+  });
+  expect(Math.max(...finals) - Math.min(...finals)).toBeLessThan(1e-6);
+});
+it("rests unsung syllables small and low, sweeps the fill, and settles sung ones", () => {
+  expect(wordGoal(1000, 2000, 500)).toEqual({
+    scale: 0.95,
+    lift: 0.01,
+    glow: 0,
+    gradient: -20,
+  });
+  const singing = wordGoal(1000, 2000, 1700);
+  expect(singing.scale).toBeCloseTo(1.0505);
+  expect(singing.lift).toBeLessThan(0);
+  expect(singing.gradient).toBeCloseTo(64);
+  // The natural spline overshoots between its points; the glow peaks above
+  // 1 early in the syllable.
+  expect(wordGoal(1000, 2000, 1400).glow).toBeCloseTo(1.4012, 3);
+  expect(wordGoal(1000, 2000, 1500).lift).toBeCloseTo(-0.0353, 4);
+  expect(wordGoal(1000, 2000, 2000)).toEqual({
+    scale: 1,
+    lift: 0,
+    glow: 0,
+    gradient: 100,
+  });
+});
+it("pops the sung letter of a held word and eases its neighbours", () => {
+  const goals = letterGoals(1000, 2000, 1310, 4);
+  expect(goals[1].scale).toBeGreaterThan(goals[0].scale);
+  expect(goals[1].gradient).toBeGreaterThan(-20);
+  expect(goals[0].gradient).toBe(100);
+  // Unsung letters wait at rest with no fill.
+  expect(goals[2]).toMatchObject({ scale: 0.95, gradient: -20 });
+  expect(goals[3]).toMatchObject({ scale: 0.95, gradient: -20 });
+  for (const goal of letterGoals(1000, 2000, 2000, 4))
+    expect(goal).toMatchObject({ scale: 1, lift: 0, gradient: 100 });
+});
+it("blurs lines more the further they are from the active one, up to a cap", () => {
+  expect(lineBlur(0)).toBe(0);
+  expect(lineBlur(1)).toBeCloseTo(1.25);
+  expect(lineBlur(2)).toBeGreaterThan(lineBlur(1));
+  expect(lineBlur(20)).toBeCloseTo(MOTION.maxBlur);
 });
 it("shows waiting dots only in long gaps with no main or background vocals", () => {
   const line = (start_ms: number, end_ms: number, background = false) =>
@@ -88,13 +126,4 @@ it("shows waiting dots only in long gaps with no main or background vocals", () 
   expect(vocalGap(lines, 4000)).toBeUndefined();
   expect(vocalGap(lines, 6500)).toEqual({ start: 6000, end: 10000, after: 1 });
   expect(vocalGap(lines, 10000)).toBeUndefined();
-});
-it("staggers held-word letter pops and settles every letter at full size", () => {
-  const first = letterMotion(1000, 4000, 1400, 0, 4);
-  const last = letterMotion(1000, 4000, 1400, 3, 4);
-  expect(first.lift).toBeLessThan(last.lift);
-  expect(first.scale).toBeGreaterThan(last.scale);
-  expect(first.fill).toBeGreaterThan(last.fill);
-  for (let index = 0; index < 4; index++)
-    expect(letterMotion(1000, 4000, 5000, index, 4).scale).toBeCloseTo(1);
 });

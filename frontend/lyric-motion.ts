@@ -68,9 +68,8 @@ export interface ScrollSpring {
   velocity: number;
   target: number;
 }
-/** Analytic critical damping preserves velocity when the active line changes.
- * A softer frequency (Spicy Lyrics uses 1 Hz, about 6.3 rad/s) glides between
- * lines instead of snapping. */
+/** Analytic critical damping preserves velocity when the active line changes,
+ * so scrolling glides between lines instead of snapping. */
 export function stepScroll(spring: ScrollSpring, seconds: number): number {
   const frequency = 7,
     offset = spring.position - spring.target;
@@ -80,82 +79,268 @@ export function stepScroll(spring: ScrollSpring, seconds: number): number {
   spring.velocity = (spring.velocity - frequency * combined * seconds) * decay;
   return spring.position;
 }
-export interface SyllableMotion {
-  /** Vertical offset in em; negative is up. */
-  lift: number;
-  scale: number;
-  /** Glow strength, 0 to 1. */
-  glow: number;
-  /** Share of the syllable already sung, 0 to 1. */
-  fill: number;
+/** Analytic damped spring ported from Fraktality/spr (MIT). Frequency is in
+ * hertz. */
+export class Spring {
+  position: number;
+  velocity = 0;
+  goal: number;
+  constructor(
+    position: number,
+    private frequency: number,
+    private damping: number,
+  ) {
+    this.position = this.goal = position;
+  }
+  step(seconds: number): number {
+    const d = this.damping,
+      f = this.frequency * 2 * Math.PI,
+      offset = this.position - this.goal,
+      v = this.velocity;
+    if (d === 1) {
+      const q = Math.exp(-f * seconds),
+        w = seconds * q;
+      this.position = offset * (q + w * f) + v * w + this.goal;
+      this.velocity = v * (q - w * f) - offset * (w * f * f);
+    } else if (d < 1) {
+      const q = Math.exp(-d * f * seconds),
+        c = Math.sqrt(1 - d * d),
+        i = Math.cos(seconds * f * c),
+        j = Math.sin(seconds * f * c),
+        z = j / c,
+        y = j / (f * c);
+      this.position = (offset * (i + z * d) + v * y) * q + this.goal;
+      this.velocity = (v * (i - z * d) - offset * (z * f)) * q;
+    } else {
+      const c = Math.sqrt(d * d - 1),
+        r1 = -f * (d + c),
+        r2 = -f * (d - c),
+        co2 = (v - offset * r1) / (2 * f * c),
+        co1 = Math.exp(r1 * seconds) * (offset - co2);
+      this.position = co1 + co2 * Math.exp(r2 * seconds) + this.goal;
+      this.velocity = co1 * r1 + co2 * Math.exp(r2 * seconds) * r2;
+    }
+    return this.position;
+  }
+  get asleep() {
+    const offset = this.position - this.goal;
+    return this.velocity ** 2 <= 1e-4 && offset ** 2 <= (1 / 3840) ** 2;
+  }
 }
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-const ease = (value: number) => {
-  const x = clamp01(value);
-  return x * x * (3 - 2 * x);
-};
-/** Shape of a syllable's pop: unsung text rests a little smaller and lower,
- * the sung syllable rises past full size, and it settles at full size once
- * sung, so the boundary between sung and unsung stays visible. Modelled on
- * Spicy Lyrics' resting scale of 0.95 and its rise-peak-settle curves. */
-export const POP = {
-  restScale: 0.96,
-  restLift: 0.01,
-  peakScale: 1.045,
-  peakLift: -0.03,
-  letterPeakScale: 1.1,
-  letterPeakLift: -0.05,
-  /** The rise leads the syllable slightly and peaks soon after it starts,
-   * matching the sung attack instead of trailing it. */
-  leadMs: 50,
-  riseMs: 220,
-  settleMs: 300,
-};
-/** Motion for a syllable at `time`. Pass -Infinity for unsung lines and
- * Infinity for sung ones. The rise starts slightly early and the settle runs
- * past the end, so neighbouring syllables overlap and the line flows. */
-export function syllableMotion(
-  start: number,
-  end: number,
-  time: number,
-  peakScale = POP.peakScale,
-  peakLift = POP.peakLift,
-): SyllableMotion {
-  const duration = Math.max(1, end - start);
-  const rise = ease(
-    (time - start + POP.leadMs) /
-      (Math.min(POP.riseMs, Math.max(90, duration * 0.6)) + POP.leadMs),
-  );
-  const settle = ease((time - end) / POP.settleMs);
-  const peak = (rest: number, top: number, sung: number) =>
-    rest + (top - rest) * rise + (sung - (rest + (top - rest) * rise)) * settle;
-  const glowIn = ease((time - start + POP.leadMs) / (POP.leadMs + 90));
-  const glowOut = ease((time - end + 60) / (POP.settleMs + 60));
-  return {
-    lift: peak(POP.restLift, peakLift, 0),
-    scale: peak(POP.restScale, peakScale, 1),
-    glow: glowIn * (1 - glowOut),
-    fill: clamp01((time - start) / duration),
+/** Natural cubic spline through `points`. */
+export function naturalSpline(points: readonly (readonly [number, number])[]) {
+  const xs = points.map((point) => point[0]),
+    ys = points.map((point) => point[1]),
+    n = xs.length - 1;
+  const below = new Array<number>(n + 1).fill(0),
+    diagonal = [...below],
+    above = [...below],
+    right = [...below];
+  for (let i = 1; i < n; i++) {
+    const l = 1 / (xs[i] - xs[i - 1]),
+      r = 1 / (xs[i + 1] - xs[i]);
+    below[i] = l;
+    diagonal[i] = 2 * (l + r);
+    above[i] = r;
+    right[i] = 3 * ((ys[i] - ys[i - 1]) * l * l + (ys[i + 1] - ys[i]) * r * r);
+  }
+  const first = 1 / (xs[1] - xs[0]),
+    last = 1 / (xs[n] - xs[n - 1]);
+  diagonal[0] = 2 * first;
+  above[0] = first;
+  right[0] = 3 * (ys[1] - ys[0]) * first * first;
+  below[n] = last;
+  diagonal[n] = 2 * last;
+  right[n] = 3 * (ys[n] - ys[n - 1]) * last * last;
+  for (let i = 1; i <= n; i++) {
+    const m = below[i] / diagonal[i - 1];
+    diagonal[i] -= m * above[i - 1];
+    right[i] -= m * right[i - 1];
+  }
+  const slopes = [...right];
+  slopes[n] = right[n] / diagonal[n];
+  for (let i = n - 1; i >= 0; i--)
+    slopes[i] = (right[i] - above[i] * slopes[i + 1]) / diagonal[i];
+  return (x: number) => {
+    let i = 1;
+    while (i < n && xs[i] < x) i++;
+    const width = xs[i] - xs[i - 1],
+      t = (x - xs[i - 1]) / width,
+      rise = ys[i] - ys[i - 1],
+      a = slopes[i - 1] * width - rise,
+      b = -slopes[i] * width + rise;
+    return (
+      (1 - t) * ys[i - 1] + t * ys[i] + t * (1 - t) * (a * (1 - t) + b * t)
+    );
   };
 }
-/** Letters of a held syllable rise one after another across its duration. */
-export function letterMotion(
+/** Animation curves over a syllable's progress, and the springs that chase
+ * them. Lift is a share of the font size. */
+export const MOTION = {
+  scale: naturalSpline([
+    [0, 0.95],
+    [0.7, 1.0505],
+    [1, 1],
+  ]),
+  letterScale: naturalSpline([
+    [0, 0.95],
+    [0.7, 1.175],
+    [1, 1],
+  ]),
+  lift: naturalSpline([
+    [0, 1 / 100],
+    [0.9, -1 / 60],
+    [1, 0],
+  ]),
+  letterLift: naturalSpline([
+    [0, 1 / 100],
+    [0.9, -1 / 56],
+    [1, 0],
+  ]),
+  glow: naturalSpline([
+    [0, 0],
+    [0.15, 1],
+    [0.6, 1],
+    [1, 0],
+  ]),
+  /** Frequency in hertz and damping ratio. */
+  springs: { scale: [0.88, 0.64], lift: [1.45, 0.4], glow: [1.18, 0.56] },
+  /** Glow left on sung letters while their held word waits between letters. */
+  sungLetterGlow: 0.2,
+  /** Held words finish their letters this much before the word ends. */
+  emphasisTailMs: 250,
+  blurPerLine: 1.25,
+  maxBlur: 1.25 * 5.465,
+} as const;
+export type SungState = "unsung" | "active" | "sung";
+export const sungState = (start: number, end: number, time: number) =>
+  (time < start ? "unsung" : time >= end ? "sung" : "active") as SungState;
+const progressOf = (start: number, end: number, time: number) =>
+  time <= start ? 0 : time >= end ? 1 : (time - start) / (end - start);
+export interface SyllableGoal {
+  scale: number;
+  /** Vertical offset in em; negative is up. */
+  lift: number;
+  /** Glow strength, 0 to 1. */
+  glow: number;
+  /** Leading edge of the sung gradient, in percent of the syllable width. */
+  gradient: number;
+}
+export function wordGoal(
   start: number,
   end: number,
   time: number,
-  index: number,
+): SyllableGoal {
+  const state = sungState(start, end, time),
+    at =
+      state === "unsung"
+        ? 0
+        : state === "sung"
+          ? 1
+          : progressOf(start, end, time);
+  return {
+    scale: MOTION.scale(at),
+    lift: MOTION.lift(at),
+    glow: MOTION.glow(at),
+    gradient:
+      state === "unsung" ? -20 : state === "sung" ? 100 : -20 + 120 * at,
+  };
+}
+/** Letters of a held word share its time evenly. The sung letter pops and its
+ * neighbours follow with a steep falloff; letters lift twice as far. */
+export function letterGoals(
+  start: number,
+  end: number,
+  time: number,
   count: number,
-): SyllableMotion {
-  const slot = Math.max(1, (end - start) / Math.max(1, count));
-  const letterStart = start + index * slot;
-  const motion = syllableMotion(
-    letterStart,
-    letterStart + Math.max(slot, 220),
-    time,
-    POP.letterPeakScale,
-    POP.letterPeakLift,
+): SyllableGoal[] {
+  const slot = (end - start) / Math.max(1, count),
+    word = sungState(start, end, time);
+  const rest = (at: number, gradient: number) => ({
+    scale: MOTION.letterScale(at),
+    lift: MOTION.letterLift(at) * 2,
+    glow: MOTION.glow(at),
+    gradient,
+  });
+  if (word !== "active")
+    return Array.from({ length: count }, () =>
+      word === "sung" ? rest(1, 100) : rest(0, -20),
+    );
+  let active = -1,
+    at = 0;
+  for (let index = 0; index < count && active < 0; index++) {
+    const letterStart = start + index * slot;
+    if (sungState(letterStart, letterStart + slot, time) === "active") {
+      active = index;
+      at = progressOf(letterStart, letterStart + slot, time);
+    }
+  }
+  return Array.from({ length: count }, (_, index) => {
+    const letterStart = start + index * slot,
+      state = sungState(letterStart, letterStart + slot, time),
+      goal = rest(0, -20);
+    if (state === "unsung") return goal;
+    if (active >= 0) {
+      const distance = Math.abs(index - active),
+        falloff = 1 / (1 + distance ** 2.8),
+        glowFalloff = 1 / (1 + distance * 0.9);
+      goal.scale += (MOTION.letterScale(at) - goal.scale) * falloff;
+      goal.lift += (MOTION.letterLift(at) * 2 - goal.lift) * falloff;
+      goal.glow += (MOTION.glow(at) - goal.glow) * glowFalloff;
+    } else if (state === "sung") goal.glow = MOTION.glow(MOTION.sungLetterGlow);
+    goal.gradient =
+      state === "sung"
+        ? 100
+        : index === active
+          ? -20 + 120 * Math.sin((at * Math.PI) / 2)
+          : -20;
+    return goal;
+  });
+}
+/** Springs for one syllable or letter, starting where unsung text rests. */
+export class SyllableSprings {
+  scale: Spring;
+  lift: Spring;
+  glow: Spring;
+  constructor(letter = false) {
+    const { scale, lift, glow } = MOTION.springs;
+    this.scale = new Spring(
+      (letter ? MOTION.letterScale : MOTION.scale)(0),
+      scale[0],
+      scale[1],
+    );
+    this.lift = new Spring(
+      letter ? MOTION.letterLift(0) * 2 : MOTION.lift(0),
+      lift[0],
+      lift[1],
+    );
+    this.glow = new Spring(MOTION.glow(0), glow[0], glow[1]);
+  }
+  step(goal: SyllableGoal, seconds: number) {
+    this.scale.goal = goal.scale;
+    this.lift.goal = goal.lift;
+    this.glow.goal = goal.glow;
+    return {
+      scale: this.scale.step(seconds),
+      lift: this.lift.step(seconds),
+      glow: this.glow.step(seconds),
+    };
+  }
+  get asleep() {
+    return this.scale.asleep && this.lift.asleep && this.glow.asleep;
+  }
+}
+/** Text-shadow blur, in pixels, for a line `distance` lines from the active
+ * one. */
+export const lineBlur = (distance: number) =>
+  Math.min(MOTION.blurPerLine * distance, MOTION.maxBlur);
+/** Held syllables animate letter by letter. */
+export function isEmphasis(word: Word, text: string) {
+  return (
+    word.end_ms - word.start_ms >= 1000 &&
+    Array.from(text).length <= 32 &&
+    !/[\s֐-ࣿ]/u.test(text)
   );
-  return { ...motion, fill: clamp01((time - letterStart) / slot) };
 }
 /** Preserve per-syllable timing while keeping split words in one layout box. */
 export function wordGroups(words: Word[]): Word[][] {

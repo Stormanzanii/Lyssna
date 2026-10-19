@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { emptyState } from "../../frontend/state";
 import type { Track } from "../../frontend/types";
 
@@ -972,23 +972,24 @@ test("timed syllables lift independently and font choices apply separately", asy
     });
   }, track.uri);
   await expect(page.locator(".lyrics-page .lyric-syllable")).toHaveCount(2);
-  const transforms = await page
-    .locator(".lyrics-page .lyric-syllable")
-    .evaluateAll((elements) =>
-      elements.map(
-        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
-      ),
-    );
+  const motion = (target: Locator) =>
+    target.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        lift:
+          style.translate === "none"
+            ? 0
+            : parseFloat(style.translate.split(" ")[1] ?? "0"),
+        scale: style.scale === "none" ? 1 : parseFloat(style.scale),
+        glow: style.textShadow,
+      };
+    });
+  const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
+    letter = page.locator(".lyrics-page .lyric-letter").first();
   // "Hel" is rising; the held "lo" moves by letter and still rests low.
-  expect(transforms[0]).toBeLessThan(0);
-  const restingLetter = await page
-    .locator(".lyrics-page .lyric-letter")
-    .first()
-    .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform));
-  expect(restingLetter.m42).toBeGreaterThan(0);
-  // Resting letters shrink only vertically, so no gaps open between them.
-  expect(restingLetter.a).toBe(1);
-  expect(restingLetter.d).toBeLessThan(1);
+  await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
+  expect((await motion(letter)).lift).toBeGreaterThan(0);
+  expect((await motion(letter)).scale).toBeCloseTo(0.95);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -1000,18 +1001,11 @@ test("timed syllables lift independently and font choices apply separately", asy
       }),
     track.uri,
   );
-  const poppedLetter = await page
-    .locator(".lyrics-page .lyric-letter")
-    .first()
-    .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform));
-  expect(poppedLetter.m42).toBeLessThan(-1);
-  expect(poppedLetter.a).toBeGreaterThan(1.05);
-  expect(
-    await page
-      .locator(".lyrics-page .lyric-letter")
-      .first()
-      .evaluate((element) => getComputedStyle(element).filter),
-  ).toMatch(/drop-shadow\(rgba\(255, 255, 255, 0\.[1-9]/);
+  await expect.poll(async () => (await motion(letter)).lift).toBeLessThan(-1);
+  await expect
+    .poll(async () => (await motion(letter)).scale)
+    .toBeGreaterThan(1.02);
+  expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
   await page.getByTitle("Settings", { exact: true }).click();
   await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
   await page
@@ -1356,12 +1350,15 @@ test("lyrics wrap at narrow widths; countdown and unsung syllables follow song t
       }),
     track.uri,
   );
-  expect(
+  // Unsung syllables carry no sung fill.
+  expect(["", "-20%"]).toContain(
     await page
       .locator(".lyric-syllable")
       .last()
-      .evaluate((element) => element.style.getPropertyValue("--word-progress")),
-  ).toBe("-12%");
+      .evaluate((element) =>
+        element.style.getPropertyValue("--gradient-position"),
+      ),
+  );
   expect(
     await page
       .locator(".lyric-line.active")
@@ -1786,8 +1783,6 @@ test("unsung split words keep their syllables together", async ({ page }) => {
   expect(
     await pieces
       .locator(".lyric-word")
-      .evaluate(
-        (element) => new DOMMatrix(getComputedStyle(element).transform).a,
-      ),
+      .evaluate((element) => parseFloat(getComputedStyle(element).scale)),
   ).toBeLessThan(1);
 });

@@ -40,14 +40,13 @@ import {
   stepScroll,
   vocalGaps,
   type VocalGap,
-  syllableMotion,
-  letterMotion,
   wordGroups,
   vocalGap,
-  vocalEnd,
-  POP,
+  isEmphasis,
+  lineBlur,
   type ScrollSpring,
 } from "./lyric-motion";
+import { LyricAnimator } from "./lyric-animator";
 
 export const imageOf = (images?: { url: string }[]) =>
   images?.find((image) => image.url.startsWith("https://"))?.url;
@@ -380,6 +379,19 @@ export function LyricsDisplay({
   useEffect(() => {
     setFollowing(true);
   }, [lyrics]);
+  const animator = useRef<LyricAnimator>(undefined);
+  useLayoutEffect(() => {
+    const instance = new LyricAnimator(
+      lyrics,
+      (index) => lines.current[index] ?? null,
+      settings.reduce_motion,
+    );
+    animator.current = instance;
+    return () => instance.dispose();
+  }, [lyrics, settings.reduce_motion]);
+  useLayoutEffect(() => {
+    if (lyrics.synced) animator.current?.update(positionMs);
+  }, [positionMs, lyrics, settings.reduce_motion]);
   useLayoutEffect(() => {
     const container = scroll.current,
       line = gap ? waiting.current : lines.current[primary];
@@ -511,7 +523,11 @@ export function LyricsDisplay({
                 }}
                 key={`${line.start_ms}-${index}`}
                 className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${index < primary ? "past" : ""}`}
-                style={{ "--distance": Math.min(5, distance) } as CSSProperties}
+                style={
+                  {
+                    "--blur": `${compact || playing ? 0 : lineBlur(distance)}px`,
+                  } as CSSProperties
+                }
                 onClick={() => {
                   if (lyrics.synced) {
                     onSeek(line.words[0]?.start_ms ?? line.start_ms);
@@ -521,19 +537,7 @@ export function LyricsDisplay({
                 disabled={!lyrics.synced}
               >
                 <span className="lyric-main">
-                  <LyricWords
-                    line={line}
-                    time={
-                      playing ||
-                      (positionMs >= line.start_ms &&
-                        positionMs <= vocalEnd(line) + POP.settleMs)
-                        ? positionMs
-                        : positionMs < line.start_ms
-                          ? -Infinity
-                          : Infinity
-                    }
-                    reduceMotion={settings.reduce_motion}
-                  />
+                  <LyricWords line={line} />
                 </span>
                 {settings.romanized && line.romanization && (
                   <span className="lyric-romanization">
@@ -633,106 +637,44 @@ const LyricCredits = memo(function LyricCredits({
   );
 });
 
-const LyricWords = memo(function LyricWords({
-  line,
-  time,
-  reduceMotion,
-}: {
-  line: Line;
-  /** Song time for the active line; -Infinity before it, Infinity after. */
-  time: number;
-  reduceMotion: boolean;
-}) {
+/** Static lyric markup. LyricAnimator moves the syllables and letters. */
+const LyricWords = memo(function LyricWords({ line }: { line: Line }) {
   const groups = useMemo(() => wordGroups(line.words), [line]);
-  if (!line.words.length) return <>{line.text}</>;
+  if (!line.words.length)
+    return <span className="lyric-plain">{line.text}</span>;
   return (
     <>
       {groups.map((group, index) => {
         const whitespace = group[0].text.match(/^\s+/u)?.[0] ?? "";
-        const emphasized = group.map((word, part) => {
-          const text =
-            part === 0 ? word.text.slice(whitespace.length) : word.text;
-          return (
-            !reduceMotion &&
-            word.end_ms - word.start_ms >= 1000 &&
-            Array.from(text).length <= 32 &&
-            !/[\s\u0590-\u08ff]/u.test(text)
-          );
-        });
-        // A one-piece word scales as a block. Split or held words shrink as a
-        // whole while unsung; their pieces only widen when popping, so no gaps
-        // open between syllables or letters.
-        const whole = group.length === 1 && !emphasized[0];
-        const rest = syllableMotion(
-          group[0].start_ms,
-          group.at(-1)!.end_ms,
-          time,
-        ).scale;
         return (
           <span key={index} className="lyric-word-group">
             {whitespace}
-            <span
-              className="lyric-word"
-              style={
-                {
-                  "--word-scale": reduceMotion || whole ? 1 : Math.min(1, rest),
-                } as CSSProperties
-              }
-            >
+            <span className="lyric-word">
               {group.map((word, part) => {
                 const text =
                   part === 0 ? word.text.slice(whitespace.length) : word.text;
-                const letters = Array.from(text);
-                const motion = syllableMotion(word.start_ms, word.end_ms, time);
-                const emphasis = emphasized[part];
-                // Held syllables move letter by letter instead of as a block.
-                const still = reduceMotion || emphasis;
-                const glowing = !still && motion.glow > 0.01;
+                const emphasis = isEmphasis(word, text);
+                // Pieces of one word scale away from their neighbours so the
+                // word stays joined.
+                const joined =
+                  group.length === 1
+                    ? ""
+                    : part === 0
+                      ? "joined-start"
+                      : part === group.length - 1
+                        ? "joined-end"
+                        : "joined-middle";
                 return (
                   <span
                     key={part}
-                    className={`lyric-syllable ${emphasis ? "emphasis" : ""} ${glowing ? "glowing" : ""}`}
-                    style={
-                      {
-                        "--word-progress": `${motion.fill * 112 - 12}%`,
-                        "--syllable-lift": still ? 0 : motion.lift,
-                        "--syllable-scale": still ? 1 : motion.scale,
-                        "--syllable-scale-x": still
-                          ? 1
-                          : whole
-                            ? motion.scale
-                            : Math.max(1, motion.scale),
-                        "--syllable-glow": glowing ? motion.glow : 0,
-                      } as CSSProperties
-                    }
+                    className={`lyric-syllable ${emphasis ? "emphasis" : ""} ${joined}`}
                   >
                     {emphasis
-                      ? letters.map((letter, index) => {
-                          const motion = letterMotion(
-                            word.start_ms,
-                            word.end_ms,
-                            time,
-                            index,
-                            letters.length,
-                          );
-                          return (
-                            <span
-                              key={index}
-                              className={`lyric-letter ${motion.glow > 0.01 ? "glowing" : ""}`}
-                              style={
-                                {
-                                  "--letter-lift": motion.lift,
-                                  "--letter-scale": motion.scale,
-                                  "--letter-scale-x": Math.max(1, motion.scale),
-                                  "--letter-glow": motion.glow,
-                                  "--word-progress": `${motion.fill * 112 - 12}%`,
-                                } as CSSProperties
-                              }
-                            >
-                              {letter}
-                            </span>
-                          );
-                        })
+                      ? Array.from(text).map((letter, index) => (
+                          <span key={index} className="lyric-letter">
+                            {letter}
+                          </span>
+                        ))
                       : text}
                   </span>
                 );

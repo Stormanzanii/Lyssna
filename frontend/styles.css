@@ -1800,27 +1800,30 @@ small {
 .lyric-spacer {
   height: var(--lead-top, 40px);
 }
+/* Text outside the active line has a transparent fill
+   and shows only its white text-shadow, so a shadow blur blurs the glyphs
+   without a filter. Unsung text is fainter than sung text. */
 .lyric-line {
+  --sung-alpha: 0.85;
+  --unsung-alpha: 0.5;
+  --blur: 0px;
   font-family: var(--lyric-font, inherit);
   display: block;
   width: 100%;
   text-align: left;
   font-size: var(--lyric-size);
-  font-weight: 780;
-  line-height: 1.22;
-  letter-spacing: -1.1px;
+  font-weight: 700;
+  line-height: 1.1818;
+  letter-spacing: 0;
   padding: 0.16em 0;
   margin: 0;
   transform: none;
   transform-origin: left center;
-  color: #ededed80;
-  opacity: 0.65;
-  filter: blur(calc(max(0, var(--distance) - 1) * 0.65px));
-  transition:
-    color 0.5s,
-    opacity 0.5s,
-    filter 0.6s,
-    transform 0.6s;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 var(--blur) rgb(255 255 255 / var(--unsung-alpha));
+  opacity: 0.51;
+  transition: opacity 0.2s cubic-bezier(0.61, 1, 0.88, 1);
 }
 .lyrics-page .lyric-line {
   font-size: clamp(23px, 3.6cqw, var(--lyric-size));
@@ -1838,17 +1841,18 @@ small {
 }
 .lyric-line:hover {
   opacity: 1 !important;
-  filter: none;
-  color: #fff;
-}
-.lyric-line.active {
-  filter: none;
-  opacity: 1;
-  transform: none;
-  color: #fff;
+  --blur: 0px !important;
 }
 .lyric-line.past {
-  color: #ededed50;
+  opacity: 0.497;
+  text-shadow: 0 0 var(--blur) rgb(255 255 255 / var(--sung-alpha));
+}
+.lyric-line.active {
+  opacity: 1;
+  text-shadow: none;
+}
+.lyric-line.active .lyric-plain {
+  -webkit-text-fill-color: rgb(255 255 255 / var(--sung-alpha));
 }
 .lyric-main {
   display: block;
@@ -1862,6 +1866,8 @@ small {
   transform-origin: right center;
 }
 .lyric-line.background-vocal {
+  --sung-alpha: 0.6;
+  --unsung-alpha: 0.3;
   font-size: calc(var(--lyric-size) * 0.58);
   font-weight: 600;
   padding-top: 0;
@@ -1874,30 +1880,38 @@ small {
   white-space: pre-wrap;
   max-width: 100%;
   overflow-wrap: anywhere;
-  transform: scale(var(--word-scale, 1));
-  transform-origin: center 65%;
 }
 .lyric-word-group {
   white-space: normal;
 }
-/* Unsung syllables rest slightly small and low; the sung one pops up and
-   glows, then settles at full size. The glow is a drop shadow, painted behind
-   the gradient-filled text so it does not wash the letters out. LyricWords
-   sets it only while a syllable glows. */
+/* Unsung text rests at 95% and slightly low; sung text sits at full size.
+   Lines not yet reached shrink whole words, so split words keep no gaps. On
+   the active line each syllable and held letter rests on its own, and
+   LyricAnimator overrides scale and translate while a line is sung or
+   settling. Pieces of one word scale away from each other. */
+.lyric-line:not(.active, .past) .lyric-word {
+  scale: 0.95;
+  translate: 0 0.01em;
+}
 .lyric-syllable {
   display: inline-block;
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  transform: translateY(calc(var(--syllable-lift, 0) * 1em))
-    scale(var(--syllable-scale-x, 1), var(--syllable-scale, 1));
-  transform-origin: center 65%;
+  transform-origin: center center;
 }
-.lyric-syllable.glowing {
-  filter: drop-shadow(
-    0 0 calc(0.06em + 0.16em * var(--syllable-glow))
-      rgb(255 255 255 / calc(var(--syllable-glow) * 0.85))
-  );
+.lyric-line.active .lyric-syllable {
+  scale: 0.95;
+  translate: 0 0.01em;
+}
+.lyric-syllable.emphasis {
+  display: inline-flex;
+}
+.lyric-syllable.joined-start {
+  transform-origin: right center;
+}
+.lyric-syllable.joined-end {
+  transform-origin: left center;
 }
 .lyric-line.active .lyric-syllable,
 .lyric-line.active .lyric-letter {
@@ -1949,32 +1963,38 @@ small {
 .reduce-motion .lyric-wait i {
   animation: none;
 }
+/* The active line fills each syllable, or each letter of a held word, with
+   a gradient whose 20% soft edge sweeps across as it is sung. The glow is a
+   white text-shadow over the fill. */
 .lyric-line.active .lyric-syllable:not(.emphasis),
 .lyric-line.active .lyric-letter {
-  color: transparent;
-  background: linear-gradient(
+  background-image: linear-gradient(
     90deg,
-    #fff var(--word-progress),
-    #e5e5e552 calc(var(--word-progress) + 12%),
-    #e5e5e552
+    rgb(255 255 255 / var(--sung-alpha)) var(--gradient-position, -20%),
+    rgb(255 255 255 / var(--unsung-alpha))
+      calc(var(--gradient-position, -20%) + 20%)
   );
   background-clip: text;
   -webkit-background-clip: text;
+  text-shadow: 0 0 var(--glow-blur, 4px)
+    rgb(255 255 255 / var(--glow-opacity, 0%));
+}
+.lyric-line.active:hover .lyric-syllable:not(.emphasis),
+.lyric-line.active:hover .lyric-letter {
+  text-shadow: 0 0 12px rgb(255 255 255 / 0.8);
 }
 .lyric-letter {
   display: inline-block;
-  transform: translateY(calc(var(--letter-lift, 0) * 1em))
-    scale(var(--letter-scale-x, 1), var(--letter-scale, 1));
-  transform-origin: center 65%;
+  transform-origin: center center;
 }
-.lyric-letter.glowing {
-  filter: drop-shadow(
-    0 0 calc(0.08em + 0.26em * var(--letter-glow))
-      rgb(255 255 255 / calc(var(--letter-glow) * 0.9))
-  );
+.lyric-line.active .lyric-letter {
+  scale: 0.95;
+  translate: 0 0.02em;
 }
 .lyric-translation,
 .lyric-romanization {
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
   display: block;
   font-size: 0.43em;
   font-weight: 550;
@@ -2131,18 +2151,19 @@ small {
   display: none;
 }
 .static-lyrics .lyric-line {
-  filter: none;
+  --blur: 0px;
   opacity: 1;
-  transform: none;
+  text-shadow: 0 0 0 rgb(255 255 255 / var(--sung-alpha));
 }
 .reduce-motion .lyric-line {
-  filter: none !important;
+  --blur: 0px !important;
   transition: none;
-  transform: none !important;
 }
-.reduce-motion .lyric-word.singing {
-  top: 0;
-  filter: none;
+.reduce-motion .lyric-word,
+.reduce-motion .lyric-syllable,
+.reduce-motion .lyric-letter {
+  scale: none !important;
+  translate: none !important;
 }
 .player-bar {
   display: grid;

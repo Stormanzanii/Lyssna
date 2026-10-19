@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import {
+  GLIDE_MS,
   MOTION,
+  glideScroll,
   Spring,
   letterGoals,
   lineBlur,
@@ -126,4 +128,13 @@ it("shows waiting dots only in long gaps with no main or background vocals", () 
   expect(vocalGap(lines, 4000)).toBeUndefined();
   expect(vocalGap(lines, 6500)).toEqual({ start: 6000, end: 10000, after: 1 });
   expect(vocalGap(lines, 10000)).toBeUndefined();
+});
+it("slides to a restarted song's first line quickly, easing in and out", () => {
+  expect(glideScroll(5000, 0, 0)).toBe(5000);
+  expect(glideScroll(5000, 0, GLIDE_MS / 2)).toBeCloseTo(2500);
+  expect(glideScroll(5000, 0, GLIDE_MS)).toBe(0);
+  expect(glideScroll(5000, 0, GLIDE_MS * 2)).toBe(0);
+  // Starts and ends gently.
+  expect(5000 - glideScroll(5000, 0, GLIDE_MS / 10)).toBeLessThan(100);
+  expect(glideScroll(5000, 0, GLIDE_MS * 0.9)).toBeLessThan(100);
 });

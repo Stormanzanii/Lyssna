@@ -45,6 +45,8 @@ import {
   isEmphasis,
   vocalEnd,
   lineBlur,
+  glideScroll,
+  GLIDE_MS,
   type ScrollSpring,
 } from "./lyric-motion";
 import { LyricAnimator } from "./lyric-animator";
@@ -320,7 +322,9 @@ export function LyricsDisplay({
   const [atEnd, setAtEnd] = useState(false);
   const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Browsing pauses follow mode; it resumes on its own once scrolling stops.
+  const glide = useRef<{ from: number; start: number }>(undefined);
   const browse = () => {
+    glide.current = undefined;
     setFollowing(false);
     clearTimeout(resume.current);
     resume.current = setTimeout(() => setFollowing(true), 3000);
@@ -381,7 +385,7 @@ export function LyricsDisplay({
     setFollowing(true);
   }, [lyrics]);
   // A restart, Previous or seek moves song time far in one step. Lyrics then
-  // jump straight there instead of gliding through the song.
+  // slide straight there instead of springing through the whole song.
   const lastPosition = useRef(positionMs),
     jumped = useRef(false);
   if (Math.abs(positionMs - lastPosition.current) > 1500) jumped.current = true;
@@ -416,7 +420,21 @@ export function LyricsDisplay({
     spring.current.position = container.scrollTop;
     const tick = (time: number) => {
       frame = 0;
-      const motion = spring.current;
+      const motion = spring.current,
+        slide = glide.current;
+      if (slide) {
+        const elapsed = time - slide.start;
+        container.scrollTop = motion.position = glideScroll(
+          slide.from,
+          motion.target,
+          elapsed,
+        );
+        motion.velocity = 0;
+        last = time;
+        if (elapsed < GLIDE_MS) frame = requestAnimationFrame(tick);
+        else glide.current = undefined;
+        return;
+      }
       container.scrollTop = stepScroll(
         motion,
         Math.min(0.064, Math.max(0, (time - last) / 1000)),
@@ -457,9 +475,12 @@ export function LyricsDisplay({
           line.offsetTop + (compact ? 0 : line.offsetHeight / 2) - focus,
         ),
       );
-      if (settings.reduce_motion || jumped.current) {
-        cancelAnimationFrame(frame);
-        frame = 0;
+      if (jumped.current && !settings.reduce_motion)
+        glide.current = {
+          from: container.scrollTop,
+          start: performance.now(),
+        };
+      if (settings.reduce_motion) {
         container.scrollTop = spring.current.target;
         spring.current.position = container.scrollTop;
         spring.current.velocity = 0;

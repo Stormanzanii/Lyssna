@@ -63,6 +63,15 @@ export function vocalGap(lines: Line[], time: number) {
     : undefined;
 }
 
+/** After a restart or long seek, lyrics slide to the new line over this long
+ * instead of springing through the whole song. */
+export const GLIDE_MS = 700;
+/** Scroll position `elapsed` ms into a glide, eased in and out. */
+export function glideScroll(from: number, to: number, elapsed: number) {
+  const t = Math.min(1, Math.max(0, elapsed / GLIDE_MS));
+  const eased = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+  return from + (to - from) * eased;
+}
 export interface ScrollSpring {
   position: number;
   velocity: number;

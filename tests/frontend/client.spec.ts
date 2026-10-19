@@ -1819,7 +1819,7 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     );
 });
 
-test("restarting a song jumps lyrics back to the start instead of gliding", async ({
+test("restarting a song slides lyrics back to the start instead of crawling", async ({
   page,
 }) => {
   await startClient(page);
@@ -1856,12 +1856,11 @@ test("restarting a song jumps lyrics back to the start instead of gliding", asyn
   await expect(page.locator(".lyrics-page .lyric-line.active")).toHaveText(
     "Test lyric line 1",
   );
-  // Two frames later the view is already at the top, not part way back.
-  await page.evaluate(
-    () =>
-      new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      ),
-  );
-  expect(await scrollTop()).toBeLessThan(50);
+  // It slides rather than snapping, and arrives within the short glide.
+  const before = await scrollTop();
+  await page.waitForTimeout(250);
+  const midway = await scrollTop();
+  expect(midway).toBeGreaterThan(50);
+  expect(midway).toBeLessThan(before);
+  await expect.poll(scrollTop, { timeout: 900 }).toBeLessThan(50);
 });

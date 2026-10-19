@@ -521,6 +521,13 @@ impl Desktop {
                             }
                             snapshot.native_ready = false;
                             snapshot.native_status = "Connecting native audio…".into();
+                            if snapshot.playback.device.name == native::device_name() {
+                                snapshot.playback.is_playing = false;
+                                snapshot.observed_at = now_ms();
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
                             emit(
                                 json!({"type":"native","ready":false,"status":snapshot.native_status}),
                             );
@@ -770,8 +777,25 @@ impl Desktop {
                                 json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":true,"loading":true}),
                             );
                         }
+                        NativeEvent::Reconnecting(seconds) => {
+                            snapshot.narrating = false;
+                            snapshot.native_ready = false;
+                            snapshot.native_status =
+                                format!("Reconnecting native audio in {seconds}s…");
+                            if snapshot.playback.device.name == native::device_name() {
+                                snapshot.playback.is_playing = false;
+                                snapshot.observed_at = now_ms();
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
+                            emit(
+                                json!({"type":"native","ready":false,"status":snapshot.native_status}),
+                            );
+                        }
                         NativeEvent::Authorizing => {
                             snapshot.narrating = false;
+                            snapshot.native_ready = false;
                             snapshot.native_status =
                                 "Authorize audio playback in your browser…".into();
                             emit(
@@ -840,6 +864,13 @@ impl Desktop {
                             }
                             snapshot.native_ready = false;
                             snapshot.native_status = message;
+                            if snapshot.playback.device.name == native::device_name() {
+                                snapshot.playback.is_playing = false;
+                                snapshot.observed_at = now_ms();
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
                             emit(
                                 json!({"type":"native","ready":false,"status":snapshot.native_status}),
                             );
@@ -1465,6 +1496,7 @@ impl PlayerRequest {
 }
 #[tauri::command]
 fn player(
+    app: tauri::AppHandle,
     request: PlayerRequest,
     target: Option<String>,
     state: State<'_, Desktop>,
@@ -1551,19 +1583,23 @@ fn player(
             if !native_context {
                 action = local_load(action, &snapshot.tracks)?;
             }
-            if snapshot.native_ready
-                && matches!(
-                    state.0.controls.connection_event(
-                        snapshot.profile.as_ref().map(|profile| profile.id.as_str())
-                    ),
-                    Some(NativeEvent::Ready(_))
-                )
+            if let Some(NativeEvent::Ready(id)) = state
+                .0
+                .controls
+                .connection_event(snapshot.profile.as_ref().map(|profile| profile.id.as_str()))
             {
+                snapshot.native_ready = true;
+                snapshot.native_status = "Ready · this computer".into();
+                *lock(&state.0.native_id)? = Some(id);
                 state.0.controls.send(action.clone()).map_err(|_| {
                     anyhow::anyhow!(
                         "Native audio disconnected. Reconnect native audio in Settings."
                     )
                 })?;
+                let _ = app.emit(
+                    "spotiflex",
+                    json!({"type":"native","ready":true,"status":snapshot.native_status}),
+                );
             } else if matches!(action, PlayerAction::Pause) {
                 *lock(&state.0.queued_native)? = None;
                 return Ok(());
@@ -1574,7 +1610,7 @@ fn player(
                     ),
                     Some(NativeEvent::Error(_))
                 ) {
-                    state.0.commands.send(Command::RetryAudio)?;
+                    state.0.commands.send(Command::EnsureAudio)?;
                 }
                 ensure!(
                     matches!(

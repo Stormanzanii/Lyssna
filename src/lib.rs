@@ -25,6 +25,7 @@ pub mod native_browse;
 pub mod notify;
 mod playback_intent;
 pub mod provider;
+mod reconnect;
 pub mod resume;
 pub mod track_facts;
 #[cfg(feature = "legacy-ui")]

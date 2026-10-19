@@ -21,6 +21,27 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("clears a connecting notification once native audio becomes ready", () => {
+    const connecting = reducer(emptyState, {
+      type: "notice",
+      message: "Connecting native audio…",
+      error: false,
+    });
+    const ready = reducer(connecting, {
+      type: "native",
+      ready: true,
+      status: "Ready · this computer",
+    });
+    expect(ready.toast).toBeUndefined();
+    const failed = reducer(emptyState, {
+      type: "notice",
+      message: "Audio failed",
+      error: true,
+    });
+    expect(
+      reducer(failed, { type: "native", ready: true, status: "Ready" }).toast,
+    ).toEqual(failed.toast);
+  });
   it("keeps first-run setup hidden until saved sign-in restoration finishes", () => {
     expect(sessionScreen(emptyState)).toBe("restoring");
     const restoring = reducer(emptyState, {

@@ -15,5 +15,5 @@ Spotify folder metadata and offline playback need a supported implementation pat
 ## Progress
 
 - Playback startup implemented and measured on Windows: 486 ms first selection, 104 ms median subsequent selection; skip median 58 ms. Network conditions still affect uncached starts.
-- Playback reliability and audio-device selection next.
+- Automatic connection recovery implemented; deliberate live disconnection recovered without a new browser login. Repeated Play requests reuse active or connecting sessions. Audio-device selection next.
 - Other batches pending.

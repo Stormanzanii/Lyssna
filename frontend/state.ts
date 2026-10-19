@@ -286,6 +286,12 @@ export function reducer(state: AppState, action: Action): AppState {
         narrating: action.ready && state.narrating,
         native_ready: action.ready,
         native_status: action.status,
+        toast:
+          action.ready &&
+          !state.toast?.error &&
+          state.toast?.message === "Connecting native audio…"
+            ? undefined
+            : state.toast,
       };
     case "library":
       return { ...state, playlists: action.playlists };

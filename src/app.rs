@@ -553,6 +553,11 @@ impl SpotiFlex {
                     self.show_notice(message.clone(), true);
                     self.native_status = message;
                 }
+                NativeEvent::Reconnecting(seconds) => {
+                    self.native_id = None;
+                    self.playback.is_playing = false;
+                    self.native_status = format!("Reconnecting native audio in {seconds}s…");
+                }
                 NativeEvent::ControlError(message) => self.show_notice(message, true),
                 NativeEvent::Position {
                     uri,

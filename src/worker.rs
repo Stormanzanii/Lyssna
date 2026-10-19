@@ -44,6 +44,7 @@ pub enum Command {
     SaveTrack(String),
     FetchLyrics(Track),
     RetryAudio,
+    EnsureAudio,
     BrowseInfo {
         key: String,
         generation: u64,
@@ -731,6 +732,14 @@ impl Backend {
                 let _ = self.lyrics.send(LyricCommand::Fetch(track, token));
             }
             Command::RetryAudio => self.start_audio()?,
+            Command::EnsureAudio => {
+                if !self
+                    .native_controls
+                    .connected_or_connecting(&self.profile.id)
+                {
+                    self.start_audio()?;
+                }
+            }
             Command::BrowseInfo { key, generation } => {
                 let account = self.profile.id.clone();
                 let mut info =

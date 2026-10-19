@@ -30,6 +30,7 @@ pub enum NativeEvent {
     Narration(bool),
     /// Waiting for the one-time browser authorization for audio.
     Authorizing,
+    Reconnecting(u64),
     Ready(String),
     Stopped,
     Track(Box<crate::model::Track>),
@@ -87,6 +88,18 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    pub fn connected_or_connecting(&self, account: &str) -> bool {
+        self.0.lock().is_ok_and(|connection| {
+            connection.as_ref().is_some_and(|connection| {
+                connection.account == account
+                    && !connection.sender.is_closed()
+                    && (connection.ready.load(Ordering::Acquire)
+                        || connection.status.lock().is_ok_and(|status| {
+                            !matches!(status.as_ref(), Some(NativeEvent::Error(_)))
+                        }))
+            })
+        })
+    }
     pub fn prewarm_dj_request(&self, account: &str) -> Result<()> {
         let (session, requests) = {
             let connection = self
@@ -840,6 +853,7 @@ enum Outcome {
 struct Failure {
     reason: String,
     rejected_credentials: bool,
+    retryable: bool,
 }
 
 impl Failure {
@@ -847,6 +861,13 @@ impl Failure {
         Self {
             reason: reason.into(),
             rejected_credentials: false,
+            retryable: false,
+        }
+    }
+    fn transient(reason: impl Into<String>) -> Self {
+        Self {
+            retryable: true,
+            ..Self::other(reason)
         }
     }
 
@@ -871,6 +892,17 @@ impl Failure {
         Self {
             reason,
             rejected_credentials,
+            retryable: !rejected_credentials
+                && message != "Login failed with reason: Premium account required"
+                && matches!(
+                    error.kind,
+                    ErrorKind::Unavailable
+                        | ErrorKind::DeadlineExceeded
+                        | ErrorKind::Aborted
+                        | ErrorKind::Unknown
+                        | ErrorKind::Internal
+                        | ErrorKind::ResourceExhausted
+                ),
         }
     }
 }
@@ -965,7 +997,10 @@ impl NativePlayer {
             let emit = |event| {
                 if matches!(
                     &event,
-                    NativeEvent::Ready(_) | NativeEvent::Authorizing | NativeEvent::Error(_)
+                    NativeEvent::Ready(_)
+                        | NativeEvent::Authorizing
+                        | NativeEvent::Reconnecting(_)
+                        | NativeEvent::Error(_)
                 ) && let Ok(mut status) = connection_status.lock()
                 {
                     *status = Some(event.clone());
@@ -983,51 +1018,75 @@ impl NativePlayer {
                 ));
                 return;
             };
-            let stored = match load_credentials(&account) {
-                Ok(credentials) => credentials,
-                Err(error) => {
-                    emit(NativeEvent::Error(error.to_string()));
-                    return;
+            let mut backoff = crate::reconnect::ReconnectBackoff::default();
+            let mut last_credentials = None;
+            loop {
+                if cancel.load(Ordering::Acquire) {
+                    break;
                 }
-            };
-            let outcome = connect_with_credentials(
-                stored,
-                &cancel,
-                || {
-                    emit(NativeEvent::Authorizing);
-                    crate::auth::http_client()
-                        .and_then(|client| crate::auth::authorize_audio(&client, &cancel))
-                        .map(Credentials::with_access_token)
-                },
-                |credentials| {
-                    runtime.block_on(run(
-                        credentials,
-                        &account,
-                        &cancel,
-                        &mut stopped,
-                        PlaybackServices {
-                            audio_buffer: &audio_buffer,
-                            commands: &mut commands,
-                            playlists: &mut playlists,
-                            metadata: &mut metadata,
-                            latest_volume: &latest_volume,
-                            shared_session: &shared_session,
-                            loaded: &loaded,
-                        },
-                        &thread_ready,
-                        &emit,
-                    ))
-                },
-                || forget_credentials(&account),
-            );
-            thread_ready.store(false, Ordering::Release);
-            if let Outcome::Failed(failure) = outcome
-                && !cancel.load(Ordering::Relaxed)
-            {
-                emit(NativeEvent::Error(format!(
-                    "{}. Reconnect native audio in Settings.",
-                    failure.reason
-                )));
+                let stored = match load_credentials(&account) {
+                    Ok(credentials) => credentials,
+                    Err(error) => {
+                        emit(NativeEvent::Error(error.to_string()));
+                        return;
+                    }
+                }
+                .or_else(|| last_credentials.clone());
+                let started = std::time::Instant::now();
+                let outcome = connect_with_credentials(
+                    stored,
+                    &cancel,
+                    || {
+                        emit(NativeEvent::Authorizing);
+                        crate::auth::http_client()
+                            .and_then(|client| crate::auth::authorize_audio(&client, &cancel))
+                            .map(Credentials::with_access_token)
+                    },
+                    |credentials| {
+                        last_credentials = Some(credentials.clone());
+                        runtime.block_on(run(
+                            credentials,
+                            &account,
+                            &cancel,
+                            &mut stopped,
+                            PlaybackServices {
+                                audio_buffer: &audio_buffer,
+                                commands: &mut commands,
+                                playlists: &mut playlists,
+                                metadata: &mut metadata,
+                                latest_volume: &latest_volume,
+                                shared_session: &shared_session,
+                                loaded: &loaded,
+                            },
+                            &thread_ready,
+                            &emit,
+                        ))
+                    },
+                    || forget_credentials(&account),
+                );
+                thread_ready.store(false, Ordering::Release);
+                loaded.store(false, Ordering::Release);
+                audio_buffer.interrupt(None);
+                if let Ok(mut session) = shared_session.lock() {
+                    *session = None;
+                }
+                if let Outcome::Failed(failure) = outcome
+                    && !cancel.load(Ordering::Relaxed)
+                {
+                    if failure.retryable {
+                        let delay = backoff.next(started.elapsed());
+                        emit(NativeEvent::Reconnecting(delay.as_secs()));
+                        if runtime.block_on(crate::reconnect::wait(delay, &mut stopped)) {
+                            continue;
+                        }
+                        break;
+                    }
+                    emit(NativeEvent::Error(format!(
+                        "{}. Reconnect native audio in Settings.",
+                        failure.reason
+                    )));
+                }
+                break;
             }
         });
         Self {
@@ -1116,7 +1175,7 @@ async fn run(
             session.shutdown();
             return Outcome::Failed(match failure {
                 Ok(Err(error)) => Failure::from_connection(error),
-                _ => Failure::other("Audio connection timed out after 40 seconds"),
+                _ => Failure::transient("Audio connection timed out after 40 seconds"),
             });
         }
     };
@@ -1168,6 +1227,7 @@ async fn run(
         prepare_resume(&session, crate::resume::load(account)),
     ));
     let mut resume_prepared = false;
+    let mut connection_lost = false;
     loop {
         tokio::select! {
             prepared = &mut resume_preparation, if !resume_prepared => {
@@ -1197,7 +1257,7 @@ async fn run(
                 let _ = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
                 break;
             }
-            _ = &mut task => { emit(NativeEvent::Error("Native audio disconnected. Retry from Settings.".into())); break; }
+            _ = &mut task => { connection_lost = true; break; }
             Some(action) = commands.recv() => {
                 if let PlayerAction::PreparedDJ{cancelled,..}=&action && cancelled.load(Ordering::Acquire){continue;}
                 if let Some((uri, position)) = preload_selection(&action) {
@@ -1247,7 +1307,7 @@ async fn run(
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{paused_position=Some((uri.clone(),position_ms.into()));emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: u64::from(position_ms).saturating_sub(audio_buffer.latency_ms()), playing: None, seeked: false });}},
                     Some(PlayerEvent::Unavailable { .. }) => {loaded.store(false,Ordering::Release);intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
-                    None => break,
+                    None => { connection_lost = true; break; },
                     _ => {}
                 }
             }
@@ -1286,7 +1346,11 @@ async fn run(
         }
     }
     session.shutdown();
-    Outcome::Stopped
+    if connection_lost {
+        Outcome::Failed(Failure::transient("Native audio disconnected"))
+    } else {
+        Outcome::Stopped
+    }
 }
 
 impl Drop for NativePlayer {
@@ -1718,6 +1782,172 @@ mod tests {
     }
 
     #[test]
+    fn transient_connection_failures_retry_but_authentication_failures_do_not() {
+        for kind in [
+            ErrorKind::Unavailable,
+            ErrorKind::DeadlineExceeded,
+            ErrorKind::Aborted,
+        ] {
+            assert!(
+                Failure::from_connection(librespot_core::Error::new(kind, "test failure"))
+                    .retryable
+            );
+        }
+        for kind in [
+            ErrorKind::Unauthenticated,
+            ErrorKind::PermissionDenied,
+            ErrorKind::InvalidArgument,
+        ] {
+            assert!(
+                !Failure::from_connection(librespot_core::Error::new(kind, "test failure"))
+                    .retryable
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "Uses saved sign-in and briefly plays and pauses the selected song"]
+    fn live_selected_song_resumes_without_reconnecting() {
+        let settings = crate::config::Settings::load().unwrap();
+        let tokens = crate::auth::Tokens::load(&settings.client_id)
+            .ok()
+            .flatten()
+            .expect("Saved sign-in required");
+        let account = tokens
+            .profile
+            .as_ref()
+            .expect("Saved profile required")
+            .id
+            .clone();
+        let saved = crate::resume::load(&account).expect("Saved selection required");
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start(account, 1, events, Default::default(), controls.clone());
+        let wait = |wanted: Option<bool>| {
+            let started = std::time::Instant::now();
+            loop {
+                assert!(
+                    started.elapsed() < Duration::from_secs(40),
+                    "Transport timed out"
+                );
+                match receive.recv_timeout(Duration::from_millis(100)) {
+                    Ok(NativeMessage {
+                        event: NativeEvent::Ready(_),
+                        ..
+                    }) if wanted.is_none() => break,
+                    Ok(NativeMessage {
+                        event:
+                            NativeEvent::Position {
+                                playing: Some(playing),
+                                ..
+                            },
+                        ..
+                    }) if Some(playing) == wanted => break,
+                    Ok(NativeMessage {
+                        event:
+                            NativeEvent::Reconnecting(_)
+                            | NativeEvent::Authorizing
+                            | NativeEvent::Error(_),
+                        ..
+                    }) => panic!("Selected song unexpectedly reconnected"),
+                    _ => {}
+                }
+            }
+            started.elapsed()
+        };
+        wait(None);
+        assert!(
+            controls
+                .send(PlayerAction::Play(Some(saved.track.uri)))
+                .is_ok()
+        );
+        wait(Some(true));
+        assert!(controls.send(PlayerAction::Pause).is_ok());
+        wait(Some(false));
+        assert!(controls.send(PlayerAction::Play(None)).is_ok());
+        let elapsed = wait(Some(true));
+        println!(
+            "selected-song resume acknowledgment: {} ms",
+            elapsed.as_millis()
+        );
+        assert!(elapsed < Duration::from_millis(250));
+        let _ = controls.send(PlayerAction::Pause);
+        drop(player);
+    }
+
+    #[test]
+    #[ignore = "Uses saved sign-in and deliberately disconnects one native session"]
+    fn live_reconnect_recovers_without_another_browser_login() {
+        let settings = crate::config::Settings::load().unwrap();
+        let tokens = crate::auth::Tokens::load(&settings.client_id)
+            .ok()
+            .flatten()
+            .expect("Saved sign-in required");
+        let account = tokens
+            .profile
+            .as_ref()
+            .expect("Saved profile required")
+            .id
+            .clone();
+        assert!(
+            load_credentials(&account).ok().flatten().is_some(),
+            "Saved audio sign-in required"
+        );
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start(
+            account.clone(),
+            1,
+            events,
+            Default::default(),
+            controls.clone(),
+        );
+        let started = std::time::Instant::now();
+        let mut disconnected = false;
+        let mut retry_seen = false;
+        loop {
+            assert!(
+                started.elapsed() < Duration::from_secs(50),
+                "Recovery timed out"
+            );
+            match receive.recv_timeout(Duration::from_millis(100)) {
+                Ok(NativeMessage {
+                    event: NativeEvent::Ready(_),
+                    ..
+                }) if !disconnected => {
+                    controls.session().unwrap().shutdown();
+                    disconnected = true;
+                }
+                Ok(NativeMessage {
+                    event: NativeEvent::Ready(_),
+                    ..
+                }) => {
+                    assert!(
+                        retry_seen,
+                        "A new connection must follow the recovery state"
+                    );
+                    assert!(controls.connected_or_connecting(&account));
+                    break;
+                }
+                Ok(NativeMessage {
+                    event: NativeEvent::Reconnecting(_),
+                    ..
+                }) => retry_seen = true,
+                Ok(NativeMessage {
+                    event: NativeEvent::Authorizing,
+                    ..
+                }) => panic!("Recovery opened browser authorization"),
+                Ok(NativeMessage {
+                    event: NativeEvent::Error(_),
+                    ..
+                }) => panic!("Recovery failed"),
+                _ => {}
+            }
+        }
+        drop(player);
+    }
+
+    #[test]
     fn transport_commands_do_not_claim_a_track_is_loaded() {
         let controls = NativeControls::default();
         let (sender, mut receiver) = async_channel::unbounded_channel();
@@ -1738,6 +1968,8 @@ mod tests {
             metadata: None,
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
+        assert!(controls.connected_or_connecting("listener"));
+        assert!(!controls.connected_or_connecting("another-account"));
         assert!(controls.connection_event(None).is_none());
         assert!(controls.connection_event(Some("another-account")).is_none());
         assert!(
@@ -1770,12 +2002,15 @@ mod tests {
             Some(NativeEvent::Error(_))
         ));
         *status.lock().unwrap() = Some(NativeEvent::Authorizing);
+        assert!(controls.connected_or_connecting("listener"));
         assert!(matches!(
             controls.connection_event(Some("listener")),
             Some(NativeEvent::Authorizing)
         ));
         *status.lock().unwrap() = None;
+        assert!(controls.connected_or_connecting("listener"));
         receiver.close();
+        assert!(!controls.connected_or_connecting("listener"));
         assert!(matches!(
             controls.connection_event(Some("listener")),
             Some(NativeEvent::Error(_))
@@ -1854,6 +2089,7 @@ mod tests {
                 Outcome::Failed(Failure {
                     reason: "credentials rejected".into(),
                     rejected_credentials: true,
+                    retryable: false,
                 })
             },
             || {

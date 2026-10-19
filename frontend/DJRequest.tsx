@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "./bridge";
-import { Mic, X, LoaderCircle } from "lucide-react";
+import { Mic, X, LoaderCircle, SendHorizontal } from "lucide-react";
+import { DJ_COVER } from "./brand";
 import { listen as listenEvent } from "@tauri-apps/api/event";
 
 export function DJRequest({
@@ -217,22 +218,31 @@ export function DJRequest({
         >
           <X size={20} />
         </button>
-        <h2 id="dj-request-title">Ask DJ</h2>
-        <p>Tell DJ what you want to hear.</p>
-        <textarea
-          autoFocus
-          aria-label="DJ request"
-          placeholder="Describe music, artists, or a mood"
-          value={text}
-          disabled={busy !== null}
-          onChange={(e) => {
-            setText(e.target.value);
-          }}
-        />
-        <div className="dj-request-meta">
-          <span>Voice sends to DJ automatically after you stop speaking.</span>
-          <span aria-live="polite">{count}/500</span>
+        <header className="dj-request-head">
+          <img className="dj-request-art" src={DJ_COVER} alt="" />
+          <div>
+            <h2 id="dj-request-title">Ask DJ</h2>
+            <p>Tell DJ what you want to hear.</p>
+          </div>
+        </header>
+        <div className="dj-request-field">
+          <textarea
+            autoFocus
+            aria-label="DJ request"
+            placeholder="Describe music, artists, or a mood"
+            value={text}
+            disabled={busy !== null}
+            onChange={(e) => {
+              setText(e.target.value);
+            }}
+          />
+          <span className="dj-request-count" aria-live="polite">
+            {count}/500
+          </span>
         </div>
+        <p className="dj-request-hint">
+          Voice sends to DJ automatically after you stop speaking.
+        </p>
         {error && (
           <p role="alert" className="dj-request-error">
             {error}
@@ -294,11 +304,17 @@ export function DJRequest({
           </div>
         )}
         <div className="dj-request-actions">
-          <button disabled={busy !== null} onClick={() => void listen()}>
+          <button
+            className="dj-request-secondary"
+            disabled={busy !== null}
+            onClick={() => void listen()}
+          >
             <Mic size={16} /> Use microphone
           </button>
+          {busy === "request" && <LoaderCircle className="spin" size={18} />}
           {busy ? (
             <button
+              className="dj-request-secondary"
               onClick={() => {
                 cancel();
                 setBusy(null);
@@ -308,13 +324,13 @@ export function DJRequest({
             </button>
           ) : (
             <button
+              className="dj-request-primary"
               disabled={count === 0 || count > 500}
               onClick={() => void send()}
             >
-              Send to DJ
+              Send to DJ <SendHorizontal size={16} />
             </button>
           )}
-          {busy === "request" && <LoaderCircle className="spin" size={18} />}
         </div>
       </section>
     </div>

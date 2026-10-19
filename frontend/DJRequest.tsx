@@ -12,7 +12,6 @@ export function DJRequest({
   onSuccess: () => void;
 }) {
   const [text, setText] = useState("");
-  const [input, setInput] = useState<"text" | "voice">("text");
   const [busy, setBusy] = useState<"voice" | "request" | null>(null);
   const [error, setError] = useState("");
   const active = useRef<string | null>(null);
@@ -81,8 +80,18 @@ export function DJRequest({
     try {
       const transcript = await rpc<string>("dj_voice", { account, id });
       if (live.current && active.current === id) {
-        setText(transcript);
-        setInput("voice");
+        setBusy("request");
+        await rpc("dj_request", {
+          account,
+          id,
+          text: transcript,
+          input: "voice",
+        });
+        if (live.current && active.current === id) {
+          active.current = null;
+          onSuccess();
+          onClose();
+        }
       }
     } catch (reason) {
       if (live.current && active.current === id) setError(String(reason));
@@ -100,7 +109,7 @@ export function DJRequest({
     setBusy("request");
     setError("");
     try {
-      await rpc("dj_request", { account, id, text, input });
+      await rpc("dj_request", { account, id, text, input: "text" });
       if (live.current && active.current === id) {
         active.current = null;
         onSuccess();
@@ -146,11 +155,10 @@ export function DJRequest({
           disabled={busy !== null}
           onChange={(e) => {
             setText(e.target.value);
-            setInput("text");
           }}
         />
         <div className="dj-request-meta">
-          <span>Review voice transcripts before sending to Spotify.</span>
+          <span>Voice sends to DJ automatically after you stop speaking.</span>
           <span aria-live="polite">{count}/500</span>
         </div>
         {error && (
@@ -161,7 +169,7 @@ export function DJRequest({
         {busy && (
           <p role="status">
             {busy === "voice"
-              ? "Listening… Speak your request (30 seconds max)."
+              ? "Listening… Speak, then pause to send (30 seconds max)."
               : "DJ is preparing your request…"}
           </p>
         )}

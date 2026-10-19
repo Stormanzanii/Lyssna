@@ -80,7 +80,7 @@ impl VoiceCapture {
 }
 
 impl Capture {
-    /// Blocking: call on a worker. A transcript is returned for review, not sent.
+    /// Blocking: call on a worker. Return recognized words after speech ends.
     pub fn transcribe(self) -> Result<String> {
         ensure!(
             !self.cancelled.load(Ordering::Acquire),
@@ -117,6 +117,50 @@ fn valid_id(id: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
+/// Only recognized speech extends the endpoint, never raw background sound.
+#[derive(Default)]
+#[cfg(any(windows, test))]
+struct Utterance {
+    text: String,
+    hypothesis: String,
+    last_activity: Option<std::time::Instant>,
+}
+#[cfg(any(windows, test))]
+impl Utterance {
+    fn hypothesis(&mut self, text: &str, now: std::time::Instant) {
+        let text = text.trim();
+        if !text.is_empty() && text != self.hypothesis {
+            self.hypothesis = text.into();
+            self.last_activity = Some(now);
+        }
+    }
+    fn recognize(&mut self, text: &str, now: std::time::Instant) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        if !self.text.is_empty() {
+            self.text.push(' ');
+        }
+        self.text.push_str(text);
+        self.hypothesis.clear();
+        self.last_activity = Some(now);
+    }
+    fn ready(&self, now: std::time::Instant) -> bool {
+        !self.text.is_empty()
+            && self.last_activity.is_some_and(|last| {
+                now.saturating_duration_since(last) >= std::time::Duration::from_millis(1200)
+            })
+    }
+}
+
+#[cfg(any(windows, test))]
+fn credible_speech(category: i8, engine_confidence: f32) -> bool {
+    // Tuned for Windows' installed dictation engine, not a probability estimate.
+    // Engine scores are implementation-specific: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee125128(v=vs.85)
+    category >= 0 && engine_confidence.is_finite() && engine_confidence >= 0.65
+}
+
 #[cfg(windows)]
 mod platform {
     use super::*;
@@ -142,6 +186,14 @@ mod platform {
     impl Drop for Recognizer {
         fn drop(&mut self) {
             let _ = unsafe { self.0.SetRecoState(SPRST_INACTIVE_WITH_PURGE) };
+        }
+    }
+    struct Phrase(*mut SPPHRASE);
+    impl Drop for Phrase {
+        fn drop(&mut self) {
+            unsafe {
+                CoTaskMemFree(Some(self.0.cast()));
+            }
         }
     }
     struct Text(PWSTR);
@@ -208,6 +260,7 @@ mod platform {
             // SPFEI includes these two validation bits in every event mask.
             let interest = (1_u64 << SPEI_RESERVED1.0)
                 | (1_u64 << SPEI_RESERVED2.0)
+                | (1_u64 << SPEI_HYPOTHESIS.0)
                 | (1_u64 << SPEI_RECOGNITION.0)
                 | (1_u64 << SPEI_FALSE_RECOGNITION.0);
             context.SetInterest(interest, interest)?;
@@ -220,9 +273,11 @@ mod platform {
             !cancelled.load(Ordering::Acquire),
             "Voice capture cancelled"
         );
-        unsafe { grammar.SetDictationState(SPRS_ACTIVE_WITH_AUTO_PAUSE) }
+        unsafe { grammar.SetDictationState(SPRS_ACTIVE) }
             .context("Microphone unavailable. Check Windows microphone permissions")?;
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let started = Instant::now();
+        let deadline = started + Duration::from_secs(30);
+        let mut utterance = Utterance::default();
         while Instant::now() < deadline {
             ensure!(
                 !cancelled.load(Ordering::Acquire),
@@ -232,12 +287,9 @@ mod platform {
             let mut fetched = 0;
             unsafe { context.GetEvents(1, &mut event.0, &mut fetched) }?;
             if fetched > 0 {
-                ensure!(
-                    event.0._bitfield & 0xffff != SPEI_FALSE_RECOGNITION.0,
-                    "Speech was unclear. Try again or type your request"
-                );
+                let event_id = event.0._bitfield & 0xffff;
                 let kind = (event.0._bitfield >> 16) & 0xffff;
-                if event.0._bitfield & 0xffff == SPEI_RECOGNITION.0
+                if matches!(event_id, id if id==SPEI_RECOGNITION.0 || id==SPEI_HYPOTHESIS.0)
                     && kind == SPET_LPARAM_IS_OBJECT.0
                     && event.0.lParam.0 != 0
                 {
@@ -253,14 +305,75 @@ mod platform {
                         !cancelled.load(Ordering::Acquire),
                         "Voice capture cancelled"
                     );
-                    if !text.trim().is_empty() {
-                        return Ok(text);
+                    let phrase = Phrase(unsafe { result.GetPhrase() }?);
+                    if !phrase.0.is_null()
+                        && unsafe {
+                            credible_speech(
+                                (*phrase.0).Base.Rule.Confidence,
+                                (*phrase.0).Base.Rule.SREngineConfidence,
+                            )
+                        }
+                    {
+                        if event_id == SPEI_RECOGNITION.0 {
+                            utterance.recognize(&text, Instant::now());
+                        } else {
+                            utterance.hypothesis(&text, Instant::now());
+                        }
                     }
                 }
             }
+            // Ambient sound events never extend this speech-only deadline.
+            if utterance.ready(Instant::now()) {
+                return Ok(utterance.text);
+            }
+            if utterance.text.is_empty()
+                && started.elapsed() >= Duration::from_secs(8)
+                && utterance
+                    .last_activity
+                    .is_none_or(|last| last.elapsed() >= Duration::from_millis(1200))
+            {
+                anyhow::bail!("No clear speech detected. Try again or type your request");
+            }
             std::thread::sleep(Duration::from_millis(50));
         }
-        anyhow::bail!("No speech detected. Try again or type your request")
+        ensure!(
+            !cancelled.load(Ordering::Acquire),
+            "Voice capture cancelled"
+        );
+        if utterance.text.is_empty() {
+            anyhow::bail!("No speech detected. Try again or type your request")
+        }
+        Ok(utterance.text)
+    }
+
+    #[cfg(test)]
+    pub(super) fn background_noise_check() -> Result<String> {
+        let path = std::path::Path::new("target/diagnostics/dj-background-noise.wav");
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        let samples = 16000 * 8;
+        let length = (samples * 2) as u32;
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend_from_slice(&(36 + length).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&16000u32.to_le_bytes());
+        bytes.extend_from_slice(&32000u32.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&length.to_le_bytes());
+        let mut random = 0x45u32;
+        for index in 0..samples {
+            random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+            let noise = (random >> 16) as i16 / 64;
+            let hum =
+                (300.0 * (std::f32::consts::TAU * 110.0 * index as f32 / 16000.0).sin()) as i16;
+            bytes.extend_from_slice(&noise.saturating_add(hum).to_le_bytes());
+        }
+        std::fs::write(path, bytes)?;
+        recognize(&AtomicBool::new(false), Some(path))
     }
 
     #[cfg(test)]
@@ -317,6 +430,63 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uncertain_or_invalid_recognition_cannot_submit_or_extend_listening() {
+        for confidence in [0.0, 0.41, 0.64, f32::NAN, f32::INFINITY] {
+            assert!(!credible_speech(0, confidence));
+        }
+        assert!(!credible_speech(-1, 0.95));
+        assert!(credible_speech(0, 0.81));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "Uses installed Windows dictation with a deterministic ambient-noise WAV, never the microphone"]
+    fn background_noise_does_not_submit_or_keep_extending_capture() {
+        let start = std::time::Instant::now();
+        assert!(
+            platform::background_noise_check().is_err(),
+            "Ambient noise must not submit a request"
+        );
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(12),
+            "Background noise prolonged capture"
+        );
+    }
+
+    #[test]
+    fn speech_endpoint_joins_phrases_and_sends_after_quiet() {
+        let now = std::time::Instant::now();
+        let mut utterance = Utterance::default();
+        utterance.recognize("Play", now);
+        utterance.hypothesis("acoustic", now + std::time::Duration::from_millis(800));
+        assert!(!utterance.ready(now + std::time::Duration::from_millis(1300)));
+        utterance.recognize(
+            "acoustic folk",
+            now + std::time::Duration::from_millis(1400),
+        );
+        assert!(!utterance.ready(now + std::time::Duration::from_millis(2599)));
+        assert!(utterance.ready(now + std::time::Duration::from_millis(2600)));
+        assert_eq!(utterance.text, "Play acoustic folk");
+    }
+
+    #[test]
+    fn empty_noise_and_repeated_hypotheses_cannot_keep_listening_alive() {
+        let now = std::time::Instant::now();
+        let mut utterance = Utterance::default();
+        for index in 0..100 {
+            utterance.hypothesis("", now + std::time::Duration::from_millis(index));
+        }
+        assert!(utterance.last_activity.is_none());
+        assert!(!utterance.ready(now + std::time::Duration::from_secs(30)));
+        utterance.recognize("Play rock", now);
+        utterance.hypothesis("and", now);
+        for index in 1..12 {
+            utterance.hypothesis("and", now + std::time::Duration::from_millis(index * 100));
+        }
+        assert!(utterance.ready(now + std::time::Duration::from_millis(1200)));
+    }
 
     #[test]
     #[cfg(windows)]

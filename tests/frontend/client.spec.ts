@@ -136,6 +136,10 @@ async function startClient(page: Page, initialRoute = "liked") {
             return new Promise<string>((resolve) => {
               host.__clientTest.resolveVoice = resolve;
             });
+          if (command === "dj_request" && host.__clientTest.holdDJRequest)
+            return new Promise<void>((resolve) => {
+              host.__clientTest.resolveDJRequest = resolve;
+            });
           if (command === "resolve_album")
             return {
               ...track.album,
@@ -335,7 +339,7 @@ test("DJ sends arbitrary typed requests without opening the microphone", async (
   );
 });
 
-test("DJ voice requires review and discards late transcripts after cancellation", async ({
+test("DJ voice submits after speech ends without filling text and rejects cancelled results", async ({
   page,
 }) => {
   await startClient(page);
@@ -348,22 +352,19 @@ test("DJ voice requires review and discards late transcripts after cancellation"
   await expect(
     page.getByRole("textbox", { name: "DJ request", exact: true }),
   ).toHaveValue("");
+  await page
+    .getByRole("textbox", { name: "DJ request", exact: true })
+    .fill("Keep my typed draft");
+  await page.evaluate(
+    () => ((window as any).__clientTest.holdDJRequest = true),
+  );
   await page.getByRole("button", { name: "Use microphone" }).click();
   await page.evaluate(() =>
     (window as any).__clientTest.resolveVoice("Play acoustic folk"),
   );
   await expect(
     page.getByRole("textbox", { name: "DJ request", exact: true }),
-  ).toHaveValue("Play acoustic folk");
-  expect(
-    await page.evaluate(
-      () =>
-        (window as any).__clientTest.commands.filter(
-          (c: any) => c.command === "dj_request",
-        ).length,
-    ),
-  ).toBe(0);
-  await page.getByRole("button", { name: "Send to DJ", exact: true }).click();
+  ).toHaveValue("Keep my typed draft");
   await expect
     .poll(() =>
       page.evaluate(
@@ -374,6 +375,16 @@ test("DJ voice requires review and discards late transcripts after cancellation"
       ),
     )
     .toMatchObject({ text: "Play acoustic folk", input: "voice" });
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (c: any) => c.command === "dj_request",
+        ).length,
+    ),
+  ).toBe(1);
+  await page.evaluate(() => (window as any).__clientTest.resolveDJRequest());
+  await expect(page.getByRole("dialog", { name: "Ask DJ" })).toHaveCount(0);
 });
 
 test("DJ dialog traps focus and closes on sign-out", async ({ page }) => {

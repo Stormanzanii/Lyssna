@@ -1890,8 +1890,7 @@ small {
   white-space: normal;
 }
 /* Text outside the active line sits at full size so lines stay aligned. On
-   the active line unsung syllables and held letters rest at 95% and slightly
-   low; LyricAnimator eases them there and overrides scale and translate
+   the active line unsung syllables and held letters rest slightly low; LyricAnimator eases them there and overrides scale and translate
    while a line is sung or settling. Text scales from near its baseline, so a
    resting piece of a split word sits level with a sung one. Pieces scale
    from their joints and middle pieces keep full size, so no seam opens. A
@@ -1904,7 +1903,6 @@ small {
   transform-origin: center 75%;
 }
 .lyric-line.active .lyric-syllable {
-  scale: 0.95;
   translate: 0 0.01em;
 }
 .lyric-syllable.emphasis {
@@ -2014,7 +2012,6 @@ small {
   transform-origin: center 75%;
 }
 .lyric-line.active .lyric-letter {
-  scale: 0.95;
   translate: 0 0.02em;
 }
 .lyric-translation,

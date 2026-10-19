@@ -81,9 +81,9 @@ it("settles springs at their goal regardless of frame rate", () => {
   });
   expect(Math.max(...finals) - Math.min(...finals)).toBeLessThan(1e-6);
 });
-it("rests unsung syllables small and low, sweeps the fill, and settles sung ones", () => {
+it("rests unsung syllables low at full size, sweeps the fill, and settles sung ones", () => {
   expect(wordGoal(1000, 2000, 500)).toEqual({
-    scale: 0.95,
+    scale: 1,
     lift: 0.01,
     glow: 0,
     gradient: -20,
@@ -109,8 +109,8 @@ it("pops the sung letter of a held word and eases its neighbours", () => {
   expect(goals[1].gradient).toBeGreaterThan(-20);
   expect(goals[0].gradient).toBe(100);
   // Unsung letters wait at rest with no fill.
-  expect(goals[2]).toMatchObject({ scale: 0.95, gradient: -20 });
-  expect(goals[3]).toMatchObject({ scale: 0.95, gradient: -20 });
+  expect(goals[2]).toMatchObject({ scale: 1, gradient: -20 });
+  expect(goals[3]).toMatchObject({ scale: 1, gradient: -20 });
   for (const goal of letterGoals(1000, 2000, 2000, 4))
     expect(goal).toMatchObject({ scale: 1, lift: 0, gradient: 100 });
 });

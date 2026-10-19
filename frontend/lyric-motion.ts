@@ -184,15 +184,16 @@ export function naturalSpline(points: readonly (readonly [number, number])[]) {
   };
 }
 /** Animation curves over a syllable's progress, and the springs that chase
- * them. Lift is a share of the font size. */
+ * them. Lift is a share of the font size. Unsung text rests at full size,
+ * slightly low, so word spacing stays even while a line waits to be sung. */
 export const MOTION = {
   scale: naturalSpline([
-    [0, 0.95],
+    [0, 1],
     [0.7, 1.0505],
     [1, 1],
   ]),
   letterScale: naturalSpline([
-    [0, 0.95],
+    [0, 1],
     [0.7, 1.175],
     [1, 1],
   ]),

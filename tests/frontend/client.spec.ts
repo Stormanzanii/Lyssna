@@ -987,12 +987,10 @@ test("timed syllables lift independently and font choices apply separately", asy
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
     letter = page.locator(".lyrics-page .lyric-letter").first();
   // "Hel" is rising; the held "lo" moves by letter and eases down to rest
-  // small and low.
+  // low at full size, so its spacing stays even.
   await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
   await expect.poll(async () => (await motion(letter)).lift).toBeGreaterThan(0);
-  await expect
-    .poll(async () => (await motion(letter)).scale)
-    .toBeLessThan(0.96);
+  expect((await motion(letter)).scale).toBeCloseTo(1, 2);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({

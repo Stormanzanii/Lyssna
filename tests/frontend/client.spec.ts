@@ -1793,6 +1793,30 @@ test("unsung split words keep their syllables together", async ({ page }) => {
       ),
     );
   expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(0.5);
+  // While the word is sung, one piece pops as the next rests small; no seam
+  // opens between them.
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 5150,
+        playing: false,
+        observed_at: Date.now(),
+      }),
+    track.uri,
+  );
+  await expect(pieces).toHaveClass(/active/);
+  await page.waitForTimeout(400);
+  const sung = await pieces
+    .locator(".lyric-syllable")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().toJSON()),
+    );
+  for (let index = 1; index < sung.length; index++)
+    expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(
+      0.5,
+    );
 });
 
 test("restarting a song jumps lyrics back to the start instead of gliding", async ({

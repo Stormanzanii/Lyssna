@@ -1892,8 +1892,8 @@ small {
 /* Text outside the active line sits at full size so lines stay aligned. On
    the active line unsung syllables and held letters rest at 95% and slightly
    low; LyricAnimator eases them there and overrides scale and translate
-   while a line is sung or settling. Pieces of one word scale away from each
-   other, and a line's first syllable keeps its left edge on the margin. */
+   while a line is sung or settling. A line's first syllable keeps its left
+   edge on the margin. */
 .lyric-syllable {
   display: inline-block;
   max-width: 100%;
@@ -1908,29 +1908,35 @@ small {
 .lyric-syllable.emphasis {
   display: inline-flex;
 }
-.lyric-syllable.joined-start {
-  transform-origin: right center;
-}
 .lyric-syllable.joined-end {
   transform-origin: left center;
 }
+/* Pieces of a split word that have more text after them keep full size, and
+   only the last piece scales, from its joint, so no seam opens inside the
+   word. They still lift and glow. */
+.lyric-syllable:is(.joined-start, .joined-middle),
+.lyric-syllable:is(.joined-start, .joined-middle) .lyric-letter {
+  scale: none !important;
+}
 .lyric-line:not(.opposite)
   .lyric-main
   > .lyric-word-group:first-child
-  .lyric-syllable:first-child,
+  .lyric-syllable:first-child:not(.joined-end),
 .lyric-line:not(.opposite)
   .lyric-main
   > .lyric-word-group:first-child
+  .lyric-syllable:first-child:not(.joined-start)
   .lyric-letter:first-child {
   transform-origin: left center;
 }
 .lyric-line.opposite
   .lyric-main
   > .lyric-word-group:last-child
-  .lyric-syllable:last-child,
+  .lyric-syllable:last-child:not(.joined-end),
 .lyric-line.opposite
   .lyric-main
   > .lyric-word-group:last-child
+  .lyric-syllable:last-child:not(.joined-end)
   .lyric-letter:last-child {
   transform-origin: right center;
 }

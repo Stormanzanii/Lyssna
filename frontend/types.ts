@@ -218,6 +218,8 @@ export type PlayerRequest = {
 };
 export type AppEvent =
   | { type: "narration"; active: boolean }
+  /** A Spicy Lyrics creator profile sheet opened or closed. */
+  | { type: "creator_profile"; open: boolean }
   | {
       /** A press on the taskbar buttons, media keys or the media flyout. */
       type: "media_control";

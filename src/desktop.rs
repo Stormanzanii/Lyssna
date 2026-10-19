@@ -1772,6 +1772,12 @@ async fn open_creator_profile(
             window.set_focus()?;
             return Ok(());
         }
+        // One profile at a time.
+        for (name, window) in app.webview_windows() {
+            if name.starts_with("creator-") {
+                let _ = window.close();
+            }
+        }
         let title = format!(
             "{} · Spicy Lyrics",
             username
@@ -1780,15 +1786,54 @@ async fn open_creator_profile(
                 .take(80)
                 .collect::<String>()
         );
-        tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
-            .title(title)
-            .inner_size(1080., 800.)
-            .min_inner_size(480., 400.)
-            .center()
-            .on_navigation(|url| {
-                url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
-            })
-            .build()?;
+        let main = app
+            .get_webview_window("main")
+            .context("Main window missing")?;
+        // A borderless sheet fixed over the main window, which dims behind
+        // it; clicking anywhere else closes it.
+        let window =
+            tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
+                .title(title)
+                .decorations(false)
+                .resizable(false)
+                .skip_taskbar(true)
+                .shadow(true)
+                .visible(false)
+                .parent(&main)?
+                .on_navigation(|url| {
+                    url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
+                })
+                .build()?;
+        let (origin, size, scale) = (
+            main.inner_position()?,
+            main.inner_size()?,
+            main.scale_factor()?,
+        );
+        let width = (f64::from(size.width) * 0.5).clamp(480. * scale, 960. * scale);
+        let height = (f64::from(size.height) * 0.7).clamp(400. * scale, 780. * scale);
+        window.set_size(tauri::PhysicalSize::new(width, height))?;
+        window.set_position(tauri::PhysicalPosition::new(
+            f64::from(origin.x) + (f64::from(size.width) - width) / 2.,
+            f64::from(origin.y) + (f64::from(size.height) - height) / 2.,
+        ))?;
+        let _ = app.emit("spotiflex", json!({"type":"creator_profile","open":true}));
+        let events = app.clone();
+        let popup = window.clone();
+        window.on_window_event(move |event| match event {
+            tauri::WindowEvent::Focused(false) => {
+                let _ = popup.close();
+            }
+            tauri::WindowEvent::Destroyed => {
+                let open = events
+                    .webview_windows()
+                    .keys()
+                    .any(|name| name.starts_with("creator-") && name != popup.label());
+                let _ = events.emit("spotiflex", json!({"type":"creator_profile","open":open}));
+            }
+            _ => {}
+        });
+        window.show()?;
+        window.set_focus()?;
         Ok(())
     };
     result().map_err(error)

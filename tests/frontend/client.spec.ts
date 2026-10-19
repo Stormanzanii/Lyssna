@@ -2388,3 +2388,17 @@ test("the queue opens in the right panel in place of Now playing", async ({
   await expect(panel).toHaveCount(0);
   await expect(page.locator(".now-playing")).toBeVisible();
 });
+
+test("the app dims while a creator profile sheet is open", async ({ page }) => {
+  await startClient(page);
+  const emit = (open: boolean) =>
+    page.evaluate(
+      (open) =>
+        (window as any).__clientTest.emit({ type: "creator_profile", open }),
+      open,
+    );
+  await emit(true);
+  await expect(page.locator(".creator-profile-dim")).toBeVisible();
+  await emit(false);
+  await expect(page.locator(".creator-profile-dim")).toHaveCount(0);
+});

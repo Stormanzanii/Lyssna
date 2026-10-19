@@ -85,6 +85,8 @@ export interface AppState extends Snapshot {
   /** DJ was just started and its narration has not been confirmed yet. The
    * DJ view shows meanwhile, so the first queued song cannot flash up. */
   dj_pending?: boolean;
+  /** A creator profile sheet is open over the app, which dims behind it. */
+  creator_profile_open?: boolean;
 }
 export const emptyState: AppState = {
   narrating: false,
@@ -173,6 +175,8 @@ export function reducer(state: AppState, action: Action): AppState {
         dj_pending: false,
         narrating: !!state.profile && state.native_ready && action.active,
       };
+    case "creator_profile":
+      return { ...state, creator_profile_open: action.open };
     case "dj_requested":
       return state.profile
         ? { ...state, narrating: true, dj_pending: true }

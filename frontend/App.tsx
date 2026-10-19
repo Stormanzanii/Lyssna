@@ -2044,6 +2044,11 @@ function App() {
           </>
         )}
       </div>
+      {state.creator_profile_open && (
+        // The profile sheet is a separate window; clicking here moves focus
+        // back to this window, which closes it.
+        <div className="creator-profile-dim" aria-hidden="true" />
+      )}
       {djRequest && state.profile && state.native_ready && (
         <DJRequest
           key={state.profile.id}

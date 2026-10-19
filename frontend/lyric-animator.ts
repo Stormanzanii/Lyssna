@@ -57,9 +57,14 @@ export class LyricAnimator {
     this.time = time;
     this.run();
   }
+  /** Drops all motion so text snaps to its resting state, as after a jump
+   * in song time. */
+  reset() {
+    for (const [index, syllables] of this.live) this.release(index, syllables);
+  }
   dispose() {
     cancelAnimationFrame(this.frame);
-    for (const [index, syllables] of this.live) this.release(index, syllables);
+    this.reset();
   }
   private run = () => {
     cancelAnimationFrame(this.frame);

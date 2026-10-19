@@ -1794,3 +1794,50 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     );
   expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(0.5);
 });
+
+test("restarting a song jumps lyrics back to the start instead of gliding", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from(
+      '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0s" end="2s">Test</p></div></body></tt>',
+    ),
+  });
+  await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
+  const seek = (position: number) =>
+    page.evaluate(
+      ({ uri, position }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms: position,
+          playing: false,
+          seeked: true,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position },
+    );
+  const scrollTop = () =>
+    page
+      .locator(".lyrics-page .lyric-scroll")
+      .evaluate((element) => element.scrollTop);
+  await seek(150_500);
+  await expect.poll(scrollTop).toBeGreaterThan(1000);
+  await page.waitForTimeout(1500);
+  await seek(500);
+  await expect(page.locator(".lyrics-page .lyric-line.active")).toHaveText(
+    "Test lyric line 1",
+  );
+  // Two frames later the view is already at the top, not part way back.
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  expect(await scrollTop()).toBeLessThan(50);
+});

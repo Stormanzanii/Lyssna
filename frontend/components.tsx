@@ -380,6 +380,12 @@ export function LyricsDisplay({
   useEffect(() => {
     setFollowing(true);
   }, [lyrics]);
+  // A restart, Previous or seek moves song time far in one step. Lyrics then
+  // jump straight there instead of gliding through the song.
+  const lastPosition = useRef(positionMs),
+    jumped = useRef(false);
+  if (Math.abs(positionMs - lastPosition.current) > 1500) jumped.current = true;
+  lastPosition.current = positionMs;
   const animator = useRef<LyricAnimator>(undefined);
   useLayoutEffect(() => {
     const instance = new LyricAnimator(
@@ -391,7 +397,12 @@ export function LyricsDisplay({
     return () => instance.dispose();
   }, [lyrics, settings.reduce_motion]);
   useLayoutEffect(() => {
-    if (lyrics.synced) animator.current?.update(positionMs);
+    if (!lyrics.synced) return;
+    if (jumped.current) {
+      animator.current?.reset();
+      setFollowing(true);
+    }
+    animator.current?.update(positionMs);
   }, [positionMs, lyrics, settings.reduce_motion]);
   useLayoutEffect(() => {
     const container = scroll.current,
@@ -446,7 +457,9 @@ export function LyricsDisplay({
           line.offsetTop + (compact ? 0 : line.offsetHeight / 2) - focus,
         ),
       );
-      if (settings.reduce_motion) {
+      if (settings.reduce_motion || jumped.current) {
+        cancelAnimationFrame(frame);
+        frame = 0;
         container.scrollTop = spring.current.target;
         spring.current.position = container.scrollTop;
         spring.current.velocity = 0;
@@ -479,6 +492,10 @@ export function LyricsDisplay({
     settings.romanized,
     gap?.start,
   ]);
+  useLayoutEffect(() => {
+    // Held until follow mode resumes, so a jump while browsing still snaps.
+    if (following) jumped.current = false;
+  }, [positionMs, following]);
   if (lyrics.instrumental)
     return (
       <div className="lyrics-message">

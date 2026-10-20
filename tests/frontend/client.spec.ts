@@ -1603,10 +1603,8 @@ test("timed syllables lift independently and font choices apply separately", asy
     .toBeGreaterThan(1.02);
   expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
   await openSettings(page);
-  await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
-  await page
-    .getByLabel("Lyrics font", { exact: true })
-    .selectOption("Consolas");
+  await page.getByLabel("App font", { exact: true }).fill("Georgia");
+  await page.getByLabel("Lyrics font", { exact: true }).fill("Consolas");
   await page.getByTitle("Lyrics", { exact: true }).click();
   expect(
     await page
@@ -1618,6 +1616,54 @@ test("timed syllables lift independently and font choices apply separately", asy
       .locator(".lyrics-page .lyric-line")
       .evaluate((element) => getComputedStyle(element).fontFamily),
   ).toContain("Consolas");
+});
+
+test("typed Windows font names apply immediately with a live preview", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  const appFont = page.getByLabel("App font", { exact: true });
+  const lyricFont = page.getByLabel("Lyrics font", { exact: true });
+  await appFont.clear();
+  await appFont.pressSequentially("Times New Roman", { delay: 10 });
+  await expect(appFont).toHaveValue("Times New Roman");
+  await expect(appFont).toBeFocused();
+  expect(
+    await page
+      .locator(".application")
+      .evaluate((node) => getComputedStyle(node).fontFamily),
+  ).toContain("Times New Roman");
+  await lyricFont.fill("Bahnschrift");
+  await expect(lyricFont).toBeFocused();
+  await expect(page.locator(".settings-page")).toBeVisible();
+  expect(
+    await page
+      .getByLabel("Lyrics font preview", { exact: true })
+      .evaluate((node) => getComputedStyle(node).fontFamily),
+  ).toContain("Bahnschrift");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyric_font,
+      ),
+    )
+    .toBe("Bahnschrift");
+  await lyricFont.clear();
+  expect(
+    await page
+      .getByLabel("Lyrics font preview", { exact: true })
+      .evaluate((node) => getComputedStyle(node).fontFamily),
+  ).toContain("Inter");
+  await appFont.clear();
+  expect(
+    await page
+      .locator(".application")
+      .evaluate((node) => getComputedStyle(node).fontFamily),
+  ).not.toContain("Times New Roman");
 });
 
 test("playlist search spans unloaded pages and play counts drive sorting", async ({

@@ -56,9 +56,9 @@ export async function loadSelectedFonts(families: (string | undefined)[]) {
   );
 }
 export function fontFamily(family?: string) {
-  return family && /^[\w -]{1,100}$/.test(family)
-    ? `"${family}", "Segoe UI", sans-serif`
-    : undefined;
+  if (!family?.trim() || family.length > 100 || /[\x00-\x1f\x7f]/.test(family))
+    return undefined;
+  return `"${family.trim().replace(/["\\]/g, "\\$&")}", "Segoe UI", sans-serif`;
 }
 const systemFonts = [
   "Segoe UI",
@@ -148,29 +148,54 @@ export function FontSettings({
         <SettingRow
           key={key}
           label={label}
-          help={help}
+          help={`${help} Type an installed Windows font name to apply immediately.`}
           keywords="font typeface"
         >
-          <select
-            className="settings-select font-select"
-            aria-label={label}
-            value={settings[key] ?? ""}
-            onChange={(event) => onSettings({ [key]: event.target.value })}
-          >
-            <option value="">Default</option>
-            {systemFonts.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-            {fonts.map((font) => (
-              <option key={font.family} value={font.family}>
-                {font.name}
-              </option>
-            ))}
-            {settings[key]?.startsWith("SpotiFlexFont_") &&
-              !fonts.some((font) => font.family === settings[key]) && (
-                <option value={settings[key]}>Saved custom font</option>
-              )}
-          </select>
+          <div className="font-control">
+            <input
+              className="settings-select font-select"
+              type="text"
+              aria-label={label}
+              list={`${key}-fonts`}
+              placeholder="Default"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={100}
+              value={
+                fonts.find((font) => font.family === settings[key])?.name ??
+                (settings[key]?.startsWith("SpotiFlexFont_")
+                  ? "Saved custom font"
+                  : (settings[key] ?? ""))
+              }
+              onChange={(event) => {
+                const name = event.target.value;
+                const imported = fonts.find(
+                  (font) => font.name.toLowerCase() === name.toLowerCase(),
+                );
+                onSettings({ [key]: imported?.family ?? name });
+              }}
+            />
+            <datalist id={`${key}-fonts`}>
+              {systemFonts.map((name) => (
+                <option key={name} value={name} />
+              ))}
+              {fonts.map((font) => (
+                <option key={font.family} value={font.name} />
+              ))}
+            </datalist>
+            <span
+              className="font-preview"
+              aria-label={`${label} preview`}
+              style={{
+                fontFamily:
+                  key === "lyric_font"
+                    ? "var(--lyric-font)"
+                    : fontFamily(settings[key]),
+              }}
+            >
+              The quick brown fox
+            </span>
+          </div>
         </SettingRow>
       ))}
       <SettingRow

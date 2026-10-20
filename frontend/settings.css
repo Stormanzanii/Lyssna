@@ -149,6 +149,25 @@
   background: #282828;
   color: #fff;
 }
+.font-control {
+  display: grid;
+  gap: 8px;
+  max-width: 280px;
+  min-width: 0;
+}
+.font-control .settings-select {
+  background-image: none;
+  cursor: text;
+  padding-right: 12px;
+  width: 100%;
+}
+.font-preview {
+  font-size: 17px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Spotify-green switch with a white knob. */
 .toggle {
   appearance: none;

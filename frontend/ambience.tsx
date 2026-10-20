@@ -6,12 +6,18 @@ export const Ambience = memo(function Ambience({
   image,
   reduceMotion = false,
   animate = false,
+  warp = 1,
+  speed = 1,
 }: {
   track?: Track;
   /** Artwork URL used instead of the track's album art. */
   image?: string;
   reduceMotion?: boolean;
   animate?: boolean;
+  /** Kawarp warp intensity; 1 matches the lyrics page. */
+  warp?: number;
+  /** Kawarp animation speed; 1 matches the lyrics page. */
+  speed?: number;
 }) {
   const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
@@ -125,6 +131,12 @@ export const Ambience = memo(function Ambience({
     };
   }, [source]);
   useEffect(() => resume.current?.(), [animate, reduceMotion]);
+  useEffect(() => {
+    renderer.current?.setOptions({
+      warpIntensity: warp,
+      animationSpeed: speed,
+    });
+  }, [warp, speed]);
   return (
     <div
       className={`ambience ${reduceMotion ? "still" : ""}`}

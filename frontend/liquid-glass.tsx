@@ -4,9 +4,9 @@ import type { Track } from "./types";
 
 /**
  * The playing track's warped, moving artwork behind the whole window, the
- * same ambience the lyrics page uses, so Liquid Glass panels have colour to
- * refract. It animates while playing and holds still when paused or when
- * motion is reduced.
+ * same ambience the lyrics page uses but warped harder and faster, so the
+ * glass panels have moving colour to refract. It animates while playing and
+ * holds still when paused or when motion is reduced.
  */
 export const GlassBackdrop = memo(function GlassBackdrop({
   track,
@@ -19,7 +19,13 @@ export const GlassBackdrop = memo(function GlassBackdrop({
 }) {
   return (
     <div className="glass-backdrop" aria-hidden="true">
-      <Ambience track={track} animate={playing} reduceMotion={reduceMotion} />
+      <Ambience
+        track={track}
+        animate={playing}
+        reduceMotion={reduceMotion}
+        warp={1.6}
+        speed={2.4}
+      />
       <div className="glass-backdrop-shade" />
     </div>
   );

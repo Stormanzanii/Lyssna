@@ -2696,6 +2696,91 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
   await expect(page.locator(".settings-empty")).toBeVisible();
 });
 
+test("Space Gravity waiting dots share the normal countdown and drift with words", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const line = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+      words: [{ text, start_ms, end_ms }],
+      background: false,
+      opposite: false,
+      translation: "",
+      romanization: "",
+    });
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [line("Before", 0, 1000), line("After", 10000, 12000)],
+      },
+    });
+  }, track.uri);
+  const position = async (position_ms: number, playing = false) =>
+    page.evaluate(
+      async ({ uri, position_ms, playing }) => {
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing,
+          observed_at: Date.now(),
+        });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      },
+      { uri: track.uri, position_ms, playing },
+    );
+  const dots = () =>
+    page
+      .locator(".lyrics-page .lyric-wait:not([aria-hidden=true]) i")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          opacity: getComputedStyle(node).opacity,
+          transform: getComputedStyle(node).transform,
+        })),
+      );
+  const normal = new Map<number, Awaited<ReturnType<typeof dots>>>();
+  for (const time of [2000, 6500, 9500]) {
+    await position(time);
+    normal.set(time, await dots());
+  }
+  await openSettings(page);
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const waiting = page.locator(".gravity-wait");
+  await expect(waiting.locator("i")).toHaveCount(3);
+  for (const [time, expected] of normal) {
+    await position(time);
+    await expect.poll(dots).toEqual(expected);
+  }
+  await position(6500, true);
+  const sample = () =>
+    waiting.evaluate((node) => (node as HTMLElement).style.transform);
+  await expect.poll(sample).toContain("translate3d");
+  const samples = [await sample()];
+  for (let index = 0; index < 3; index += 1) {
+    await page.waitForTimeout(250);
+    samples.push(await sample());
+  }
+  expect(new Set(samples).size).toBeGreaterThan(2);
+  await position(10000);
+  await expect(waiting).toHaveCount(0);
+  await position(6500);
+  await expect(waiting.locator("i")).toHaveCount(3);
+  await expect.poll(dots).toEqual(normal.get(6500));
+  await expect.poll(sample).toContain("translate3d");
+});
+
 test("Space Gravity shares normal syllable joins and held-letter timing", async ({
   page,
 }) => {

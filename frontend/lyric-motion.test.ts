@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   GLIDE_MS,
+  countdownDots,
   MOTION,
   glideScroll,
   Spring,
@@ -13,6 +14,29 @@ import {
   wordGoal,
 } from "./lyric-motion";
 import type { Line } from "./types";
+it("fills countdown dots in order and rewinds from song time", () => {
+  const gap = { start: 1000, end: 7000, after: 0 };
+  expect(countdownDots(gap, 0).map((dot) => dot.opacity)).toEqual([
+    0.35, 0.35, 0.35,
+  ]);
+  expect(countdownDots(gap, 4000).map((dot) => dot.opacity)).toEqual([
+    1, 0.675, 0.35,
+  ]);
+  expect(countdownDots(gap, 8000).map((dot) => dot.opacity)).toEqual([1, 1, 1]);
+  expect(countdownDots(gap, 1000).map((dot) => dot.opacity)).toEqual([
+    0.35, 0.35, 0.35,
+  ]);
+});
+it("keeps countdown progress with reduced motion while removing the lift", () => {
+  const gap = { start: 1000, end: 7000, after: 0 };
+  const moving = countdownDots(gap, 4000),
+    still = countdownDots(gap, 4000, true);
+  expect(still.map((dot) => dot.opacity)).toEqual(
+    moving.map((dot) => dot.opacity),
+  );
+  expect(still.every((dot) => dot.lift === 0)).toBe(true);
+  expect(moving[1].lift).toBeGreaterThan(0);
+});
 it("puts interlude dots on the side of the upcoming singer", () => {
   const lines = [
     { start_ms: 0, end_ms: 1000, words: [] },

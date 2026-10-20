@@ -17,6 +17,23 @@ export interface VocalGap {
   end: number;
   after: number;
 }
+
+/** The normal three-dot countdown follows song time, including pauses and seeks. */
+export function countdownDots(
+  gap: VocalGap,
+  time: number,
+  reduceMotion = false,
+) {
+  const progress = (time - gap.start) / Math.max(1, gap.end - gap.start);
+  return [0, 1, 2].map((index) => {
+    const phase = Math.max(0, Math.min(1, progress * 3 - index));
+    return {
+      opacity: 0.35 + phase * 0.65,
+      lift: reduceMotion ? 0 : Math.sin(phase * Math.PI),
+    };
+  });
+}
+
 export function vocalGaps(lines: Line[]): VocalGap[] {
   const intervals = lines
     .map((line, index) => ({

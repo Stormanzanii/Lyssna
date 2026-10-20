@@ -9,6 +9,7 @@ import {
 import { vocalGap, wordGroups, type AnimatedWord } from "./lyric-motion";
 import { LyricAnimator } from "./lyric-animator";
 import { LyricWord } from "./lyric-word";
+import { LyricCountdown } from "./lyric-countdown";
 import {
   constrain,
   createBody,
@@ -205,6 +206,8 @@ export function SpaceGravityLyrics({
   credits: ReactNode;
 }) {
   const prepared = useMemo(() => prepareGravity(lyrics), [lyrics]);
+  const gap = vocalGap(lyrics.lines, time);
+  const waitKey = gap ? `wait:${gap.start}:${gap.end}` : "";
   const stage = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
   // Area the artwork, toolbar and credits take; measured by the frame loop.
@@ -240,10 +243,10 @@ export function SpaceGravityLyrics({
     ...leaving.filter((entity) => !visible.includes(entity)),
   ];
 
-  const elements = useRef(new Map<string, HTMLButtonElement>());
+  const elements = useRef(new Map<string, HTMLElement>());
   const bodies = useRef(new Map<string, Body & { spawned: boolean }>());
-  const live = useRef({ time, visible, prepared, reduceMotion });
-  live.current = { time, visible, prepared, reduceMotion };
+  const live = useRef({ visible, prepared, reduceMotion, waitKey });
+  live.current = { visible, prepared, reduceMotion, waitKey };
   useEffect(() => {
     // A new song starts every word fresh.
     bodies.current.clear();
@@ -252,9 +255,7 @@ export function SpaceGravityLyrics({
   // One stable ref callback per word. An inline callback would be detached
   // and reattached on every render (every frame while playing), and its
   // cleanup would respawn the word each time.
-  const refs = useRef(
-    new Map<string, (element: HTMLButtonElement | null) => void>(),
-  );
+  const refs = useRef(new Map<string, (element: HTMLElement | null) => void>());
   const refFor = (key: string) => {
     let callback = refs.current.get(key);
     if (!callback) {
@@ -321,7 +322,7 @@ export function SpaceGravityLyrics({
             : current,
         );
       }
-      const { time, visible, prepared, reduceMotion } = live.current;
+      const { visible, prepared, reduceMotion, waitKey } = live.current;
       const art = obstacles[0];
       // Spawn words in the larger free strip beside the artwork.
       const freeLeft =
@@ -340,13 +341,17 @@ export function SpaceGravityLyrics({
       const centreY = (freeTop + (credits?.top ?? area.height)) / 2;
       const active: Body[] = [];
       for (const [key, element] of elements.current) {
+        const waiting = key === waitKey;
         const entity =
           visible.find((item) => item.key === key) ??
           prepared.entities.find((item) => item.key === key);
-        if (!entity) continue;
+        if (!entity && !waiting) continue;
         let body = bodies.current.get(key);
         if (!body) {
-          body = { ...createBody(entity.seed, entity.speed), spawned: false };
+          body = {
+            ...createBody(entity?.seed ?? hash(key), entity?.speed ?? 1),
+            spawned: false,
+          };
           bodies.current.set(key, body);
         }
         if (element.offsetWidth)
@@ -354,19 +359,21 @@ export function SpaceGravityLyrics({
         if (!body.spawned) {
           const spread = Math.min(freeRight - freeLeft, area.width) * 0.8;
           const column =
-            entity.slots > 1 ? entity.slot / (entity.slots - 1) - 0.5 : 0;
+            entity && entity.slots > 1
+              ? entity.slot / (entity.slots - 1) - 0.5
+              : 0;
           body.x =
             centreX +
             column * spread +
-            (random(entity.seed + 7) * 2 - 1) * body.width * 1.35;
+            (random(body.seed + 7) * 2 - 1) * body.width * 1.35;
           // Every line spawns around the middle of the free area, as in
           // Spicy Lyrics; its words then drift apart.
           body.y =
-            centreY + (random(entity.seed + 8) * 2 - 1) * body.height * 1.35;
+            centreY + (random(body.seed + 8) * 2 - 1) * body.height * 1.35;
           body.spawned = true;
           constrain(body, area, obstacles);
         }
-        if (visible.includes(entity)) active.push(body);
+        if (waiting || (entity && visible.includes(entity))) active.push(body);
       }
       if (reduceMotion) {
         for (const body of active) {
@@ -417,7 +424,6 @@ export function SpaceGravityLyrics({
     animator.current?.update(time);
   }, [time, lyrics]);
 
-  const gap = vocalGap(lyrics.lines, time);
   return (
     <div className="gravity-lyrics">
       <div
@@ -466,14 +472,14 @@ export function SpaceGravityLyrics({
           );
         })}
         {gap && (
-          <div
-            className={`lyric-wait gravity-wait ${gap.opposite ? "opposite" : ""}`}
-            aria-label="Instrumental break"
-          >
-            <i />
-            <i />
-            <i />
-          </div>
+          <LyricCountdown
+            key={waitKey}
+            ref={refFor(waitKey)}
+            className="gravity-wait"
+            gap={gap}
+            time={time}
+            reduceMotion={reduceMotion}
+          />
         )}
       </div>
       <div className="gravity-credits">{credits}</div>

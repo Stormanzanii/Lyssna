@@ -52,6 +52,7 @@ import {
 } from "./lyric-motion";
 import { LyricAnimator } from "./lyric-animator";
 import { LyricWord } from "./lyric-word";
+import { LyricCountdown } from "./lyric-countdown";
 
 export const imageOf = (images?: { url: string }[]) =>
   images?.find((image) => image.url.startsWith("https://"))?.url;
@@ -357,36 +358,14 @@ export function LyricsDisplay({
   const waitingDots = (item: VocalGap) => {
     const visible = gap?.start === item.start;
     return (
-      <div
+      <LyricCountdown
         key={item.start}
         ref={visible ? waiting : undefined}
-        aria-hidden={!visible}
-        className={`lyric-wait ${item.opposite ? "opposite" : ""}`}
-        role="status"
-        aria-label="Instrumental break"
-      >
-        {[0, 1, 2].map((index) => {
-          const phase = Math.max(
-            0,
-            Math.min(
-              1,
-              ((positionMs - item.start) / (item.end - item.start)) * 3 - index,
-            ),
-          );
-          const lift = settings.reduce_motion ? 0 : Math.sin(phase * Math.PI);
-          return (
-            <i
-              key={index}
-              style={
-                {
-                  "--dot-opacity": 0.35 + phase * 0.65,
-                  "--dot-lift": lift,
-                } as CSSProperties
-              }
-            />
-          );
-        })}
-      </div>
+        gap={item}
+        time={positionMs}
+        reduceMotion={settings.reduce_motion}
+        visible={visible}
+      />
     );
   };
   const active = activeLines(lyrics.lines, positionMs);

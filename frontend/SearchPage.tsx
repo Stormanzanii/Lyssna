@@ -28,6 +28,7 @@ export function SearchPage({
   save,
   follow,
   retry,
+  remember,
 }: {
   state: AppState;
   navigate: (route: string) => void;
@@ -38,6 +39,8 @@ export function SearchPage({
   save: (track: Track) => void;
   follow: (artist: Artist) => void;
   retry: () => void;
+  /** Record an opened result for the search box's recent searches. */
+  remember: (entry: SearchEntry) => void;
 }) {
   const [category, setCategory] = useState<SearchCategory>("All");
   const entries = useMemo(
@@ -61,14 +64,17 @@ export function SearchPage({
     playable: true,
     format: "",
   });
-  const start = (entry: SearchEntry) =>
-    entry.track
+  const start = (entry: SearchEntry) => {
+    remember(entry);
+    return entry.track
       ? playTrack(
           entry.track,
           state.tracks.findIndex((track) => track.uri === entry.uri),
         )
       : play(asItem(entry));
+  };
   const open = (entry: SearchEntry) => {
+    remember(entry);
     if (entry.track) start(entry);
     else if (entry.artist) openArtist(entry.artist);
     else if (entry.album) openAlbum(entry.album);

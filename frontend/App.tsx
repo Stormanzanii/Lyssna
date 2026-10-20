@@ -133,6 +133,13 @@ import { RecentsPage } from "./recents-page";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
+import {
+  loadRecentSearches,
+  rememberSearch,
+  saveRecentSearches,
+  type RecentSearch,
+} from "./recent-searches";
+import type { SearchEntry } from "./search-results";
 /** Lyrics use Inter unless the user picks a lyrics font. */
 const DEFAULT_LYRIC_FONT = '"Inter Variable", "Segoe UI", sans-serif';
 /** Inputs that take no typing, so Space still toggles playback. */
@@ -171,6 +178,8 @@ function App() {
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
   const [sidebar, setSidebar] = useState(true);
@@ -916,6 +925,23 @@ function App() {
                   ? "Album"
                   : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
+  const account = state.profile?.id ?? "";
+  useEffect(() => setRecentSearches(loadRecentSearches(account)), [account]);
+  const updateRecentSearches = (
+    change: (list: RecentSearch[]) => RecentSearch[],
+  ) =>
+    setRecentSearches((list) => {
+      const next = change(list);
+      saveRecentSearches(account, next);
+      return next;
+    });
+  const openRecentSearch = (item: RecentSearch) => {
+    setSearchFocused(false);
+    searchInput.current?.blur();
+    if (item.track)
+      play({ command: "play", uri: item.track.uri, track: item.track });
+    else navigate(item.route);
+  };
   // Native playlist info gives the owner's user ID; show their display name.
   const ownerId = playlistInfo?.owner || playlist?.owner.id;
   const ownerName =
@@ -1149,7 +1175,10 @@ function App() {
               value={query}
               disabled={!state.profile}
               onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               onKeyDown={(event) => {
+                if (event.key === "Escape") event.currentTarget.blur();
                 if (event.key === "Enter" && query.trim()) {
                   event.preventDefault();
                   navigate(`search:${query.trim()}`);
@@ -1167,6 +1196,57 @@ function App() {
               >
                 <X size={17} />
               </button>
+            )}
+            {searchFocused && !query && recentSearches.length > 0 && (
+              <div
+                className="recent-searches popover"
+                role="listbox"
+                aria-label="Recent searches"
+                // Keep focus in the box so clicks land before it closes.
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                <h3>Recent searches</h3>
+                {recentSearches.map((item) => (
+                  <div className="recent-search" key={item.uri}>
+                    <button
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => openRecentSearch(item)}
+                    >
+                      <Cover
+                        images={item.images}
+                        className={item.kind === "Artist" ? "round" : ""}
+                      />
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>
+                          {item.kind}
+                          {item.subtitle && item.kind !== "Artist"
+                            ? ` • ${item.subtitle}`
+                            : ""}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={`Remove ${item.name} from recent searches`}
+                      onClick={() =>
+                        updateRecentSearches((list) =>
+                          list.filter((entry) => entry.uri !== item.uri),
+                        )
+                      }
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="recent-searches-clear"
+                  onClick={() => updateRecentSearches(() => [])}
+                >
+                  Clear recent searches
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1490,6 +1570,9 @@ function App() {
                 save={save}
                 follow={follow}
                 retry={() => navigate(state.route, false)}
+                remember={(entry: SearchEntry) =>
+                  updateRecentSearches((list) => rememberSearch(list, entry))
+                }
               />
             </div>
           ) : (

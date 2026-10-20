@@ -3172,6 +3172,10 @@ input[type="range"]:hover {
 .gravity-credits p {
   margin: 0 0 4px;
 }
+.gravity-credits .lyric-source {
+  position: static;
+  padding: 0;
+}
 
 /* Dims the app while a creator profile sheet is open above it. */
 .creator-profile-dim {

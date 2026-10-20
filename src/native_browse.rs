@@ -104,10 +104,75 @@ pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
         from += count;
         let total = usize::try_from(page.length()).unwrap_or_default();
         if count == 0 || (from >= total && count < ROOTLIST_PAGE) {
+            name_owners(session, &mut playlists).await;
             return Ok(playlists);
         }
     }
     anyhow::bail!("Spotify library has too many pages")
+}
+
+static OWNER_NAMES: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
+
+/// The rootlist names owners by user ID; look up each owner's display name
+/// once per run. Failed lookups leave the name empty.
+async fn name_owners(session: &Session, playlists: &mut [crate::model::Playlist]) {
+    let me = session.username();
+    let known = OWNER_NAMES.get_or_init(Default::default);
+    let missing: HashSet<String> = {
+        let Ok(known) = known.lock() else { return };
+        playlists
+            .iter()
+            .map(|playlist| &playlist.owner.id)
+            .filter(|owner| !owner.is_empty() && **owner != me && !known.contains_key(*owner))
+            .cloned()
+            .collect()
+    };
+    let mut requests = tokio::task::JoinSet::new();
+    for owner in missing.into_iter().take(64) {
+        let session = session.clone();
+        requests.spawn(async move {
+            let encoded: String = url::form_urlencoded::byte_serialize(owner.as_bytes()).collect();
+            let bytes = tokio::time::timeout(
+                Duration::from_secs(6),
+                session
+                    .spclient()
+                    .get_user_profile(&encoded, Some(0), Some(0)),
+            )
+            .await
+            .ok()?
+            .ok()?;
+            let name = owner_name(&bytes)?;
+            Some((owner, name))
+        });
+    }
+    let mut found = Vec::new();
+    while let Some(result) = requests.join_next().await {
+        if let Ok(Some(entry)) = result {
+            found.push(entry);
+        }
+    }
+    let Ok(mut known) = known.lock() else { return };
+    if known.len() >= 4096 {
+        known.clear();
+    }
+    known.extend(found);
+    for playlist in playlists.iter_mut() {
+        if playlist.owner.display_name.is_none() {
+            playlist.owner.display_name = known.get(&playlist.owner.id).cloned();
+        }
+    }
+}
+
+fn owner_name(bytes: &[u8]) -> Option<String> {
+    if bytes.len() > 1_000_000 {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(bytes).ok()?;
+    value["name"]
+        .as_str()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
 }
 
 /// Adds one rootlist page and returns how many rows it held.
@@ -434,5 +499,19 @@ mod playlist_header_tests {
         assert_eq!(details.owner, "spotify");
         assert_eq!(details.total_tracks, Some(50));
         assert_eq!(details.format, "daily-mix");
+    }
+}
+
+#[cfg(test)]
+mod owner_name_tests {
+    use super::*;
+    #[test]
+    fn profile_view_display_name_is_trimmed_and_required() {
+        assert_eq!(
+            owner_name(br#"{"uri":"spotify:user:friend","name":" Friend "}"#).as_deref(),
+            Some("Friend")
+        );
+        assert_eq!(owner_name(br#"{"name":""}"#), None);
+        assert_eq!(owner_name(b"not json"), None);
     }
 }

@@ -461,8 +461,8 @@ impl LibraryRefresh {
     }
 }
 
-/// The rootlist names owners by user ID and can omit generated mosaics, so
-/// keep display names and artwork from the last full library read.
+/// Owner names the native lookup missed and generated mosaics the rootlist
+/// omits come from the last full library read.
 fn fill_library_details(
     mut playlists: Vec<Playlist>,
     previous: Option<&[Playlist]>,
@@ -482,8 +482,8 @@ fn fill_library_details(
         }
         if playlist.owner.id == profile.id {
             playlist.owner.display_name = profile.display_name.clone();
-        } else if let Some(earlier) =
-            earlier.filter(|earlier| earlier.owner.id == playlist.owner.id)
+        } else if playlist.owner.display_name.is_none()
+            && let Some(earlier) = earlier.filter(|earlier| earlier.owner.id == playlist.owner.id)
         {
             playlist.owner.display_name = earlier.owner.display_name.clone();
         }
@@ -1421,12 +1421,16 @@ mod session_tests {
             display_name: Some("Me".into()),
             ..Profile::default()
         };
-        let previous = [owned("a", "friend", Some("Friend"), true)];
+        let previous = [
+            owned("a", "friend", Some("Friend"), true),
+            owned("d", "renamed", Some("Old"), true),
+        ];
         let filled = fill_library_details(
             vec![
                 owned("a", "friend", None, false),
                 owned("b", "me", None, false),
                 owned("c", "other", None, false),
+                owned("d", "renamed", Some("New"), true),
             ],
             Some(&previous),
             &profile,
@@ -1435,6 +1439,7 @@ mod session_tests {
         assert_eq!(filled[0].images.len(), 1);
         assert_eq!(filled[1].owner.display_name.as_deref(), Some("Me"));
         assert_eq!(filled[2].owner.display_name, None);
+        assert_eq!(filled[3].owner.display_name.as_deref(), Some("New"));
     }
     #[test]
     fn cached_profiles_only_restore_the_same_session_during_cooldown() {

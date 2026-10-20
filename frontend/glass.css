@@ -110,6 +110,31 @@
   background: none;
 }
 
+/* Search results sit on the glass sheet like other pages. */
+.liquid-glass .search-scroll,
+.liquid-glass .search-category-bar {
+  background: transparent;
+}
+.liquid-glass .search-category {
+  background: #ffffff17;
+}
+.liquid-glass .search-category:hover {
+  background: #ffffff26;
+}
+.liquid-glass .search-category.selected {
+  background: #fff;
+}
+.liquid-glass .search-top-result {
+  background: #ffffff12;
+}
+.liquid-glass .search-top-result:hover,
+.liquid-glass .search-top-result:focus-within {
+  background: #ffffff1c;
+}
+.liquid-glass .search-result-art {
+  background: #ffffff0f;
+}
+
 /* The sticky Home bar stays fully see-through. */
 .liquid-glass .home-toolbar {
   background: transparent;

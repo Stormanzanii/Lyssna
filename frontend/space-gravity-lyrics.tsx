@@ -229,7 +229,25 @@ export function SpaceGravityLyrics({
   useEffect(() => {
     // A new song starts every word fresh.
     bodies.current.clear();
+    refs.current.clear();
   }, [prepared]);
+  // One stable ref callback per word. An inline callback would be detached
+  // and reattached on every render (every frame while playing), and its
+  // cleanup would respawn the word each time.
+  const refs = useRef(
+    new Map<string, (element: HTMLButtonElement | null) => void>(),
+  );
+  const refFor = (key: string) => {
+    let callback = refs.current.get(key);
+    if (!callback) {
+      callback = (element) => {
+        if (element) elements.current.set(key, element);
+        else elements.current.delete(key);
+      };
+      refs.current.set(key, callback);
+    }
+    return callback;
+  };
 
   useLayoutEffect(() => {
     const element = stage.current;
@@ -328,6 +346,9 @@ export function SpaceGravityLyrics({
         );
         step(active, dt, area, obstacles, motion);
       }
+      // Words that left the screen start fresh when they return.
+      for (const key of bodies.current.keys())
+        if (!elements.current.has(key)) bodies.current.delete(key);
       for (const [key, element] of elements.current) {
         const body = bodies.current.get(key);
         if (!body?.spawned) continue;
@@ -353,13 +374,7 @@ export function SpaceGravityLyrics({
           return (
             <button
               key={entity.key}
-              ref={(element) => {
-                if (element) elements.current.set(entity.key, element);
-                else {
-                  elements.current.delete(entity.key);
-                  bodies.current.delete(entity.key);
-                }
-              }}
+              ref={refFor(entity.key)}
               className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""}`}
               onClick={() => onSeek(entity.start)}
               tabIndex={exiting ? -1 : 0}

@@ -2669,3 +2669,51 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
   await page.getByLabel("Search settings").fill("zzzz");
   await expect(page.locator(".settings-empty")).toBeVisible();
 });
+
+test("Space Gravity words keep drifting while the song plays", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          progress_ms: 40_000,
+          device: { name: "SpotiFlex", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  const word = page.locator(".gravity-word:not(.exiting)").first();
+  await expect(word).toBeVisible();
+  const key = await word.textContent();
+  const sample = () =>
+    page
+      .locator(".gravity-word:not(.exiting)", { hasText: key! })
+      .first()
+      .evaluate((element) => (element as HTMLElement).style.transform);
+  await page.waitForTimeout(300);
+  const samples = [await sample()];
+  for (let index = 0; index < 3; index += 1) {
+    await page.waitForTimeout(250);
+    samples.push(await sample());
+  }
+  // Re-rendering every frame must not respawn words at their start point.
+  expect(new Set(samples).size).toBeGreaterThan(2);
+});

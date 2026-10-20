@@ -2103,6 +2103,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // WebView2 keeps rendering while minimized, so tell the page
                 // when to suspend or throttle its GPU animations.
                 let activity = window.clone();
+                #[cfg(windows)]
+                let was_minimized = AtomicBool::new(false);
                 window.on_window_event(move |event| {
                     if matches!(
                         event,
@@ -2110,6 +2112,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     ) {
                         let minimized = activity.is_minimized().unwrap_or(false);
                         let focused = activity.is_focused().unwrap_or(true);
+                        // Hiding the WebView2 controller makes Chromium stop
+                        // compositing and throttle timers, so a minimized
+                        // window uses no GPU. Audio runs natively and continues.
+                        #[cfg(windows)]
+                        if was_minimized.swap(minimized, Ordering::SeqCst) != minimized {
+                            let _ = activity.with_webview(move |webview| unsafe {
+                                let _ = webview.controller().SetIsVisible(!minimized);
+                            });
+                        }
                         let _ = activity.emit(
                             "spotiflex",
                             json!({"type":"window_activity","minimized":minimized,"focused":focused}),

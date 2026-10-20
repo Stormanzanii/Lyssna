@@ -1132,11 +1132,14 @@ export function NowPlaying({
   );
   return (
     <aside className={`now-playing ${canvas ? "has-canvas" : ""}`}>
-      <Ambience
-        track={track}
-        reduceMotion={state.settings.reduce_motion}
-        animate={state.playback.is_playing}
-      />
+      {/* Liquid Glass already draws this artwork behind the window. */}
+      {!state.settings.liquid_glass && (
+        <Ambience
+          track={track}
+          reduceMotion={state.settings.reduce_motion}
+          animate={state.playback.is_playing}
+        />
+      )}
       <div className="now-playing-scroll">
         {!canvas && heading}
         {track ? (
@@ -1347,11 +1350,14 @@ export function QueuePanel({
   );
   return (
     <aside className="now-playing queue-panel">
-      <Ambience
-        track={track}
-        reduceMotion={state.settings.reduce_motion}
-        animate={state.playback.is_playing}
-      />
+      {/* Liquid Glass already draws this artwork behind the window. */}
+      {!state.settings.liquid_glass && (
+        <Ambience
+          track={track}
+          reduceMotion={state.settings.reduce_motion}
+          animate={state.playback.is_playing}
+        />
+      )}
       <div className="now-playing-scroll">
         <div className="section-heading">
           <h2>Queue</h2>

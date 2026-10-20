@@ -2,7 +2,7 @@
    track's artwork moves behind the window as the lyrics ambience does;
    panels become frosted, translucent sheets with a bright specular rim. */
 .liquid-glass {
-  --glass-fill: #1c1c2161;
+  --glass-fill: #16161a6b;
   --glass-fill-strong: #1e1e23b8;
   --glass-blur: blur(30px) saturate(175%);
   --glass-shadow:
@@ -42,9 +42,9 @@
 .liquid-glass .now-playing,
 .liquid-glass .player-bar {
   position: relative;
+  /* No backdrop-filter here: the ambience behind is already blurred, and
+     re-blurring four window-sized panels every frame costs a lot of GPU. */
   background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-shadow);
   border-radius: 18px;
 }
@@ -93,10 +93,6 @@
   margin: 0 8px 8px;
   padding: 8px 18px;
   border-radius: 24px;
-}
-.liquid-glass .now-playing .ambience {
-  opacity: 0.55;
-  background: transparent;
 }
 .liquid-glass .now-card {
   background: #ffffff0f;

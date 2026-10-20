@@ -34,13 +34,15 @@ export const LyricWord = memo(function LyricWord({
               data-letter-offset={word.letterOffset}
               data-letter-count={word.letterCount}
             >
-              {emphasis
-                ? Array.from(text).map((letter, index) => (
-                    <span key={index} className="lyric-letter">
-                      {letter}
-                    </span>
-                  ))
-                : text}
+              {emphasis ? (
+                Array.from(text).map((letter, index) => (
+                  <span key={index} className="lyric-letter">
+                    <span className="lyric-paint">{letter}</span>
+                  </span>
+                ))
+              ) : (
+                <span className="lyric-paint">{text}</span>
+              )}
             </span>
           );
         })}

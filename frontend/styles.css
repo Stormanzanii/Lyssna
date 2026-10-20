@@ -1894,6 +1894,7 @@ small {
   transform: none;
   transform-origin: left center;
   --line-fill: -20%;
+  --line-gradient: -0.2;
   color: transparent;
   -webkit-text-fill-color: transparent;
   opacity: 0.51;
@@ -1925,6 +1926,7 @@ small {
 }
 .lyric-line.past {
   --line-fill: 100%;
+  --line-gradient: 1;
   opacity: 0.497;
 }
 .lyric-line.active {
@@ -2060,16 +2062,32 @@ small {
    fully unsung or fully sung. */
 .lyric-syllable:not(.emphasis),
 .lyric-letter {
+  text-shadow: var(--glow, none);
+}
+/* Italics and display fonts can paint beyond their advance width. Keep that
+   ink inside the gradient without widening syllables or changing line wraps.
+   Gradient stops stay relative to the original text width, excluding bleed. */
+.lyric-paint {
+  --glyph-bleed: 0.35em;
+  padding: 0.2em var(--glyph-bleed);
+  margin: -0.2em calc(-1 * var(--glyph-bleed));
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   background-image: linear-gradient(
     90deg,
     rgb(var(--lyric-rgb, 255 255 255) / var(--sung-alpha))
-      var(--gradient-position, var(--line-fill)),
+      calc(
+        var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) *
+          var(--gradient-ratio, var(--line-gradient, -0.2))
+      ),
     rgb(var(--lyric-rgb, 255 255 255) / var(--unsung-alpha))
-      calc(var(--gradient-position, var(--line-fill)) + 20%)
+      calc(
+        var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) *
+          (var(--gradient-ratio, var(--line-gradient, -0.2)) + 0.2)
+      )
   );
   background-clip: text;
   -webkit-background-clip: text;
-  text-shadow: var(--glow, none);
 }
 .lyric-line.active:hover .lyric-syllable:not(.emphasis),
 .lyric-line.active:hover .lyric-letter {
@@ -2247,6 +2265,7 @@ small {
 .static-lyrics .lyric-line {
   --blur: 0px;
   --line-fill: 100%;
+  --line-gradient: 1;
   opacity: 1;
 }
 .reduce-motion .lyric-line {

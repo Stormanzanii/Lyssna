@@ -3598,3 +3598,96 @@ test("compact search fits narrow panels, supports keyboard filters and resets fo
     }),
   ).toBeVisible();
 });
+
+test("custom lyric fonts keep italic glyph overhang inside gradient paint bounds", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate(
+    ({ uri, settings }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "settings",
+        settings: {
+          ...settings,
+          lyric_font: "Arial",
+          lyric_size: 72,
+          reduce_motion: true,
+        },
+      });
+      host.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "test",
+          synced: true,
+          instrumental: false,
+          lines: [
+            {
+              text: "f",
+              start_ms: 1000,
+              end_ms: 3000,
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [{ text: "f", start_ms: 1000, end_ms: 3000 }],
+            },
+            {
+              text: "jiffy",
+              start_ms: 4000,
+              end_ms: 4500,
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [{ text: "jiffy", start_ms: 4000, end_ms: 4500 }],
+            },
+          ],
+        },
+      });
+      host.emit({
+        type: "native_position",
+        uri,
+        position_ms: 1500,
+        playing: false,
+        observed_at: Date.now(),
+      });
+    },
+    { uri: track.uri, settings: emptyState.settings },
+  );
+  await page.addStyleTag({ content: ".lyric-line { font-style: italic; }" });
+  await expect(page.locator(".lyrics-page .lyric-letter")).toHaveCount(1);
+  const ink = await page
+    .locator(
+      ".lyrics-page .lyric-letter, .lyrics-page .lyric-syllable:not(.emphasis)",
+    )
+    .evaluateAll((elements) => {
+      const context = document.createElement("canvas").getContext("2d")!;
+      return elements.map((element) => {
+        const style = getComputedStyle(
+          element.querySelector(".lyric-paint") ?? element,
+        );
+        context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const metrics = context.measureText(element.textContent ?? "");
+        return {
+          left: Math.max(0, metrics.actualBoundingBoxLeft),
+          right: Math.max(0, metrics.actualBoundingBoxRight - metrics.width),
+          paintLeft: parseFloat(style.paddingLeft),
+          paintRight: parseFloat(style.paddingRight),
+          background: style.backgroundImage,
+          width: element.getBoundingClientRect().width,
+          advance: metrics.width,
+        };
+      });
+    });
+  await page.screenshot({ path: "test-results/lyric-font-overhang.png" });
+  expect(ink.some((item) => item.left > 0.5 || item.right > 0.5)).toBe(true);
+  for (const item of ink) {
+    expect(item.paintLeft + 0.5).toBeGreaterThanOrEqual(item.left);
+    expect(item.paintRight + 0.5).toBeGreaterThanOrEqual(item.right);
+    expect(item.background).toContain("linear-gradient");
+    expect(Math.abs(item.width - item.advance)).toBeLessThan(1);
+  }
+});

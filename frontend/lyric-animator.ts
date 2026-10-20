@@ -21,7 +21,13 @@ interface Syllable extends Piece {
   letterOffset: number;
   letterCount: number;
 }
-const STYLES = ["scale", "translate", "--gradient-position", "--glow"];
+const STYLES = [
+  "scale",
+  "translate",
+  "--gradient-position",
+  "--gradient-ratio",
+  "--glow",
+];
 const piece = (element: HTMLElement): Piece => ({
   element,
   springs: new SyllableSprings(),
@@ -117,7 +123,10 @@ export class LyricAnimator {
     seconds: number,
     glow: [blur: number, opacity: number] | undefined,
   ) {
-    if (glow) write(target, "--gradient-position", `${goal.gradient}%`);
+    if (glow) {
+      write(target, "--gradient-position", `${goal.gradient}%`);
+      write(target, "--gradient-ratio", `${goal.gradient / 100}`);
+    }
     if (this.reduceMotion) return;
     const motion = target.springs.step(goal, seconds);
     write(target, "scale", motion.scale.toFixed(4));

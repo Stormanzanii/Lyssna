@@ -2576,6 +2576,68 @@ test("a left click anywhere outside the song menu closes it", async ({
   }
 });
 
+test("the avatar menu opens settings, profile and grouped recents", async ({
+  page,
+}) => {
+  await startClient(page);
+  const menu = () =>
+    page.getByRole("button", { name: "Account menu", exact: true });
+  await menu().click();
+  await expect(page.getByRole("menu", { name: "Account" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Account" })).toHaveCount(0);
+
+  await menu().click();
+  await page.getByRole("menuitem", { name: "Profile" }).click();
+  await expect(page.locator(".profile-hero .eyebrow")).toHaveText("Profile");
+
+  await menu().click();
+  await page.getByRole("menuitem", { name: "Recents" }).click();
+  const request = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1),
+  );
+  expect(request.args.key).toBe("recent");
+  await page.evaluate((generation) => {
+    const now = Date.now();
+    const base = {
+      artists: [{ id: "artistartistartistarti", name: "Artist" }],
+      album: { name: "Record", images: [] },
+      duration_ms: 1000,
+      is_local: false,
+    };
+    (window as any).__clientTest.emit({
+      type: "tracks",
+      key: "recent",
+      generation,
+      offset: 0,
+      more: false,
+      tracks: [
+        {
+          ...base,
+          uri: "spotify:track:one",
+          name: "One",
+          added_at: new Date(now - 60_000).toISOString(),
+          played_context: "spotify:album:abcdefghijklmnopqrstuv",
+        },
+        {
+          ...base,
+          uri: "spotify:track:two",
+          name: "Two",
+          added_at: new Date(now - 120_000).toISOString(),
+          played_context: "spotify:album:abcdefghijklmnopqrstuv",
+        },
+      ],
+    });
+  }, request.args.generation);
+  await expect(page.locator(".recents-day h2").first()).toHaveText("Today");
+  await expect(page.locator(".recents-group")).toHaveCount(1);
+  await expect(page.locator(".recents-group")).toContainText("2 songs played");
+  await page.getByTitle("Show songs").click();
+  await expect(page.locator(".recents-tracks li")).toHaveCount(2);
+});
+
 test("Liquid Glass is off by default and toggles from Settings", async ({
   page,
 }) => {

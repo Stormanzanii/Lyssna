@@ -2040,6 +2040,7 @@ fn open_link(url: String) -> std::result::Result<(), String> {
             parsed.host_str(),
             Some(
                 "open.spotify.com"
+                    | "www.spotify.com"
                     | "developer.spotify.com"
                     | "developers.spicylyrics.org"
                     | "spicylyrics.org"

@@ -115,6 +115,9 @@ import {
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
 import { GlassBackdrop } from "./liquid-glass";
+import { ProfileMenu } from "./profile-menu";
+import { ProfilePage } from "./profile-page";
+import { RecentsPage } from "./recents-page";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 /** Lyrics use Inter unless the user picks a lyrics font. */
@@ -131,7 +134,7 @@ const NON_TEXT_INPUTS = new Set([
   "file",
 ]);
 
-type Center = "browse" | "lyrics" | "settings";
+type Center = "browse" | "lyrics" | "settings" | "profile";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
   id: string;
@@ -154,6 +157,7 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
+  const [settingsFocus, setSettingsFocus] = useState<{ section: string }>();
   const [query, setQuery] = useState("");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
@@ -829,17 +833,19 @@ function App() {
       ? "Liked Songs"
       : state.route === "queue"
         ? "Queue"
-        : state.route.startsWith("search:")
-          ? `Results for “${state.route.slice(7)}”`
-          : state.route.startsWith("playlist:")
-            ? "Playlist"
-            : state.route.startsWith("artist:")
-              ? state.playback.item?.artists.find(
-                  (artist) => artist.id === state.route.slice(7),
-                )?.name || "Artist"
-              : state.route.startsWith("album:")
-                ? "Album"
-                : "Good to see you");
+        : state.route === "recent"
+          ? "Recently played"
+          : state.route.startsWith("search:")
+            ? `Results for “${state.route.slice(7)}”`
+            : state.route.startsWith("playlist:")
+              ? "Playlist"
+              : state.route.startsWith("artist:")
+                ? state.playback.item?.artists.find(
+                    (artist) => artist.id === state.route.slice(7),
+                  )?.name || "Artist"
+                : state.route.startsWith("album:")
+                  ? "Album"
+                  : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const collection =
@@ -1085,17 +1091,25 @@ function App() {
           >
             <SettingsIcon size={20} />
           </button>
-          <button
-            className="avatar"
-            title={profileName}
-            onClick={() => setCenter("settings")}
-          >
-            {profileImage ? (
-              <img src={profileImage} alt="Your Spotify profile" />
-            ) : (
-              profileName.slice(0, 1).toUpperCase()
-            )}
-          </button>
+          <ProfileMenu
+            name={profileName}
+            image={profileImage}
+            onAction={(action) => {
+              if (action === "account")
+                void call("open_link", {
+                  url: "https://www.spotify.com/account/overview/",
+                });
+              else if (action === "lyrics-settings") {
+                setSettingsFocus({ section: "lyrics" });
+                setCenter("settings");
+              } else if (action === "profile") setCenter("profile");
+              else if (action === "recents") navigate("recent");
+              else if (action === "settings") {
+                setSettingsFocus(undefined);
+                setCenter("settings");
+              } else void call("sign_out");
+            }}
+          />
         </div>
         <div className="window-controls">
           <button
@@ -1331,11 +1345,30 @@ function App() {
             </>
           ) : center === "settings" ? (
             <SettingsPage
+              focus={settingsFocus}
               state={state}
               onSettings={updateSettings}
               onCall={call}
               onNotice={notify}
             />
+          ) : center === "profile" ? (
+            <ProfilePage
+              profile={state.profile}
+              playlists={state.playlists}
+              onPlaylist={(playlist) => navigate(`playlist:${playlist.id}`)}
+              onRecents={() => navigate("recent")}
+              onOpen={(url) => void call("open_link", { url })}
+            />
+          ) : state.route === "recent" ? (
+            <div className="browse-scroll" ref={mainScroll}>
+              <RecentsPage
+                tracks={state.tracks}
+                playlists={state.playlists}
+                loading={state.loading}
+                onOpen={(route) => navigate(route)}
+                onPlay={playTrack}
+              />
+            </div>
           ) : (
             <div className="browse-scroll" ref={mainScroll}>
               {state.route === "home" ? (

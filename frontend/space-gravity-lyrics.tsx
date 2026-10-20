@@ -364,7 +364,15 @@ export function SpaceGravityLyrics({
       const freeRight =
         art && art.left > area.width - art.right ? art.left : area.width;
       const centreX = (freeLeft + freeRight) / 2;
-      const anchor = gravityAnchor(prepared, time).line;
+      // A wide header above (the stacked layout) moves the free area down;
+      // the credits close it off at the bottom.
+      const headerAbove =
+        art &&
+        art.right - art.left > area.width * 0.5 &&
+        art.bottom < area.height * 0.6;
+      const freeTop = headerAbove ? art.bottom : 0;
+      const credits = obstacles.find((rect) => rect.top > area.height * 0.6);
+      const centreY = (freeTop + (credits?.top ?? area.height)) / 2;
       const active: Body[] = [];
       for (const [key, element] of elements.current) {
         const entity =
@@ -386,10 +394,10 @@ export function SpaceGravityLyrics({
             centreX +
             column * spread +
             (random(entity.seed + 7) * 2 - 1) * body.width * 1.35;
+          // Every line spawns around the middle of the free area, as in
+          // Spicy Lyrics; its words then drift apart.
           body.y =
-            area.height / 2 +
-            (entity.lead - Math.max(0, anchor)) * body.height * 1.6 +
-            (random(entity.seed + 8) * 2 - 1) * body.height * 1.35;
+            centreY + (random(entity.seed + 8) * 2 - 1) * body.height * 1.35;
           body.spawned = true;
           constrain(body, area, obstacles);
         }

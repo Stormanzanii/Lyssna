@@ -24,7 +24,7 @@ import {
   type WindowMotion,
 } from "./space-gravity";
 import { windowPosition } from "./window-activity";
-import type { Lyrics } from "./types";
+import type { Lyrics, Word } from "./types";
 
 interface Entity {
   key: string;
@@ -50,6 +50,60 @@ interface LeadLine {
   count: number;
 }
 
+const DASH_END = /[-‐‑‒–—―]$/u;
+const DASH_START = /^[-‐‑‒–—―]/u;
+
+/**
+ * One floating piece per hyphen-joined part, like Spicy Lyrics: "eye-eye-eyes"
+ * floats as three words. Pieces sung as one timed word share its time by
+ * letter count.
+ */
+export function gravityPieces(group: Word[]) {
+  const pieces: { text: string; start: number; end: number }[] = [];
+  let current: Word[] = [];
+  const flush = () => {
+    if (!current.length) return;
+    const text = current
+      .map((word) => word.text)
+      .join("")
+      .trim();
+    const start = current[0].start_ms,
+      end = current.at(-1)!.end_ms;
+    const parts = text.match(/[^-‐‑‒–—―]+[-‐‑‒–—―]*/gu) ?? [text];
+    if (current.length > 1 || parts.length < 2) {
+      if (text) pieces.push({ text, start, end });
+    } else {
+      const weights = parts.map((part) => Math.max(1, part.length));
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      let used = 0;
+      parts.forEach((part, index) => {
+        const from = start + ((end - start) * used) / total;
+        used += weights[index];
+        pieces.push({
+          text: part,
+          start: Math.round(from),
+          end:
+            index === parts.length - 1
+              ? end
+              : Math.round(start + ((end - start) * used) / total),
+        });
+      });
+    }
+    current = [];
+  };
+  group.forEach((word, index) => {
+    current.push(word);
+    const next = group[index + 1];
+    if (
+      DASH_END.test(word.text.trim()) ||
+      (next && DASH_START.test(next.text.trim()))
+    )
+      flush();
+  });
+  flush();
+  return pieces;
+}
+
 /** Splits lyrics into floating word entities grouped by lead line. */
 export function prepareGravity(lyrics: Lyrics) {
   const entities: Entity[] = [];
@@ -65,23 +119,20 @@ export function prepareGravity(lyrics: Lyrics) {
         count: 0,
       });
     const lead = leads.length - 1;
-    const groups = wordGroups(line.words);
+    const pieces = wordGroups(line.words).flatMap(gravityPieces);
     const speed = speedMultiplier(line.words.map((word) => word.start_ms));
-    for (const [slot, group] of groups.entries()) {
-      const text = group
-        .map((word) => word.text)
-        .join("")
-        .trim();
+    for (const [slot, piece] of pieces.entries()) {
+      const { text } = piece;
       if (!text) continue;
       const background = line.background && lead >= 0;
       entities.push({
         key: `${lineIndex}:${slot}`,
         text,
-        start: group[0].start_ms,
-        end: group.at(-1)!.end_ms,
+        start: piece.start,
+        end: piece.end,
         lead,
         slot,
-        slots: groups.length,
+        slots: pieces.length,
         index: background ? -1 : total,
         background,
         opposite: line.opposite,

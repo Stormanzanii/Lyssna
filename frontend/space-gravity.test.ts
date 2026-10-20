@@ -12,6 +12,7 @@ import {
 } from "./space-gravity";
 import {
   gravityAnchor,
+  gravityPieces,
   gravityRole,
   prepareGravity,
   visibleGravity,
@@ -161,5 +162,37 @@ describe("Space Gravity word selection", () => {
       expect.arrayContaining(["one", "two", "three", "echo"]),
     );
     expect(shown.some((entity) => entity.text === "five")).toBe(false);
+  });
+});
+
+describe("Space Gravity pieces", () => {
+  const word = (text: string, start: number, end: number) => ({
+    text,
+    start_ms: start,
+    end_ms: end,
+  });
+  it("splits hyphen-joined syllables into separate words", () => {
+    expect(
+      gravityPieces([
+        word(" eye-", 0, 100),
+        word("eye-", 100, 200),
+        word("eyes", 200, 400),
+      ]),
+    ).toEqual([
+      { text: "eye-", start: 0, end: 100 },
+      { text: "eye-", start: 100, end: 200 },
+      { text: "eyes", start: 200, end: 400 },
+    ]);
+  });
+  it("splits one hyphenated word and shares its time", () => {
+    const pieces = gravityPieces([word("na-na-na", 0, 900)]);
+    expect(pieces.map((piece) => piece.text)).toEqual(["na-", "na-", "na"]);
+    expect(pieces[0].start).toBe(0);
+    expect(pieces.at(-1)!.end).toBe(900);
+  });
+  it("keeps ordinary split syllables together", () => {
+    expect(gravityPieces([word(" Hel", 0, 100), word("lo", 100, 200)])).toEqual(
+      [{ text: "Hello", start: 0, end: 200 }],
+    );
   });
 });

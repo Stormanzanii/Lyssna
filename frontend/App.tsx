@@ -860,6 +860,19 @@ function App() {
                   ? "Album"
                   : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
+  // Native playlist info gives the owner's user ID; show their display name.
+  const ownerId = playlistInfo?.owner || playlist?.owner.id;
+  const ownerName =
+    state.route === "liked" || (ownerId && ownerId === state.profile?.id)
+      ? profileName
+      : ownerId === "spotify"
+        ? "Spotify"
+        : (playlist?.owner.id === ownerId && playlist?.owner.display_name) ||
+          state.playlists.find(
+            (item) => item.owner.id === ownerId && item.owner.display_name,
+          )?.owner.display_name ||
+          ownerId ||
+          "Your collection";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const collection =
     state.route === "liked" || state.route.startsWith("playlist:");
@@ -1468,7 +1481,7 @@ function App() {
                           ) : (
                             <>
                               {(state.route === "liked" ||
-                                playlist?.owner.id === state.profile?.id) &&
+                                ownerId === state.profile?.id) &&
                                 profileImage && (
                                   <img
                                     className="hero-owner"
@@ -1479,14 +1492,7 @@ function App() {
                               <strong>
                                 {personalizedMix
                                   ? `Made for ${profileName}`
-                                  : playlistInfo?.owner === "spotify"
-                                    ? "Spotify"
-                                    : playlistInfo?.owner ||
-                                      playlist?.owner.display_name ||
-                                      playlist?.owner.id ||
-                                      (state.route === "liked"
-                                        ? profileName
-                                        : "Your collection")}
+                                  : ownerName}
                               </strong>
                             </>
                           )}

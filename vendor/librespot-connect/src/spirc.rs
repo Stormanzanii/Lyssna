@@ -133,6 +133,96 @@ pub struct ConnectedDevice {
     pub volume_percent: Option<u8>,
 }
 
+/// True for names that are really identifiers, such as the UUIDs some
+/// speakers and Cast groups register with.
+fn looks_like_id(name: &str) -> bool {
+    let name = name.trim();
+    let hex = name.chars().filter(char::is_ascii_hexdigit).count();
+    name.is_empty()
+        || (name.len() >= 16
+            && hex * 10 >= name.len() * 8
+            && name.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+}
+
+/// A readable name for a Connect device. Some devices advertise an ID as
+/// their name; fall back to their alias, audio output, brand and model, or
+/// kind of device.
+pub fn device_display_name(device: &librespot_protocol::connect::DeviceInfo) -> String {
+    use librespot_protocol::devices::DeviceType;
+    if !looks_like_id(&device.name) {
+        return device.name.trim().to_owned();
+    }
+    let usable = |name: &str| (!looks_like_id(name)).then(|| name.trim().to_owned());
+    let mut aliases: Vec<_> = device.device_aliases.values().collect();
+    aliases.sort_by_key(|alias| (alias.id != device.selected_alias_id, alias.id));
+    if let Some(name) = aliases.iter().find_map(|alias| usable(&alias.display_name)) {
+        return name;
+    }
+    if let Some(name) = device
+        .audio_output_device_info
+        .as_ref()
+        .and_then(|info| info.device_name.as_deref())
+        .and_then(usable)
+    {
+        return name;
+    }
+    if let Some(name) = usable(&format!("{} {}", device.brand.trim(), device.model.trim())) {
+        return name;
+    }
+    let kind = match device.device_type.enum_value() {
+        Ok(DeviceType::SPEAKER) => "Speaker",
+        Ok(DeviceType::TV) => "TV",
+        Ok(DeviceType::AVR) => "AV receiver",
+        Ok(DeviceType::STB) => "Set-top box",
+        Ok(DeviceType::AUDIO_DONGLE) => "Audio dongle",
+        Ok(DeviceType::GAME_CONSOLE) => "Game console",
+        Ok(DeviceType::CAST_VIDEO) => "Cast device",
+        Ok(DeviceType::CAST_AUDIO) => "Cast speaker",
+        Ok(DeviceType::AUTOMOBILE | DeviceType::CAR_THING) => "Car",
+        Ok(DeviceType::SMARTWATCH) => "Watch",
+        Ok(DeviceType::COMPUTER | DeviceType::CHROMEBOOK) => "Computer",
+        Ok(DeviceType::SMARTPHONE) => "Phone",
+        Ok(DeviceType::TABLET) => "Tablet",
+        _ => "",
+    };
+    if !kind.is_empty() {
+        return if device.is_group {
+            format!("{kind} group")
+        } else {
+            kind.to_owned()
+        };
+    }
+    device.name.trim().to_owned()
+}
+
+#[cfg(test)]
+mod display_name_tests {
+    use super::{device_display_name, looks_like_id};
+    use librespot_protocol::{connect::DeviceInfo, devices::DeviceAlias};
+
+    #[test]
+    fn readable_names_are_kept_and_ids_are_replaced() {
+        assert!(looks_like_id("2c5fe5dc-8c99-4b20-9eff-546a4fd16960"));
+        assert!(!looks_like_id("Kitchen speaker"));
+        assert!(!looks_like_id("Cafe"));
+        let mut device = DeviceInfo::new();
+        device.name = "Gameroom".into();
+        assert_eq!(device_display_name(&device), "Gameroom");
+
+        device.name = "75cb14aa-b9cc-4b8d-7a47-60ac5c1a7d00".into();
+        device.brand = "Sonos".into();
+        device.model = "One".into();
+        assert_eq!(device_display_name(&device), "Sonos One");
+
+        let mut alias = DeviceAlias::new();
+        alias.id = 2;
+        alias.display_name = "Living room".into();
+        device.device_aliases.insert("2".into(), alias);
+        device.selected_alias_id = 2;
+        assert_eq!(device_display_name(&device), "Living room");
+    }
+}
+
 /// Account-local device discovery supplied by the existing Connect subscription.
 #[derive(Clone, Default)]
 pub struct ConnectedDevices(Arc<Mutex<Vec<ConnectedDevice>>>);
@@ -150,11 +240,13 @@ impl ConnectedDevices {
         let mut devices: Vec<_> = cluster
             .device
             .iter()
-            .filter(|(id, device)| !id.is_empty() && device.can_play && !device.name.is_empty())
-            .map(|(id, device)| ConnectedDevice {
+            .filter(|(id, device)| !id.is_empty() && device.can_play)
+            .map(|(id, device)| (id, device, device_display_name(device)))
+            .filter(|(_, _, name)| !name.is_empty())
+            .map(|(id, device, name)| ConnectedDevice {
                 is_offline: device.is_offline,
                 id: id.clone(),
-                name: device.name.clone(),
+                name,
                 is_active: id == &cluster.active_device_id,
                 volume_percent: (!device.capabilities.disable_volume)
                     .then_some((device.volume.min(65535) * 100 / 65535) as u8),

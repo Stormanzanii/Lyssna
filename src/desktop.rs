@@ -78,6 +78,8 @@ struct Inner {
     generation: Mutex<u64>,
     last_native: Mutex<Option<Instant>>,
     pending_track: Mutex<Option<(String, Instant)>>,
+    /// Click-to-audio timing for the last local selection, by page kind.
+    start_timing: Mutex<Option<(String, Instant, &'static str)>>,
     /// Local playback requested before native audio connected.
     queued_native: Mutex<Option<(PlayerAction, Instant)>>,
     login_cancelled: Mutex<Arc<AtomicBool>>,
@@ -310,6 +312,7 @@ impl Desktop {
             generation: Mutex::new(0),
             last_native: Mutex::new(None),
             pending_track: Mutex::new(None),
+            start_timing: Mutex::new(None),
             queued_native: Mutex::new(None),
             login_cancelled: Mutex::new(Arc::new(AtomicBool::new(false))),
             stopped: AtomicBool::new(false),
@@ -992,6 +995,13 @@ impl Desktop {
                                 {
                                     *pending = None;
                                 }
+                                if playing == Some(true)
+                                    && let Ok(mut timing) = pump.start_timing.lock()
+                                    && let Some((_, started, kind)) =
+                                        timing.take_if(|(wanted, ..)| *wanted == uri)
+                                {
+                                    record_start_time(kind, started.elapsed());
+                                }
                                 if let Ok(mut last) = pump.last_native.lock() {
                                     *last = Some(Instant::now());
                                 }
@@ -1543,6 +1553,46 @@ fn browse(
     };
     result().map_err(error)
 }
+/// Page kinds for start timing; never the page's ID or search text.
+fn page_kind(route: &str) -> &'static str {
+    match route.split_once(':').map_or(route, |(kind, _)| kind) {
+        "search" => "search",
+        "playlist" => "playlist",
+        "album" => "album",
+        "artist" => "artist",
+        "liked" => "liked",
+        "recent" => "recent",
+        "queue" => "queue",
+        "home" => "home",
+        _ => "other",
+    }
+}
+
+/// Append one click-to-audio time to a small local diagnostics log.
+fn record_start_time(kind: &str, elapsed: Duration) {
+    use std::io::Write;
+    let Ok(dir) = crate::config::data_dir().map(|dir| dir.join("diagnostics")) else {
+        return;
+    };
+    let path = dir.join("start-times.log");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 64 * 1024) {
+        let _ = std::fs::remove_file(&path);
+    }
+    let when = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(file, "{when} {kind} {}ms", elapsed.as_millis());
+    }
+}
+
 fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
     if matches!(&action,PlayerAction::PlayContext{context,..} if context==crate::home::DJ_URI) {
         return Ok(action);
@@ -1791,6 +1841,13 @@ fn player(
             if let Some(track) = request.track {
                 if let Ok(mut pending) = state.0.pending_track.lock() {
                     *pending = Some((track.uri.clone(), Instant::now()));
+                }
+                if let Ok(mut timing) = state.0.start_timing.lock() {
+                    *timing = Some((
+                        track.uri.clone(),
+                        Instant::now(),
+                        page_kind(&snapshot.route),
+                    ));
                 }
                 snapshot.playback.item = Some(track.clone());
                 snapshot.playback.progress_ms = Some(0);

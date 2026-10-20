@@ -101,6 +101,15 @@
   border-radius: 14px;
 }
 
+/* Headers drop their artwork colour; the glass backdrop already carries
+   the playing track's colour. Artist banner photos (set inline) remain. */
+.liquid-glass .page-hero {
+  background: none;
+}
+.liquid-glass .browse-actions {
+  background: none;
+}
+
 /* The sticky Home bar stays fully see-through. */
 .liquid-glass .home-toolbar {
   background: transparent;

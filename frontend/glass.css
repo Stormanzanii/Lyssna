@@ -104,6 +104,17 @@
   border-radius: 14px;
 }
 
+/* Sticky bars stay see-through and only frost what scrolls beneath them. */
+.liquid-glass .home-toolbar {
+  background: transparent;
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+.liquid-glass .liked-heart {
+  background: #000;
+  box-shadow: 0 0 0 3px #0006;
+}
+
 /* Inputs and controls in glass. */
 .liquid-glass .search-box {
   background: #ffffff14;

@@ -117,6 +117,7 @@ import { SettingsPage } from "./settings-page";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
+import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
@@ -1564,6 +1565,11 @@ function App() {
                       </button>
                       {collection && (
                         <div className="song-filters">
+                          <small aria-live="polite">
+                            {filtering
+                              ? `${displayTracks.length} songs${state.more ? " · loading the rest…" : ""}`
+                              : ""}
+                          </small>
                           {songSearch || songQuery ? (
                             <label className="playlist-search">
                               <Search size={16} />
@@ -1593,48 +1599,15 @@ function App() {
                               <Search size={18} />
                             </button>
                           )}
-                          <select
-                            aria-label="Genre"
-                            value={songGenre}
-                            onChange={(event) =>
-                              setSongGenre(event.target.value)
-                            }
-                          >
-                            <option value="">All genres</option>
-                            {songGenres.map((genre) => (
-                              <option key={genre}>{genre}</option>
-                            ))}
-                            <option value="unknown">Unknown genre</option>
-                          </select>
-                          <select
-                            aria-label="Release age"
-                            value={songAge}
-                            onChange={(event) => setSongAge(event.target.value)}
-                          >
-                            <option value="">Any release age</option>
-                            <option value="year">Past year</option>
-                            <option value="five">1–5 years old</option>
-                            <option value="ten">5–10 years old</option>
-                            <option value="older">10+ years old</option>
-                          </select>
-                          <select
-                            aria-label="Sort songs"
-                            value={songSort}
-                            onChange={(event) =>
-                              setSongSort(event.target.value)
-                            }
-                          >
-                            <option value="order">Playlist order</option>
-                            <option value="recent">Recently added</option>
-                            <option value="newest">Newest releases</option>
-                            <option value="oldest">Oldest releases</option>
-                            <option value="popular">Most played</option>
-                          </select>
-                          <small aria-live="polite">
-                            {filtering
-                              ? `${displayTracks.length} songs${state.more ? " · loading the rest…" : ""}`
-                              : ""}
-                          </small>
+                          <SongSortMenu
+                            sort={songSort}
+                            genre={songGenre}
+                            age={songAge}
+                            genres={songGenres}
+                            onSort={setSongSort}
+                            onGenre={setSongGenre}
+                            onAge={setSongAge}
+                          />
                         </div>
                       )}
                     </div>

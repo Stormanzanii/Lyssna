@@ -270,43 +270,103 @@
 /* Playlist search and filters sit at the right of the action bar. */
 .browse-actions .song-filters {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   margin-left: auto;
   padding: 0;
   min-width: 0;
 }
-.song-filters select {
-  appearance: none;
-  field-sizing: content;
-  max-width: 180px;
+/* One "Recently added ☰" button opens sort and filters. */
+.sort-menu-root {
+  position: relative;
+}
+.sort-menu-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   height: 32px;
-  padding: 0 24px 0 8px;
+  padding: 0 4px 0 8px;
+  font-size: 14px;
+  color: var(--text-subdued);
+  white-space: nowrap;
+}
+.sort-menu-button:hover,
+.sort-menu-button[aria-expanded="true"] {
+  color: #fff;
+}
+.sort-menu-button.filtered {
+  color: var(--spotify-green);
+}
+.sort-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  border-radius: 6px;
+  background: #282828;
+  box-shadow:
+    0 16px 24px #0000004d,
+    0 6px 8px #00000033;
+  animation: profile-menu-in 0.14s ease-out;
+}
+.sort-menu-heading {
+  display: block;
+  padding: 10px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subdued);
+}
+.sort-menu > button {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 3px;
+  text-align: left;
+  font-size: 14px;
+  color: #ffffffe6;
+}
+.sort-menu > button:hover {
+  background: #ffffff1a;
+}
+.sort-menu > button.active {
+  color: var(--spotify-green);
+}
+.sort-menu hr {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid #ffffff1a;
+}
+.sort-menu label {
+  display: block;
+  padding-bottom: 6px;
+}
+.sort-menu select {
+  display: block;
+  width: calc(100% - 16px);
+  height: 34px;
+  margin: 0 8px;
+  padding: 0 10px;
   border: 0;
   border-radius: 4px;
-  background: transparent
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 5.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E")
-    no-repeat right 6px center;
-  color: var(--text-subdued);
+  background: #ffffff14;
+  color: #fff;
   font: inherit;
   font-size: 14px;
-  text-overflow: ellipsis;
-  cursor: pointer;
 }
-.song-filters select:hover,
-.song-filters select:focus-visible {
-  color: #fff;
-  outline: none;
-}
-.song-filters select option {
+.sort-menu select option {
   background: #282828;
-  color: #fff;
 }
 .playlist-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 220px;
+  width: 240px;
   height: 32px;
   min-height: 32px;
   padding: 0 10px;

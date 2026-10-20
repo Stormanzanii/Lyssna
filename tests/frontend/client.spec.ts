@@ -1580,7 +1580,8 @@ test("playlist search spans unloaded pages and play counts drive sorting", async
   });
   await expect(page.locator(".track-streams")).toHaveCount(0);
   await page.getByLabel("Search songs in this playlist").clear();
-  await page.getByLabel("Sort songs").selectOption("popular");
+  await page.getByTitle("Sort and filter", { exact: true }).click();
+  await page.getByRole("button", { name: "Most played", exact: true }).click();
   await expect(page.locator(".track-row").first()).toContainText("Song 125");
   await page.getByLabel("Genre", { exact: true }).selectOption("rock");
   await expect(page.locator(".track-row")).toHaveCount(1);

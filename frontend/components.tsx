@@ -11,6 +11,7 @@ import {
 } from "react";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { FloatingLyrics } from "./floating-lyrics";
+import { displayLyrics } from "./word-sync";
 import {
   Music2,
   Maximize2,
@@ -644,6 +645,7 @@ const LyricCredits = memo(function LyricCredits({
   return (
     <div className={`lyric-source ${expanded ? "expanded" : ""}`}>
       Lyrics provided by: {source}
+      {lyrics.estimated_words && " (+ estimated word timing)"}
       {lyrics.source === "spicy_lyrics" &&
         (
           [
@@ -753,9 +755,13 @@ function TimedLyricsPreview({
   onPlayer: (request: PlayerRequest) => void;
 }) {
   const current = usePosition(state) + state.settings.lyric_offset_ms;
-  return state.lyrics ? (
+  const lyrics = displayLyrics(
+    state.lyrics,
+    !!state.settings.experimental_word_sync,
+  );
+  return lyrics ? (
     <LyricsDisplay
-      lyrics={state.lyrics}
+      lyrics={lyrics}
       writers={state.playback.item?.songwriters}
       positionMs={current}
       settings={state.settings}
@@ -867,6 +873,10 @@ function SongLyricsPage({
     state.lyrics?.synced &&
     motionAllowed
   );
+  const lyrics = displayLyrics(
+    state.lyrics,
+    !!state.settings.experimental_word_sync,
+  );
   return (
     <section
       ref={page}
@@ -927,9 +937,9 @@ function SongLyricsPage({
             </Marquee>
           </div>
           <div className="lyrics-body">
-            {state.lyrics && floating ? (
+            {lyrics && floating ? (
               <FloatingLyrics
-                lyrics={state.lyrics}
+                lyrics={lyrics}
                 time={current}
                 onSeek={(positionMs) =>
                   onPlayer({ command: "seek", positionMs })
@@ -938,18 +948,18 @@ function SongLyricsPage({
                   <>
                     <p>
                       Written by:{" "}
-                      {(state.lyrics.songwriters?.length
-                        ? state.lyrics.songwriters
+                      {(lyrics.songwriters?.length
+                        ? lyrics.songwriters
                         : (track.songwriters ?? [])
                       ).join(", ") || "Songwriter credits unavailable"}
                     </p>
-                    <LyricCredits lyrics={state.lyrics} expanded />
+                    <LyricCredits lyrics={lyrics} expanded />
                   </>
                 }
               />
-            ) : state.lyrics ? (
+            ) : lyrics ? (
               <LyricsDisplay
-                lyrics={state.lyrics}
+                lyrics={lyrics}
                 writers={state.playback.item?.songwriters}
                 positionMs={current}
                 settings={state.settings}

@@ -350,6 +350,11 @@ export function SettingsPage({
                   "Floating lyrics",
                   "Let synced words float around the lyrics page.",
                 ],
+                [
+                  "experimental_word_sync",
+                  "Experimental word sync",
+                  "Estimate word timing for lyrics that are only synced by line. Timing may be off.",
+                ],
               ] as const
             ).map(([key, label, help]) => (
               <SettingRow key={key} label={label} help={help}>

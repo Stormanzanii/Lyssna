@@ -345,6 +345,8 @@ export const lineBlur = (distance: number) =>
 /** Held syllables animate letter by letter. */
 export function isEmphasis(word: Word, text: string) {
   return (
+    // Estimated words have no real hold to animate letter by letter.
+    !word.estimated &&
     word.end_ms - word.start_ms >= 1000 &&
     Array.from(text).length <= 32 &&
     !/[\s֐-ࣿ]/u.test(text)

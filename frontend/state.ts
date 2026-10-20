@@ -117,6 +117,7 @@ export const emptyState: AppState = {
     liquid_glass: false,
     canvas_lyrics: true,
     floating_lyrics: false,
+    experimental_word_sync: false,
     ui_font: "",
     lyric_font: "",
     audio_output: null,

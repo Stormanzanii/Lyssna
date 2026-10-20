@@ -84,6 +84,7 @@ export interface Settings {
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
   floating_lyrics?: boolean;
+  experimental_word_sync?: boolean;
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;
@@ -96,6 +97,8 @@ export interface Word {
   start_ms: number;
   end_ms: number;
   text: string;
+  /** Timing estimated by experimental word sync, not authored. */
+  estimated?: boolean;
 }
 export interface Line {
   start_ms: number;
@@ -114,6 +117,8 @@ export interface Lyrics {
   source: string;
   instrumental: boolean;
   synced: boolean;
+  /** Word timing was estimated from line timing (experimental word sync). */
+  estimated_words?: boolean;
 }
 export interface Contributor {
   id: string;

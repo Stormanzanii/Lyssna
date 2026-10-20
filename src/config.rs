@@ -22,6 +22,7 @@ pub struct Settings {
     pub liquid_glass: bool,
     pub canvas_lyrics: bool,
     pub floating_lyrics: bool,
+    pub experimental_word_sync: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -46,6 +47,7 @@ impl Default for Settings {
             liquid_glass: false,
             canvas_lyrics: true,
             floating_lyrics: false,
+            experimental_word_sync: false,
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),
@@ -126,3 +128,4 @@ impl Settings {
 pub fn valid_client_id(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
+

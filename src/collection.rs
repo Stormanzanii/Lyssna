@@ -391,6 +391,34 @@ mod tests {
         assert_eq!(fields, ["me", "collection", "item", "update"]);
     }
     #[test]
+    #[ignore = "Likes one unliked recent song through the saved sign-in, then unlikes it"]
+    fn live_like_is_confirmed_and_undone() {
+        crate::native::with_live_session(async |session: &Session| {
+            let recent = crate::native_browse::recent(session)
+                .await
+                .expect("Native play history failed");
+            let uris: Vec<_> = recent.iter().map(|track| track.uri.clone()).collect();
+            let saved = contains(session, &uris)
+                .await
+                .expect("Native saved status failed");
+            let like = uris
+                .iter()
+                .zip(&saved)
+                .find(|(_, saved)| !**saved)
+                .map(|(uri, _)| uri.clone())
+                .expect("Expected a recent song that is not liked");
+            let liked = write(session, &like, true).await;
+            let after_like = contains(session, std::slice::from_ref(&like)).await;
+            let unliked = write(session, &like, false).await;
+            let after_unlike = contains(session, &[like]).await;
+            liked.expect("Native like failed");
+            unliked.expect("Native unlike failed");
+            assert_eq!(after_like.unwrap(), [true]);
+            assert_eq!(after_unlike.unwrap(), [false]);
+            eprintln!("Native like and unlike confirmed");
+        });
+    }
+    #[test]
     #[ignore = "Uses saved native sign-in for read-only library checks; never writes"]
     fn live_library_reads_without_writes() {
         crate::native::with_live_session(async |session: &Session| {

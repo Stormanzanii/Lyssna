@@ -753,4 +753,74 @@ mod tests {
         assert_eq!(tracks[0].name, "New");
         assert_eq!(tracks[1].name, "Old");
     }
+    #[test]
+    #[ignore = "Writes to the saved account and undoes it: a temporary private playlist"]
+    fn live_native_playlist_add_skips_duplicates() {
+        let settings = crate::config::Settings::load().expect("Settings unavailable");
+        let tokens = Tokens::load(&settings.client_id)
+            .ok()
+            .flatten()
+            .expect("Saved sign-in required");
+        let mut spotify = Spotify::new(
+            crate::auth::http_client().unwrap(),
+            settings.client_id.clone(),
+            tokens,
+        );
+        let created = spotify
+            .request(
+                Method::POST,
+                "me/playlists",
+                &[],
+                Some(json!({
+                    "name": "SpotiFlex write test",
+                    "public": false,
+                    "description": "Temporary; removed by a SpotiFlex test"
+                })),
+            )
+            .expect("Cannot create the temporary playlist");
+        let id = created["id"].as_str().expect("Playlist ID").to_owned();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::native::with_live_session(async |session: &librespot_core::Session| {
+                let recent = crate::native_browse::recent(session)
+                    .await
+                    .expect("Native play history failed");
+                let mut picks = Vec::new();
+                for track in &recent {
+                    if picks.len() < 3 && !picks.iter().any(|pick: &Track| pick.uri == track.uri) {
+                        picks.push(track.clone());
+                    }
+                }
+                let first = crate::native_browse::add_to_playlist(session, &id, &picks)
+                    .await
+                    .expect("Native playlist add failed");
+                let again = crate::native_browse::add_to_playlist(session, &id, &picks)
+                    .await
+                    .expect("Native duplicate check failed");
+                match (first, again) {
+                    (
+                        crate::native_browse::Added::Count(first),
+                        crate::native_browse::Added::Count(again),
+                    ) => {
+                        assert_eq!(first, picks.len());
+                        assert_eq!(again, 0);
+                        eprintln!("Native playlist add: {first} songs, then 0 duplicates");
+                    }
+                    (crate::native_browse::Added::NotWritten(error), _)
+                    | (_, crate::native_browse::Added::NotWritten(error)) => {
+                        panic!("Native playlist change was not written: {error:#}")
+                    }
+                }
+            })
+        }));
+        let removed = spotify.request(
+            Method::DELETE,
+            &format!("playlists/{id}/followers"),
+            &[],
+            None,
+        );
+        if let Err(panic) = result {
+            std::panic::resume_unwind(panic);
+        }
+        removed.expect("Cannot remove the temporary playlist");
+    }
 }

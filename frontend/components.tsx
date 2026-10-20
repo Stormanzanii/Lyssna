@@ -17,7 +17,6 @@ import {
   Upload,
   RotateCw,
   Mic2,
-  ArrowUpRight,
   CirclePlus,
   CircleCheck,
   X,
@@ -1225,13 +1224,20 @@ export function NowPlaying({
                   <div className="card-heading">About the artist</div>
                 )}
                 <div className="card-content">
-                  <div className="artist-card-heading">
-                    <button
-                      className="text-link"
-                      onClick={() => onArtist(artist)}
-                    >
-                      {artist.name}
-                    </button>
+                  <button
+                    className="text-link artist-card-name"
+                    onClick={() => onArtist(artist)}
+                  >
+                    {artist.name}
+                  </button>
+                  <div className="artist-card-row">
+                    <p className="artist-stat">
+                      {artist.monthly_listeners != null
+                        ? `${artist.monthly_listeners.toLocaleString()} monthly listeners`
+                        : artist.followers
+                          ? `${artist.followers.total.toLocaleString()} followers`
+                          : ""}
+                    </p>
                     <button
                       className="pill outline"
                       onClick={() => onFollow(artist)}
@@ -1243,62 +1249,20 @@ export function NowPlaying({
                           : "Enable following"}
                     </button>
                   </div>
-                  {artist.monthly_listeners != null && (
-                    <p className="artist-stat">
-                      {artist.monthly_listeners.toLocaleString()} monthly
-                      listeners
-                    </p>
-                  )}
-                  {artist.followers && (
-                    <p className="artist-stat">
-                      {artist.followers.total.toLocaleString()} followers
-                    </p>
-                  )}
                   {!!artist.genres?.length && (
                     <p className="artist-genres">
                       {artist.genres.slice(0, 3).join(" · ")}
                     </p>
                   )}
-                  <button
-                    className="text-link muted artist-profile-link"
-                    onClick={() => onArtist(artist)}
-                  >
-                    Explore artist
-                    <ArrowUpRight size={15} />
-                  </button>
                 </div>
               </article>
             )}
-            <article className="now-card">
-              <div className="card-heading">Credits</div>
-              <div className="card-content credit-list">
-                {track.artists.map((credit) => (
-                  <div key={credit.id ?? credit.name} className="credit">
-                    <div>
-                      <button
-                        className="text-link"
-                        onClick={() => onArtist(credit)}
-                      >
-                        {credit.name}
-                      </button>
-                      <p>Artist</p>
-                    </div>
-                    {credit.id && (
-                      <button
-                        className="pill outline"
-                        onClick={() => onFollow(credit)}
-                      >
-                        {state.saved[
-                          credit.uri ?? `spotify:artist:${credit.id}`
-                        ]
-                          ? "Following"
-                          : "Follow"}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </article>
+            <CreditsCard
+              track={track}
+              saved={state.saved}
+              onArtist={onArtist}
+              onFollow={onFollow}
+            />
             {next && (
               <article className="now-card queue-card">
                 <div className="card-heading">
@@ -1413,5 +1377,81 @@ export function QueuePanel({
         </section>
       </div>
     </aside>
+  );
+}
+
+/** Performers plus songwriters, merged by name like Spotify's credits card. */
+export function trackCredits(track: Track) {
+  const credits = track.artists.map((artist) => ({
+    name: artist.name,
+    artist: artist as Artist | undefined,
+    roles: ["Main Artist"],
+  }));
+  for (const writer of track.songwriters ?? []) {
+    const existing = credits.find(
+      (credit) => credit.name.toLowerCase() === writer.toLowerCase(),
+    );
+    if (existing) existing.roles.push("Writer");
+    else credits.push({ name: writer, artist: undefined, roles: ["Writer"] });
+  }
+  return credits;
+}
+
+function CreditsCard({
+  track,
+  saved,
+  onArtist,
+  onFollow,
+}: {
+  track: Track;
+  saved: Record<string, boolean>;
+  onArtist: (artist: Artist) => void;
+  onFollow: (artist: Artist) => void;
+}) {
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [track.uri]);
+  const credits = trackCredits(track);
+  return (
+    <article className="now-card">
+      <div className="card-heading">
+        <span>Credits</span>
+        {credits.length > 3 && (
+          <button className="text-link muted" onClick={() => setAll(!all)}>
+            {all ? "Show less" : "Show all"}
+          </button>
+        )}
+      </div>
+      <div className="card-content credit-list">
+        {(all ? credits : credits.slice(0, 3)).map((credit) => (
+          <div key={credit.name} className="credit">
+            <div>
+              {credit.artist ? (
+                <button
+                  className="text-link"
+                  onClick={() => onArtist(credit.artist!)}
+                >
+                  {credit.name}
+                </button>
+              ) : (
+                <span className="credit-name">{credit.name}</span>
+              )}
+              <p>{credit.roles.join(" • ")}</p>
+            </div>
+            {credit.artist?.id && (
+              <button
+                className="pill outline"
+                onClick={() => onFollow(credit.artist!)}
+              >
+                {saved[
+                  credit.artist.uri ?? `spotify:artist:${credit.artist.id}`
+                ]
+                  ? "Following"
+                  : "Follow"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }

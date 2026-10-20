@@ -37,7 +37,6 @@ import {
   Repeat,
   Repeat1,
   Search,
-  Settings as SettingsIcon,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -157,7 +156,6 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
-  const [settingsFocus, setSettingsFocus] = useState<{ section: string }>();
   const [query, setQuery] = useState("");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
@@ -1088,13 +1086,6 @@ function App() {
           </div>
         </div>
         <div className="top-actions">
-          <button
-            className={`icon-button ${center === "settings" ? "active" : ""}`}
-            title="Settings"
-            onClick={() => setCenter("settings")}
-          >
-            <SettingsIcon size={20} />
-          </button>
           <ProfileMenu
             name={profileName}
             image={profileImage}
@@ -1103,15 +1094,10 @@ function App() {
                 void call("open_link", {
                   url: "https://www.spotify.com/account/overview/",
                 });
-              else if (action === "lyrics-settings") {
-                setSettingsFocus({ section: "lyrics" });
-                setCenter("settings");
-              } else if (action === "profile") setCenter("profile");
+              else if (action === "profile") setCenter("profile");
               else if (action === "recents") navigate("recent");
-              else if (action === "settings") {
-                setSettingsFocus(undefined);
-                setCenter("settings");
-              } else void call("sign_out");
+              else if (action === "settings") setCenter("settings");
+              else void call("sign_out");
             }}
           />
         </div>
@@ -1349,7 +1335,6 @@ function App() {
             </>
           ) : center === "settings" ? (
             <SettingsPage
-              focus={settingsFocus}
               state={state}
               onSettings={updateSettings}
               onCall={call}

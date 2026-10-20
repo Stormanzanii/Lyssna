@@ -102,7 +102,7 @@ test("audio output selection saves headphones and can return to system default",
   page,
 }) => {
   await startClient(page);
-  await page.getByTitle("Settings", { exact: true }).click();
+  await openSettings(page);
   const output = page.getByRole("combobox", {
     name: "Audio output",
     exact: true,
@@ -243,6 +243,10 @@ test("metadata menus stay off blank rows, backgrounds and player controls", asyn
   ).toBeVisible();
 });
 
+async function openSettings(page: Page) {
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+}
 async function startClient(page: Page, initialRoute = "liked") {
   await page.route("https://artwork.example.test/**", (route) =>
     route.fulfill({
@@ -1411,7 +1415,7 @@ test("Canvas defaults on, floating lyrics are optional, with sharp video left an
     buffer: Buffer.from("<tt/>"),
   });
   await emitCanvas(page);
-  await page.getByTitle("Settings", { exact: true }).click();
+  await openSettings(page);
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
   await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
   await expect(page.getByLabel("Floating lyrics")).not.toBeChecked();
@@ -1449,7 +1453,7 @@ test("Canvas defaults on, floating lyrics are optional, with sharp video left an
     titleLeft: true,
     titleBottom: true,
   });
-  await page.getByTitle("Settings", { exact: true }).click();
+  await openSettings(page);
   await page.getByLabel("Reduce motion").check();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".floating-stage")).toHaveCount(0);
@@ -1532,7 +1536,7 @@ test("timed syllables lift independently and font choices apply separately", asy
     .poll(async () => (await motion(letter)).scale)
     .toBeGreaterThan(1.02);
   expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
-  await page.getByTitle("Settings", { exact: true }).click();
+  await openSettings(page);
   await page.getByLabel("App font", { exact: true }).selectOption("Georgia");
   await page
     .getByLabel("Lyrics font", { exact: true })
@@ -2643,7 +2647,7 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
 }) => {
   await startClient(page);
   await expect(page.locator(".application")).not.toHaveClass(/liquid-glass/);
-  await page.getByTitle("Settings", { exact: true }).click();
+  await openSettings(page);
   await page.getByRole("switch", { name: "Liquid Glass" }).check();
   await expect(page.locator(".application")).toHaveClass(/liquid-glass/);
   await expect(page.locator(".glass-backdrop")).toHaveCount(1);

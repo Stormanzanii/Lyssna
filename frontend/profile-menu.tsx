@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ExternalLink, WandSparkles } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 export type ProfileAction =
-  | "account"
-  | "lyrics-settings"
-  | "profile"
-  | "recents"
-  | "settings"
-  | "sign-out";
+  "account" | "profile" | "recents" | "settings" | "sign-out";
 
 /** Avatar button with Spotify's account dropdown. */
 export function ProfileMenu({
@@ -67,13 +62,6 @@ export function ProfileMenu({
       {open && (
         <div className="profile-menu" role="menu" aria-label="Account">
           {item("account", "Account", <ExternalLink size={17} />)}
-          {item(
-            "lyrics-settings",
-            <>
-              <WandSparkles size={17} />
-              Lyrics settings
-            </>,
-          )}
           {item("profile", "Profile")}
           {item("recents", "Recents")}
           {item("settings", "Settings")}

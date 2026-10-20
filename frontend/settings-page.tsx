@@ -27,14 +27,11 @@ function Toggle({
 }
 
 export function SettingsPage({
-  focus,
   state,
   onSettings,
   onCall,
   onNotice,
 }: {
-  /** Section to scroll to; a new object scrolls again. */
-  focus?: { section: string };
   state: AppState;
   onSettings: (settings: Partial<Settings>) => void;
   onCall: <T = void>(
@@ -64,12 +61,6 @@ export function SettingsPage({
   useEffect(() => {
     if (searching) searchField.current?.focus();
   }, [searching]);
-  useEffect(() => {
-    if (focus)
-      document
-        .getElementById(`settings-${focus.section}`)
-        ?.scrollIntoView({ block: "start" });
-  }, [focus]);
   const settings = state.settings;
   const lyricSize = settings.lyric_size;
   return (
@@ -295,7 +286,7 @@ export function SettingsPage({
             />
           </section>
 
-          <section className="settings-section" id="settings-lyrics">
+          <section className="settings-section">
             <h2>Lyrics</h2>
             <SettingRow
               label="Lyric text size"

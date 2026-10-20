@@ -1000,6 +1000,9 @@ impl Desktop {
                                 );
                             }
                         }
+                        NativeEvent::DJContext(active) => {
+                            emit(json!({"type": "dj_context", "active": active}));
+                        }
                         NativeEvent::QueueChanged => {
                             if let Some(track) = snapshot.playback.item.clone() {
                                 let _ = pump.commands.send(Command::PlayingDetails(track));

@@ -34,6 +34,8 @@ pub enum NativeEvent {
     Ready(String),
     Stopped,
     QueueChanged,
+    /// Whether the current context is a DJ session.
+    DJContext(bool),
     Track(Box<crate::model::Track>),
     Transport {
         shuffle: Option<bool>,
@@ -604,6 +606,12 @@ fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUr
     Some((librespot_core::SpotifyUri::from_uri(uri).ok()?, position))
 }
 
+fn is_dj_context(uri: &str) -> bool {
+    uri == crate::home::DJ_URI
+        || uri.starts_with("spotify:lexicon:")
+        || uri == librespot_connect::REQUESTED_DJ_CONTEXT
+}
+
 fn remember_player_queue(account: &str, event: PlayerEvent) {
     let PlayerEvent::SetQueue {
         context_uri,
@@ -616,10 +624,7 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
     else {
         return;
     };
-    let context = if context_uri == crate::home::DJ_URI
-        || context_uri.starts_with("spotify:lexicon:")
-        || context_uri == librespot_connect::REQUESTED_DJ_CONTEXT
-    {
+    let context = if is_dj_context(&context_uri) {
         let queue = prev_tracks
             .iter()
             .rev()
@@ -1492,6 +1497,9 @@ async fn run(
                             && let Ok(mut queue) = queue_snapshot.lock()
                         {
                             *queue = Some(next_tracks.iter().take(50).map(|track| track.uri.clone()).collect());
+                        }
+                        if let PlayerEvent::SetQueue { context_uri, .. } = &event {
+                            emit(NativeEvent::DJContext(is_dj_context(context_uri)));
                         }
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);

@@ -2396,8 +2396,8 @@ small {
   min-width: 0;
 }
 .player-song > .cover {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
 }
 .player-song > div:nth-child(2) {
   min-width: 0;
@@ -2414,13 +2414,13 @@ small {
   overflow: visible;
 }
 .player-song .song-title {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.5;
   letter-spacing: 0;
   font-weight: 600;
 }
 .player-song .artist-link {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
 }
 .player-song > .icon-button {
@@ -2457,14 +2457,14 @@ small {
 }
 .transport-buttons {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   margin-bottom: 6px;
 }
 .transport-buttons .icon-button {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   color: #b3b3b3;
 }
 .transport-buttons .icon-button:hover {
@@ -2473,8 +2473,8 @@ small {
   transform: scale(1.06);
 }
 .play-toggle {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   margin: 0 4px;
   display: flex;
   align-items: center;
@@ -2498,7 +2498,7 @@ small {
   width: 100%;
 }
 .seek-row time {
-  font-size: 12px;
+  font-size: 13px;
   color: #b0b0b0;
   font-variant-numeric: tabular-nums;
   min-width: 30px;
@@ -2554,8 +2554,8 @@ input[type="range"]:hover {
   min-width: 0;
 }
 .player-extras .icon-button {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   color: #b3b3b3;
 }
 .player-extras .icon-button:hover {
@@ -2570,7 +2570,7 @@ input[type="range"]:hover {
   bottom: -1px;
 }
 .volume-range {
-  width: 96px;
+  width: 110px;
   margin: 0 6px 0 2px;
 }
 .spin {

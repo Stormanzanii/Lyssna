@@ -250,6 +250,7 @@ export type AppEvent =
   | { type: "window_moved"; x: number; y: number }
   | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }
   | { type: "narration"; active: boolean }
+  | { type: "dj_context"; active: boolean }
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
   | {

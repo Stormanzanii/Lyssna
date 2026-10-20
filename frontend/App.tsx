@@ -2915,9 +2915,9 @@ function PlayerBar({
               onClick={() => onSave(track)}
             >
               {saved ? (
-                <CircleCheck size={19} fill="currentColor" stroke="#000" />
+                <CircleCheck size={22} fill="currentColor" stroke="#000" />
               ) : (
-                <CirclePlus size={19} />
+                <CirclePlus size={22} />
               )}
             </button>
           </>
@@ -2939,14 +2939,14 @@ function PlayerBar({
               })
             }
           >
-            <Shuffle size={20} />
+            <Shuffle size={24} />
           </button>
           <button
             className="icon-button"
             title="Previous song"
             onClick={() => onPlayer({ command: "previous" })}
           >
-            <SkipBack size={21} fill="currentColor" />
+            <SkipBack size={25} fill="currentColor" />
           </button>
           <button
             className="play-toggle"
@@ -2956,11 +2956,11 @@ function PlayerBar({
             disabled={!track}
           >
             {state.pending ? (
-              <LoaderCircle className="spin" size={20} />
+              <LoaderCircle className="spin" size={24} />
             ) : state.playback.is_playing ? (
-              <Pause size={20} fill="currentColor" />
+              <Pause size={24} fill="currentColor" />
             ) : (
-              <Play size={20} fill="currentColor" />
+              <Play size={24} fill="currentColor" />
             )}
           </button>
           <button
@@ -2968,7 +2968,7 @@ function PlayerBar({
             title="Next song"
             onClick={() => onPlayer({ command: "next" })}
           >
-            <SkipForward size={21} fill="currentColor" />
+            <SkipForward size={25} fill="currentColor" />
           </button>
           <button
             className={`icon-button ${state.playback.repeat_state !== "off" && state.playback.repeat_state ? "active" : ""}`}
@@ -2987,9 +2987,9 @@ function PlayerBar({
             }
           >
             {state.playback.repeat_state === "track" ? (
-              <Repeat1 size={20} />
+              <Repeat1 size={24} />
             ) : (
-              <Repeat size={20} />
+              <Repeat size={24} />
             )}
           </button>
         </div>
@@ -3020,33 +3020,35 @@ function PlayerBar({
         </div>
       </div>
       <div className="player-extras">
-        <DJButton
-          onRefresh={() => onPlayer({ command: "dj" })}
-          onHold={onDJRequest}
-        />
+        {(state.dj_context || state.narrating || state.dj_pending) && (
+          <DJButton
+            onRefresh={() => onPlayer({ command: "dj" })}
+            onHold={onDJRequest}
+          />
+        )}
         <button
           className={`icon-button ${lyricsActive ? "active" : ""}`}
           title="Lyrics"
           onClick={onLyrics}
         >
-          <Mic2 size={19} />
+          <Mic2 size={22} />
         </button>
         <button
           className={`icon-button ${queueActive ? "active" : ""}`}
           title="Queue"
           onClick={onQueue}
         >
-          <ListMusic size={20} />
+          <ListMusic size={23} />
         </button>
         <button className="icon-button" title="Devices" onClick={onDevices}>
-          <Speaker size={19} />
+          <Speaker size={22} />
         </button>
         <button
           className={`icon-button ${sidebarActive ? "active" : ""}`}
           title="Now playing"
           onClick={onSidebar}
         >
-          <PanelRight size={19} />
+          <PanelRight size={22} />
         </button>
         <button
           className="icon-button volume-button"
@@ -3057,7 +3059,7 @@ function PlayerBar({
             volumeControl.finish();
           }}
         >
-          {volume ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          {volume ? <Volume2 size={23} /> : <VolumeX size={23} />}
         </button>
         <input
           className="volume-range"
@@ -3082,7 +3084,7 @@ function PlayerBar({
           title="Full screen lyrics"
           onClick={onFullscreen}
         >
-          <Maximize2 size={17} />
+          <Maximize2 size={21} />
         </button>
       </div>
     </footer>

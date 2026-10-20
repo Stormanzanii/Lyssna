@@ -318,4 +318,5 @@ export type AppEvent =
   | { type: "devices"; devices: Device[] }
   | { type: "notice"; message: string; error: boolean }
   | { type: "saved"; uri: string; saved: boolean }
+  | { type: "saved_many"; items: Record<string, boolean> }
   | { type: "update"; status: string; version?: string };

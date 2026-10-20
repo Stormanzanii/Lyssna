@@ -426,6 +426,7 @@ impl SpotiFlex {
                 | Event::CanvasPrefetched { .. }
                 | Event::PagePrefetched { .. }
                 | Event::Saved { .. }
+                | Event::SavedMany(..)
                 | Event::TrackInfo { .. } => {}
                 Event::Session(profile) => {
                     if !self.login_pending {

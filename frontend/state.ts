@@ -536,6 +536,8 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         saved: { ...state.saved, [action.uri]: action.saved },
       };
+    case "saved_many":
+      return { ...state, saved: { ...state.saved, ...action.items } };
     case "settings":
       return { ...state, settings: action.settings };
     case "provider_configured":

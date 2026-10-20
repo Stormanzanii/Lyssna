@@ -111,6 +111,188 @@ pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
     anyhow::bail!("Spotify library has too many pages")
 }
 
+/// The latest 50 played contexts, newest first, each as the song last heard
+/// in it. Spotify's play history is per context, not per play.
+pub async fn recent(session: &Session) -> Result<Vec<Track>> {
+    let user: String =
+        url::form_urlencoded::byte_serialize(session.username().as_bytes()).collect();
+    let path = format!(
+        "/recently-played/v3/user/{user}/recently-played?format=json&offset=0&limit=50&filter=default"
+    );
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(10),
+        session
+            .spclient()
+            .request_as_json(&reqwest::Method::GET, &path, None, None),
+    )
+    .await
+    .context("Spotify play history request timed out")??;
+    ensure!(
+        bytes.len() <= 2_000_000,
+        "Spotify play history is too large"
+    );
+    let plays = recent_plays(&serde_json::from_slice(&bytes)?)?;
+    let uris: Vec<String> = plays.iter().map(|play| play.track.clone()).collect();
+    let mut tracks = resolve_tracks(session, &uris).await?;
+    for (track, play) in tracks.iter_mut().zip(plays) {
+        track.added_at = play.played_at;
+        track.played_context = play.context;
+    }
+    Ok(tracks)
+}
+
+#[derive(Debug, PartialEq)]
+struct RecentPlay {
+    context: String,
+    track: String,
+    played_at: String,
+}
+
+fn recent_plays(value: &Value) -> Result<Vec<RecentPlay>> {
+    let contexts = value["playContexts"]
+        .as_array()
+        .context("Spotify play history unavailable")?;
+    Ok(contexts
+        .iter()
+        .filter_map(|item| {
+            let track = item["lastPlayedTrackUri"]
+                .as_str()
+                .filter(|uri| uri.starts_with("spotify:track:"))?;
+            let time = item["lastPlayedTime"].as_i64()?;
+            // Milliseconds; older entries may carry seconds.
+            let ms = if time < 100_000_000_000 {
+                time * 1000
+            } else {
+                time
+            };
+            let played_at =
+                time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000)
+                    .ok()?
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .ok()?;
+            Some(RecentPlay {
+                context: item["uri"].as_str().unwrap_or_default().to_owned(),
+                track: track.to_owned(),
+                played_at,
+            })
+        })
+        .take(50)
+        .collect())
+}
+
+/// Result of a native playlist write that may be retried elsewhere.
+pub enum Added {
+    Count(usize),
+    /// Nothing reached the playlist, so another path can retry safely.
+    NotWritten(anyhow::Error),
+}
+
+/// Add songs not already in the playlist, 100 per change, at the end.
+pub async fn add_to_playlist(session: &Session, id: &str, tracks: &[Track]) -> Result<Added> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid playlist ID"
+    );
+    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    let read = async || -> Result<Playlist> {
+        let playlist = tokio::time::timeout(Duration::from_secs(10), Playlist::get(session, &uri))
+            .await
+            .context("Playlist request timed out")??;
+        ensure!(
+            playlist.contents.position == 0 && !playlist.contents.is_truncated,
+            "Spotify returned an incomplete playlist"
+        );
+        Ok(playlist)
+    };
+    let playlist = match read().await {
+        Ok(playlist) => playlist,
+        Err(error) => return Ok(Added::NotWritten(error)),
+    };
+    let existing: HashSet<String> = playlist.tracks().map(SpotifyUri::to_uri).collect();
+    let additions = crate::model::unique_additions(&existing, tracks);
+    let mut revision = playlist.revision;
+    let mut added = 0;
+    for batch in additions.chunks(100) {
+        let written = async {
+            let body = add_changes(&revision, batch, &session.username());
+            let bytes = tokio::time::timeout(
+                Duration::from_secs(15),
+                session.spclient().request_with_protobuf(
+                    &reqwest::Method::POST,
+                    &format!("/playlist/v2/playlist/{id}/changes"),
+                    None,
+                    &body,
+                ),
+            )
+            .await
+            .context("Playlist change timed out")??;
+            ensure!(bytes.len() <= 16_000_000, "Playlist response is too large");
+            Ok::<_, anyhow::Error>(bytes)
+        }
+        .await;
+        let confirmed = match written {
+            Ok(_) => read().await,
+            Err(error) => Err(error),
+        };
+        match confirmed {
+            Ok(after) => {
+                let present: HashSet<String> = after.tracks().map(SpotifyUri::to_uri).collect();
+                if !batch.iter().all(|uri| present.contains(uri)) {
+                    let error = anyhow::anyhow!("Spotify did not confirm the playlist change");
+                    if added == 0 && !batch.iter().any(|uri| present.contains(uri)) {
+                        return Ok(Added::NotWritten(error));
+                    }
+                    return Err(error);
+                }
+                revision = after.revision;
+                added += batch.len();
+            }
+            Err(error) if added == 0 => return Ok(Added::NotWritten(error)),
+            Err(error) => anyhow::bail!(
+                "Added {added} tracks before stopping: {error}. Retry safely; existing tracks are skipped."
+            ),
+        }
+    }
+    Ok(Added::Count(added))
+}
+
+fn add_changes(
+    revision: &[u8],
+    uris: &[String],
+    user: &str,
+) -> librespot_protocol::playlist4_external::ListChanges {
+    use librespot_protocol::playlist4_external::{
+        Add, ChangeInfo, Delta, Item, ItemAttributes, ListChanges, Op, op::Kind,
+    };
+    let now = time::OffsetDateTime::now_utc().unix_timestamp() * 1000;
+    let mut add = Add::new();
+    add.set_add_last(true);
+    for uri in uris {
+        let mut attributes = ItemAttributes::new();
+        attributes.set_added_by(user.into());
+        attributes.set_timestamp(now);
+        let mut item = Item::new();
+        item.set_uri(uri.clone());
+        item.attributes = Some(attributes).into();
+        add.items.push(item);
+    }
+    let mut op = Op::new();
+    op.set_kind(Kind::ADD);
+    op.add = Some(add).into();
+    let mut info = ChangeInfo::new();
+    info.set_user(user.into());
+    info.set_timestamp(now);
+    let mut delta = Delta::new();
+    delta.set_base_version(revision.to_vec());
+    delta.ops.push(op);
+    delta.info = Some(info).into();
+    let mut changes = ListChanges::new();
+    changes.set_base_revision(revision.to_vec());
+    changes.deltas.push(delta);
+    changes.set_want_resulting_revisions(true);
+    changes
+}
+
 static OWNER_NAMES: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
 
 /// The rootlist names owners by user ID; look up each owner's display name
@@ -513,5 +695,51 @@ mod owner_name_tests {
         );
         assert_eq!(owner_name(br#"{"name":""}"#), None);
         assert_eq!(owner_name(b"not json"), None);
+    }
+}
+
+#[cfg(test)]
+mod library_write_tests {
+    use super::*;
+    #[test]
+    fn play_history_keeps_song_contexts_and_dates() {
+        let plays = recent_plays(&json!({"playContexts":[
+            {"uri":"spotify:album:a","lastPlayedTrackUri":"spotify:track:t","lastPlayedTime":1_760_000_000_000_i64},
+            {"uri":"spotify:show:s","lastPlayedTrackUri":"spotify:episode:e","lastPlayedTime":1_760_000_000_000_i64},
+            {"uri":"spotify:playlist:p","lastPlayedTrackUri":"spotify:track:u","lastPlayedTime":1_760_000_000_i64}
+        ]}))
+        .unwrap();
+        assert_eq!(plays.len(), 2);
+        assert_eq!(plays[0].context, "spotify:album:a");
+        assert_eq!(plays[0].track, "spotify:track:t");
+        assert_eq!(plays[0].played_at, plays[1].played_at);
+        assert!(plays[0].played_at.starts_with("2025-10-09T"));
+        assert!(recent_plays(&json!({})).is_err());
+    }
+    #[test]
+    fn playlist_change_appends_items_from_the_current_revision() {
+        let changes = add_changes(
+            b"rev",
+            &["spotify:track:a".into(), "spotify:track:b".into()],
+            "me",
+        );
+        assert_eq!(changes.base_revision(), b"rev");
+        let delta = &changes.deltas[0];
+        assert_eq!(delta.base_version(), b"rev");
+        assert_eq!(delta.info.user(), "me");
+        let op = &delta.ops[0];
+        assert_eq!(
+            op.kind(),
+            librespot_protocol::playlist4_external::op::Kind::ADD
+        );
+        assert!(op.add.add_last());
+        let uris: Vec<_> = op.add.items.iter().map(|item| item.uri()).collect();
+        assert_eq!(uris, ["spotify:track:a", "spotify:track:b"]);
+        assert!(
+            op.add
+                .items
+                .iter()
+                .all(|item| item.attributes.added_by() == "me")
+        );
     }
 }

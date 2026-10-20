@@ -758,6 +758,10 @@ impl Desktop {
                                 emit(json!({"type":"playing_details","uri":uri,"details":details}));
                             }
                         }
+                        Event::SavedMany(items) => emit(json!({
+                            "type": "saved_many",
+                            "items": items.into_iter().collect::<std::collections::HashMap<_, _>>()
+                        })),
                         Event::Saved { uri, saved } => {
                             emit(json!({"type":"saved","uri":uri,"saved":saved}))
                         }

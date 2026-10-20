@@ -11,6 +11,7 @@ mod audio_output;
 pub mod auth;
 pub mod canvas;
 pub mod catalogue;
+pub mod collection;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod desktop;

@@ -118,6 +118,8 @@ pub enum Event {
         uri: String,
         saved: bool,
     },
+    /// Saved status for many items at once.
+    SavedMany(Vec<(String, bool)>),
     Session(Profile),
     SignedOut,
     LoginFinished,
@@ -821,6 +823,7 @@ impl Backend {
                 let result = self.fetch_tracks(&key, offset);
                 match result {
                     Ok(tracks) => {
+                        self.publish_saved(tracks.iter().map(|track| track.uri.clone()).collect());
                         if (key == "liked" || key.starts_with("playlist:"))
                             && let Some(spotify) = self.spotify.as_ref()
                         {
@@ -856,14 +859,28 @@ impl Backend {
                     playlist.editable_by(&self.profile.id),
                     "This playlist cannot be edited by your account"
                 );
-                let count = self.api()?.add_to_playlist(&playlist.id, &tracks)?;
+                let native = if self.native_ready() {
+                    self.native_controls.add_to_playlist(&playlist.id, &tracks)
+                } else {
+                    Err(anyhow::anyhow!("Native audio is connecting"))
+                };
+                let count = match native {
+                    Ok(crate::native_browse::Added::Count(count)) => count,
+                    // Nothing was written natively, so the Web API can retry.
+                    Ok(crate::native_browse::Added::NotWritten(_)) | Err(_) => {
+                        self.api()?.add_to_playlist(&playlist.id, &tracks)?
+                    }
+                };
                 self.emit(Event::Notice(format!(
                     "Added {count} tracks to {}. Existing tracks skipped.",
                     playlist.name
                 )));
             }
             Command::SaveTrack(uri) => {
-                self.api()?.save_track(&uri)?;
+                if !self.native_ready() || self.native_controls.set_saved(&uri, true).is_err() {
+                    self.api()?.save_track(&uri)?;
+                }
+                self.emit(Event::Saved { uri, saved: true });
                 self.emit(Event::Notice("Saved to Liked Songs".into()));
             }
             Command::FetchLyrics(track) => {
@@ -1044,14 +1061,14 @@ impl Backend {
                 if let Some(overview) = info.overview.as_mut() {
                     let mut statuses = Vec::new();
                     {
-                        let api = self.api()?;
                         let uris: Vec<_> = overview
                             .popular
                             .iter()
                             .map(|item| item.track.uri.clone())
                             .collect();
+                        let native = self.native_controls.saved_items(&uris);
                         if !uris.is_empty()
-                            && let Ok(saved) = api.saved_items(&uris)
+                            && let Ok(saved) = native.or_else(|_| self.api()?.saved_items(&uris))
                         {
                             statuses = uris.into_iter().zip(saved).collect();
                         }
@@ -1075,6 +1092,7 @@ impl Backend {
                 });
             }
             Command::PlayingDetails(track) => {
+                self.publish_saved(vec![track.uri.clone()]);
                 let canvas_track = track.uri.clone();
                 let native = self.native_controls.clone();
                 let events = self.events.clone();
@@ -1165,12 +1183,46 @@ impl Backend {
                 }
             }
             Command::SetSaved { uri, saved } => {
-                self.api()?.set_saved_item(&uri, saved)?;
+                if !self.native_ready() || self.native_controls.set_saved(&uri, saved).is_err() {
+                    self.api()?.set_saved_item(&uri, saved)?;
+                }
                 self.emit(Event::Saved { uri, saved });
             }
             Command::Shutdown => {}
         }
         Ok(())
+    }
+
+    fn native_ready(&self) -> bool {
+        matches!(
+            self.native_controls
+                .connection_event(Some(&self.profile.id)),
+            Some(crate::native::NativeEvent::Ready(_))
+        )
+    }
+
+    /// Saved status from the native library mirror, off the worker thread.
+    fn publish_saved(&self, uris: Vec<String>) {
+        let mut seen = std::collections::HashSet::new();
+        let uris: Vec<String> = uris
+            .into_iter()
+            .filter(|uri| crate::collection::supports(uri) && seen.insert(uri.clone()))
+            .collect();
+        if uris.is_empty() || !self.native_ready() {
+            return;
+        }
+        let native = self.native_controls.clone();
+        let events = self.events.clone();
+        let context = self.context.clone();
+        thread::spawn(move || {
+            for chunk in uris.chunks(500) {
+                let Ok(saved) = native.saved_items(chunk) else {
+                    return;
+                };
+                let _ = events.send(Event::SavedMany(chunk.iter().cloned().zip(saved).collect()));
+            }
+            context.request_repaint();
+        });
     }
 
     fn fetch_tracks(&mut self, key: &str, offset: usize) -> Result<Vec<Track>> {
@@ -1266,7 +1318,7 @@ fn fetch_live_tracks(
             "queue" => api.queue(),
             // Spotify keeps only the latest 50 plays, so there is no second page.
             _ if offset > 0 => Ok(Vec::new()),
-            _ => api.recent(),
+            _ => native.recent().or_else(|_| api.recent()),
         }
     }
 }

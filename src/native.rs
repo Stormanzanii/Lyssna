@@ -281,11 +281,32 @@ impl NativeControls {
             .block_on(crate::native_browse::playlist_info(&session, id))
     }
     pub fn library(&self) -> Result<Vec<crate::model::Playlist>> {
+        self.run(crate::native_browse::library)
+    }
+    pub fn saved_items(&self, uris: &[String]) -> Result<Vec<bool>> {
+        self.run(async |session| crate::collection::contains(session, uris).await)
+    }
+    pub fn set_saved(&self, uri: &str, saved: bool) -> Result<()> {
+        self.run(async |session| crate::collection::write(session, uri, saved).await)
+    }
+    pub fn recent(&self) -> Result<Vec<crate::model::Track>> {
+        self.run(crate::native_browse::recent)
+    }
+    pub fn add_to_playlist(
+        &self,
+        playlist_id: &str,
+        tracks: &[crate::model::Track],
+    ) -> Result<crate::native_browse::Added> {
+        self.run(async |session| {
+            crate::native_browse::add_to_playlist(session, playlist_id, tracks).await
+        })
+    }
+    fn run<T>(&self, task: impl AsyncFnOnce(&Session) -> Result<T>) -> Result<T> {
         let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
-            .block_on(crate::native_browse::library(&session))
+            .block_on(task(&session))
     }
     pub fn queue(&self) -> Result<Vec<crate::model::Track>> {
         let uris = {
@@ -1627,6 +1648,46 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
         },
         ..Track::default()
     })
+}
+
+/// Runs `check` on a fresh native session from the saved sign-in. For
+/// ignored live tests only; never starts playback.
+#[cfg(test)]
+pub(crate) fn with_live_session<T>(check: impl AsyncFnOnce(&Session) -> T) -> T {
+    let settings = crate::config::Settings::load().expect("Settings unavailable");
+    let tokens = crate::auth::Tokens::load(&settings.client_id)
+        .ok()
+        .flatten()
+        .expect("Saved sign-in required");
+    let account = tokens
+        .profile
+        .as_ref()
+        .expect("Saved profile required")
+        .id
+        .clone();
+    let credentials = load_credentials(&account)
+        .expect("Cannot read saved native sign-in")
+        .expect("Saved native sign-in required");
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let session = Session::new(
+                SessionConfig {
+                    client_id: crate::auth::AUDIO_CLIENT_ID.into(),
+                    ..SessionConfig::default()
+                },
+                None,
+            );
+            tokio::time::timeout(Duration::from_secs(30), session.connect(credentials, false))
+                .await
+                .expect("Native connection timed out")
+                .expect("Native connection failed");
+            let result = check(&session).await;
+            session.shutdown();
+            result
+        })
 }
 
 #[cfg(test)]

@@ -57,6 +57,7 @@ import {
   ExternalLink,
   Pin,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
@@ -634,6 +635,8 @@ function App() {
       if (event.key === "F5") {
         event.preventDefault();
         void call("refresh");
+        // Also reload the open page, picking up changes from other devices.
+        if (stateRef.current.profile) navigate(stateRef.current.route, false);
         return;
       }
       if (!stateRef.current.profile || editing) return;
@@ -672,7 +675,7 @@ function App() {
       window.removeEventListener("keydown", keydown, true);
       window.removeEventListener("keyup", keyup, true);
     };
-  }, [toggle, call]);
+  }, [toggle, call, navigate]);
   const prefetchOn = useCallback(
     (key: string) => ({
       onMouseEnter: () => {
@@ -749,10 +752,23 @@ function App() {
   );
   const save = useCallback(
     (track: Track) => {
-      void call("save_item", {
-        uri: track.uri,
-        saved: !stateRef.current.saved[track.uri],
-      });
+      const saved = !stateRef.current.saved[track.uri];
+      // Apply at once; the worker reports the old state back on failure.
+      dispatch({ type: "saved", uri: track.uri, saved });
+      void call("save_item", { uri: track.uri, saved });
+    },
+    [call],
+  );
+  const removeFromPlaylist = useCallback(
+    (track: Track) => {
+      const current = stateRef.current,
+        playlist = current.playlists.find(
+          (item) => `playlist:${item.id}` === current.route,
+        ),
+        index = current.tracks.indexOf(track);
+      if (!playlist || index < 0) return;
+      dispatch({ type: "track_removed", key: current.route, index });
+      void call("remove_from_playlist", { playlist, index, uri: track.uri });
     },
     [call],
   );
@@ -2471,6 +2487,20 @@ function App() {
                 () => play({ command: "enqueue", uri: songMenu.track.uri }),
               ],
               ["Add to playlist", Plus, () => {}],
+              ...(songMenu.fromList &&
+              state.playlists.some(
+                (item) =>
+                  `playlist:${item.id}` === state.route &&
+                  (item.owner.id === state.profile?.id || item.collaborative),
+              )
+                ? [
+                    [
+                      "Remove from this playlist",
+                      Trash2,
+                      () => removeFromPlaylist(songMenu.track),
+                    ],
+                  ]
+                : []),
               ["Open album", Music2, () => openAlbum(songMenu.track.album)],
               [
                 "Go to artist",

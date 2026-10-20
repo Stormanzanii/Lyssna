@@ -47,6 +47,12 @@ pub enum Command {
         name: String,
         tracks: Vec<Track>,
     },
+    /// Remove the song at `index` from an editable playlist.
+    RemoveFromPlaylist {
+        playlist: Playlist,
+        index: usize,
+        uri: String,
+    },
     /// Delete an owned playlist or unfollow another, as Spotify does.
     RemovePlaylist {
         id: String,
@@ -128,6 +134,8 @@ pub enum Event {
         uri: String,
         saved: bool,
     },
+    /// Songs on this page changed; reload it if it is open.
+    PageChanged(String),
     /// Saved status for many items at once.
     SavedMany(Vec<(String, bool)>),
     Session(Profile),
@@ -885,6 +893,32 @@ impl Backend {
                     "Added {count} tracks to {}. Existing tracks skipped.",
                     playlist.name
                 )));
+                if count > 0 {
+                    self.emit(Event::PageChanged(format!("playlist:{}", playlist.id)));
+                }
+            }
+            Command::RemoveFromPlaylist {
+                playlist,
+                index,
+                uri,
+            } => {
+                anyhow::ensure!(
+                    playlist.editable_by(&self.profile.id),
+                    "This playlist cannot be edited by your account"
+                );
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then remove the song."
+                );
+                let removed = self
+                    .native_controls
+                    .remove_from_playlist(&playlist.id, index, &uri);
+                if removed.is_err() {
+                    // The window already hid the song; reload to restore it.
+                    self.emit(Event::PageChanged(format!("playlist:{}", playlist.id)));
+                }
+                removed?;
+                self.emit(Event::Notice(format!("Removed from {}", playlist.name)));
             }
             Command::CreatePlaylist { name, tracks } => {
                 anyhow::ensure!(
@@ -922,6 +956,7 @@ impl Backend {
                     self.api()?.save_track(&uri)?;
                 }
                 self.emit(Event::Saved { uri, saved: true });
+                self.emit(Event::PageChanged("liked".into()));
                 self.emit(Event::Notice("Saved to Liked Songs".into()));
             }
             Command::FetchLyrics(track) => {
@@ -1224,8 +1259,20 @@ impl Backend {
                 }
             }
             Command::SetSaved { uri, saved } => {
-                if !self.native_ready() || self.native_controls.set_saved(&uri, saved).is_err() {
-                    self.api()?.set_saved_item(&uri, saved)?;
+                if (!self.native_ready() || self.native_controls.set_saved(&uri, saved).is_err())
+                    && let Err(error) = self.api().and_then(|api| api.set_saved_item(&uri, saved))
+                {
+                    // The window already applied the change; undo it there.
+                    self.emit(Event::Saved {
+                        uri: uri.clone(),
+                        saved: !saved,
+                    });
+                    self.emit(Event::PageChanged("liked".into()));
+                    return Err(error);
+                }
+                // The window drops unliked songs itself; new likes need a reload.
+                if saved && uri.starts_with("spotify:track:") {
+                    self.emit(Event::PageChanged("liked".into()));
                 }
                 self.emit(Event::Saved { uri, saved });
             }

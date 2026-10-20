@@ -184,6 +184,8 @@ export type Action =
   | { type: "page_loading"; generation: number }
   | { type: "toast_clear" }
   | { type: "dj_requested" }
+  /** A song left the open playlist; drop that row before Spotify confirms. */
+  | { type: "track_removed"; key: string; index: number }
   | { type: "dj_pending_expired" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -535,11 +537,35 @@ export function reducer(state: AppState, action: Action): AppState {
         : state;
     case "devices":
       return { ...state, devices: action.devices };
-    case "saved":
+    case "saved": {
+      const saved = { ...state.saved, [action.uri]: action.saved };
+      // An unliked song leaves the open Liked Songs list at once.
+      if (action.saved || state.route !== "liked")
+        return { ...state, saved };
+      const tracks = state.tracks.filter((track) => track.uri !== action.uri);
       return {
         ...state,
-        saved: { ...state.saved, [action.uri]: action.saved },
+        saved,
+        tracks,
+        pages: rememberPage(state.pages, "liked", {
+          tracks,
+          more: state.more,
+        }),
       };
+    }
+    case "track_removed": {
+      if (action.key !== state.route || !state.tracks[action.index])
+        return state;
+      const tracks = state.tracks.filter((_, index) => index !== action.index);
+      return {
+        ...state,
+        tracks,
+        pages: rememberPage(state.pages, state.route, {
+          tracks,
+          more: state.more,
+        }),
+      };
+    }
     case "saved_many":
       return { ...state, saved: { ...state.saved, ...action.items } };
     case "settings":

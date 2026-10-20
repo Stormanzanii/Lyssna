@@ -541,3 +541,40 @@ describe("starting DJ", () => {
     expect(reducer(emptyState, { type: "dj_requested" }).narrating).toBe(false);
   });
 });
+
+describe("library edits on the open page", () => {
+  const other: Track = { ...track, id: "other", uri: "spotify:track:other" };
+  it("drops an unliked song from the open Liked Songs list at once", () => {
+    const liked = { ...emptyState, route: "liked", tracks: [track, other] };
+    const next = reducer(liked, {
+      type: "saved",
+      uri: track.uri,
+      saved: false,
+    });
+    expect(next.tracks).toEqual([other]);
+    expect(next.saved[track.uri]).toBe(false);
+    expect(next.pages.liked.tracks).toEqual([other]);
+    const elsewhere = { ...liked, route: "playlist:p" };
+    expect(
+      reducer(elsewhere, { type: "saved", uri: track.uri, saved: false })
+        .tracks,
+    ).toHaveLength(2);
+  });
+  it("removes only the chosen row of the open playlist", () => {
+    const open = {
+      ...emptyState,
+      route: "playlist:p",
+      tracks: [track, other, track],
+    };
+    const next = reducer(open, {
+      type: "track_removed",
+      key: "playlist:p",
+      index: 2,
+    });
+    expect(next.tracks).toEqual([track, other]);
+    expect(
+      reducer(open, { type: "track_removed", key: "playlist:q", index: 0 })
+        .tracks,
+    ).toHaveLength(3);
+  });
+});

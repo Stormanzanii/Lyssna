@@ -758,6 +758,15 @@ impl Desktop {
                                 emit(json!({"type":"playing_details","uri":uri,"details":details}));
                             }
                         }
+                        Event::PageChanged(key) => {
+                            if snapshot.route == key {
+                                let _ = pump.commands.send(Command::Tracks {
+                                    key,
+                                    offset: 0,
+                                    generation: snapshot.generation,
+                                });
+                            }
+                        }
                         Event::SavedMany(items) => emit(json!({
                             "type": "saved_many",
                             "items": items.into_iter().collect::<std::collections::HashMap<_, _>>()
@@ -1975,6 +1984,26 @@ fn add_tracks(
         .map_err(error)
 }
 #[tauri::command]
+fn remove_from_playlist(
+    playlist: Playlist,
+    index: usize,
+    uri: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::RemoveFromPlaylist {
+            playlist,
+            index,
+            uri,
+        })
+        .map_err(error)
+}
+#[tauri::command]
 fn remove_playlist(
     id: String,
     name: String,
@@ -2301,6 +2330,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             add_tracks,
             create_playlist,
             remove_playlist,
+            remove_from_playlist,
             open_link,
             open_creator_profile,
             resolve_album,

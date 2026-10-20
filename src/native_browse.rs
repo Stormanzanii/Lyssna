@@ -295,6 +295,78 @@ async fn playlist_json(session: &Session, path: &str, body: &Value) -> Result<Va
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+/// Remove the song at `index`, checking first that it is still there.
+pub async fn remove_from_playlist(
+    session: &Session,
+    id: &str,
+    index: usize,
+    uri: &str,
+) -> Result<()> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid playlist ID"
+    );
+    let playlist_uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    // Each row carries its own ID, so one copy of a repeated song can go.
+    let read = async || -> Result<Vec<(String, String)>> {
+        let playlist = tokio::time::timeout(
+            Duration::from_secs(10),
+            Playlist::get(session, &playlist_uri),
+        )
+        .await
+        .context("Playlist request timed out")??;
+        ensure!(
+            playlist.contents.position == 0 && !playlist.contents.is_truncated,
+            "Spotify returned an incomplete playlist"
+        );
+        Ok(playlist
+            .contents
+            .items
+            .iter()
+            .map(|item| {
+                use base64::{Engine, engine::general_purpose::STANDARD};
+                // JSON carries protobuf bytes as base64.
+                let row = STANDARD.encode(&item.attributes.item_id);
+                (item.id.to_uri(), row)
+            })
+            .collect())
+    };
+    let before = read().await?;
+    let row = before
+        .get(index)
+        .filter(|(item, row)| item == uri && !row.is_empty())
+        .map(|(_, row)| row.clone())
+        .context("The playlist changed. Refresh it and try again.")?;
+    playlist_json(
+        session,
+        &format!("/playlist/v2/playlist/{id}/changes"),
+        &remove_changes(uri, &row),
+    )
+    .await
+    .context("Spotify could not remove the song")?;
+    let after = read().await?;
+    ensure!(
+        after.len() + 1 == before.len() && !after.iter().any(|(_, other)| *other == row),
+        "Spotify did not confirm the removal"
+    );
+    Ok(())
+}
+
+fn remove_changes(uri: &str, row: &str) -> Value {
+    json!({
+        "deltas": [{
+            "ops": [{"kind": 3, "rem": {
+                "items": [{"uri": uri, "attributes": {"itemId": row}}],
+                "itemsAsKey": true
+            }}],
+            "info": {"source": {"client": 5}}
+        }],
+        "wantResultingRevisions": false,
+        "wantSyncResult": false,
+        "nonces": []
+    })
+}
+
 /// Remove a playlist from the library, as Spotify's Delete does for owners.
 pub async fn remove_from_library(session: &Session, id: &str) -> Result<()> {
     ensure!(
@@ -822,6 +894,7 @@ mod live_playlist_tests {
                 }
                 let first = add_to_playlist(session, &id, &picks).await?;
                 let again = add_to_playlist(session, &id, &picks).await?;
+                remove_from_playlist(session, &id, 0, &picks[0].uri).await?;
                 Ok::<_, anyhow::Error>((picks.len(), first, again))
             }
             .await;
@@ -829,7 +902,9 @@ mod live_playlist_tests {
             let gone = library(session)
                 .await
                 .map(|listed| !listed.iter().any(|playlist| playlist.id == id));
-            let (picked, first, again) = checked.expect("Native playlist checks failed");
+            let (picked, first, again) = checked
+                .map_err(|error| anyhow::anyhow!("{error:#}"))
+                .expect("Native playlist checks failed");
             removed.expect("Native playlist removal failed");
             assert!(
                 gone.expect("Library reread failed"),
@@ -840,7 +915,7 @@ mod live_playlist_tests {
                     assert_eq!(first, picked);
                     assert_eq!(again, 0);
                     eprintln!(
-                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, removed"
+                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, removed one song, removed playlist"
                     );
                 }
                 (Added::NotWritten(error), _) | (_, Added::NotWritten(error)) => {

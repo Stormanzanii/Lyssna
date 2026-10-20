@@ -3087,7 +3087,8 @@ input[type="range"]:hover {
   right: 2%;
 }
 .canvas-lyrics.artwork-right:not(.narrow):not(.no-artwork) > .lyrics-toolbar {
-  left: calc(100% - var(--canvas-width) + 12px);
+  left: auto;
+  right: 12px;
 }
 /* Narrow Canvas view: the video becomes the header thumbnail, the title sits
    beside it, and the blurred backdrop fills the page evenly. */

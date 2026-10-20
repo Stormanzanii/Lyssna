@@ -1491,7 +1491,9 @@ test("Canvas and its toolbar move together without restarting the video", async 
       return {
         right: cover.left >= section.left + section.width / 2,
         anchorX: Math.abs(
-          toolbar.left - (Math.max(section.left, cover.left) + 12),
+          cover.left >= section.left + section.width / 2
+            ? toolbar.right - (section.right - 12)
+            : toolbar.left - (Math.max(section.left, cover.left) + 12),
         ),
         anchorY: Math.abs(
           toolbar.top - (Math.max(section.top, cover.top) + 12),

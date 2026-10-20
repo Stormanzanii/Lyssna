@@ -1,0 +1,414 @@
+/* Playlist, album, artist, profile and recents pages, following Spotify's
+   layout: big hero, artwork colour washing into the action bar, then a
+   roomy track table. Loaded after styles.css so these rules win. */
+:root {
+  --spotify-green: #1ed760;
+  --spotify-green-hover: #3be477;
+  --text-subdued: #b3b3b3;
+}
+
+/* Hero + action bar share one artwork tint that fades into the page. */
+.entity-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.entity-tint {
+  position: absolute;
+  inset: -80px;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  filter: blur(70px) saturate(1.8) brightness(0.62);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 92%);
+  pointer-events: none;
+}
+.liked-header {
+  background: linear-gradient(
+    #5038a0 0,
+    #3a2a78 300px,
+    #1d1640 380px,
+    transparent 470px
+  );
+}
+.page-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  min-height: 300px;
+  padding: 64px 24px 24px;
+  background: linear-gradient(transparent 40%, #0000002e);
+}
+.hero-cover {
+  width: clamp(150px, 17vw, 232px);
+  height: auto;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  border-radius: 6px;
+  box-shadow: 0 8px 60px #00000080;
+}
+.hero-cover.liked-cover {
+  border-radius: 6px;
+}
+.hero-copy {
+  min-width: 0;
+  flex: 1;
+}
+.hero-copy .eyebrow {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #fff;
+  text-transform: capitalize;
+}
+.hero-copy h1 {
+  margin: 0 0 14px;
+  font-size: clamp(40px, 6.2vw, 96px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.hero-copy h1.long-title {
+  font-size: clamp(32px, 4.4vw, 72px);
+}
+.hero-description {
+  margin: -4px 0 10px;
+  max-width: 760px;
+  font-size: 14px;
+  color: #ffffffb3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 14px;
+  color: #ffffffb3;
+  line-height: 1.6;
+}
+.hero-meta strong {
+  color: #fff;
+  font-weight: 700;
+}
+.hero-meta strong .text-link {
+  font-weight: 700;
+  color: #fff;
+}
+.hero-meta > span::before {
+  content: "•";
+  margin: 0 6px;
+}
+.hero-owner {
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Artist banner hero. */
+.artist-hero {
+  min-height: clamp(320px, 31vw, 480px);
+  padding: 24px 24px 28px;
+  background-color: #282828;
+  background-size: cover;
+  background-position: center 22%;
+}
+.artist-hero h1 {
+  font-size: clamp(48px, 7.4vw, 112px);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 24px #0004;
+}
+.artist-verified {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+.artist-verified svg {
+  color: #4cb3ff;
+  fill: #4cb3ff;
+}
+.artist-verified svg path:last-child {
+  fill: none;
+  stroke: #fff;
+}
+.artist-monthly {
+  margin: 0;
+  font-size: 16px;
+  color: #fff;
+}
+.artist-header .browse-actions {
+  background: linear-gradient(#0000004d, transparent);
+}
+
+/* Action bar. */
+.browse-actions {
+  gap: 24px;
+  padding: 24px;
+  background: none;
+}
+.browse-actions > span {
+  font-size: 14px;
+  color: var(--text-subdued);
+}
+.primary-play {
+  width: 56px;
+  height: 56px;
+  background: var(--spotify-green);
+  color: #000;
+  box-shadow: 0 8px 16px #0000004d;
+  transition:
+    transform 0.12s,
+    background 0.12s;
+}
+.primary-play:hover {
+  background: var(--spotify-green-hover);
+  transform: scale(1.04);
+}
+.primary-play:active {
+  transform: scale(0.98);
+}
+.action-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--text-subdued);
+}
+.action-icon:hover {
+  background: none;
+  transform: scale(1.04);
+}
+.action-icon.active {
+  color: var(--spotify-green);
+}
+.action-icon.active:after {
+  background: var(--spotify-green);
+  bottom: -2px;
+}
+.browse-actions .pill.outline {
+  font-size: 14px;
+  padding: 7px 16px;
+  border-color: #878787;
+}
+
+/* Track table. */
+.track-table {
+  margin: 0 24px;
+}
+.track-table-head,
+.track-row {
+  grid-template-columns: 32px minmax(180px, 6fr) minmax(120px, 4fr) 96px;
+  gap: 16px;
+  padding: 0 16px;
+}
+.collection-table .track-row,
+.collection-table .track-table-head {
+  grid-template-columns: 32px minmax(180px, 6fr) minmax(120px, 4fr) 110px 96px;
+}
+.album-table .track-row,
+.album-table .track-table-head {
+  grid-template-columns: 32px minmax(180px, 6fr) minmax(110px, 2fr) 96px;
+}
+.album-table .track-cell > .cover {
+  display: none;
+}
+.album-table .track-streams,
+.album-table .track-table-head > span:nth-child(3) {
+  justify-self: end;
+}
+.track-table-head {
+  height: 36px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #ffffff1a;
+  font-size: 14px;
+  color: var(--text-subdued);
+}
+.track-row {
+  height: 56px;
+  border-radius: 4px;
+}
+.track-row:hover {
+  background: #ffffff1a;
+}
+.track-row.selected {
+  background: #ffffff2e;
+}
+.track-number {
+  font-size: 16px;
+  color: var(--text-subdued);
+  font-variant-numeric: tabular-nums;
+}
+.track-cell > .cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+}
+.track-name {
+  font-size: 16px;
+  color: #fff;
+}
+.track-row.playing .track-name {
+  color: var(--spotify-green);
+}
+.track-artists {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--text-subdued);
+}
+.track-row:hover .track-artists,
+.track-row:hover .album-link {
+  color: #fff;
+}
+.album-link,
+.track-streams {
+  font-size: 14px;
+  color: var(--text-subdued);
+  font-variant-numeric: tabular-nums;
+}
+.row-end {
+  font-size: 14px;
+  color: var(--text-subdued);
+  font-variant-numeric: tabular-nums;
+}
+.equalizer i {
+  background: var(--spotify-green);
+}
+
+/* Playlist filters as compact chips. */
+.song-filters {
+  gap: 8px;
+  padding: 0 24px 16px;
+}
+.song-filters select,
+.playlist-search {
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background-color: #ffffff12;
+  font-size: 14px;
+}
+.song-filters select {
+  appearance: none;
+  padding: 0 32px 0 14px;
+  background: #ffffff12
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 5.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  cursor: pointer;
+}
+.song-filters select:hover,
+.playlist-search:hover {
+  background-color: #ffffff1f;
+}
+.song-filters select option {
+  background: #282828;
+}
+.playlist-search {
+  padding: 0 14px;
+}
+.playlist-search:focus-within {
+  box-shadow: 0 0 0 1px #ffffff4d;
+}
+.song-filters small {
+  font-size: 13px;
+}
+
+/* Artist page body. */
+.browse-section-title {
+  padding: 32px 24px 16px;
+}
+.browse-section-title h2,
+.artist-liked h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.artist-top .track-table-head {
+  display: none;
+}
+.artist-top .track-table-head,
+.artist-top .track-row {
+  grid-template-columns: 32px minmax(140px, 4fr) minmax(100px, 2fr) 84px;
+}
+.artist-top .album-link {
+  justify-self: end;
+}
+.see-more {
+  margin: 16px 0 0 40px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-subdued);
+}
+.see-more:hover {
+  color: #fff;
+}
+.artist-liked {
+  padding: 32px 24px 16px 0;
+}
+.artist-liked .cover {
+  width: 72px;
+  height: 72px;
+}
+.liked-heart {
+  color: var(--spotify-green);
+}
+.discography-filters {
+  padding: 0 24px 16px;
+}
+.discography-filters .pill {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffffff12;
+}
+.discography-filters .pill:hover {
+  background: #ffffff1f;
+  transform: none;
+}
+.discography-filters .active,
+.discography-filters .active:hover {
+  background: #fff;
+  color: #000;
+}
+.album-grid {
+  padding: 0 12px 32px;
+  gap: 4px;
+}
+.album-tile {
+  padding: 12px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+.album-tile:hover {
+  background: #ffffff12;
+}
+.album-tile .cover {
+  border-radius: 6px;
+  box-shadow: 0 8px 24px #00000080;
+}
+.album-tile strong {
+  font-size: 16px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-tile small {
+  font-size: 14px;
+  text-transform: capitalize;
+  color: var(--text-subdued);
+}
+.album-release-details {
+  padding: 24px 24px 32px;
+  font-size: 14px;
+  color: var(--text-subdued);
+}

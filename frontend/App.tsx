@@ -13,6 +13,7 @@ import { createDJReminder } from "./djHint";
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
   Check,
   ChevronDown,
   Clock3,
@@ -97,6 +98,7 @@ import {
   usePosition,
 } from "./components";
 import "./styles.css";
+import "./pages.css";
 import "./settings.css";
 import "./glass.css";
 import { VolumeControl } from "./volume-control";
@@ -138,6 +140,13 @@ type EntityMenu = {
   y: number;
 };
 const windowHandle = () => getCurrentWindow();
+/** Spotify-style total length: "1 hr 42 min" or "38 min 12 sec". */
+const longDuration = (ms: number) => {
+  const minutes = Math.floor(ms / 60_000);
+  return minutes >= 60
+    ? `${Math.floor(minutes / 60)} hr ${minutes % 60} min`
+    : `${minutes} min ${Math.floor(ms / 1000) % 60} sec`;
+};
 
 function App() {
   const [djRequest, setDJRequest] = useState(false);
@@ -176,6 +185,7 @@ function App() {
     fullscreenBusy = useRef(false);
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
+  const [popularMore, setPopularMore] = useState(false);
   const [songQuery, setSongQuery] = useState(""),
     [songGenre, setSongGenre] = useState(""),
     [songAge, setSongAge] = useState(""),
@@ -250,6 +260,7 @@ function App() {
       setCenter("browse");
       setAlbumFilter("all");
       setAllAlbums(false);
+      setPopularMore(false);
       setSelected(new Set());
       setSongMenu(null);
       const next = ++generation.current;
@@ -804,6 +815,13 @@ function App() {
     state.tracks.every((track) => track.duration_ms > 0)
       ? state.tracks.reduce((sum, track) => sum + track.duration_ms, 0)
       : undefined;
+  const heroSongCount =
+    entity?.album?.total_tracks ??
+    playlistInfo?.total_tracks ??
+    (state.tracks.length > 0 && !state.more ? state.tracks.length : undefined);
+  const heroDuration = entity?.album_details?.complete_duration
+    ? entity.album_details.duration_ms
+    : playlistDuration;
   const title =
     entity?.title ||
     playlist?.name ||
@@ -1333,163 +1351,184 @@ function App() {
                   refresh={refreshHome}
                 />
               ) : (
-                <section
-                  className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
-                  style={
-                    entity?.artist && artistBanner
-                      ? {
-                          backgroundImage: `linear-gradient(0deg,#000b,#0001 70%),url("${artistBanner}")`,
-                        }
-                      : undefined
-                  }
+                <div
+                  className={`entity-header ${entity?.artist ? "artist-header" : ""} ${state.route === "liked" ? "liked-header" : ""}`}
                 >
-                  {imageOf(heroImages) && (
+                  {imageOf(heroImages) && !(entity?.artist && artistBanner) && (
                     <div
-                      className="hero-wash"
+                      className="entity-tint"
                       style={{
                         backgroundImage: `url("${imageOf(heroImages)}")`,
                       }}
                     />
                   )}
-                  {state.route === "liked" ? (
-                    <div className="liked-cover hero-cover">
-                      <Heart size={65} fill="currentColor" />
-                    </div>
-                  ) : (
-                    (!!entity?.images.length || !!playlist?.images.length) &&
-                    !entity?.artist && (
-                      <Cover
-                        images={heroImages}
-                        className="hero-cover"
-                        contextRoute={state.route}
-                        contextName={title}
-                      />
-                    )
-                  )}
-                  <div className="hero-copy">
-                    <span className="eyebrow">
-                      {state.route.startsWith("artist:")
-                        ? "Artist"
-                        : state.route.startsWith("album:")
-                          ? entity?.album?.album_type || "Album"
-                          : state.route.startsWith("search:")
-                            ? "Search"
-                            : state.route === "queue"
-                              ? "Up next"
-                              : "Playlist"}
-                    </span>
-                    <h1>
-                      <span
-                        data-context-route={state.route}
-                        data-context-name={title}
-                      >
-                        {title}
-                      </span>
-                    </h1>
-                    {entity?.overview?.verified && (
-                      <p className="artist-verified">
-                        <Check size={18} /> Verified by Spotify
-                      </p>
-                    )}
-                    {entity?.overview?.monthly_listeners != null && (
-                      <p className="artist-monthly">
-                        {entity.overview.monthly_listeners.toLocaleString()}{" "}
-                        monthly listeners
-                      </p>
-                    )}
-                    <div>
-                      {entity?.album ? (
-                        <ArtistLinks
-                          artists={entity.album.artists || []}
-                          onArtist={openArtist}
+                  <section
+                    className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
+                    style={
+                      entity?.artist && artistBanner
+                        ? {
+                            backgroundImage: `linear-gradient(0deg,#000c,#0000 65%),url("${artistBanner}")`,
+                          }
+                        : undefined
+                    }
+                  >
+                    {state.route === "liked" ? (
+                      <div className="liked-cover hero-cover">
+                        <Heart size={84} fill="currentColor" />
+                      </div>
+                    ) : (
+                      (!!entity?.images.length || !!playlist?.images.length) &&
+                      !entity?.artist && (
+                        <Cover
+                          images={heroImages}
+                          className="hero-cover"
+                          contextRoute={state.route}
+                          contextName={title}
                         />
-                      ) : entity?.artist ? (
-                        ""
+                      )
+                    )}
+                    <div className="hero-copy">
+                      {entity?.overview?.verified ? (
+                        <p className="artist-verified">
+                          <BadgeCheck size={22} /> Verified Artist
+                        </p>
                       ) : (
-                        entity?.subtitle ||
-                        playlist?.owner.display_name ||
-                        playlist?.owner.id ||
-                        "Your collection"
+                        <span className="eyebrow">
+                          {state.route.startsWith("artist:")
+                            ? "Artist"
+                            : state.route.startsWith("album:")
+                              ? entity?.album?.album_type || "Album"
+                              : state.route.startsWith("search:")
+                                ? "Search"
+                                : state.route === "queue"
+                                  ? "Up next"
+                                  : "Playlist"}
+                        </span>
+                      )}
+                      <h1 className={title.length > 28 ? "long-title" : ""}>
+                        <span
+                          data-context-route={state.route}
+                          data-context-name={title}
+                        >
+                          {title}
+                        </span>
+                      </h1>
+                      {entity?.overview?.monthly_listeners != null && (
+                        <p className="artist-monthly">
+                          {entity.overview.monthly_listeners.toLocaleString()}{" "}
+                          monthly listeners
+                        </p>
+                      )}
+                      {state.route.startsWith("playlist:") &&
+                        entity?.subtitle &&
+                        entity.subtitle !== playlistInfo?.owner && (
+                          <p className="hero-description">{entity.subtitle}</p>
+                        )}
+                      {!entity?.artist && (
+                        <p
+                          className={`hero-meta ${entity?.album ? "" : "playlist-meta"}`}
+                        >
+                          {entity?.album ? (
+                            <strong>
+                              <ArtistLinks
+                                artists={entity.album.artists || []}
+                                onArtist={openArtist}
+                              />
+                            </strong>
+                          ) : (
+                            <>
+                              {(state.route === "liked" ||
+                                playlist?.owner.id === state.profile?.id) &&
+                                profileImage && (
+                                  <img
+                                    className="hero-owner"
+                                    src={profileImage}
+                                    alt=""
+                                  />
+                                )}
+                              <strong>
+                                {personalizedMix
+                                  ? `Made for ${profileName}`
+                                  : playlistInfo?.owner === "spotify"
+                                    ? "Spotify"
+                                    : playlistInfo?.owner ||
+                                      playlist?.owner.display_name ||
+                                      playlist?.owner.id ||
+                                      (state.route === "liked"
+                                        ? profileName
+                                        : "Your collection")}
+                              </strong>
+                            </>
+                          )}
+                          {entity?.album?.release_date && (
+                            <span>{entity.album.release_date.slice(0, 4)}</span>
+                          )}
+                          {heroSongCount != null && (
+                            <span>
+                              {heroSongCount} songs
+                              {heroDuration != null &&
+                                `, ${longDuration(heroDuration)}`}
+                            </span>
+                          )}
+                        </p>
                       )}
                     </div>
-                    {entity?.album?.release_date && (
-                      <small>
-                        {entity.album.release_date.slice(0, 4)} ·{" "}
-                        {entity.album.total_tracks} songs
-                        {entity.album_details?.complete_duration && (
-                          <> · {formatTime(entity.album_details.duration_ms)}</>
-                        )}
-                      </small>
-                    )}
-                    {playlistInfo &&
-                      (personalizedMix ||
-                        playlistInfo.owner ||
-                        playlistInfo.total_tracks != null) && (
-                        <small className="playlist-meta">
-                          {personalizedMix
-                            ? `Made for ${profileName}`
-                            : playlistInfo.owner === "spotify"
-                              ? "Spotify"
-                              : playlistInfo.owner}
-                          {playlistInfo.total_tracks != null && (
-                            <>
-                              {personalizedMix || playlistInfo.owner
-                                ? " · "
-                                : ""}
-                              {playlistInfo.total_tracks} songs
-                            </>
-                          )}
-                          {playlistDuration != null && (
-                            <>
-                              {" "}
-                              ·{" "}
-                              {playlistDuration >= 3_600_000
-                                ? `${Math.floor(playlistDuration / 3_600_000)} hr `
-                                : ""}
-                              {Math.floor(playlistDuration / 60_000) % 60} min
-                            </>
-                          )}
-                        </small>
+                  </section>
+                  {!state.route.startsWith("search:") && (
+                    <div className="browse-actions">
+                      <button
+                        className="primary-play"
+                        title={`Play ${title}`}
+                        onClick={() => {
+                          if (state.route.startsWith("artist:"))
+                            play({
+                              command: "play_context",
+                              context: `spotify:${state.route}`,
+                            });
+                          else if (state.tracks[0])
+                            playTrack(state.tracks[0], 0);
+                        }}
+                      >
+                        <Play fill="currentColor" size={24} />
+                      </button>
+                      <button
+                        className={`icon-button action-icon ${state.playback.shuffle_state ? "active" : ""}`}
+                        title={
+                          state.playback.shuffle_state
+                            ? "Turn off shuffle"
+                            : "Turn on shuffle"
+                        }
+                        onClick={() =>
+                          play({
+                            command: "shuffle",
+                            enabled: !state.playback.shuffle_state,
+                          })
+                        }
+                      >
+                        <Shuffle size={28} />
+                      </button>
+                      {entity?.artist && (
+                        <button
+                          className="pill outline"
+                          onClick={() => follow(entity.artist!)}
+                        >
+                          Follow
+                        </button>
                       )}
-                  </div>
-                </section>
-              )}
-              {state.route !== "home" && !state.route.startsWith("search:") && (
-                <div className="browse-actions">
-                  <button
-                    className="primary-play"
-                    title={`Play ${title}`}
-                    onClick={() => {
-                      if (state.route.startsWith("artist:"))
-                        play({
-                          command: "play_context",
-                          context: `spotify:${state.route}`,
-                        });
-                      else if (state.tracks[0]) playTrack(state.tracks[0], 0);
-                    }}
-                  >
-                    <Play fill="currentColor" size={26} />
-                  </button>
-                  {entity?.artist && (
-                    <button
-                      className="pill outline"
-                      onClick={() => follow(entity.artist!)}
-                    >
-                      Follow
-                    </button>
+                      <button
+                        className="icon-button action-icon"
+                        title="Refresh page"
+                        onClick={() => navigate(state.route, false)}
+                      >
+                        <RefreshCw size={22} />
+                      </button>
+                      <span>
+                        {state.tracks.length > 0 && !entity?.artist
+                          ? `${state.tracks.length}${state.more ? "+" : ""} songs loaded`
+                          : ""}
+                      </span>
+                    </div>
                   )}
-                  <button
-                    className="icon-button"
-                    title="Refresh page"
-                    onClick={() => navigate(state.route, false)}
-                  >
-                    <RefreshCw size={21} />
-                  </button>
-                  <span>
-                    {state.tracks.length > 0
-                      ? `${state.tracks.length}${state.more ? "+" : ""} songs`
-                      : ""}
-                  </span>
                 </div>
               )}
               {selected.size > 0 && (
@@ -1584,7 +1623,7 @@ function App() {
                         </div>
                       )}
                       <div
-                        className={`track-table ${collectionPlays ? "collection-table" : ""}`}
+                        className={`track-table ${collectionPlays ? "collection-table" : ""} ${entity?.album ? "album-table" : ""}`}
                       >
                         <div className="track-table-head">
                           <span>#</span>
@@ -1601,7 +1640,10 @@ function App() {
                             <Clock3 size={16} />
                           </span>
                         </div>
-                        {displayTracks.map((track, index) => {
+                        {(entity?.artist && !popularMore
+                          ? displayTracks.slice(0, 5)
+                          : displayTracks
+                        ).map((track, index) => {
                           const current =
                             track.uri === state.playback.item?.uri;
                           return (
@@ -1769,6 +1811,14 @@ function App() {
                           );
                         })}
                       </div>
+                      {entity?.artist && displayTracks.length > 5 && (
+                        <button
+                          className="text-link see-more"
+                          onClick={() => setPopularMore(!popularMore)}
+                        >
+                          {popularMore ? "Show less" : "See more"}
+                        </button>
+                      )}
                     </>
                   )}
                 </section>

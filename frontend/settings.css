@@ -1,0 +1,300 @@
+/* Settings page, laid out like Spotify's: one centred column, quiet section
+   headings, muted labels with their control on the right. */
+.settings-page {
+  height: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.settings-column {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px clamp(20px, 4vw, 40px) 96px;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  margin-bottom: 28px;
+}
+.settings-header h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(300px, 60%);
+  height: 36px;
+  padding: 0 4px 0 12px;
+  border-radius: 999px;
+  background: #ffffff14;
+  color: #b3b3b3;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.settings-search:focus-within {
+  border-color: #ffffff4d;
+}
+.settings-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+.settings-search input:focus-visible {
+  box-shadow: none;
+}
+.settings-section {
+  margin-bottom: 36px;
+  scroll-margin-top: 24px;
+}
+.settings-section > h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.settings-section:not(:has(.setting-row)) {
+  display: none;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 44px;
+  padding: 6px 0;
+}
+.setting-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.setting-text {
+  min-width: 0;
+}
+.setting-label {
+  display: block;
+  font-size: 14px;
+  color: #b3b3b3;
+  line-height: 1.4;
+}
+.setting-help {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #a7a7a7b3;
+  line-height: 1.45;
+}
+.setting-help .native-ready {
+  color: #1ed760;
+}
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.setting-row.stacked .setting-control {
+  display: block;
+}
+.settings-page .pill {
+  font-size: 14px;
+  padding: 7px 16px;
+}
+.settings-page .pill.outline {
+  border-color: #7c7c7c;
+}
+.settings-page .pill.outline:hover {
+  border-color: #fff;
+}
+.settings-select {
+  appearance: none;
+  min-width: 160px;
+  max-width: 280px;
+  height: 36px;
+  padding: 0 36px 0 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #ffffff14
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.settings-select:hover {
+  background-color: #ffffff1f;
+}
+.settings-select:focus-visible {
+  border-color: #ffffff80;
+  outline: none;
+}
+.settings-select option {
+  background: #282828;
+  color: #fff;
+}
+/* Spotify-green switch with a white knob. */
+.toggle {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: #727272;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.toggle:after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0005;
+  transition: transform 0.18s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.toggle:hover {
+  background: #8a8a8a;
+}
+.toggle:checked {
+  background: #1ed760;
+}
+.toggle:checked:hover {
+  background: #3be477;
+}
+.toggle:checked:after {
+  transform: translateX(16px);
+}
+.reduce-motion .toggle,
+.reduce-motion .toggle:after {
+  transition: none;
+}
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-range input {
+  appearance: none;
+  width: 160px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    #fff var(--fill, 50%),
+    #4d4d4d var(--fill, 50%)
+  );
+  cursor: pointer;
+}
+.settings-range input:hover {
+  background: linear-gradient(
+    to right,
+    #1ed760 var(--fill, 50%),
+    #4d4d4d var(--fill, 50%)
+  );
+}
+.settings-range input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px #0006;
+}
+.settings-range output {
+  width: 24px;
+  font-size: 14px;
+  color: #b3b3b3;
+  font-variant-numeric: tabular-nums;
+}
+.settings-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #b3b3b3;
+}
+.number-field {
+  width: 96px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #ffffff14;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.number-field:focus-visible {
+  border-color: #ffffff80;
+  outline: none;
+}
+.settings-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 0 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #e9142921;
+  border: 1px solid #e9142955;
+  font-size: 14px;
+}
+.settings-key-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 520px;
+}
+.settings-key-form .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.settings-key-form .field {
+  max-width: 420px;
+  background: #ffffff14;
+  border-color: transparent;
+  border-radius: 4px;
+}
+.settings-key-form .consent-row {
+  margin: 0;
+}
+.settings-empty {
+  display: none;
+  padding: 48px 0;
+  text-align: center;
+  font-size: 16px;
+  color: #b3b3b3;
+}
+.settings-page.searching
+  .settings-column:not(:has(.setting-row))
+  .settings-empty {
+  display: block;
+}

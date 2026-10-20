@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "./types";
+import { SettingRow } from "./setting-row";
 type StoredFont = { family: string; name: string; data: Blob };
 let database: Promise<IDBDatabase> | undefined;
 function openFonts() {
@@ -137,17 +138,21 @@ export function FontSettings({
     }
   };
   return (
-    <div className="font-settings">
+    <>
       {(
         [
-          ["ui_font", "App font"],
-          ["lyric_font", "Lyrics font"],
+          ["ui_font", "App font", "Used across menus, lists and the player."],
+          ["lyric_font", "Lyrics font", "Used for lyric lines only."],
         ] as const
-      ).map(([key, label]) => (
-        <label className="setting-row" key={key}>
-          <span>{label}</span>
+      ).map(([key, label, help]) => (
+        <SettingRow
+          key={key}
+          label={label}
+          help={help}
+          keywords="font typeface"
+        >
           <select
-            className="font-select"
+            className="settings-select font-select"
             aria-label={label}
             value={settings[key] ?? ""}
             onChange={(event) => onSettings({ [key]: event.target.value })}
@@ -166,26 +171,32 @@ export function FontSettings({
                 <option value={settings[key]}>Saved custom font</option>
               )}
           </select>
-        </label>
+        </SettingRow>
       ))}
-      <input
-        ref={input}
-        className="file-input"
-        type="file"
-        accept=".ttf,.otf,.woff,.woff2"
-        aria-label="Import custom font"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void importFont(file);
-        }}
-      />
-      <button
-        className="pill"
-        disabled={importing}
-        onClick={() => input.current?.click()}
+      <SettingRow
+        label="Custom fonts"
+        help="Import a TTF, OTF, WOFF or WOFF2 file up to 5 MB."
+        keywords="font import upload"
       >
-        {importing ? "Importing font…" : "Import custom font"}
-      </button>
-    </div>
+        <input
+          ref={input}
+          className="file-input"
+          type="file"
+          accept=".ttf,.otf,.woff,.woff2"
+          aria-label="Import custom font"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void importFont(file);
+          }}
+        />
+        <button
+          className="pill outline"
+          disabled={importing}
+          onClick={() => input.current?.click()}
+        >
+          {importing ? "Importing font…" : "Import custom font"}
+        </button>
+      </SettingRow>
+    </>
   );
 }

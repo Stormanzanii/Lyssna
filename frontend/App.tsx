@@ -597,8 +597,10 @@ function App() {
       }
       if (!stateRef.current.profile || editing) return;
       if (event.code === "Space") {
+        // Space always plays or pauses, even on a focused button.
         event.preventDefault();
-        toggle();
+        event.stopPropagation();
+        if (!event.repeat) toggle();
       }
       if (event.key === "Escape") {
         setSongMenu(null);
@@ -607,8 +609,27 @@ function App() {
         setFolderDialog(false);
       }
     };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
+    // A focused button activates on Space keyup; cancel that so Space never
+    // also presses whatever button was clicked last.
+    const keyup = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        event.code === "Space" &&
+        !target?.closest('textarea,select,[contenteditable="true"]') &&
+        !(
+          target instanceof HTMLInputElement &&
+          !NON_TEXT_INPUTS.has(target.type)
+        )
+      )
+        event.preventDefault();
+    };
+    // Capture so no other handler can see or stop Space first.
+    window.addEventListener("keydown", keydown, true);
+    window.addEventListener("keyup", keyup, true);
+    return () => {
+      window.removeEventListener("keydown", keydown, true);
+      window.removeEventListener("keyup", keyup, true);
+    };
   }, [toggle, call]);
   const prefetchOn = useCallback(
     (key: string) => ({

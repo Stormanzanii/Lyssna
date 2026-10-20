@@ -2717,3 +2717,33 @@ test("Space Gravity words keep drifting while the song plays", async ({
   // Re-rendering every frame must not respawn words at their start point.
   expect(new Set(samples).size).toBeGreaterThan(2);
 });
+
+test("Space plays and pauses after clicking any button, but not while searching", async ({
+  page,
+}) => {
+  await startClient(page);
+  const requests = () =>
+    page.evaluate((): string[] =>
+      (window as any).__clientTest.commands
+        .filter((call: any) => call.command === "player")
+        .map((call: any) => call.args.request.command),
+    );
+  for (const title of ["Lyrics", "Queue", "Lyrics"]) {
+    await page.locator("footer").getByTitle(title, { exact: true }).click();
+    const before = (await requests()).length;
+    await page.keyboard.press("Space");
+    await expect.poll(async () => (await requests()).length).toBe(before + 1);
+    expect((await requests()).at(-1)).toMatch(/^(play|pause)$/);
+  }
+  // Space on a focused button must not also press that button.
+  const lyricsOpen = await page.locator(".lyrics-page").count();
+  await page.locator("footer").getByTitle("Lyrics", { exact: true }).focus();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(100);
+  expect(await page.locator(".lyrics-page").count()).toBe(lyricsOpen);
+  const before = (await requests()).length;
+  await page.getByPlaceholder("What do you want to play?").click();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(100);
+  expect((await requests()).length).toBe(before);
+});

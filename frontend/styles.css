@@ -3089,11 +3089,13 @@ input[type="range"]:hover {
   font-weight: 750;
   line-height: 1.15;
   white-space: nowrap;
+  --gravity-sung: #fff;
+  --gravity-unsung: #ffffffb3;
   color: transparent;
   background: linear-gradient(
     90deg,
-    #fff var(--word-progress, 0%),
-    #ffffffb3 var(--word-progress, 0%)
+    var(--gravity-sung) var(--word-progress, 0%),
+    var(--gravity-unsung) var(--word-progress, 0%)
   );
   background-clip: text;
   -webkit-background-clip: text;
@@ -3118,6 +3120,14 @@ input[type="range"]:hover {
 }
 .gravity-word.previous {
   opacity: 0.22;
+}
+/* The second duet voice gets its own colour so the two singers read apart. */
+.gravity-word.opposite {
+  --gravity-sung: #ffb3c7;
+  --gravity-unsung: #ff8ca8b3;
+}
+.gravity-word.opposite.current {
+  text-shadow: 0 0 18px #ff8ca833;
 }
 .gravity-word.background {
   font-size: clamp(17px, 1.9cqw, 32px);

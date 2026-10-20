@@ -511,6 +511,20 @@ function App() {
     [state.playback.item?.uri, state.tracks, state.home, state.profile?.id],
   );
   const metadataSignature = metadataKeys.join("|");
+  // Featured Home albums show a saved mark; ask for their status.
+  const featuredAlbums = (state.home?.sections ?? [])
+    .filter(
+      (section) =>
+        section.items.length === 1 && section.items[0].kind === "album",
+    )
+    .map((section) => section.items[0].uri)
+    .join("|");
+  useEffect(() => {
+    if (state.profile && state.native_ready && featuredAlbums)
+      void rpc("saved_status", { uris: featuredAlbums.split("|") }).catch(
+        () => {},
+      );
+  }, [state.profile?.id, state.native_ready, featuredAlbums]);
   useEffect(() => {
     if (state.profile && state.native_ready && metadataKeys.length)
       void rpc("prefetch_metadata", { keys: metadataKeys }).catch(() => {});
@@ -1611,6 +1625,12 @@ function App() {
                   play={homePlay}
                   dj={startDJ}
                   refresh={refreshHome}
+                  saved={state.saved}
+                  onSave={(item) => {
+                    const saved = !state.saved[item.uri];
+                    dispatch({ type: "saved", uri: item.uri, saved });
+                    void call("save_item", { uri: item.uri, saved });
+                  }}
                 />
               ) : (
                 <div

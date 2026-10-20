@@ -59,6 +59,8 @@ pub enum Command {
         name: String,
     },
     SaveTrack(String),
+    /// Look up saved status for these items and report it.
+    SavedStatus(Vec<String>),
     FetchLyrics(Track),
     RetryAudio,
     EnsureAudio,
@@ -951,6 +953,7 @@ impl Backend {
                 self.refresh_library()?;
                 self.emit(Event::Notice(format!("Removed {name} from Your Library")));
             }
+            Command::SavedStatus(uris) => self.publish_saved(uris),
             Command::SaveTrack(uri) => {
                 if !self.native_ready() || self.native_controls.set_saved(&uri, true).is_err() {
                     self.api()?.save_track(&uri)?;

@@ -1912,8 +1912,8 @@ fn save_item(
     saved: bool,
     state: State<'_, Desktop>,
 ) -> std::result::Result<(), String> {
-    if !uri.starts_with("spotify:track:") && !uri.starts_with("spotify:artist:") {
-        return Err("Choose a Spotify track or artist".into());
+    if !crate::collection::supports(&uri) {
+        return Err("Choose a Spotify song, album or artist".into());
     }
     state
         .0
@@ -2038,6 +2038,17 @@ fn add_tracks(
         .0
         .commands
         .send(Command::Add { playlist, tracks })
+        .map_err(error)
+}
+#[tauri::command]
+fn saved_status(uris: Vec<String>, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    if uris.len() > 500 {
+        return Err("Too many library items".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::SavedStatus(uris))
         .map_err(error)
 }
 #[tauri::command]
@@ -2388,6 +2399,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             create_playlist,
             remove_playlist,
             remove_from_playlist,
+            saved_status,
             open_link,
             open_creator_profile,
             resolve_album,

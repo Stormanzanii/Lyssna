@@ -13,6 +13,7 @@ import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
 import {
+  BadgeCheck,
   Music2,
   Maximize2,
   Upload,
@@ -1259,6 +1260,13 @@ export function NowPlaying({
                     onClick={() => onArtist(artist)}
                   >
                     {artist.name}
+                    {artist.verified && (
+                      <BadgeCheck
+                        className="verified-badge"
+                        size={20}
+                        aria-label="Verified artist"
+                      />
+                    )}
                   </button>
                   <div className="artist-card-row">
                     <p className="artist-stat">
@@ -1279,10 +1287,14 @@ export function NowPlaying({
                           : "Enable following"}
                     </button>
                   </div>
-                  {!!artist.genres?.length && (
-                    <p className="artist-genres">
-                      {artist.genres.slice(0, 3).join(" · ")}
-                    </p>
+                  {artist.biography ? (
+                    <p className="artist-bio">{artist.biography}</p>
+                  ) : (
+                    !!artist.genres?.length && (
+                      <p className="artist-genres">
+                        {artist.genres.slice(0, 3).join(" · ")}
+                      </p>
+                    )
                   )}
                 </div>
               </article>

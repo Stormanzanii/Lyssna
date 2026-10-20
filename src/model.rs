@@ -15,6 +15,10 @@ pub struct Artist {
     #[serde(default)]
     pub genres: Vec<String>,
     pub followers: Option<Followers>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified: Option<bool>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub biography: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

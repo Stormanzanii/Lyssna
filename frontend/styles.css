@@ -1456,6 +1456,30 @@ small {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.artist-card-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.verified-badge {
+  flex-shrink: 0;
+  color: #4cb3ff;
+  fill: #4cb3ff;
+}
+.verified-badge path:last-child {
+  fill: none;
+  stroke: #fff;
+}
+.artist-bio {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #ffffffb3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .artist-card-row {
   display: flex;
   align-items: center;

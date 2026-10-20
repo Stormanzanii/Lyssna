@@ -89,8 +89,10 @@ pub enum Event {
         uri: String,
         artist_id: String,
         listeners: Option<u64>,
-        /// Header photo, used when the artist has no other picture.
+        /// Header photo or avatar, used when the artist has no other picture.
         image: Option<String>,
+        verified: Option<bool>,
+        biography: String,
     },
     TrackInfo {
         uri: String,
@@ -1053,15 +1055,14 @@ impl Backend {
                     let context = self.context.clone();
                     let uri = track.uri;
                     thread::spawn(move || {
-                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id)
-                            && (overview.monthly_listeners.is_some()
-                                || overview.header_image.is_some())
-                        {
+                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id) {
                             let _ = events.send(Event::ArtistStats {
                                 uri,
                                 artist_id,
                                 listeners: overview.monthly_listeners,
-                                image: overview.header_image,
+                                image: overview.header_image.or(overview.avatar_image),
+                                verified: overview.verified,
+                                biography: overview.biography,
                             });
                             context.request_repaint();
                         }

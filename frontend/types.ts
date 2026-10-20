@@ -10,6 +10,8 @@ export interface Artist {
   images?: Artwork[];
   genres?: string[];
   followers?: { total: number };
+  verified?: boolean;
+  biography?: string;
 }
 export interface Album {
   copyrights?: { text: string; type: string }[];

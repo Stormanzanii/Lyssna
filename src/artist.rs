@@ -15,6 +15,9 @@ use std::{
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ArtistOverview {
     pub monthly_listeners: Option<u64>,
+    /// Profile picture, for artists without a header photo.
+    #[serde(default)]
+    pub avatar_image: Option<String>,
     pub followers: Option<u64>,
     pub header_image: Option<String>,
     pub verified: Option<bool>,
@@ -234,6 +237,16 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
         details_loaded: false,
         monthly_listeners: artist["stats"]["monthlyListeners"].as_u64(),
         followers: artist["stats"]["followers"].as_u64(),
+        avatar_image: artist["visuals"]["avatarImage"]["sources"]
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .max_by_key(|image| image["width"].as_u64().unwrap_or_default())
+            })
+            .and_then(|image| image["url"].as_str())
+            .filter(|url| url.starts_with("https://"))
+            .map(str::to_owned),
         header_image: artist["headerImage"]["data"]["sources"]
             .as_array()
             .or_else(|| artist["visuals"]["headerImage"]["sources"].as_array())

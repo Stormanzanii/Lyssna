@@ -387,6 +387,8 @@ impl Desktop {
                             artist_id,
                             listeners,
                             image,
+                            verified,
+                            biography,
                         } => {
                             if snapshot
                                 .playback
@@ -398,6 +400,12 @@ impl Desktop {
                                     if artist.id.as_deref() == Some(&artist_id) {
                                         if listeners.is_some() {
                                             artist.monthly_listeners = listeners;
+                                        }
+                                        if verified.is_some() {
+                                            artist.verified = verified;
+                                        }
+                                        if !biography.is_empty() {
+                                            artist.biography = biography.clone();
                                         }
                                         // Local playback only knows artists whose page
                                         // was opened; fall back to the header photo.

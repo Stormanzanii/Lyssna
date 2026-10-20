@@ -3422,3 +3422,12 @@ input[type="range"]:hover {
     animation: none;
   }
 }
+
+/* Centred status text whose trailing ellipsis should not pull it left. */
+.hanging-ellipsis {
+  position: relative;
+}
+.hanging-ellipsis > span {
+  position: absolute;
+  left: 100%;
+}

@@ -822,7 +822,14 @@ function DJLyricsPage({ state }: { state: AppState }) {
           <span className="song-title">DJ</span>
         </div>
         <div className="lyrics-artists">
-          {state.playback.is_playing ? "Speaking…" : "Paused"}
+          {state.playback.is_playing ? (
+            // Centre the word; the ellipsis hangs past it.
+            <span className="hanging-ellipsis">
+              Speaking<span aria-hidden="true">…</span>
+            </span>
+          ) : (
+            "Paused"
+          )}
         </div>
       </div>
       <div className="lyrics-body dj-lyrics-message" role="status">

@@ -3123,13 +3123,7 @@ input[type="range"]:hover {
   --gravity-sung: #fff;
   --gravity-unsung: #ffffffb3;
   color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--gravity-sung) var(--word-progress, 0%),
-    var(--gravity-unsung) var(--word-progress, 0%)
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
+  background: none;
   transform-origin: center;
   will-change: transform;
   pointer-events: auto;
@@ -3161,6 +3155,20 @@ input[type="range"]:hover {
 }
 .gravity-word.previous {
   opacity: 0.22;
+}
+/* The text inside a floating word animates like a normal lyric syllable:
+   a soft 20% edge sweeps the fill while springs scale, lift and glow it. */
+.gravity-text {
+  display: inline-block;
+  transform-origin: center 75%;
+  background-image: linear-gradient(
+    90deg,
+    var(--gravity-sung) var(--gradient-position, -20%),
+    var(--gravity-unsung) calc(var(--gradient-position, -20%) + 20%)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  text-shadow: var(--glow, none);
 }
 /* The second duet voice gets its own colour so the two singers read apart. */
 .gravity-word.opposite {

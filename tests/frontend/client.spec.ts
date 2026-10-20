@@ -2718,6 +2718,20 @@ test("Space Gravity words keep drifting while the song plays", async ({
   expect(new Set(samples).size).toBeGreaterThan(2);
   // Exactly one word is marked as being sung.
   await expect(page.locator(".gravity-word.singing")).toHaveCount(1);
+  // Its fill sweeps smoothly like the normal lyrics view.
+  const fill = () =>
+    page
+      .locator(".gravity-word.singing .gravity-text")
+      .evaluate((element) =>
+        parseFloat(
+          (element as HTMLElement).style.getPropertyValue(
+            "--gradient-position",
+          ),
+        ),
+      );
+  const first = await fill();
+  await page.waitForTimeout(250);
+  expect(await fill()).toBeGreaterThan(first);
 });
 
 test("Space plays and pauses after clicking any button, but not while searching", async ({

@@ -6,7 +6,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { vocalGap, wordGroups } from "./lyric-motion";
+import {
+  MOTION,
+  SyllableSprings,
+  vocalGap,
+  wordGoal,
+  wordGroups,
+} from "./lyric-motion";
 import {
   constrain,
   createBody,
@@ -277,6 +283,7 @@ export function SpaceGravityLyrics({
 
   const elements = useRef(new Map<string, HTMLButtonElement>());
   const bodies = useRef(new Map<string, Body & { spawned: boolean }>());
+  const wordSprings = useRef(new Map<string, SyllableSprings>());
   const live = useRef({ time, visible, prepared, reduceMotion });
   live.current = { time, visible, prepared, reduceMotion };
   useEffect(() => {
@@ -402,15 +409,27 @@ export function SpaceGravityLyrics({
           constrain(body, area, obstacles);
         }
         if (visible.includes(entity)) active.push(body);
-        const progress =
-          time <= entity.start
-            ? 0
-            : time >= entity.end
-              ? 100
-              : ((time - entity.start) /
-                  Math.max(1, entity.end - entity.start)) *
-                100;
-        element.style.setProperty("--word-progress", `${progress}%`);
+        // The same sung animation as the normal lyrics view: springs chase
+        // the word's scale, lift and glow while a soft-edged fill sweeps it.
+        const text = element.firstElementChild as HTMLElement | null;
+        if (text) {
+          const goal = wordGoal(entity.start, entity.end, time + MOTION.leadMs);
+          let springs = wordSprings.current.get(key);
+          if (!springs) {
+            springs = new SyllableSprings();
+            wordSprings.current.set(key, springs);
+          }
+          text.style.setProperty("--gradient-position", `${goal.gradient}%`);
+          if (!reduceMotion) {
+            const motion = springs.step(goal, dt);
+            text.style.scale = motion.scale.toFixed(4);
+            text.style.translate = `0 ${motion.lift.toFixed(4)}em`;
+            text.style.setProperty(
+              "--glow",
+              `0 0 ${(4 + 2 * motion.glow).toFixed(2)}px rgb(255 255 255 / ${Math.min(100, Math.max(0, motion.glow * 35)).toFixed(1)}%)`,
+            );
+          }
+        }
       }
       if (reduceMotion) {
         for (const body of active) {
@@ -428,6 +447,8 @@ export function SpaceGravityLyrics({
       // Words that left the screen start fresh when they return.
       for (const key of bodies.current.keys())
         if (!elements.current.has(key)) bodies.current.delete(key);
+      for (const key of wordSprings.current.keys())
+        if (!elements.current.has(key)) wordSprings.current.delete(key);
       for (const [key, element] of elements.current) {
         const body = bodies.current.get(key);
         if (!body?.spawned) continue;
@@ -461,7 +482,7 @@ export function SpaceGravityLyrics({
               onClick={() => onSeek(entity.start)}
               tabIndex={exiting ? -1 : 0}
             >
-              {entity.text}
+              <span className="gravity-text">{entity.text}</span>
             </button>
           );
         })}

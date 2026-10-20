@@ -242,7 +242,9 @@ export function SpaceGravityLyrics({
   const prepared = useMemo(() => prepareGravity(lyrics), [lyrics]);
   const stage = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
-  const count = visibleWordCount(bounds, (bounds.width * bounds.height) / 3);
+  // Area the artwork, toolbar and credits take; measured by the frame loop.
+  const [occupied, setOccupied] = useState(0);
+  const count = visibleWordCount(bounds, occupied);
   const visible = visibleGravity(prepared, time, count);
   const visibleKeys = visible.map((entity) => entity.key).join("|");
   // Words that just left stay a moment to fade out.
@@ -335,6 +337,24 @@ export function SpaceGravityLyrics({
           relative(page?.querySelector(".lyrics-toolbar"), box),
           relative(page?.querySelector(".gravity-credits"), box),
         ].filter((rect): rect is Rect => !!rect);
+        const covered = obstacles.reduce(
+          (sum, rect) =>
+            sum +
+            Math.max(
+              0,
+              Math.min(area.width, rect.right) - Math.max(0, rect.left),
+            ) *
+              Math.max(
+                0,
+                Math.min(area.height, rect.bottom) - Math.max(0, rect.top),
+              ),
+          0,
+        );
+        setOccupied((current) =>
+          Math.abs(current - covered) > GRAVITY.areaPerWord / 2
+            ? covered
+            : current,
+        );
       }
       const { time, visible, prepared, reduceMotion } = live.current;
       const art = obstacles[0];

@@ -60,6 +60,7 @@ import {
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
 import { SearchPage } from "./SearchPage";
+import { SpotifyText } from "./SpotifyText";
 import { Logo } from "./brand";
 import {
   emptyState,
@@ -1563,7 +1564,12 @@ function App() {
                       {state.route.startsWith("playlist:") &&
                         entity?.subtitle &&
                         entity.subtitle !== playlistInfo?.owner && (
-                          <p className="hero-description">{entity.subtitle}</p>
+                          <p className="hero-description">
+                            <SpotifyText
+                              text={entity.subtitle}
+                              navigate={homeNavigate}
+                            />
+                          </p>
                         )}
                       {!entity?.artist && (
                         <p

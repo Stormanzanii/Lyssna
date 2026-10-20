@@ -14,6 +14,7 @@ import type {
   Playlist,
 } from "./types";
 import { Cover } from "./components";
+import { SpotifyText } from "./SpotifyText";
 import { DJ_COVER } from "./brand";
 import "./HomePage.css";
 
@@ -36,7 +37,11 @@ export function Shelf({
     <section className="home-shelf" aria-label={section.title}>
       <div className="home-shelf-heading">
         <div>
-          {section.subtitle && <p>{section.subtitle}</p>}
+          {section.subtitle && (
+            <p>
+              <SpotifyText text={section.subtitle} navigate={navigate} />
+            </p>
+          )}
           <h2>{section.title}</h2>
         </div>
         <div className="home-shelf-controls">
@@ -107,7 +112,12 @@ export function Shelf({
             >
               {item.name}
             </button>
-            <p>{item.subtitle || item.kind}</p>
+            <p>
+              <SpotifyText
+                text={item.subtitle || item.kind}
+                navigate={navigate}
+              />
+            </p>
           </article>
         ))}
       </div>

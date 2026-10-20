@@ -3691,3 +3691,89 @@ test("custom lyric fonts keep italic glyph overhang inside gradient paint bounds
     expect(Math.abs(item.width - item.advance)).toBeLessThan(1);
   }
 });
+
+test("curated playlist descriptions display link labels and open Spotify playlists", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await page
+    .getByRole("button", { name: "Open Daily Mix 1", exact: true })
+    .click();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const request = host.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1);
+    host.emit({
+      type: "browse_info",
+      generation: request.args.generation,
+      info: {
+        key: request.args.key,
+        title: "Curated test",
+        albums: [],
+        images: [],
+        subtitle:
+          'Here\'s some <a href="spotify:playlist:1123456789abcdefghijkl">happy</a>, <a href="https://open.spotify.com/playlist/2123456789abcdefghijkl?si=test">dystopian</a> &amp; gentle music.',
+        playlist: { owner: "spotify", format: "", total_tracks: 50 },
+      },
+    });
+  });
+  const description = page.locator(".hero-description");
+  await expect(description).toHaveText(
+    "Here's some happy, dystopian & gentle music.",
+  );
+  await description.getByRole("link", { name: "happy", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1)?.args.key,
+      ),
+    )
+    .toBe("playlist:1123456789abcdefghijkl");
+});
+
+test("playlist descriptions preserve formatting without executing or loading provider markup", async ({
+  page,
+}) => {
+  const resourceRequests: string[] = [];
+  await page.route("https://markup.example.test/**", async (route) => {
+    resourceRequests.push(route.request().url());
+    await route.fulfill({ status: 200, body: "" });
+  });
+  await startClient(page, "home");
+  await page
+    .getByRole("button", { name: "Open Daily Mix 1", exact: true })
+    .click();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const request = host.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1);
+    host.emit({
+      type: "browse_info",
+      generation: request.args.generation,
+      info: {
+        key: request.args.key,
+        title: "Curated test",
+        albums: [],
+        images: [],
+        subtitle:
+          '<strong>Safe</strong><br>Music &#x266b; <a href="javascript:window.__descriptionExecuted=1">blocked</a> <a href="https://open.spotify.com.evil.test/playlist/1123456789abcdefghijkl">spoof</a><script>window.__descriptionExecuted=1</script><img src="https://markup.example.test/image" onerror="window.__descriptionExecuted=1"><iframe src="https://markup.example.test/frame"></iframe><style>body { display:none; }</style>',
+        playlist: { owner: "spotify", format: "", total_tracks: 50 },
+      },
+    });
+  });
+  const description = page.locator(".hero-description");
+  await expect(description.locator("strong")).toHaveText("Safe");
+  await expect(description.locator("br")).toHaveCount(1);
+  await expect(description).toContainText("Music ♫ blocked spoof");
+  await expect(description.locator("script,img,iframe,style")).toHaveCount(0);
+  await expect(description.getByRole("link")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => (window as any).__descriptionExecuted),
+  ).toBeUndefined();
+  expect(resourceRequests).toEqual([]);
+});

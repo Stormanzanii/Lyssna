@@ -80,6 +80,21 @@
   line-height: 1;
   flex-shrink: 0;
 }
+.spotify-description-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  white-space: normal;
+  cursor: pointer;
+}
+.spotify-description-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
 .avatar img {
   display: block;
   width: 100%;

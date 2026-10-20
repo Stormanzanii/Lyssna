@@ -191,9 +191,20 @@
   overflow: hidden;
   padding: 0 0 8px;
 }
+/* Clipped rows run on to the panel edge, like Spotify, and ease out. */
+.personal-home .home-shelf-items:not(.expanded) {
+  margin-right: -36px;
+}
 .home-shelf-items.clipped {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 90px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 90px), transparent);
+  --fade: linear-gradient(
+    to right,
+    #000 calc(100% - 180px),
+    #000000c0 calc(100% - 120px),
+    #00000059 calc(100% - 60px),
+    transparent
+  );
+  -webkit-mask-image: var(--fade);
+  mask-image: var(--fade);
 }
 .home-shelf-items.expanded {
   grid-auto-flow: row;
@@ -406,6 +417,9 @@
 @media (max-width: 850px) {
   .personal-home {
     padding: 0 18px 32px;
+  }
+  .personal-home .home-shelf-items:not(.expanded) {
+    margin-right: -18px;
   }
   .home-shelf-items {
     grid-auto-columns: 150px;

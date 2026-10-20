@@ -7,12 +7,14 @@ export function LyricsCanvas({
   playing,
   backdrop,
   onActive,
+  artworkRight = false,
 }: {
   url: string;
   poster?: string;
   playing: boolean;
   backdrop: RefObject<HTMLCanvasElement | null>;
   onActive?: (active: boolean) => void;
+  artworkRight?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
@@ -85,6 +87,8 @@ export function LyricsCanvas({
             rootWidth = bounds?.width ?? 1,
             rootHeight = bounds?.height ?? 1,
             edge = (frame.width / rootWidth) * canvas.width,
+            sharpX = artworkRight ? canvas.width - edge : 0,
+            boundary = artworkRight ? sharpX : edge,
             top =
               ((frame.top - (bounds?.top ?? 0)) / rootHeight) * canvas.height,
             height = (frame.height / rootHeight) * canvas.height;
@@ -102,21 +106,21 @@ export function LyricsCanvas({
             sourceY,
             sourceWidth,
             sourceHeight,
-            0,
+            sharpX,
             top,
             edge,
             height,
           );
           context.save();
-          context.translate(edge * 2, 0);
+          context.translate(boundary * 2, 0);
           context.scale(-1, 1);
           context.drawImage(
             element,
-            sourceX + sourceWidth * 0.8,
+            sourceX + sourceWidth * (artworkRight ? 0 : 0.8),
             sourceY,
             sourceWidth * 0.2,
             sourceHeight,
-            edge * 2 - canvas.width - 24,
+            artworkRight ? boundary : edge * 2 - canvas.width - 24,
             top,
             canvas.width - edge + 24,
             height,
@@ -144,7 +148,7 @@ export function LyricsCanvas({
       observer.disconnect();
       context.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [url, backdrop, failed]);
+  }, [url, backdrop, failed, artworkRight]);
   return (
     <div className="cover lyrics-canvas-cover">
       {failed ? (

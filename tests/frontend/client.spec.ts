@@ -1461,6 +1461,72 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
   await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
 });
 
+test("Canvas and its toolbar move together without restarting the video", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await emitCanvas(page);
+  await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
+  await page.evaluate(() => {
+    (window as any).__canvasBeforeMove = document.querySelector(
+      ".lyrics-canvas-cover video",
+    );
+  });
+  const layout = () =>
+    page.evaluate(() => {
+      const section = document
+        .querySelector(".lyrics-page")!
+        .getBoundingClientRect();
+      const cover = document
+        .querySelector(".lyrics-canvas-cover")!
+        .getBoundingClientRect();
+      const toolbar = document
+        .querySelector(".lyrics-toolbar")!
+        .getBoundingClientRect();
+      const title = document
+        .querySelector(".lyrics-title")!
+        .getBoundingClientRect();
+      return {
+        right: cover.left >= section.left + section.width / 2,
+        anchorX: Math.abs(
+          toolbar.left - (Math.max(section.left, cover.left) + 12),
+        ),
+        anchorY: Math.abs(
+          toolbar.top - (Math.max(section.top, cover.top) + 12),
+        ),
+        contained:
+          toolbar.right <= Math.min(section.right, cover.right) &&
+          toolbar.bottom < Math.min(section.bottom, cover.bottom),
+        titleRight: title.left > section.left + section.width / 2,
+      };
+    });
+  await expect.poll(layout).toMatchObject({ right: false, contained: true });
+  await expect.poll(async () => (await layout()).anchorX).toBeLessThan(2);
+  await expect.poll(async () => (await layout()).anchorY).toBeLessThan(2);
+  const flip = page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Artwork on the right", { exact: true });
+  await flip.click();
+  await expect
+    .poll(layout)
+    .toMatchObject({ right: true, contained: true, titleRight: true });
+  await expect.poll(async () => (await layout()).anchorX).toBeLessThan(2);
+  await expect.poll(async () => (await layout()).anchorY).toBeLessThan(2);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__canvasBeforeMove ===
+        document.querySelector(".lyrics-canvas-cover video"),
+    ),
+  ).toBe(true);
+  await flip.click();
+  await expect
+    .poll(layout)
+    .toMatchObject({ right: false, contained: true, titleRight: false });
+});
+
 test("timed syllables lift independently and font choices apply separately", async ({
   page,
 }) => {

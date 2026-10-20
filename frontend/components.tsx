@@ -747,13 +747,20 @@ function useNarrowLyrics() {
   }, []);
   return [page, narrow] as const;
 }
-function DJLyricsPage({ state }: { state: AppState }) {
+function DJLyricsPage({
+  state,
+  children,
+}: {
+  state: AppState;
+  children?: ReactNode;
+}) {
   const [page, narrow] = useNarrowLyrics();
   return (
     <section
       ref={page}
       className={`lyrics-page dj-view ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
     >
+      {children}
       <Ambience
         image={DJ_COVER}
         reduceMotion={state.settings.reduce_motion}
@@ -787,7 +794,7 @@ function DJLyricsPage({ state }: { state: AppState }) {
 }
 export function LyricsPage(props: Parameters<typeof SongLyricsPage>[0]) {
   return props.state.narrating ? (
-    <DJLyricsPage state={props.state} />
+    <DJLyricsPage state={props.state}>{props.children}</DJLyricsPage>
   ) : (
     <SongLyricsPage {...props} />
   );
@@ -799,11 +806,13 @@ function SongLyricsPage({
   onArtist,
   onImport,
   onRetry,
+  children,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onImport: () => void;
   onRetry: () => void;
+  children?: ReactNode;
 } & Links) {
   const current = usePosition(state) + state.settings.lyric_offset_ms,
     track = state.playback.item;
@@ -837,6 +846,7 @@ function SongLyricsPage({
       ref={page}
       className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""}`}
     >
+      {children}
       {(!canvas || !canvasPlaying) && (
         <Ambience
           track={track}
@@ -867,6 +877,7 @@ function SongLyricsPage({
                 playing={state.playback.is_playing}
                 backdrop={backdrop}
                 onActive={setCanvasPlaying}
+                artworkRight={!!state.settings.lyrics_artwork_right}
               />
             ) : (
               <Cover

@@ -1366,15 +1366,14 @@ function App() {
           className={`center-panel ${center === "lyrics" ? "showing-lyrics" : ""}`}
         >
           {center === "lyrics" ? (
-            <>
-              <LyricsPage
-                state={state}
-                onPlayer={play}
-                onAlbum={openAlbum}
-                onArtist={openArtist}
-                onImport={() => fileInput.current?.click()}
-                onRetry={() => void call("retry_lyrics")}
-              />
+            <LyricsPage
+              state={state}
+              onPlayer={play}
+              onAlbum={openAlbum}
+              onArtist={openArtist}
+              onImport={() => fileInput.current?.click()}
+              onRetry={() => void call("retry_lyrics")}
+            >
               <div
                 className="lyrics-toolbar"
                 role="toolbar"
@@ -1443,7 +1442,7 @@ function App() {
                   <SettingsIcon size={18} />
                 </button>
               </div>
-            </>
+            </LyricsPage>
           ) : center === "settings" ? (
             <SettingsPage
               state={state}

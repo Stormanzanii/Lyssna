@@ -1816,7 +1816,7 @@ small {
 .lyrics-page.narrow .lyrics-body {
   height: 100%;
 }
-.lyrics-page.narrow + .lyrics-toolbar {
+.lyrics-page.narrow > .lyrics-toolbar {
   top: 8px;
   right: 8px;
 }
@@ -2960,6 +2960,10 @@ input[type="range"]:hover {
   z-index: 2;
   padding-top: 0;
 }
+.canvas-lyrics {
+  --canvas-direction: to right;
+  --canvas-width: 47%;
+}
 .canvas-lyrics .lyrics-album {
   position: static;
   height: 100%;
@@ -2972,12 +2976,12 @@ input[type="range"]:hover {
   left: 0;
   top: -9%;
   bottom: auto;
-  width: 47%;
+  width: var(--canvas-width);
   height: 118%;
   max-width: none;
   aspect-ratio: 9/16;
   mask-image: linear-gradient(
-    to right,
+    var(--canvas-direction),
     #000 0%,
     #000 72%,
     #000e 82%,
@@ -3021,7 +3025,7 @@ input[type="range"]:hover {
   pointer-events: none;
   z-index: -1;
   background: linear-gradient(
-    to right,
+    var(--canvas-direction),
     transparent 31%,
     #0003 40%,
     #0005 45%,
@@ -3054,6 +3058,28 @@ input[type="range"]:hover {
 }
 .canvas-lyrics .lyrics-body {
   padding-bottom: 0;
+}
+.canvas-lyrics:not(.narrow):not(.no-artwork) > .lyrics-toolbar {
+  top: 12px;
+  left: 12px;
+  right: auto;
+  max-width: calc(var(--canvas-width) - 24px);
+  flex-wrap: wrap;
+}
+.canvas-lyrics.artwork-right:not(.narrow) {
+  --canvas-direction: to left;
+}
+.canvas-lyrics.artwork-right:not(.narrow) .lyrics-canvas-cover {
+  left: auto;
+  right: 0;
+}
+.canvas-lyrics.artwork-right:not(.narrow) .lyrics-title,
+.canvas-lyrics.artwork-right:not(.narrow) .lyrics-artists {
+  left: auto;
+  right: 2%;
+}
+.canvas-lyrics.artwork-right:not(.narrow):not(.no-artwork) > .lyrics-toolbar {
+  left: calc(100% - var(--canvas-width) + 12px);
 }
 /* Narrow Canvas view: the video becomes the header thumbnail, the title sits
    beside it, and the blurred backdrop fills the page evenly. */

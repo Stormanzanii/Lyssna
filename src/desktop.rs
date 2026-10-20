@@ -386,6 +386,7 @@ impl Desktop {
                             uri,
                             artist_id,
                             listeners,
+                            image,
                         } => {
                             if snapshot
                                 .playback
@@ -395,7 +396,19 @@ impl Desktop {
                             {
                                 for artist in &mut snapshot.details.artists {
                                     if artist.id.as_deref() == Some(&artist_id) {
-                                        artist.monthly_listeners = Some(listeners);
+                                        if listeners.is_some() {
+                                            artist.monthly_listeners = listeners;
+                                        }
+                                        // Local playback only knows artists whose page
+                                        // was opened; fall back to the header photo.
+                                        if artist.images.is_empty()
+                                            && let Some(url) = &image
+                                        {
+                                            artist.images = vec![crate::model::Artwork {
+                                                url: url.clone(),
+                                                width: None,
+                                            }];
+                                        }
                                     }
                                 }
                                 emit(

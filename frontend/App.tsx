@@ -2915,9 +2915,9 @@ function PlayerBar({
               onClick={() => onSave(track)}
             >
               {saved ? (
-                <CircleCheck size={22} fill="currentColor" stroke="#000" />
+                <CircleCheck size={20} fill="currentColor" stroke="#000" />
               ) : (
-                <CirclePlus size={22} />
+                <CirclePlus size={20} />
               )}
             </button>
           </>
@@ -2939,14 +2939,14 @@ function PlayerBar({
               })
             }
           >
-            <Shuffle size={24} />
+            <Shuffle size={22} />
           </button>
           <button
             className="icon-button"
             title="Previous song"
             onClick={() => onPlayer({ command: "previous" })}
           >
-            <SkipBack size={25} fill="currentColor" />
+            <SkipBack size={23} fill="currentColor" />
           </button>
           <button
             className="play-toggle"
@@ -2956,11 +2956,11 @@ function PlayerBar({
             disabled={!track}
           >
             {state.pending ? (
-              <LoaderCircle className="spin" size={24} />
+              <LoaderCircle className="spin" size={22} />
             ) : state.playback.is_playing ? (
-              <Pause size={24} fill="currentColor" />
+              <Pause size={22} fill="currentColor" />
             ) : (
-              <Play size={24} fill="currentColor" />
+              <Play size={22} fill="currentColor" />
             )}
           </button>
           <button
@@ -2968,7 +2968,7 @@ function PlayerBar({
             title="Next song"
             onClick={() => onPlayer({ command: "next" })}
           >
-            <SkipForward size={25} fill="currentColor" />
+            <SkipForward size={23} fill="currentColor" />
           </button>
           <button
             className={`icon-button ${state.playback.repeat_state !== "off" && state.playback.repeat_state ? "active" : ""}`}
@@ -2987,9 +2987,9 @@ function PlayerBar({
             }
           >
             {state.playback.repeat_state === "track" ? (
-              <Repeat1 size={24} />
+              <Repeat1 size={22} />
             ) : (
-              <Repeat size={24} />
+              <Repeat size={22} />
             )}
           </button>
         </div>
@@ -3031,24 +3031,24 @@ function PlayerBar({
           title="Lyrics"
           onClick={onLyrics}
         >
-          <Mic2 size={22} />
+          <Mic2 size={20} />
         </button>
         <button
           className={`icon-button ${queueActive ? "active" : ""}`}
           title="Queue"
           onClick={onQueue}
         >
-          <ListMusic size={23} />
+          <ListMusic size={21} />
         </button>
         <button className="icon-button" title="Devices" onClick={onDevices}>
-          <Speaker size={22} />
+          <Speaker size={20} />
         </button>
         <button
           className={`icon-button ${sidebarActive ? "active" : ""}`}
           title="Now playing"
           onClick={onSidebar}
         >
-          <PanelRight size={22} />
+          <PanelRight size={20} />
         </button>
         <button
           className="icon-button volume-button"
@@ -3059,7 +3059,7 @@ function PlayerBar({
             volumeControl.finish();
           }}
         >
-          {volume ? <Volume2 size={23} /> : <VolumeX size={23} />}
+          {volume ? <Volume2 size={21} /> : <VolumeX size={21} />}
         </button>
         <input
           className="volume-range"
@@ -3084,7 +3084,7 @@ function PlayerBar({
           title="Full screen lyrics"
           onClick={onFullscreen}
         >
-          <Maximize2 size={21} />
+          <Maximize2 size={19} />
         </button>
       </div>
     </footer>

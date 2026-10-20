@@ -865,7 +865,9 @@ function SongLyricsPage({
   const current = usePosition(state) + state.settings.lyric_offset_ms,
     track = state.playback.item;
   const backdrop = useRef<HTMLCanvasElement>(null);
-  const [page, narrow] = useNarrowLyrics();
+  const [page, measuredNarrow] = useNarrowLyrics();
+  // The toolbar's compact toggle forces the stacked layout.
+  const narrow = measuredNarrow || !!state.settings.lyrics_compact;
   const [canvasPlaying, setCanvasPlaying] = useState(false);
   const motionAllowed =
     !state.settings.reduce_motion &&
@@ -890,7 +892,7 @@ function SongLyricsPage({
   return (
     <section
       ref={page}
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""}`}
     >
       {(!canvas || !canvasPlaying) && (
         <Ambience

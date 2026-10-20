@@ -1795,8 +1795,8 @@ small {
   align-self: end;
 }
 .lyrics-page.narrow .lyrics-album {
-  /* Keep the header text clear of the floating lyrics toolbar. */
-  padding-right: 170px;
+  /* Keep the header text clear of the lyrics toolbar. */
+  padding-right: 370px;
 }
 .lyrics-page.narrow .lyrics-title:not(.scrolling) .marquee-content,
 .lyrics-page.narrow .lyrics-artists:not(.scrolling) .marquee-content {
@@ -3457,4 +3457,36 @@ input[type="range"]:hover {
 .hanging-ellipsis > span {
   position: absolute;
   left: 100%;
+}
+
+/* Lyrics toolbar layout toggles. */
+.lyrics-page.no-artwork:not(.narrow) {
+  grid-template-columns: minmax(0, 1fr);
+  padding-inline: 10%;
+}
+.lyrics-page.no-artwork:not(.narrow) .lyrics-album {
+  display: none;
+}
+.lyrics-page.narrow.no-artwork .lyrics-album {
+  display: none;
+}
+.lyrics-page.narrow.no-artwork {
+  grid-template-rows: minmax(0, 1fr);
+  padding-top: 64px;
+}
+.lyrics-page.artwork-right:not(.narrow):not(.no-artwork) {
+  grid-template-columns: minmax(220px, 1.15fr) minmax(180px, 0.85fr);
+}
+.lyrics-page.artwork-right:not(.narrow) .lyrics-album {
+  order: 2;
+}
+.lyrics-toolbar .icon-button.active {
+  color: #fff;
+}
+.toolbar-divider {
+  align-self: center;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: #ffffff26;
 }

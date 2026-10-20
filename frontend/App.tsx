@@ -13,8 +13,14 @@ import { createDJReminder } from "./djHint";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowLeftRight,
+  AudioLines,
   BadgeCheck,
   Check,
+  Languages,
+  PanelLeftClose,
+  Rows3,
+  Settings as SettingsIcon,
   ChevronDown,
   Clock3,
   FolderPlus,
@@ -1369,7 +1375,42 @@ function App() {
                 onImport={() => fileInput.current?.click()}
                 onRetry={() => void call("retry_lyrics")}
               />
-              <div className="lyrics-toolbar">
+              <div
+                className="lyrics-toolbar"
+                role="toolbar"
+                aria-label="Lyrics"
+              >
+                {(
+                  [
+                    ["romanized", "Romanization", Languages],
+                    [
+                      "experimental_word_sync",
+                      "Experimental word sync",
+                      AudioLines,
+                    ],
+                    ["lyrics_compact", "Compact lyrics", Rows3],
+                    ["lyrics_hide_artwork", "Hide artwork", PanelLeftClose],
+                    [
+                      "lyrics_artwork_right",
+                      "Artwork on the right",
+                      ArrowLeftRight,
+                    ],
+                  ] as const
+                ).map(([key, label, Icon]) => {
+                  const on = !!state.settings[key];
+                  return (
+                    <button
+                      key={key}
+                      className={`icon-button ${on ? "active" : ""}`}
+                      title={label}
+                      aria-pressed={on}
+                      onClick={() => updateSettings({ [key]: !on })}
+                    >
+                      <Icon size={18} />
+                    </button>
+                  );
+                })}
+                <span className="toolbar-divider" aria-hidden="true" />
                 <button
                   className="icon-button"
                   title="Import lyrics"
@@ -1393,13 +1434,13 @@ function App() {
                 </button>
                 <button
                   className="icon-button"
-                  title="Close lyrics"
+                  title="Lyrics settings"
                   onClick={() => {
                     if (immersive) void fullscreen(false);
-                    setCenter("browse");
+                    setCenter("settings");
                   }}
                 >
-                  <X size={18} />
+                  <SettingsIcon size={18} />
                 </button>
               </div>
             </>

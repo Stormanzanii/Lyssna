@@ -87,6 +87,9 @@ export interface Settings {
   canvas_lyrics?: boolean;
   space_gravity?: boolean;
   experimental_word_sync?: boolean;
+  lyrics_hide_artwork?: boolean;
+  lyrics_artwork_right?: boolean;
+  lyrics_compact?: boolean;
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;

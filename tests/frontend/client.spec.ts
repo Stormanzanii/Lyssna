@@ -1346,7 +1346,7 @@ test("imported lyrics keep artwork and ambience in place, without a duplicate pr
       )
       .toBe(true);
   }
-  await page.getByTitle("Close lyrics", { exact: true }).click();
+  await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
   const cards = page.locator(".now-playing .now-card");
   await expect(cards.first()).toHaveClass(/lyric-preview/);
   await expect(cards.nth(1)).toHaveClass(/artist-card/);
@@ -2762,4 +2762,41 @@ test("clicking outside the device popup closes it", async ({ page }) => {
   await devices.click();
   await devices.click();
   await expect(page.locator(".device-menu")).toHaveCount(0);
+});
+
+test("lyrics toolbar toggles romanization, word sync and layout", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const toolbar = page.getByRole("toolbar", { name: "Lyrics" });
+  await expect(toolbar.getByTitle("Close lyrics")).toHaveCount(0);
+  const saved = (key: string) =>
+    page.evaluate(
+      (key) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings[key],
+      key,
+    );
+  for (const [title, key] of [
+    ["Romanization", "romanized"],
+    ["Experimental word sync", "experimental_word_sync"],
+  ]) {
+    const button = toolbar.getByTitle(title, { exact: true });
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => saved(key)).toBe(true);
+  }
+  await toolbar.getByTitle("Hide artwork", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toHaveClass(/no-artwork/);
+  await expect(page.locator(".lyrics-album")).toBeHidden();
+  await toolbar.getByTitle("Hide artwork", { exact: true }).click();
+  await toolbar.getByTitle("Artwork on the right", { exact: true }).click();
+  // Side-by-side layouts put the artwork after the lyrics.
+  await expect(page.locator(".lyrics-page")).toHaveClass(/artwork-right/);
+  await toolbar.getByTitle("Compact lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toHaveClass(/narrow/);
+  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  await expect(page.locator(".settings-page")).toBeVisible();
 });

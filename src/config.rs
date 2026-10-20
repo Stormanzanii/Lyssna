@@ -25,6 +25,10 @@ pub struct Settings {
     #[serde(alias = "floating_lyrics")]
     pub space_gravity: bool,
     pub experimental_word_sync: bool,
+    /// Lyrics page layout toggles from the lyrics toolbar.
+    pub lyrics_hide_artwork: bool,
+    pub lyrics_artwork_right: bool,
+    pub lyrics_compact: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -50,6 +54,9 @@ impl Default for Settings {
             canvas_lyrics: true,
             space_gravity: false,
             experimental_word_sync: false,
+            lyrics_hide_artwork: false,
+            lyrics_artwork_right: false,
+            lyrics_compact: false,
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),

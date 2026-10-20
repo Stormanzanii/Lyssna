@@ -1786,9 +1786,15 @@ function App() {
                               onDoubleClick={() => playTrack(track, index)}
                               onMouseEnter={() => prefetchCanvas(track.uri)}
                               onContextMenu={(event) => {
+                                // Anywhere on the row opens the song menu;
+                                // artist and album links keep their own menus.
+                                const link = (
+                                  event.target as HTMLElement
+                                ).closest<HTMLElement>("[data-context-route]");
                                 if (
-                                  !(event.target as HTMLElement).closest(
-                                    ".track-name,.song-title",
+                                  link &&
+                                  !link.dataset.contextRoute?.startsWith(
+                                    "track:",
                                   )
                                 )
                                   return;

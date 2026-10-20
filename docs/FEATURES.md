@@ -60,7 +60,7 @@ DJ prepares one unheard set and its first speech in the background without activ
 
 Live Windows checks on 2026-10-18 measured prepared DJ narration starts at 761 ms and 814 ms, against the earlier 5,936 ms baseline on the same machine/account. The second selection changed tracks and produced a Windows audio-session signal. Idle playback stayed paused with an unchanged position while preparation ran. A separate cold-start Play check resumed the saved position without manual reconnection. Cached artist metadata arrived in 6 ms; unseen metadata still depends on network responses. These are observed samples, not latency guarantees.
 
-Metadata context menus target song titles, artist names, album labels/artwork and playlist items. Right-clicking blank row space, hero backgrounds or player controls dismisses them. Human-created playlists and Liked Songs hide the Plays column; album, artist and Spotify-owned playlist statistics remain available.
+Metadata context menus target song titles, artist names, album labels/artwork and playlist items. Right-clicking anywhere else on a song row opens its song menu. Right-clicking hero backgrounds or player controls dismisses menus. Human-created playlists and Liked Songs hide the Plays column; album, artist and Spotify-owned playlist statistics remain available.
 
 Album links whose current track lacks an album ID resolve it through native `TRACK_V4` metadata. The native metadata request filter permits that read; a channel-level regression test covers album resolution and preserves the album ID in its result.
 

@@ -1164,6 +1164,8 @@ fn fetch_live_tracks(
                 .or_else(|_| api.saved_tracks(offset)),
             "queue" if native.has_track() => native.queue(),
             "queue" => api.queue(),
+            // Spotify keeps only the latest 50 plays, so there is no second page.
+            _ if offset > 0 => Ok(Vec::new()),
             _ => api.recent(),
         }
     }

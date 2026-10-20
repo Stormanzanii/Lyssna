@@ -33,6 +33,7 @@ export interface Track {
   album: Album;
   duration_ms: number;
   is_local: boolean;
+  played_context?: string;
 }
 export interface Device {
   id?: string;

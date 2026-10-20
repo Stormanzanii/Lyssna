@@ -77,6 +77,9 @@ pub struct Track {
     pub duration_ms: u64,
     #[serde(default)]
     pub is_local: bool,
+    /// Context (album, playlist, artist) a recently played track came from.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub played_context: String,
 }
 
 impl Track {

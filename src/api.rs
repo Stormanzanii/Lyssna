@@ -206,14 +206,31 @@ impl Spotify {
         parse_track_items(&response)
     }
 
+    /// Listening history, newest first. `added_at` carries the play time and
+    /// `played_context` the album, playlist or artist URI it played from.
     pub fn recent(&mut self) -> Result<Vec<Track>> {
         let response = self.request(
             Method::GET,
             "me/player/recently-played",
-            &[("limit", "30".into())],
+            &[("limit", "50".into())],
             None,
         )?;
-        parse_track_items(&response)
+        let mut tracks = parse_track_items(&response)?;
+        let items = response["items"]
+            .as_array()
+            .context("Track page has no items")?;
+        let played = items.iter().filter(|item| {
+            let track = item
+                .get("item")
+                .or_else(|| item.get("track"))
+                .unwrap_or(&Value::Null);
+            !track.is_null() && track["type"].as_str().is_none_or(|kind| kind == "track")
+        });
+        for (track, item) in tracks.iter_mut().zip(played) {
+            track.added_at = item["played_at"].as_str().unwrap_or_default().into();
+            track.played_context = item["context"]["uri"].as_str().unwrap_or_default().into();
+        }
+        Ok(tracks)
     }
     pub fn last_played(&mut self) -> Result<Option<crate::resume::LastPlayed>> {
         let response = self.request(

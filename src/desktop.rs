@@ -1280,7 +1280,7 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::Logout).map_err(error)
 }
 fn valid_route(key: &str) -> bool {
-    if ["home", "liked", "queue"].contains(&key) {
+    if ["home", "liked", "queue", "recent"].contains(&key) {
         return true;
     }
     if let Some(query) = key.strip_prefix("search:") {
@@ -2253,6 +2253,7 @@ mod tests {
     #[test]
     fn routes_reject_arbitrary_urls_and_malformed_ids() {
         assert!(valid_route("search:Petite Meller"));
+        assert!(valid_route("recent"));
         assert!(valid_route("album:0123456789abcdefghijkl"));
         assert!(!valid_route("https://example.com"));
         assert!(!valid_route("album:../secrets"));

@@ -1,4 +1,11 @@
 import type { Word, Line } from "./types";
+
+export interface AnimatedWord extends Word {
+  /** A floating fragment keeps its place in the original held word. */
+  letterOffset?: number;
+  letterCount?: number;
+}
+
 export function vocalEnd(line: Line) {
   return line.words?.length
     ? Math.max(...line.words.map((word) => word.end_ms))

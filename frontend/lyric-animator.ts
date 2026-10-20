@@ -18,6 +18,8 @@ interface Syllable extends Piece {
   start: number;
   end: number;
   letters: Piece[];
+  letterOffset: number;
+  letterCount: number;
 }
 const STYLES = ["scale", "translate", "--gradient-position", "--glow"];
 const piece = (element: HTMLElement): Piece => ({
@@ -84,19 +86,28 @@ export class LyricAnimator {
     const element = this.line(index),
       words = this.lyrics.lines[index].words;
     const nodes = element?.querySelectorAll<HTMLElement>(".lyric-syllable");
-    if (!nodes || nodes.length !== words.length) return undefined;
+    if (!nodes?.length) return undefined;
+    // Syllables may carry their own timing (Space Gravity splits words
+    // across floating pieces); otherwise they match the line's words.
+    const timed = nodes[0].dataset.start !== undefined;
+    if (!timed && nodes.length !== words.length) return undefined;
     return Array.from(nodes, (node, part) => {
       const emphasis = node.classList.contains("emphasis");
+      const start = timed ? Number(node.dataset.start) : words[part].start_ms,
+        end = timed ? Number(node.dataset.end) : words[part].end_ms;
+      const letters = emphasis
+        ? Array.from(
+            node.querySelectorAll<HTMLElement>(".lyric-letter"),
+            (letter) => piece(letter),
+          )
+        : [];
       return {
         ...piece(node),
-        start: words[part].start_ms,
-        end: words[part].end_ms - (emphasis ? MOTION.emphasisTailMs : 0),
-        letters: emphasis
-          ? Array.from(
-              node.querySelectorAll<HTMLElement>(".lyric-letter"),
-              (letter) => piece(letter),
-            )
-          : [],
+        start,
+        end: end - (emphasis ? MOTION.emphasisTailMs : 0),
+        letters,
+        letterOffset: Number(node.dataset.letterOffset ?? 0),
+        letterCount: Number(node.dataset.letterCount ?? letters.length),
       };
     });
   }
@@ -151,14 +162,14 @@ export class LyricAnimator {
           seconds,
           syllable.letters.length ? undefined : [2, 35],
         );
-        letterGoals(
-          syllable.start,
-          syllable.end,
-          ahead,
-          syllable.letters.length,
-        ).forEach((goal, letter) =>
-          this.apply(syllable.letters[letter], goal, seconds, [12, 185]),
-        );
+        letterGoals(syllable.start, syllable.end, ahead, syllable.letterCount)
+          .slice(
+            syllable.letterOffset,
+            syllable.letterOffset + syllable.letters.length,
+          )
+          .forEach((goal, letter) =>
+            this.apply(syllable.letters[letter], goal, seconds, [12, 185]),
+          );
         awake ||=
           !this.reduceMotion &&
           (!syllable.springs.asleep ||

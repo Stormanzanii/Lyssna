@@ -6,17 +6,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  MOTION,
-  SyllableSprings,
-  vocalGap,
-  wordGoal,
-  wordGroups,
-} from "./lyric-motion";
+import { vocalGap, wordGroups, type AnimatedWord } from "./lyric-motion";
+import { LyricAnimator } from "./lyric-animator";
+import { LyricWord } from "./lyric-word";
 import {
   constrain,
   createBody,
   GRAVITY,
+  gravityPieces,
   hash,
   measure,
   random,
@@ -30,11 +27,14 @@ import {
   type WindowMotion,
 } from "./space-gravity";
 import { windowPosition } from "./window-activity";
-import type { Lyrics, Word } from "./types";
+import type { Lyrics } from "./types";
 
 interface Entity {
   key: string;
   text: string;
+  /** Source line index, and the syllables to animate like normal lyrics. */
+  line: number;
+  words: AnimatedWord[];
   start: number;
   end: number;
   /** Lead line ordinal this word belongs to (backing vocals use their parent). */
@@ -56,58 +56,15 @@ interface LeadLine {
   count: number;
 }
 
-const DASH_END = /[-‐‑‒–—―]$/u;
-const DASH_START = /^[-‐‑‒–—―]/u;
-
-/**
- * One floating piece per hyphen-joined part, like Spicy Lyrics: "eye-eye-eyes"
- * floats as three words. Pieces sung as one timed word share its time by
- * letter count.
- */
-export function gravityPieces(group: Word[]) {
-  const pieces: { text: string; start: number; end: number }[] = [];
-  let current: Word[] = [];
-  const flush = () => {
-    if (!current.length) return;
-    const text = current
-      .map((word) => word.text)
-      .join("")
-      .trim();
-    const start = current[0].start_ms,
-      end = current.at(-1)!.end_ms;
-    const parts = text.match(/[^-‐‑‒–—―]+[-‐‑‒–—―]*/gu) ?? [text];
-    if (current.length > 1 || parts.length < 2) {
-      if (text) pieces.push({ text, start, end });
-    } else {
-      const weights = parts.map((part) => Math.max(1, part.length));
-      const total = weights.reduce((sum, weight) => sum + weight, 0);
-      let used = 0;
-      parts.forEach((part, index) => {
-        const from = start + ((end - start) * used) / total;
-        used += weights[index];
-        pieces.push({
-          text: part,
-          start: Math.round(from),
-          end:
-            index === parts.length - 1
-              ? end
-              : Math.round(start + ((end - start) * used) / total),
-        });
-      });
-    }
-    current = [];
-  };
-  group.forEach((word, index) => {
-    current.push(word);
-    const next = group[index + 1];
-    if (
-      DASH_END.test(word.text.trim()) ||
-      (next && DASH_START.test(next.text.trim()))
-    )
-      flush();
-  });
-  flush();
-  return pieces;
+/** Groups shown words by their source line, keeping first-seen order. */
+function groupByLine(entities: Entity[]) {
+  const groups = new Map<number, Entity[]>();
+  for (const entity of entities) {
+    const group = groups.get(entity.line) ?? [];
+    group.push(entity);
+    groups.set(entity.line, group);
+  }
+  return [...groups.entries()];
 }
 
 /** Splits lyrics into floating word entities grouped by lead line. */
@@ -134,6 +91,8 @@ export function prepareGravity(lyrics: Lyrics) {
       entities.push({
         key: `${lineIndex}:${slot}`,
         text,
+        line: lineIndex,
+        words: piece.words,
         start: piece.start,
         end: piece.end,
         lead,
@@ -283,7 +242,6 @@ export function SpaceGravityLyrics({
 
   const elements = useRef(new Map<string, HTMLButtonElement>());
   const bodies = useRef(new Map<string, Body & { spawned: boolean }>());
-  const wordSprings = useRef(new Map<string, SyllableSprings>());
   const live = useRef({ time, visible, prepared, reduceMotion });
   live.current = { time, visible, prepared, reduceMotion };
   useEffect(() => {
@@ -409,27 +367,6 @@ export function SpaceGravityLyrics({
           constrain(body, area, obstacles);
         }
         if (visible.includes(entity)) active.push(body);
-        // The same sung animation as the normal lyrics view: springs chase
-        // the word's scale, lift and glow while a soft-edged fill sweeps it.
-        const text = element.firstElementChild as HTMLElement | null;
-        if (text) {
-          const goal = wordGoal(entity.start, entity.end, time + MOTION.leadMs);
-          let springs = wordSprings.current.get(key);
-          if (!springs) {
-            springs = new SyllableSprings();
-            wordSprings.current.set(key, springs);
-          }
-          text.style.setProperty("--gradient-position", `${goal.gradient}%`);
-          if (!reduceMotion) {
-            const motion = springs.step(goal, dt);
-            text.style.scale = motion.scale.toFixed(4);
-            text.style.translate = `0 ${motion.lift.toFixed(4)}em`;
-            text.style.setProperty(
-              "--glow",
-              `0 0 ${(4 + 2 * motion.glow).toFixed(2)}px rgb(255 255 255 / ${Math.min(100, Math.max(0, motion.glow * 35)).toFixed(1)}%)`,
-            );
-          }
-        }
       }
       if (reduceMotion) {
         for (const body of active) {
@@ -447,8 +384,6 @@ export function SpaceGravityLyrics({
       // Words that left the screen start fresh when they return.
       for (const key of bodies.current.keys())
         if (!elements.current.has(key)) bodies.current.delete(key);
-      for (const key of wordSprings.current.keys())
-        if (!elements.current.has(key)) wordSprings.current.delete(key);
       for (const [key, element] of elements.current) {
         const body = bodies.current.get(key);
         if (!body?.spawned) continue;
@@ -459,6 +394,29 @@ export function SpaceGravityLyrics({
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  // The normal lyrics animator drives the syllables, exactly as in the
+  // regular lyrics view.
+  const animator = useRef<LyricAnimator>(undefined);
+  useLayoutEffect(() => {
+    const instance = new LyricAnimator(
+      lyrics,
+      (index) =>
+        stage.current?.querySelector<HTMLElement>(
+          `.gravity-line[data-line="${index}"]`,
+        ) ?? null,
+      reduceMotion,
+    );
+    animator.current = instance;
+    return () => instance.dispose();
+  }, [lyrics, reduceMotion]);
+  const lastTime = useRef(time);
+  useLayoutEffect(() => {
+    // A seek jumps song time; snap instead of springing through it.
+    if (Math.abs(time - lastTime.current) > 1500) animator.current?.reset();
+    lastTime.current = time;
+    animator.current?.update(time);
+  }, [time, lyrics]);
+
   const gap = vocalGap(lyrics.lines, time);
   return (
     <div className="gravity-lyrics">
@@ -467,23 +425,44 @@ export function SpaceGravityLyrics({
         ref={stage}
         aria-label="Space Gravity lyrics"
       >
-        {shown.map((entity) => {
-          const lead = prepared.leads[entity.lead];
-          const role = gravityRole(entity, lead, time, prepared.finalEnd);
-          const exiting = !visible.includes(entity);
-          // The word being sung right now stands out from its line.
-          const singing =
-            role === "current" && time >= entity.start && time < entity.end;
+        {groupByLine(shown).map(([index, entities]) => {
+          const line = lyrics.lines[index];
+          const state =
+            time >= line.end_ms
+              ? "past"
+              : time >= line.start_ms
+                ? "active"
+                : "";
           return (
-            <button
-              key={entity.key}
-              ref={refFor(entity.key)}
-              className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""} ${singing ? "singing" : ""}`}
-              onClick={() => onSeek(entity.start)}
-              tabIndex={exiting ? -1 : 0}
+            // A box-less wrapper so the lyric animator finds this line's
+            // syllables, and the normal lyric styles apply to them.
+            <div
+              key={index}
+              className={`gravity-line lyric-line ${state} ${line.background ? "background-vocal" : ""}`}
+              data-line={index}
             >
-              <span className="gravity-text">{entity.text}</span>
-            </button>
+              {entities.map((entity) => {
+                const lead = prepared.leads[entity.lead];
+                const role = gravityRole(entity, lead, time, prepared.finalEnd);
+                const exiting = !visible.includes(entity);
+                // The word being sung right now is the brightest.
+                const singing =
+                  role === "current" &&
+                  time >= entity.start &&
+                  time < entity.end;
+                return (
+                  <button
+                    key={entity.key}
+                    ref={refFor(entity.key)}
+                    className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""} ${singing ? "singing" : ""}`}
+                    onClick={() => onSeek(entity.start)}
+                    tabIndex={exiting ? -1 : 0}
+                  >
+                    <LyricWord words={entity.words} />
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
         {gap && (

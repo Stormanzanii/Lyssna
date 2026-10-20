@@ -44,7 +44,6 @@ import {
   type VocalGap,
   wordGroups,
   vocalGap,
-  isEmphasis,
   vocalEnd,
   lineBlur,
   glideScroll,
@@ -52,6 +51,7 @@ import {
   type ScrollSpring,
 } from "./lyric-motion";
 import { LyricAnimator } from "./lyric-animator";
+import { LyricWord } from "./lyric-word";
 
 export const imageOf = (images?: { url: string }[]) =>
   images?.find((image) => image.url.startsWith("https://"))?.url;
@@ -705,45 +705,9 @@ const LyricWords = memo(function LyricWords({ line }: { line: Line }) {
     return <span className="lyric-plain">{line.text}</span>;
   return (
     <>
-      {groups.map((group, index) => {
-        const whitespace = group[0].text.match(/^\s+/u)?.[0] ?? "";
-        return (
-          <span key={index} className="lyric-word-group">
-            {whitespace}
-            <span className="lyric-word">
-              {group.map((word, part) => {
-                const text =
-                  part === 0 ? word.text.slice(whitespace.length) : word.text;
-                const emphasis = isEmphasis(word, text);
-                // Pieces of one word scale away from their neighbours so the
-                // word stays joined.
-                const joined =
-                  group.length === 1
-                    ? ""
-                    : part === 0
-                      ? "joined-start"
-                      : part === group.length - 1
-                        ? "joined-end"
-                        : "joined-middle";
-                return (
-                  <span
-                    key={part}
-                    className={`lyric-syllable ${emphasis ? "emphasis" : ""} ${joined}`}
-                  >
-                    {emphasis
-                      ? Array.from(text).map((letter, index) => (
-                          <span key={index} className="lyric-letter">
-                            {letter}
-                          </span>
-                        ))
-                      : text}
-                  </span>
-                );
-              })}
-            </span>
-          </span>
-        );
-      })}
+      {groups.map((group, index) => (
+        <LyricWord key={index} words={group} />
+      ))}
     </>
   );
 });
@@ -1169,14 +1133,11 @@ export function NowPlaying({
   );
   return (
     <aside className={`now-playing ${canvas ? "has-canvas" : ""}`}>
-      {/* Liquid Glass already draws this artwork behind the window. */}
-      {!state.settings.liquid_glass && (
-        <Ambience
-          track={track}
-          reduceMotion={state.settings.reduce_motion}
-          animate={state.playback.is_playing}
-        />
-      )}
+      <Ambience
+        track={track}
+        reduceMotion={state.settings.reduce_motion}
+        animate={state.playback.is_playing}
+      />
       <div className="now-playing-scroll">
         {!canvas && heading}
         {track ? (

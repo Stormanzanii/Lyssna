@@ -2213,6 +2213,32 @@ test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {
   ).toBe("visible");
 });
 
+test("Now playing retains the lyrics ambience with Liquid Glass enabled", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  await openSettings(page);
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByRole("switch", { name: "Liquid Glass" }).check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(
+    page.locator(".lyrics-page > .ambience .ambient-layer"),
+  ).toHaveCount(1);
+  await expect(
+    page.locator(".now-playing > .ambience .ambient-layer"),
+  ).toHaveCount(1);
+  await expect(
+    page.locator(".now-playing > .ambience .ambient-layer"),
+  ).toBeVisible();
+  await openSettings(page);
+  await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(
+    page.locator(".now-playing > .ambience .ambient-layer"),
+  ).toHaveCount(1);
+});
+
 test("narrow Canvas lyrics stack the title above the lyrics", async ({
   page,
 }) => {
@@ -2670,6 +2696,108 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
   await expect(page.locator(".settings-empty")).toBeVisible();
 });
 
+test("Space Gravity shares normal syllable joins and held-letter timing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "Hello na-na-na",
+            start_ms: 1000,
+            end_ms: 5700,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "Hel", start_ms: 1000, end_ms: 1300 },
+              { text: "lo", start_ms: 1300, end_ms: 3300 },
+              { text: " na-na-na", start_ms: 3300, end_ms: 5700 },
+            ],
+          },
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 3500,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const letters = page.locator(".lyrics-page .lyric-letter");
+  await expect(letters).toHaveCount(10);
+  const fills = () =>
+    letters.evaluateAll((nodes) =>
+      nodes.map((node) =>
+        (node as HTMLElement).style.getPropertyValue("--gradient-position"),
+      ),
+    );
+  await expect.poll(async () => (await fills()).every(Boolean)).toBe(true);
+  const position = async (position_ms: number) =>
+    page.evaluate(
+      async ({ uri, position_ms }) => {
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      },
+      { uri: track.uri, position_ms },
+    );
+  const normalFills = new Map<number, string[]>();
+  for (const time of [1200, 3500, 4900]) {
+    await position(time);
+    normalFills.set(time, await fills());
+  }
+  await openSettings(page);
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".gravity-word")).toHaveCount(4);
+  await expect(letters).toHaveCount(10);
+  for (const [time, expected] of normalFills) {
+    await position(time);
+    await expect.poll(fills).toEqual(expected);
+  }
+  await expect(page.locator(".gravity-word.singing")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page
+        .locator(".gravity-word.current:not(.singing)")
+        .first()
+        .evaluate((node) => Number(getComputedStyle(node).opacity)),
+    )
+    .toBeCloseTo(0.55, 2);
+  await expect(page.locator(".gravity-word .joined-start")).toHaveText("Hel");
+  await expect(page.locator(".gravity-word .joined-end")).toHaveText("lo");
+  await expect
+    .poll(() =>
+      letters
+        .nth(2)
+        .evaluate((node) =>
+          (node as HTMLElement).style.getPropertyValue("--glow"),
+        ),
+    )
+    .not.toBe("");
+});
+
 test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {
@@ -2721,7 +2849,8 @@ test("Space Gravity words keep drifting while the song plays", async ({
   // Its fill sweeps smoothly like the normal lyrics view.
   const fill = () =>
     page
-      .locator(".gravity-word.singing .gravity-text")
+      .locator(".gravity-word.singing .lyric-syllable")
+      .first()
       .evaluate((element) =>
         parseFloat(
           (element as HTMLElement).style.getPropertyValue(

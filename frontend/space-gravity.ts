@@ -9,6 +9,9 @@
  * opposite to the window's own movement. No DOM access lives here.
  */
 
+import { isEmphasis, type AnimatedWord } from "./lyric-motion";
+import type { Word } from "./types";
+
 export interface Rect {
   left: number;
   top: number;
@@ -374,4 +377,79 @@ export function wordWindow(anchor: number, total: number, count: number) {
     Math.min(anchor - Math.floor((size - 1) / 2), total - size),
   );
   return { first, last: first + size - 1 };
+}
+
+const DASH_END = /[-‐‑‒–—―]$/u;
+const DASH_START = /^[-‐‑‒–—―]/u;
+
+/**
+ * One floating piece per hyphen-joined part, like Spicy Lyrics: "eye-eye-eyes"
+ * floats as three words. Pieces sung as one timed word share its time by
+ * letter count.
+ */
+export function gravityPieces(group: Word[]) {
+  const pieces: {
+    text: string;
+    start: number;
+    end: number;
+    words: AnimatedWord[];
+  }[] = [];
+  let current: Word[] = [];
+  const flush = () => {
+    if (!current.length) return;
+    const text = current
+      .map((word) => word.text)
+      .join("")
+      .trim();
+    const start = current[0].start_ms,
+      end = current.at(-1)!.end_ms;
+    const parts = text.match(/[^-‐‑‒–—―]+[-‐‑‒–—―]*/gu) ?? [text];
+    if (current.length > 1 || parts.length < 2) {
+      const words = current.map((word, index) =>
+        index ? word : { ...word, text: word.text.trimStart() },
+      );
+      if (text) pieces.push({ text, start, end, words });
+    } else {
+      const held = isEmphasis(current[0], current[0].text.trimStart());
+      const weights = parts.map((part) => Math.max(1, Array.from(part).length));
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      let used = 0;
+      parts.forEach((part, index) => {
+        const from = start + ((end - start) * used) / total;
+        const letterOffset = used;
+        used += weights[index];
+        const to =
+          index === parts.length - 1
+            ? end
+            : Math.round(start + ((end - start) * used) / total);
+        pieces.push({
+          text: part,
+          start: Math.round(from),
+          end: to,
+          words: [
+            {
+              ...current[0],
+              text: part,
+              start_ms: held ? start : Math.round(from),
+              end_ms: held ? end : to,
+              letterOffset: held ? letterOffset : undefined,
+              letterCount: held ? total : undefined,
+            },
+          ],
+        });
+      });
+    }
+    current = [];
+  };
+  group.forEach((word, index) => {
+    current.push(word);
+    const next = group[index + 1];
+    if (
+      DASH_END.test(word.text.trim()) ||
+      (next && DASH_START.test(next.text.trim()))
+    )
+      flush();
+  });
+  flush();
+  return pieces;
 }

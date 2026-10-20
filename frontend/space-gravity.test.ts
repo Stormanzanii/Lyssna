@@ -3,6 +3,7 @@ import {
   constrain,
   createBody,
   GRAVITY,
+  gravityPieces,
   intersects,
   measure,
   speedMultiplier,
@@ -12,7 +13,6 @@ import {
 } from "./space-gravity";
 import {
   gravityAnchor,
-  gravityPieces,
   gravityRole,
   prepareGravity,
   visibleGravity,
@@ -171,13 +171,17 @@ describe("Space Gravity pieces", () => {
     start_ms: start,
     end_ms: end,
   });
+  const strip = (pieces: ReturnType<typeof gravityPieces>) =>
+    pieces.map(({ text, start, end }) => ({ text, start, end }));
   it("splits hyphen-joined syllables into separate words", () => {
     expect(
-      gravityPieces([
-        word(" eye-", 0, 100),
-        word("eye-", 100, 200),
-        word("eyes", 200, 400),
-      ]),
+      strip(
+        gravityPieces([
+          word(" eye-", 0, 100),
+          word("eye-", 100, 200),
+          word("eyes", 200, 400),
+        ]),
+      ),
     ).toEqual([
       { text: "eye-", start: 0, end: 100 },
       { text: "eye-", start: 100, end: 200 },
@@ -191,8 +195,53 @@ describe("Space Gravity pieces", () => {
     expect(pieces.at(-1)!.end).toBe(900);
   });
   it("keeps ordinary split syllables together", () => {
-    expect(gravityPieces([word(" Hel", 0, 100), word("lo", 100, 200)])).toEqual(
-      [{ text: "Hello", start: 0, end: 200 }],
-    );
+    const [piece] = gravityPieces([word(" Hel", 0, 100), word("lo", 100, 200)]);
+    expect(piece.words.map((item) => item.text)).toEqual(["Hel", "lo"]);
+    expect(strip([piece])).toEqual([{ text: "Hello", start: 0, end: 200 }]);
+  });
+  it("keeps held fragments on the original note with their original letter positions", () => {
+    const original = Object.freeze(word(" na-na-na", 1000, 3400));
+    const pieces = gravityPieces([original]);
+    expect(pieces.map((piece) => [piece.start, piece.end])).toEqual([
+      [1000, 1900],
+      [1900, 2800],
+      [2800, 3400],
+    ]);
+    expect(pieces.map((piece) => piece.words[0])).toEqual([
+      {
+        text: "na-",
+        start_ms: 1000,
+        end_ms: 3400,
+        letterOffset: 0,
+        letterCount: 8,
+      },
+      {
+        text: "na-",
+        start_ms: 1000,
+        end_ms: 3400,
+        letterOffset: 3,
+        letterCount: 8,
+      },
+      {
+        text: "na",
+        start_ms: 1000,
+        end_ms: 3400,
+        letterOffset: 6,
+        letterCount: 8,
+      },
+    ]);
+  });
+  it("keeps estimated pieces timed separately without inventing held letters", () => {
+    const pieces = gravityPieces([
+      { ...word("na-na-na", 1000, 3400), estimated: true },
+    ]);
+    for (const piece of pieces) {
+      expect(piece.words[0]).toMatchObject({
+        start_ms: piece.start,
+        end_ms: piece.end,
+        estimated: true,
+      });
+      expect(piece.words[0].letterCount).toBeUndefined();
+    }
   });
 });

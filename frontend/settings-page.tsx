@@ -249,6 +249,17 @@ export function SettingsPage({
           <section className="settings-section">
             <h2>Appearance</h2>
             <SettingRow
+              label="Liquid Glass"
+              help="Frosted, translucent panels that pick up colour from the artwork you're playing."
+              keywords="theme glass blur translucent apple transparency"
+            >
+              <Toggle
+                label="Liquid Glass"
+                checked={Boolean(settings.liquid_glass)}
+                onChange={(liquid_glass) => onSettings({ liquid_glass })}
+              />
+            </SettingRow>
+            <SettingRow
               label="Reduce motion"
               help="Turn off animated backgrounds and word animations."
               keywords="animation accessibility"

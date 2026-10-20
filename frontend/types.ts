@@ -80,6 +80,7 @@ export interface Settings {
   lyric_offset_ms: number;
   romanized: boolean;
   reduce_motion: boolean;
+  liquid_glass?: boolean;
   canvas_lyrics?: boolean;
   floating_lyrics?: boolean;
   ui_font?: string;

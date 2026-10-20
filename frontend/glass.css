@@ -1,0 +1,172 @@
+/* Liquid Glass: an optional theme (Settings > Appearance). The playing
+   track's artwork, heavily blurred, sits behind the window; panels become
+   frosted, translucent sheets with a bright specular rim. */
+.liquid-glass {
+  --glass-fill: #1c1c2161;
+  --glass-fill-strong: #1e1e23b8;
+  --glass-blur: blur(30px) saturate(175%);
+  --glass-shadow:
+    0 1px 0 #ffffff1f inset, 0 0 0 1px #ffffff0a inset, 0 18px 50px #00000040;
+  position: relative;
+  isolation: isolate;
+  background: #0b0b0d;
+}
+.glass-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 20%, #2b2b3a, #0b0b0d 70%);
+}
+.glass-backdrop-art {
+  position: absolute;
+  inset: -12%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(90px) saturate(1.7) brightness(0.62);
+  transform: scale(1.1);
+  animation: glass-art-in 0.9s ease-out both;
+}
+@keyframes glass-art-in {
+  from {
+    opacity: 0;
+  }
+}
+.glass-backdrop-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 0%, transparent, #00000059 70%),
+    linear-gradient(#0000002e, #00000066);
+}
+.liquid-glass.reduce-motion .glass-backdrop-art {
+  animation: none;
+}
+
+/* Chrome around the panels lets the backdrop through. */
+.liquid-glass .topbar,
+.liquid-glass .player-bar {
+  background: transparent;
+}
+
+/* The glass sheets. */
+.liquid-glass .library-panel,
+.liquid-glass .center-panel,
+.liquid-glass .now-playing,
+.liquid-glass .player-bar {
+  position: relative;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  border-radius: 18px;
+}
+/* Specular rim: brightest along the top-left edge, like light caught in
+   the curved edge of a lens. */
+.liquid-glass .library-panel::after,
+.liquid-glass .center-panel::after,
+.liquid-glass .now-playing::after,
+.liquid-glass .player-bar::after,
+.liquid-glass .popover::after,
+.liquid-glass .profile-menu::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    150deg,
+    #ffffff59,
+    #ffffff12 28%,
+    #ffffff05 55%,
+    #ffffff26
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* A soft sheen across the upper part of each sheet. */
+.liquid-glass .library-panel::before,
+.liquid-glass .player-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 90px;
+  border-radius: inherit;
+  background: linear-gradient(#ffffff0d, transparent);
+  pointer-events: none;
+}
+
+/* Floating player capsule, Apple Music style. */
+.liquid-glass .player-bar {
+  margin: 0 8px 8px;
+  padding: 8px 18px;
+  border-radius: 24px;
+}
+.liquid-glass .now-playing .ambience {
+  opacity: 0.55;
+  background: transparent;
+}
+.liquid-glass .now-card {
+  background: #ffffff0f;
+  box-shadow: 0 1px 0 #ffffff14 inset;
+  border-radius: 14px;
+}
+
+/* Inputs and controls in glass. */
+.liquid-glass .search-box {
+  background: #ffffff14;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 1px 0 #ffffff1f inset;
+}
+.liquid-glass .search-box:focus-within {
+  background: #ffffff1f;
+}
+.liquid-glass .library-item:hover {
+  background: #ffffff12;
+}
+.liquid-glass .library-item.current {
+  background: #ffffff1c;
+}
+.liquid-glass .track-row:hover,
+.liquid-glass .recents-row:hover,
+.liquid-glass .album-tile:hover {
+  background: #ffffff17;
+}
+.liquid-glass .settings-select,
+.liquid-glass .number-field,
+.liquid-glass .settings-search {
+  background-color: #ffffff17;
+}
+
+/* Menus become frosted popovers. */
+.liquid-glass .popover,
+.liquid-glass .profile-menu {
+  position: fixed;
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px #00000073;
+}
+.liquid-glass .profile-menu {
+  position: absolute;
+}
+.liquid-glass .profile-menu > button,
+.liquid-glass .song-menu > button {
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass {
+    --glass-fill: #1c1c21e6;
+    --glass-fill-strong: #1e1e23f2;
+  }
+}

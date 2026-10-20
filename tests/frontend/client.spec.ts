@@ -2575,3 +2575,29 @@ test("a left click anywhere outside the song menu closes it", async ({
     await expect(page.getByRole("menu")).toHaveCount(0);
   }
 });
+
+test("Liquid Glass is off by default and toggles from Settings", async ({
+  page,
+}) => {
+  await startClient(page);
+  await expect(page.locator(".application")).not.toHaveClass(/liquid-glass/);
+  await page.getByTitle("Settings", { exact: true }).click();
+  await page.getByRole("switch", { name: "Liquid Glass" }).check();
+  await expect(page.locator(".application")).toHaveClass(/liquid-glass/);
+  await expect(page.locator(".glass-backdrop")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.liquid_glass,
+      ),
+    )
+    .toBe(true);
+  await page.getByTitle("Search settings", { exact: true }).click();
+  await page.getByLabel("Search settings").fill("glass");
+  await expect(page.locator(".setting-row")).toHaveCount(1);
+  await page.getByLabel("Search settings").fill("zzzz");
+  await expect(page.locator(".settings-empty")).toBeVisible();
+});

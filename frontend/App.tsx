@@ -98,6 +98,7 @@ import {
 } from "./components";
 import "./styles.css";
 import "./settings.css";
+import "./glass.css";
 import { VolumeControl } from "./volume-control";
 import { DJButton } from "./dj-button";
 import {
@@ -111,6 +112,7 @@ import {
 } from "./library-order";
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
+import { GlassBackdrop } from "./liquid-glass";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 /** Lyrics use Inter unless the user picks a lyrics font. */
@@ -937,7 +939,7 @@ function App() {
     state.route !== "home" && (!entity?.artist || displayTracks.length > 0);
   return (
     <div
-      className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""}`}
+      className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
       style={
         {
           fontFamily: fontFamily(state.settings.ui_font),
@@ -1004,6 +1006,9 @@ function App() {
         if (file) void importFile(file);
       }}
     >
+      {state.settings.liquid_glass && (
+        <GlassBackdrop image={state.playback.item?.album.images?.[0]?.url} />
+      )}
       <header className="topbar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region aria-label="SpotiFlex">
           <Logo size={30} />

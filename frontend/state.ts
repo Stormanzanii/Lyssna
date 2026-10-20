@@ -114,6 +114,7 @@ export const emptyState: AppState = {
     lyric_offset_ms: 0,
     romanized: false,
     reduce_motion: false,
+    liquid_glass: false,
     canvas_lyrics: true,
     floating_lyrics: false,
     ui_font: "",

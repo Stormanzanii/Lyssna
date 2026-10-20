@@ -104,11 +104,9 @@
   border-radius: 14px;
 }
 
-/* Sticky bars stay see-through and only frost what scrolls beneath them. */
+/* The sticky Home bar stays fully see-through. */
 .liquid-glass .home-toolbar {
   background: transparent;
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  backdrop-filter: blur(24px) saturate(160%);
 }
 .liquid-glass .liked-heart {
   background: #000;

@@ -120,6 +120,7 @@ import {
   recordManualPlay,
   saveAccountOrder,
   togglePlaylistPin,
+  forgetPlaylist,
 } from "./library-order";
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
@@ -214,6 +215,11 @@ function App() {
     y: number;
   } | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
+  const [removeDialog, setRemoveDialog] = useState<{
+    id: string;
+    name: string;
+    own: boolean;
+  } | null>(null);
   const [folderName, setFolderName] = useState("");
   const [songMenu, setSongMenu] = useState<{
     track: Track;
@@ -642,6 +648,7 @@ function App() {
         setDeviceMenu(false);
         setPicker(null);
         setFolderDialog(false);
+        setRemoveDialog(null);
       }
     };
     // A focused button activates on Space keyup; cancel that so Space never
@@ -2574,6 +2581,17 @@ function App() {
                   : "Pin playlist",
                 run: () => togglePin(playlist),
               });
+            const saved =
+              menu.kind === "playlist" &&
+              current.playlists.find((item) => item.id === menu.id);
+            if (saved) {
+              const own = saved.owner.id === current.profile?.id;
+              actions.push({
+                label: own ? "Delete" : "Remove from Your Library",
+                run: () =>
+                  setRemoveDialog({ id: saved.id, name: saved.name, own }),
+              });
+            }
             if (menu.kind === "artist")
               actions.push({
                 label: current.saved[`spotify:artist:${menu.id}`]
@@ -2690,6 +2708,54 @@ function App() {
             }}
           />
         </>
+      )}
+      {removeDialog && (
+        <div className="modal-backdrop" onClick={() => setRemoveDialog(null)}>
+          <section
+            className="dialog"
+            role="alertdialog"
+            aria-labelledby="remove-playlist-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="remove-playlist-title">
+              {removeDialog.own ? "Delete from Your Library?" : "Remove from Your Library?"}
+            </h2>
+            <p>
+              {removeDialog.own
+                ? `This will delete ${removeDialog.name} from Your Library.`
+                : `${removeDialog.name} will be removed from Your Library.`}
+            </p>
+            <div className="inline-actions">
+              <button
+                className="pill"
+                autoFocus
+                onClick={() => setRemoveDialog(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="pill primary"
+                onClick={() => {
+                  void call("remove_playlist", {
+                    id: removeDialog.id,
+                    name: removeDialog.name,
+                  });
+                  updateSettings(
+                    saveAccountOrder(
+                      state,
+                      forgetPlaylist(accountOrder(state), removeDialog.id),
+                    ),
+                  );
+                  if (state.route === `playlist:${removeDialog.id}`)
+                    navigate("home");
+                  setRemoveDialog(null);
+                }}
+              >
+                {removeDialog.own ? "Delete" : "Remove"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       {folderDialog && (
         <div className="modal-backdrop" onClick={() => setFolderDialog(false)}>

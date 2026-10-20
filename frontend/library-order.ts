@@ -65,6 +65,14 @@ export function recordManualPlay(
     items: remember(order, item),
   };
 }
+/** Drop a removed playlist from pins, recents and remembered items. */
+export function forgetPlaylist(order: LibraryOrder, id: string): LibraryOrder {
+  return {
+    pinned: order.pinned.filter((item) => item !== id),
+    recent: order.recent.filter((item) => item !== id),
+    items: order.items.filter((item) => item.id !== id),
+  };
+}
 export function togglePlaylistPin(
   order: LibraryOrder,
   item: Playlist,

@@ -3,6 +3,7 @@ import { emptyState, reducer } from "./state";
 import {
   DJ_ID,
   emptyOrder,
+  forgetPlaylist,
   libraryItems,
   recordManualPlay,
   togglePlaylistPin,
@@ -73,4 +74,14 @@ it("restores account-specific order and always includes DJ", () => {
       settings,
     })[0].id,
   ).toBe(DJ_ID);
+});
+
+it("forgets a removed playlist everywhere in the sidebar order", () => {
+  let order = recordManualPlay(emptyOrder(), playlists[0]);
+  order = togglePlaylistPin(order, playlists[1]);
+  order = recordManualPlay(order, playlists[1]);
+  order = forgetPlaylist(order, playlists[1].id);
+  expect(order.pinned).toEqual([]);
+  expect(order.recent).toEqual([playlists[0].id]);
+  expect(order.items.map((item) => item.id)).toEqual([playlists[0].id]);
 });

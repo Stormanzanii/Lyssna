@@ -47,6 +47,11 @@ pub enum Command {
         name: String,
         tracks: Vec<Track>,
     },
+    /// Delete an owned playlist or unfollow another, as Spotify does.
+    RemovePlaylist {
+        id: String,
+        name: String,
+    },
     SaveTrack(String),
     FetchLyrics(Track),
     RetryAudio,
@@ -902,6 +907,15 @@ impl Backend {
                 } else {
                     format!("Added to {name}")
                 }));
+            }
+            Command::RemovePlaylist { id, name } => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then remove the playlist."
+                );
+                self.native_controls.remove_playlist(&id)?;
+                self.refresh_library()?;
+                self.emit(Event::Notice(format!("Removed {name} from Your Library")));
             }
             Command::SaveTrack(uri) => {
                 if !self.native_ready() || self.native_controls.set_saved(&uri, true).is_err() {

@@ -1975,6 +1975,21 @@ fn add_tracks(
         .map_err(error)
 }
 #[tauri::command]
+fn remove_playlist(
+    id: String,
+    name: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::RemovePlaylist { id, name })
+        .map_err(error)
+}
+#[tauri::command]
 fn create_playlist(
     name: String,
     tracks: Vec<Track>,
@@ -2285,6 +2300,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             import_lyrics,
             add_tracks,
             create_playlist,
+            remove_playlist,
             open_link,
             open_creator_profile,
             resolve_album,

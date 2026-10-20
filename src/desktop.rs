@@ -892,6 +892,8 @@ impl Desktop {
                             }
                             snapshot.native_ready = true;
                             snapshot.native_status = "Ready · this computer".into();
+                            // Reload playlists from Spotify's own library list.
+                            let _ = pump.commands.send(Command::Library);
                             if let Some((action, _)) = pump
                                 .queued_native
                                 .lock()

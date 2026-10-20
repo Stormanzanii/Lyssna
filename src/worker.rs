@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, atomic::AtomicBool, mpsc},
     thread,
@@ -460,6 +461,36 @@ impl LibraryRefresh {
     }
 }
 
+/// The rootlist names owners by user ID and can omit generated mosaics, so
+/// keep display names and artwork from the last full library read.
+fn fill_library_details(
+    mut playlists: Vec<Playlist>,
+    previous: Option<&[Playlist]>,
+    profile: &Profile,
+) -> Vec<Playlist> {
+    let previous: HashMap<&str, &Playlist> = previous
+        .unwrap_or_default()
+        .iter()
+        .map(|playlist| (playlist.id.as_str(), playlist))
+        .collect();
+    for playlist in &mut playlists {
+        let earlier = previous.get(playlist.id.as_str());
+        if playlist.images.is_empty()
+            && let Some(earlier) = earlier
+        {
+            playlist.images = earlier.images.clone();
+        }
+        if playlist.owner.id == profile.id {
+            playlist.owner.display_name = profile.display_name.clone();
+        } else if let Some(earlier) =
+            earlier.filter(|earlier| earlier.owner.id == playlist.owner.id)
+        {
+            playlist.owner.display_name = earlier.owner.display_name.clone();
+        }
+    }
+    playlists
+}
+
 fn profile_for_session(
     remote: Result<Profile>,
     cached: Option<Profile>,
@@ -558,6 +589,23 @@ impl Backend {
     }
 
     fn refresh_library(&mut self) -> Result<()> {
+        // Spotify's own rootlist has no 50-playlist cap and skips the Web API.
+        if matches!(
+            self.native_controls
+                .connection_event(Some(&self.profile.id)),
+            Some(crate::native::NativeEvent::Ready(_))
+        ) && let Ok(playlists) = self.native_controls.library()
+        {
+            let playlists = fill_library_details(
+                playlists,
+                crate::library_cache::load(&self.profile.id).as_deref(),
+                &self.profile,
+            );
+            self.library_refresh.next = None;
+            crate::library_cache::save(&self.profile.id, &playlists);
+            self.emit(Event::Library(playlists));
+            return Ok(());
+        }
         let api = self.spotify.as_mut().context("Sign in to Spotify first")?;
         if api.cooling_down()
             && let Some(playlists) = crate::library_cache::load(&self.profile.id)
@@ -1349,6 +1397,44 @@ mod session_tests {
             .unwrap();
         assert_eq!(playlists.len(), 36);
         assert!(!refresh.due(now + Duration::from_secs(60)));
+    }
+    #[test]
+    fn native_library_keeps_owner_names_and_artwork_from_the_last_read() {
+        let owned = |id: &str, owner: &str, name: Option<&str>, art: bool| Playlist {
+            id: id.into(),
+            owner: crate::model::Owner {
+                id: owner.into(),
+                display_name: name.map(Into::into),
+            },
+            images: if art {
+                vec![crate::model::Artwork {
+                    url: "https://mosaic.scdn.co/cover".into(),
+                    width: None,
+                }]
+            } else {
+                Vec::new()
+            },
+            ..Default::default()
+        };
+        let profile = Profile {
+            id: "me".into(),
+            display_name: Some("Me".into()),
+            ..Profile::default()
+        };
+        let previous = [owned("a", "friend", Some("Friend"), true)];
+        let filled = fill_library_details(
+            vec![
+                owned("a", "friend", None, false),
+                owned("b", "me", None, false),
+                owned("c", "other", None, false),
+            ],
+            Some(&previous),
+            &profile,
+        );
+        assert_eq!(filled[0].owner.display_name.as_deref(), Some("Friend"));
+        assert_eq!(filled[0].images.len(), 1);
+        assert_eq!(filled[1].owner.display_name.as_deref(), Some("Me"));
+        assert_eq!(filled[2].owner.display_name, None);
     }
     #[test]
     fn cached_profiles_only_restore_the_same_session_during_cooldown() {

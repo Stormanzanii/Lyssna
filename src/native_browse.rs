@@ -77,6 +77,104 @@ fn playlist_header(id: &str, playlist: &Playlist) -> crate::model::BrowseInfo {
     }
 }
 
+const ROOTLIST_PAGE: usize = 120;
+
+/// Every saved playlist in Spotify library order, read from the account's
+/// rootlist like the desktop client. Folder markers are skipped.
+pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
+    use protobuf::Message;
+    let mut playlists = Vec::new();
+    let mut ids = HashSet::new();
+    let mut from = 0;
+    for _ in 0..100 {
+        let bytes = tokio::time::timeout(
+            Duration::from_secs(10),
+            session.spclient().get_rootlist(from, Some(ROOTLIST_PAGE)),
+        )
+        .await
+        .context("Spotify library request timed out")??;
+        ensure!(
+            bytes.len() <= 8_000_000,
+            "Spotify library page is too large"
+        );
+        let page =
+            librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(&bytes)
+                .context("Invalid Spotify library page")?;
+        let count = rootlist_page(&page, &mut ids, &mut playlists)?;
+        from += count;
+        let total = usize::try_from(page.length()).unwrap_or_default();
+        if count == 0 || (from >= total && count < ROOTLIST_PAGE) {
+            return Ok(playlists);
+        }
+    }
+    anyhow::bail!("Spotify library has too many pages")
+}
+
+/// Adds one rootlist page and returns how many rows it held.
+fn rootlist_page(
+    page: &librespot_protocol::playlist4_external::SelectedListContent,
+    ids: &mut HashSet<String>,
+    playlists: &mut Vec<crate::model::Playlist>,
+) -> Result<usize> {
+    let contents = page.contents.get_or_default();
+    ensure!(
+        contents.items.len() == contents.meta_items.len(),
+        "Spotify library page has no playlist details"
+    );
+    for (item, meta) in contents.items.iter().zip(&contents.meta_items) {
+        let Some(id) = item
+            .uri()
+            .strip_prefix("spotify:")
+            .and_then(|uri| uri.rsplit_once("playlist:"))
+            .map(|(_, id)| id)
+            .filter(|id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+        else {
+            continue;
+        };
+        let attributes = meta.attributes.get_or_default();
+        if attributes.name().is_empty() || !ids.insert(id.to_owned()) {
+            continue;
+        }
+        playlists.push(crate::model::Playlist {
+            id: id.to_owned(),
+            name: attributes.name().to_owned(),
+            images: list_images(attributes),
+            owner: crate::model::Owner {
+                id: meta.owner_username().to_owned(),
+                display_name: None,
+            },
+            collaborative: attributes.collaborative(),
+        });
+    }
+    Ok(contents.items.len())
+}
+
+fn list_images(
+    attributes: &librespot_protocol::playlist4_external::ListAttributes,
+) -> Vec<crate::model::Artwork> {
+    let mut images: Vec<_> = attributes
+        .picture_size
+        .iter()
+        .filter(|picture| picture.url().starts_with("https://"))
+        .map(|picture| crate::model::Artwork {
+            url: picture.url().to_owned(),
+            width: None,
+        })
+        .collect();
+    if images.is_empty() && attributes.picture().len() == 20 {
+        let file: String = attributes
+            .picture()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        images.push(crate::model::Artwork {
+            url: format!("https://i.scdn.co/image/{file}"),
+            width: None,
+        });
+    }
+    images
+}
+
 pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Track>> {
     let identity = session.username();
     let cache_key = (identity.clone(), key.to_owned());
@@ -243,6 +341,66 @@ pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result
         result.extend(ordered.into_iter().map(|(_, track)| track));
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod rootlist_tests {
+    use super::*;
+    use librespot_protocol::playlist4_external::{
+        Item, ListAttributes, ListItems, MetaItem, SelectedListContent,
+    };
+    fn page(rows: &[(&str, &str, &str)]) -> SelectedListContent {
+        let mut contents = ListItems::new();
+        for (uri, name, owner) in rows {
+            let mut item = Item::new();
+            item.set_uri((*uri).into());
+            contents.items.push(item);
+            let mut meta = MetaItem::new();
+            if !name.is_empty() {
+                let mut attributes = ListAttributes::new();
+                attributes.set_name((*name).into());
+                attributes.set_collaborative(*name == "Shared");
+                meta.attributes = Some(attributes).into();
+                meta.set_owner_username((*owner).into());
+            }
+            contents.meta_items.push(meta);
+        }
+        let mut page = SelectedListContent::new();
+        page.contents = Some(contents).into();
+        page
+    }
+    #[test]
+    fn library_skips_folders_and_keeps_private_and_collaborative_playlists() {
+        let (mut ids, mut playlists) = (HashSet::new(), Vec::new());
+        let count = rootlist_page(
+            &page(&[
+                ("spotify:start-group:abc:Folder", "", ""),
+                ("spotify:playlist:0123456789abcdefghijkl", "Mine", "me"),
+                (
+                    "spotify:user:friend:playlist:abcdefghijkl0123456789",
+                    "Shared",
+                    "friend",
+                ),
+                ("spotify:end-group:abc", "", ""),
+                ("spotify:playlist:0123456789abcdefghijkl", "Mine", "me"),
+            ]),
+            &mut ids,
+            &mut playlists,
+        )
+        .unwrap();
+        assert_eq!(count, 5);
+        let names: Vec<_> = playlists.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(names, ["Mine", "Shared"]);
+        assert_eq!(playlists[1].id, "abcdefghijkl0123456789");
+        assert_eq!(playlists[1].owner.id, "friend");
+        assert!(playlists[1].collaborative && !playlists[0].collaborative);
+    }
+    #[test]
+    fn library_page_without_details_is_rejected() {
+        let mut broken = page(&[("spotify:playlist:0123456789abcdefghijkl", "Mine", "me")]);
+        broken.contents.mut_or_insert_default().meta_items.clear();
+        assert!(rootlist_page(&broken, &mut HashSet::new(), &mut Vec::new()).is_err());
+    }
 }
 
 #[cfg(test)]

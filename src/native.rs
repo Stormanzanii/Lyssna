@@ -280,6 +280,13 @@ impl NativeControls {
             .build()?
             .block_on(crate::native_browse::playlist_info(&session, id))
     }
+    pub fn library(&self) -> Result<Vec<crate::model::Playlist>> {
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::native_browse::library(&session))
+    }
     pub fn queue(&self) -> Result<Vec<crate::model::Track>> {
         let uris = {
             let connection = self

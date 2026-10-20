@@ -21,6 +21,63 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("keeps all music search categories together and rejects old responses", () => {
+    const artist = {
+      id: "artist",
+      name: "Artist",
+      uri: "spotify:artist:artist",
+    };
+    const album = {
+      id: "album",
+      uri: "spotify:album:album",
+      name: "Album",
+      images: [],
+    };
+    const state = {
+      ...emptyState,
+      profile: { id: "listener" },
+      route: "search:music",
+      generation: 5,
+      loading: true,
+    };
+    const event = {
+      type: "search_results" as const,
+      account: "listener",
+      key: state.route,
+      generation: 5,
+      message: "",
+      results: {
+        tracks: [track],
+        artists: [artist],
+        albums: [album],
+        playlists: [],
+        top_results: [artist.uri],
+      },
+    };
+    expect(reducer(state, { ...event, account: "other" })).toBe(state);
+    expect(reducer(state, { ...event, key: "search:old" })).toBe(state);
+    expect(reducer(state, { ...event, generation: 4 })).toBe(state);
+    expect(reducer(emptyState, event)).toBe(emptyState);
+    const loaded = reducer(state, event);
+    expect(loaded.loading).toBe(false);
+    expect(loaded.tracks).toEqual([track]);
+    expect(loaded.search_artists).toEqual([artist]);
+    const other = reducer(loaded, {
+      type: "navigate",
+      key: "liked",
+      generation: 6,
+    });
+    expect(other.search_artists).toEqual([]);
+    const back = reducer(other, {
+      type: "navigate",
+      key: state.route,
+      generation: 7,
+    });
+    expect(back.search_artists).toEqual([artist]);
+    expect(back.search_albums).toEqual([album]);
+    expect(back.search_top_results).toEqual([artist.uri]);
+    expect(reducer(back, { type: "signed_out" }).search_artists).toEqual([]);
+  });
   it("rejects playlists from old searches, refreshes and signed-out accounts", () => {
     const playlist = {
       id: "public",

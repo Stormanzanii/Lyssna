@@ -355,6 +355,13 @@ impl NativeControls {
             .build()?
             .block_on(crate::search::playlists(&session, query))
     }
+    pub fn search_catalogue(&self, query: &str) -> Result<crate::search::SearchResults> {
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::search::catalogue(&session, query))
+    }
     pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
         use librespot_protocol::extension_kind::ExtensionKind;
         anyhow::ensure!(
@@ -1854,6 +1861,7 @@ mod tests {
                     .expect("Native connection timed out")
                     .expect("Native connection failed");
                 let results = crate::search::playlists(&session, "workout").await;
+                let catalogue = crate::search::catalogue(&session, "arianna").await;
                 session.shutdown();
                 let results = results.expect("Native playlist search failed");
                 assert!(!results.is_empty(), "Expected workout playlists");
@@ -1873,6 +1881,26 @@ mod tests {
                 eprintln!(
                     "Native search returned {} playlists, including Spotify and public creators",
                     results.len()
+                );
+                let catalogue = catalogue.expect("Native music search failed");
+                assert!(!catalogue.tracks.is_empty(), "Expected song results");
+                assert!(!catalogue.artists.is_empty(), "Expected artist results");
+                assert!(!catalogue.albums.is_empty(), "Expected album results");
+                assert!(!catalogue.playlists.is_empty(), "Expected playlist results");
+                assert!(
+                    !catalogue.top_results.is_empty(),
+                    "Expected Spotify result ranking"
+                );
+                assert!(
+                    catalogue.tracks.iter().all(|track| track.duration_ms > 0),
+                    "Expected track durations"
+                );
+                eprintln!(
+                    "Music search returned {} songs, {} artists, {} albums and {} playlists",
+                    catalogue.tracks.len(),
+                    catalogue.artists.len(),
+                    catalogue.albums.len(),
+                    catalogue.playlists.len()
                 );
             });
     }

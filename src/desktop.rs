@@ -53,6 +53,9 @@ pub struct Snapshot {
     generation: u64,
     tracks: Vec<Track>,
     search_playlists: Vec<Playlist>,
+    search_artists: Vec<crate::model::Artist>,
+    search_albums: Vec<crate::model::Album>,
+    search_top_results: Vec<String>,
     search_playlists_loading: bool,
     search_playlists_error: String,
     browse_info: Option<BrowseInfo>,
@@ -287,6 +290,9 @@ impl Desktop {
                 generation: 0,
                 tracks: Vec::new(),
                 search_playlists: Vec::new(),
+                search_artists: Vec::new(),
+                search_albums: Vec::new(),
+                search_top_results: Vec::new(),
                 search_playlists_loading: false,
                 search_playlists_error: String::new(),
                 browse_info: None,
@@ -536,6 +542,9 @@ impl Desktop {
                             snapshot.details = PlayingDetails::default();
                             snapshot.tracks.clear();
                             snapshot.search_playlists.clear();
+                            snapshot.search_artists.clear();
+                            snapshot.search_albums.clear();
+                            snapshot.search_top_results.clear();
                             snapshot.search_playlists_loading = false;
                             snapshot.search_playlists_error.clear();
                             emit(json!({"type":"signed_out"}));
@@ -655,11 +664,11 @@ impl Desktop {
                                 json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":changed}),
                             );
                         }
-                        Event::SearchPlaylists {
+                        Event::SearchResults {
                             account,
                             key,
                             generation,
-                            playlists,
+                            results,
                             message,
                         } => {
                             if snapshot.generation != generation
@@ -671,11 +680,17 @@ impl Desktop {
                             {
                                 continue;
                             }
-                            snapshot.search_playlists = playlists.clone();
+                            snapshot.tracks = results.tracks.clone();
+                            snapshot.search_playlists = results.playlists.clone();
+                            snapshot.search_artists = results.artists.clone();
+                            snapshot.search_albums = results.albums.clone();
+                            snapshot.search_top_results = results.top_results.clone();
+                            snapshot.loading = false;
+                            snapshot.more = false;
                             snapshot.search_playlists_loading = false;
                             snapshot.search_playlists_error = message.clone();
                             emit(
-                                json!({"type":"search_playlists","account":account,"key":key,"generation":generation,"playlists":playlists,"message":message}),
+                                json!({"type":"search_results","account":account,"key":key,"generation":generation,"results":results,"message":message}),
                             );
                         }
                         Event::Tracks {
@@ -1430,6 +1445,9 @@ fn browse(
             snapshot.generation = generation;
             snapshot.tracks.clear();
             snapshot.search_playlists.clear();
+            snapshot.search_artists.clear();
+            snapshot.search_albums.clear();
+            snapshot.search_top_results.clear();
             snapshot.search_playlists_loading = key.starts_with("search:");
             snapshot.search_playlists_error.clear();
             snapshot.browse_info = snapshot

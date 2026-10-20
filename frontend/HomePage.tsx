@@ -22,14 +22,16 @@ export function Shelf({
   navigate,
   play,
   ready,
+  defaultExpanded = false,
 }: {
   section: HomeSection;
   navigate: (route: string) => void;
   play: (item: HomeItem) => void;
   ready: boolean;
+  defaultExpanded?: boolean;
 }) {
   const row = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return (
     <section className="home-shelf" aria-label={section.title}>
       <div className="home-shelf-heading">

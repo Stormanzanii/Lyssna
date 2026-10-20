@@ -5,12 +5,17 @@ import type {
   Snapshot,
   Track,
   Playlist,
+  Artist,
+  Album,
   TrackFacts,
   Word,
 } from "./types";
 /** A page as last loaded, shown instantly when revisited or prefetched. */
 export interface CachedPage {
   search_playlists?: Playlist[];
+  search_artists?: Artist[];
+  search_albums?: Album[];
+  search_top_results?: string[];
   tracks?: Track[];
   more?: boolean;
   info?: BrowseInfo;
@@ -142,6 +147,9 @@ export const emptyState: AppState = {
   generation: 0,
   tracks: [],
   search_playlists: [],
+  search_artists: [],
+  search_albums: [],
+  search_top_results: [],
   search_playlists_loading: false,
   search_playlists_error: "",
   loading: false,
@@ -335,6 +343,31 @@ export function reducer(state: AppState, action: Action): AppState {
           search_playlists: action.playlists,
         }),
       };
+    case "search_results": {
+      if (
+        action.account !== state.profile?.id ||
+        action.generation !== state.generation ||
+        action.key !== state.route
+      )
+        return state;
+      const page = {
+        tracks: action.results.tracks,
+        search_playlists: action.results.playlists,
+        search_artists: action.results.artists,
+        search_albums: action.results.albums,
+        search_top_results: action.results.top_results,
+        more: false,
+      };
+      return {
+        ...state,
+        ...page,
+        loading: false,
+        pageError: "",
+        search_playlists_loading: false,
+        search_playlists_error: action.message,
+        pages: rememberPage(state.pages, action.key, page),
+      };
+    }
     case "page_loading":
       return action.generation === state.generation
         ? { ...state, loading: true }
@@ -368,6 +401,9 @@ export function reducer(state: AppState, action: Action): AppState {
         generation: action.generation,
         tracks: cached?.tracks ?? [],
         search_playlists: cached?.search_playlists ?? [],
+        search_artists: cached?.search_artists ?? [],
+        search_albums: cached?.search_albums ?? [],
+        search_top_results: cached?.search_top_results ?? [],
         search_playlists_loading: action.key.startsWith("search:"),
         search_playlists_error: "",
         browse_info: info,

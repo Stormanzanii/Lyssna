@@ -59,7 +59,7 @@ import {
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
-import { SearchPlaylists } from "./SearchPlaylists";
+import { SearchPage } from "./SearchPage";
 import { Logo } from "./brand";
 import {
   emptyState,
@@ -1469,6 +1469,21 @@ function App() {
                 onPlay={playTrack}
               />
             </div>
+          ) : state.route.startsWith("search:") ? (
+            <div className="browse-scroll search-scroll" ref={mainScroll}>
+              <SearchPage
+                key={state.route}
+                state={state}
+                navigate={homeNavigate}
+                play={homePlay}
+                playTrack={playTrack}
+                openArtist={openArtist}
+                openAlbum={openAlbum}
+                save={save}
+                follow={follow}
+                retry={() => navigate(state.route, false)}
+              />
+            </div>
           ) : (
             <div className="browse-scroll" ref={mainScroll}>
               {state.route === "home" ? (
@@ -1716,21 +1731,8 @@ function App() {
                   </button>
                 </div>
               )}
-              {state.route.startsWith("search:") && (
-                <SearchPlaylists
-                  state={state}
-                  navigate={homeNavigate}
-                  play={homePlay}
-                />
-              )}
               <div className={entity?.artist ? "artist-top" : "track-section"}>
                 <section>
-                  {state.route.startsWith("search:") &&
-                    state.tracks.length > 0 && (
-                      <div className="browse-section-title">
-                        <h2>Songs</h2>
-                      </div>
-                    )}
                   {entity?.artist && displayTracks.length > 0 && (
                     <div className="browse-section-title">
                       <h2>Popular</h2>

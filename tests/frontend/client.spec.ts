@@ -401,6 +401,49 @@ async function startClient(page: Page, initialRoute = "liked") {
           }
           if (command === "browse") {
             if (args.key === "home") return;
+            if (args.key.startsWith("search:")) {
+              setTimeout(
+                () =>
+                  emit({
+                    type: "search_results",
+                    account: "test-user",
+                    key: args.key,
+                    generation: args.generation,
+                    message: "",
+                    results: {
+                      tracks: Array.from({ length: 20 }, (_, index) => {
+                        const id = String(index + 1).padStart(22, "0");
+                        return {
+                          ...track,
+                          id,
+                          uri: `spotify:track:${id}`,
+                          name: `Song ${index + 1}`,
+                        };
+                      }),
+                      artists: [
+                        {
+                          ...track.artists[0],
+                          uri: `spotify:artist:${track.artists[0].id}`,
+                          images: track.album.images,
+                        },
+                      ],
+                      albums: [
+                        {
+                          ...track.album,
+                          uri: `spotify:album:${track.album.id}`,
+                        },
+                      ],
+                      playlists: [],
+                      top_results: [
+                        "spotify:track:0000000000000000000001",
+                        `spotify:artist:${track.artists[0].id}`,
+                      ],
+                    },
+                  }),
+                20,
+              );
+              return;
+            }
             const offset = args.offset ?? 0;
             setTimeout(
               () =>
@@ -3394,7 +3437,9 @@ test("playlist-only search results stay visible when songs are empty or playlist
   });
   await search.fill("chill");
   await search.press("Enter");
-  await expect(page.locator(".search-playlists")).toBeVisible();
+  await expect(
+    page.getByRole("tablist", { name: "Search categories" }),
+  ).toBeVisible();
   await page.waitForTimeout(150);
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
@@ -3434,7 +3479,122 @@ test("playlist-only search results stay visible when songs are empty or playlist
   await expect(
     page.getByRole("heading", { name: "No songs found" }),
   ).toHaveCount(0);
-  await expect(page.locator(".search-playlists")).toContainText(
+  await expect(page.locator(".search-page")).toContainText(
     "Some Spotify-curated playlists may be unavailable.",
   );
+});
+
+test("search matches compact Spotify layout and music category filters stay functional", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("arianna");
+  await search.press("Enter");
+  const results = page.getByRole("region", {
+    name: "Search results for arianna",
+    exact: true,
+  });
+  await expect(results.locator(".search-top-result")).toBeVisible();
+  await expect(results.getByRole("tab")).toHaveText([
+    "All",
+    "Songs",
+    "Artists",
+    "Playlists",
+    "Albums",
+  ]);
+  await expect(page.locator(".page-hero")).toHaveCount(0);
+  expect(
+    await results
+      .locator(".search-top-result")
+      .evaluate((element) => element.getBoundingClientRect().height),
+  ).toBeLessThan(110);
+  await page.screenshot({ path: "test-results/search-wide.png" });
+  await results.getByRole("tab", { name: "Songs", exact: true }).click();
+  await expect(results.locator(".search-result-row")).toHaveCount(20);
+  await expect(results.locator(".home-shelf")).toHaveCount(0);
+  await results
+    .getByRole("button", { name: "Save Song 1 to Liked Songs", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_item")
+            .at(-1)?.args,
+      ),
+    )
+    .toMatchObject({
+      uri: "spotify:track:0000000000000000000001",
+      saved: true,
+    });
+  await results
+    .locator(".search-result-row")
+    .first()
+    .click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "Song actions" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await results.getByRole("tab", { name: "Artists", exact: true }).click();
+  await expect(
+    results.getByRole("region", { name: "Artists", exact: true }),
+  ).toBeVisible();
+  await expect(results.locator(".home-shelf-items")).toHaveClass(/expanded/);
+  await results.getByRole("tab", { name: "Playlists", exact: true }).click();
+  await expect(
+    results.getByRole("heading", { name: "No playlists found", exact: true }),
+  ).toBeVisible();
+  await results.getByRole("tab", { name: "Albums", exact: true }).click();
+  await expect(
+    results.getByRole("region", { name: "Albums", exact: true }),
+  ).toBeVisible();
+  await results
+    .getByRole("button", { name: "Open Test album", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Test album",
+  );
+});
+
+test("compact search fits narrow panels, supports keyboard filters and resets for another query", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await startClient(page);
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("first");
+  await search.press("Enter");
+  await expect(page.locator(".search-top-result")).toBeVisible();
+  const all = page.getByRole("tab", { name: "All", exact: true });
+  await all.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "Songs", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  const fits = await page.locator(".search-page").evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return Array.from(element.querySelectorAll(".search-result-row")).every(
+      (row) => row.getBoundingClientRect().right <= box.right + 1,
+    );
+  });
+  expect(fits).toBe(true);
+  await page.screenshot({ path: "test-results/search-narrow.png" });
+  await search.fill("second");
+  await search.press("Enter");
+  await expect(
+    page.getByRole("tab", { name: "All", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("region", {
+      name: "Search results for second",
+      exact: true,
+    }),
+  ).toBeVisible();
 });

@@ -209,6 +209,19 @@ impl Spotify {
         )?;
         crate::search::parse_public(&response)
     }
+    pub fn search_catalogue(&mut self, text: &str) -> Result<crate::search::SearchResults> {
+        let response = self.request(
+            Method::GET,
+            "search",
+            &[
+                ("q", text.to_owned()),
+                ("type", "track,artist,album,playlist".into()),
+                ("limit", "10".into()),
+            ],
+            None,
+        )?;
+        crate::search::parse_public_catalogue(&response)
+    }
 
     pub fn saved_tracks(&mut self, offset: usize) -> Result<Vec<Track>> {
         let response = self.request(

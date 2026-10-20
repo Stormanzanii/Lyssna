@@ -418,7 +418,6 @@ impl SpotiFlex {
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
                 Event::BrowseInfo { .. }
-                | Event::SearchPlaylists { .. }
                 | Event::PlayingDetails { .. }
                 | Event::ArtistStats { .. }
                 | Event::Canvas { .. }
@@ -473,6 +472,28 @@ impl SpotiFlex {
                     }
                     self.native_id = None;
                     self.native_status = "Connecting…".into();
+                }
+                Event::SearchResults {
+                    account,
+                    key,
+                    generation,
+                    results,
+                    message,
+                } => {
+                    if self
+                        .profile
+                        .as_ref()
+                        .is_some_and(|profile| profile.id == account)
+                        && key == self.view
+                        && generation == self.tracks_generation
+                    {
+                        self.tracks = results.tracks;
+                        self.loading = false;
+                        self.more = false;
+                        if !message.is_empty() {
+                            self.show_notice(message, true);
+                        }
+                    }
                 }
                 Event::Library(playlists) => self.playlists = playlists,
                 Event::Tracks {

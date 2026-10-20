@@ -68,6 +68,13 @@ export interface Playlist {
   owner: { id: string; display_name?: string };
   collaborative: boolean;
 }
+export interface SearchResults {
+  tracks: Track[];
+  artists: Artist[];
+  albums: Album[];
+  playlists: Playlist[];
+  top_results: string[];
+}
 export interface Folder {
   name: string;
   playlist_ids: string[];
@@ -191,6 +198,9 @@ export interface Snapshot {
   generation: number;
   tracks: Track[];
   search_playlists: Playlist[];
+  search_artists: Artist[];
+  search_albums: Album[];
+  search_top_results: string[];
   search_playlists_loading: boolean;
   search_playlists_error: string;
   browse_info?: BrowseInfo;
@@ -261,6 +271,14 @@ export type AppEvent =
   | { type: "provider_configured"; kind?: "spicy" | "legacy" }
   | { type: "native"; ready: boolean; status: string }
   | { type: "library"; playlists: Playlist[] }
+  | {
+      type: "search_results";
+      account: string;
+      key: string;
+      generation: number;
+      results: SearchResults;
+      message: string;
+    }
   | {
       type: "search_playlists";
       account: string;

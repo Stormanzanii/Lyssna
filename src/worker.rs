@@ -66,11 +66,11 @@ pub enum Command {
 }
 
 pub enum Event {
-    SearchPlaylists {
+    SearchResults {
         account: String,
         key: String,
         generation: u64,
-        playlists: Vec<Playlist>,
+        results: Box<crate::search::SearchResults>,
         message: String,
     },
     TrackFacts(std::collections::HashMap<String, crate::track_facts::Facts>),
@@ -733,7 +733,12 @@ impl Backend {
                 if offset == 0
                     && let Some(query) = key.strip_prefix("search:")
                 {
-                    let mut spotify = self.api()?.background();
+                    let spotify = self.api()?;
+                    // Refresh on the background worker before sharing a read-only snapshot.
+                    let _ = spotify
+                        .tokens
+                        .refresh_if_needed(&spotify.client, &spotify.client_id);
+                    let mut spotify = spotify.background();
                     let native = self.native_controls.clone();
                     let events = self.events.clone();
                     let context = self.context.clone();
@@ -741,28 +746,29 @@ impl Backend {
                     let query = query.to_owned();
                     let key = key.clone();
                     thread::spawn(move || {
-                        let (playlists, message) = match native.search_playlists(&query) {
-                            Ok(playlists) => (playlists, String::new()),
-                            Err(_) => match spotify.search_playlists(&query) {
-                                Ok(playlists) => (
-                                    playlists,
+                        let (results, message) = match native.search_catalogue(&query) {
+                            Ok(results) => (results, String::new()),
+                            Err(_) => match spotify.search_catalogue(&query) {
+                                Ok(results) => (
+                                    results,
                                     "Some Spotify-curated playlists may be unavailable.".into(),
                                 ),
                                 Err(_) => (
-                                    Vec::new(),
-                                    "Could not load playlists. Try searching again.".into(),
+                                    crate::search::SearchResults::default(),
+                                    "Could not load search results. Try searching again.".into(),
                                 ),
                             },
                         };
-                        let _ = events.send(Event::SearchPlaylists {
+                        let _ = events.send(Event::SearchResults {
                             account,
                             key,
                             generation,
-                            playlists,
+                            results: Box::new(results),
                             message,
                         });
                         context.request_repaint();
                     });
+                    return Ok(());
                 }
                 let result = self.fetch_tracks(&key, offset);
                 match result {

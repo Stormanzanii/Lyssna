@@ -92,6 +92,7 @@ import {
   prefetchPage,
   cancelPrefetch,
   useLoadedImage,
+  useStickyLoadedImage,
   preloadImage,
   ExplicitBadge,
   usePosition,
@@ -815,7 +816,10 @@ function App() {
         album: state.browse_info.album ?? fallbackInfo?.album,
       }
     : fallbackInfo;
-  const artistBanner = useLoadedImage(entity?.overview?.header_image);
+  const artistBanner = useStickyLoadedImage(
+    entity?.overview?.header_image,
+    state.route,
+  );
   const heroImages = entity?.images.length ? entity.images : playlist?.images;
   const artworkColor = useArtworkColor(
     state.route === "liked" ? undefined : imageOf(heroImages),
@@ -1408,7 +1412,7 @@ function App() {
                   <section
                     className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
                     style={
-                      entity?.artist && artistBanner
+                      state.route.startsWith("artist:") && artistBanner
                         ? {
                             backgroundImage: `linear-gradient(0deg,#000c,#0000 65%),url("${artistBanner}")`,
                           }

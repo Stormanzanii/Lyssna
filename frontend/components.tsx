@@ -207,6 +207,20 @@ export function useLoadedImage(url?: string) {
   return loaded === url || (url && decodedImages.has(url)) ? url : undefined;
 }
 
+/**
+ * Like useLoadedImage, but while a replacement for the same `key` decodes
+ * (or the URL briefly disappears) it keeps returning the last decoded image,
+ * so refreshed metadata does not flash an empty background.
+ */
+export function useStickyLoadedImage(url: string | undefined, key: string) {
+  const loaded = useLoadedImage(url);
+  const [last, setLast] = useState<{ key: string; url: string }>();
+  useEffect(() => {
+    if (loaded) setLast({ key, url: loaded });
+  }, [loaded, key]);
+  return loaded ?? (last?.key === key ? last.url : undefined);
+}
+
 export function ArtistLinks({
   artists,
   onArtist,

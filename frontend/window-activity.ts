@@ -26,3 +26,10 @@ export function onWindowActivity(listener: () => void) {
 /** Ambience frame rate: full while focused, reduced in the background. */
 export const ambienceFps = (activity: WindowActivity) =>
   activity.minimized ? 0 : activity.focused ? 30 : 12;
+
+/** Latest window position in CSS pixels, as reported by Rust when moved. */
+let position: { x: number; y: number } | undefined;
+export const windowPosition = () => position;
+export function setWindowPosition(x: number, y: number) {
+  if (Number.isFinite(x) && Number.isFinite(y)) position = { x, y };
+}

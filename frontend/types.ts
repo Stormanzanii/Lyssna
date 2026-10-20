@@ -83,7 +83,7 @@ export interface Settings {
   reduce_motion: boolean;
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
-  floating_lyrics?: boolean;
+  space_gravity?: boolean;
   experimental_word_sync?: boolean;
   ui_font?: string;
   ui_zoom_percent?: number;
@@ -227,6 +227,7 @@ export type PlayerRequest = {
 };
 export type AppEvent =
   | { type: "window_activity"; minimized: boolean; focused: boolean }
+  | { type: "window_moved"; x: number; y: number }
   | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }
   | { type: "narration"; active: boolean }
   /** A Spicy Lyrics creator profile sheet opened or closed. */

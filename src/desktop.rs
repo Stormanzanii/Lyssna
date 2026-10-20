@@ -2119,6 +2119,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 #[cfg(windows)]
                 let was_minimized = AtomicBool::new(false);
                 window.on_window_event(move |event| {
+                    // Space Gravity lyrics react to the window being dragged.
+                    if let tauri::WindowEvent::Moved(position) = event {
+                        let scale = activity.scale_factor().unwrap_or(1.0);
+                        let _ = activity.emit(
+                            "spotiflex",
+                            json!({
+                                "type": "window_moved",
+                                "x": f64::from(position.x) / scale,
+                                "y": f64::from(position.y) / scale,
+                            }),
+                        );
+                    }
                     if matches!(
                         event,
                         tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)

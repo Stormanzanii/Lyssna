@@ -116,7 +116,7 @@ export const emptyState: AppState = {
     reduce_motion: false,
     liquid_glass: false,
     canvas_lyrics: true,
-    floating_lyrics: false,
+    space_gravity: false,
     experimental_word_sync: false,
     ui_font: "",
     lyric_font: "",
@@ -501,6 +501,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "media_control":
       // App handles these through the playback commands.
       return state;
+    case "window_moved":
     case "window_activity":
       // Held outside React state so animations update without re-rendering.
       return state;

@@ -346,9 +346,9 @@ export function SettingsPage({
                   "Play the track's Canvas video behind the lyrics page.",
                 ],
                 [
-                  "floating_lyrics",
-                  "Floating lyrics",
-                  "Let synced words float around the lyrics page.",
+                  "space_gravity",
+                  "Space Gravity",
+                  "Words float in zero gravity, drift as they're sung and react when you move the window.",
                 ],
                 [
                   "experimental_word_sync",

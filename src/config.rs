@@ -21,7 +21,9 @@ pub struct Settings {
     pub reduce_motion: bool,
     pub liquid_glass: bool,
     pub canvas_lyrics: bool,
-    pub floating_lyrics: bool,
+    /// Space Gravity lyrics; replaced the earlier floating lyrics option.
+    #[serde(alias = "floating_lyrics")]
+    pub space_gravity: bool,
     pub experimental_word_sync: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
@@ -46,7 +48,7 @@ impl Default for Settings {
             reduce_motion: false,
             liquid_glass: false,
             canvas_lyrics: true,
-            floating_lyrics: false,
+            space_gravity: false,
             experimental_word_sync: false,
             ui_font: String::new(),
             ui_zoom_percent: 100,
@@ -129,3 +131,17 @@ pub fn valid_client_id(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::Settings;
+
+    #[test]
+    fn saved_floating_lyrics_choice_becomes_space_gravity() {
+        let settings: Settings = serde_json::from_str(r#"{"floating_lyrics":true}"#).unwrap();
+        assert!(settings.space_gravity);
+        assert!(!settings.experimental_word_sync);
+        let saved = serde_json::to_value(&settings).unwrap();
+        assert_eq!(saved["space_gravity"], true);
+        assert!(saved.get("floating_lyrics").is_none());
+    }
+}

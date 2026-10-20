@@ -3062,95 +3062,115 @@ input[type="range"]:hover {
 .lyrics-page.narrow.canvas-lyrics::after {
   background: linear-gradient(#0004, #0006);
 }
-.floating-lyrics {
-  position: relative;
+/* Space Gravity: words float over the whole lyrics page. The stage spans
+   the page so words can drift around the artwork, which they avoid. */
+.lyrics-page.space-gravity .lyrics-body {
+  position: static;
+}
+.gravity-lyrics {
   height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
-.floating-stage {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  isolation: isolate;
-}
-.floating-word {
-  font-family: var(--lyric-font, inherit);
+.gravity-stage {
   position: absolute;
-  max-width: 45%;
-  text-align: center;
-  font-size: clamp(21px, 2.5cqw, 42px);
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.gravity-word {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 40cqw;
+  padding: 4px 6px;
+  border: 0;
+  font-family: var(--lyric-font, inherit);
+  font-size: clamp(22px, 2.6cqw, 44px);
   font-weight: 750;
-  line-height: 1.2;
-  transform-origin: center;
-  overflow-wrap: anywhere;
+  line-height: 1.15;
+  white-space: nowrap;
   color: transparent;
   background: linear-gradient(
     90deg,
-    #fff var(--word-progress),
-    #c5c5c5 var(--word-progress)
+    #fff var(--word-progress, 0%),
+    #ffffffb3 var(--word-progress, 0%)
   );
   background-clip: text;
   -webkit-background-clip: text;
-  padding: 8px;
-  border: 0;
-  will-change: transform, opacity;
+  transform-origin: center;
+  will-change: transform;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+  animation: gravity-word-in 180ms ease both;
 }
-.floating-word.active {
-  text-shadow: 0 0 20px #fff3;
-  z-index: 2;
+@keyframes gravity-word-in {
+  from {
+    opacity: 0;
+  }
 }
-.floating-word:focus-visible {
+.gravity-word.current {
+  opacity: 1;
+  text-shadow: 0 0 18px #ffffff2e;
+}
+.gravity-word.next {
+  opacity: 0.34;
+}
+.gravity-word.previous {
+  opacity: 0.22;
+}
+.gravity-word.background {
+  font-size: clamp(17px, 1.9cqw, 32px);
+}
+.gravity-word.exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+.gravity-word:hover {
+  opacity: 1;
+}
+.gravity-word.current:hover {
+  filter: drop-shadow(0 0 10px #ffffffd9);
+}
+.gravity-word.opposite.current:hover {
+  filter: drop-shadow(0 0 10px #ff8ca8d9);
+}
+.gravity-word:focus-visible {
   outline: 2px solid #fff9;
   border-radius: 6px;
 }
-.floating-wait {
+.gravity-wait {
   position: absolute;
-  top: 45%;
-  left: 12px;
-  right: 12px;
+  top: 50%;
+  right: 5%;
+  width: 45%;
+  transform: translateY(-50%);
   pointer-events: none;
 }
-.floating-wait i {
+.gravity-wait i {
   opacity: 0.7;
   animation: lyric-wait-pulse 1.8s ease-in-out infinite;
 }
-.floating-wait i:nth-child(2) {
+.gravity-wait i:nth-child(2) {
   animation-delay: 0.2s;
 }
-.floating-wait i:nth-child(3) {
+.gravity-wait i:nth-child(3) {
   animation-delay: 0.4s;
 }
-.floating-instrumental {
+.gravity-credits {
   position: absolute;
-  top: 45%;
-  left: 0;
-  width: 100%;
-  text-align: center;
-  font-size: 28px;
-  color: #fff9;
-}
-.floating-credits {
-  flex-shrink: 0;
-  max-height: 135px;
+  right: 5%;
+  bottom: 16px;
+  z-index: 3;
+  width: 42%;
+  max-height: 120px;
   overflow: auto;
-  padding: 12px 18px 18px;
   color: #fff9;
   font-size: 13px;
   line-height: 1.5;
 }
-.floating-credits p {
+.gravity-credits p {
   margin: 0 0 4px;
-}
-.floating-credits .lyric-source {
-  position: static;
-  padding: 0;
-}
-.floating-wait {
-  top: var(--floating-focus, 45%);
-  transform: translateY(-50%);
 }
 
 /* Dims the app while a creator profile sheet is open above it. */

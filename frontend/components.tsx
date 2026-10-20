@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { LyricsCanvas } from "./canvas-lyrics";
-import { FloatingLyrics } from "./floating-lyrics";
+import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
 import {
   Music2,
@@ -868,19 +868,21 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
-  const floating = !!(
-    state.settings.floating_lyrics &&
+  // Space Gravity needs word timing, so it estimates it for line-synced
+  // lyrics even when experimental word sync is off.
+  const gravity = !!(
+    state.settings.space_gravity &&
     state.lyrics?.synced &&
     motionAllowed
   );
   const lyrics = displayLyrics(
     state.lyrics,
-    !!state.settings.experimental_word_sync,
+    !!state.settings.experimental_word_sync || gravity,
   );
   return (
     <section
       ref={page}
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""}`}
     >
       {(!canvas || !canvasPlaying) && (
         <Ambience
@@ -937,10 +939,11 @@ function SongLyricsPage({
             </Marquee>
           </div>
           <div className="lyrics-body">
-            {lyrics && floating ? (
-              <FloatingLyrics
+            {lyrics && gravity ? (
+              <SpaceGravityLyrics
                 lyrics={lyrics}
                 time={current}
+                reduceMotion={!motionAllowed}
                 onSeek={(positionMs) =>
                   onPlayer({ command: "seek", positionMs })
                 }

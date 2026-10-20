@@ -1404,7 +1404,7 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
-test("Canvas defaults on, floating lyrics are optional, with sharp video left and metadata bottom-left", async ({
+test("Canvas defaults on, Space Gravity is optional, with sharp video left and metadata bottom-left", async ({
   page,
 }) => {
   await startClient(page);
@@ -1418,12 +1418,12 @@ test("Canvas defaults on, floating lyrics are optional, with sharp video left an
   await openSettings(page);
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
   await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
-  await expect(page.getByLabel("Floating lyrics")).not.toBeChecked();
+  await expect(page.getByLabel("Space Gravity")).not.toBeChecked();
   await page.getByLabel("Canvas in lyrics").check();
-  await page.getByLabel("Floating lyrics").check();
+  await page.getByLabel("Space Gravity").check();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".canvas-lyrics video")).toBeVisible();
-  await expect(page.locator(".floating-stage")).toBeVisible();
+  await expect(page.locator(".gravity-stage")).toBeVisible();
   expect(
     await page
       .locator(".lyrics-canvas-cover video")
@@ -1456,7 +1456,7 @@ test("Canvas defaults on, floating lyrics are optional, with sharp video left an
   await openSettings(page);
   await page.getByLabel("Reduce motion").check();
   await page.getByTitle("Lyrics", { exact: true }).click();
-  await expect(page.locator(".floating-stage")).toHaveCount(0);
+  await expect(page.locator(".gravity-stage")).toHaveCount(0);
   await expect(page.locator(".lyrics-canvas-cover")).toHaveCount(0);
   await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
 });

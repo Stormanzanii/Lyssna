@@ -115,7 +115,7 @@ import {
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
 import { GlassBackdrop } from "./liquid-glass";
-import { setWindowActivity } from "./window-activity";
+import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
 import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
@@ -301,6 +301,10 @@ function App() {
       const receive = (event: AppEvent) => {
         if (event.type === "window_activity") {
           setWindowActivity(event);
+          return;
+        }
+        if (event.type === "window_moved") {
+          setWindowPosition(event.x, event.y);
           return;
         }
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);

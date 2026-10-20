@@ -162,7 +162,6 @@ pub fn parse(account: &str, value: &Value) -> Result<HomePage> {
         greeting: text(&home["greeting"]),
         ..Default::default()
     };
-    let mut mixes = Vec::new();
     for section in sections.iter().take(50) {
         let title = text(&section["data"]["title"]);
         if title.is_empty() {
@@ -177,12 +176,6 @@ pub fn parse(account: &str, value: &Value) -> Result<HomePage> {
                 cards(child, 0, &mut items)
             }
         }
-        for item in &items {
-            if item.format == "daily-mix" && !mixes.iter().any(|old: &HomeItem| old.uri == item.uri)
-            {
-                mixes.push(item.clone());
-            }
-        }
         if !items.is_empty() {
             result.sections.push(HomeSection {
                 uri: text(&section["uri"]),
@@ -191,17 +184,6 @@ pub fn parse(account: &str, value: &Value) -> Result<HomePage> {
                 items,
             })
         }
-    }
-    if !mixes.is_empty() {
-        result.sections.insert(
-            0,
-            HomeSection {
-                uri: "daily-mixes".into(),
-                title: "Daily Mixes".into(),
-                items: mixes,
-                ..Default::default()
-            },
-        );
     }
     ensure!(
         !result.sections.is_empty(),
@@ -223,12 +205,14 @@ mod tests {
         let value = json!({"data":{"home":{"greeting":{"text":"Hello"},"sectionContainer":{"sections":{"items":[{"uri":"spotify:section:personal","data":{"title":{"transformedLabel":"Made for listener"}},"sectionItems":{"items":[{"content":{"data":playlist}}]}},{"uri":"spotify:section:recent","data":{"title":{"transformedLabel":"Recents"}},"sectionItems":{"items":[{"content":{"data":{"items":{"items":[{"entity":{"data":recent}},{"entity":{"data":{"uri":"spotify:episode:3234567890123456789012","name":"Podcast"}}}]}}}}]}}]}}}}});
         let page = parse("account-a", &value).unwrap();
         assert_eq!(page.account, "account-a");
-        assert_eq!(page.sections[0].title, "Daily Mixes");
+        // Daily Mixes stay inside Spotify's own shelf, not a copied row.
+        assert_eq!(page.sections.len(), 2);
+        assert_eq!(page.sections[0].title, "Made for listener");
         assert_eq!(page.sections[0].items[0].images.len(), 1);
-        assert_eq!(page.sections[2].items.len(), 1);
-        assert_eq!(page.sections[2].items[0].name, "Recent album");
+        assert_eq!(page.sections[1].items.len(), 1);
+        assert_eq!(page.sections[1].items[0].name, "Recent album");
         assert_eq!(
-            page.sections[2].items[0].route,
+            page.sections[1].items[0].route,
             "album:2234567890123456789012"
         );
     }

@@ -1,5 +1,6 @@
 .personal-home {
-  padding: 0 12px 32px;
+  /* Spotify keeps Home well clear of the panel edges. */
+  padding: 0 36px 32px;
   min-width: 0;
   container-type: inline-size;
 }
@@ -399,6 +400,9 @@
   }
 }
 @media (max-width: 850px) {
+  .personal-home {
+    padding: 0 18px 32px;
+  }
   .home-shelf-items {
     grid-auto-columns: 150px;
     gap: 16px;

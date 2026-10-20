@@ -2716,6 +2716,8 @@ test("Space Gravity words keep drifting while the song plays", async ({
   }
   // Re-rendering every frame must not respawn words at their start point.
   expect(new Set(samples).size).toBeGreaterThan(2);
+  // Exactly one word is marked as being sung.
+  await expect(page.locator(".gravity-word.singing")).toHaveCount(1);
 });
 
 test("Space plays and pauses after clicking any button, but not while searching", async ({

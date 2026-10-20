@@ -442,11 +442,14 @@ export function SpaceGravityLyrics({
           const lead = prepared.leads[entity.lead];
           const role = gravityRole(entity, lead, time, prepared.finalEnd);
           const exiting = !visible.includes(entity);
+          // The word being sung right now stands out from its line.
+          const singing =
+            role === "current" && time >= entity.start && time < entity.end;
           return (
             <button
               key={entity.key}
               ref={refFor(entity.key)}
-              className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""}`}
+              className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""} ${singing ? "singing" : ""}`}
               onClick={() => onSeek(entity.start)}
               tabIndex={exiting ? -1 : 0}
             >

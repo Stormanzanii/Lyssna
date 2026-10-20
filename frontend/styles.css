@@ -3134,7 +3134,10 @@ input[type="range"]:hover {
   will-change: transform;
   pointer-events: auto;
   cursor: pointer;
-  transition: opacity 180ms ease;
+  transition:
+    opacity 180ms ease,
+    scale 160ms ease,
+    text-shadow 160ms ease;
   animation: gravity-word-in 180ms ease both;
 }
 @keyframes gravity-word-in {
@@ -3143,8 +3146,25 @@ input[type="range"]:hover {
   }
 }
 .gravity-word.current {
-  opacity: 1;
+  opacity: 0.8;
   text-shadow: 0 0 18px #ffffff2e;
+}
+/* The word being sung: brightest, larger, glowing and above the rest. */
+.gravity-word.singing {
+  z-index: 5;
+  opacity: 1;
+  scale: 1.22;
+  text-shadow:
+    0 0 14px #ffffff8c,
+    0 0 34px #ffffff40;
+}
+.gravity-word.opposite.singing {
+  text-shadow:
+    0 0 14px #ff8ca88c,
+    0 0 34px #ff8ca840;
+}
+.reduce-motion .gravity-word.singing {
+  scale: 1.1;
 }
 .gravity-word.next {
   opacity: 0.34;

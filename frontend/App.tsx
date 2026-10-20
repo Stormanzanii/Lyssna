@@ -992,11 +992,12 @@ function App() {
   useEffect(() => {
     if (!state.loading) pendingPage.current = "";
   }, [state.loading, state.tracks.length, state.generation]);
+  // Playlists, Liked Songs and albums load every page at once, like Spotify.
+  const loadAll = collection || state.route.startsWith("album:");
   useEffect(() => {
-    if (collection && filtering && state.more && !state.loading) loadMore();
+    if (loadAll && state.more && !state.loading) loadMore();
   }, [
-    collection,
-    filtering,
+    loadAll,
     state.more,
     state.loading,
     state.tracks.length,

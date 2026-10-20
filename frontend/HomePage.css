@@ -191,6 +191,10 @@
   overflow: hidden;
   padding: 0 0 8px;
 }
+.home-shelf-items.clipped {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 90px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 90px), transparent);
+}
 .home-shelf-items.expanded {
   grid-auto-flow: row;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

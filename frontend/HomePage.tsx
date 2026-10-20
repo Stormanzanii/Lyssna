@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CircleCheck,
   CirclePlus,
@@ -45,6 +45,19 @@ export function Shelf({
   defaultExpanded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [clipped, setClipped] = useState(false);
+  const row = useRef<HTMLDivElement>(null);
+  // Fade the right edge only while cards run past it.
+  useEffect(() => {
+    const element = row.current;
+    if (!element) return;
+    const measure = () =>
+      setClipped(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [expanded, section.items.length]);
   const heading = shelfHeading(section);
   return (
     <section className="home-shelf" aria-label={section.title}>
@@ -64,7 +77,10 @@ export function Shelf({
           {expanded ? "Show less" : "Show all"}
         </button>
       </div>
-      <div className={`home-shelf-items ${expanded ? "expanded" : ""}`}>
+      <div
+        ref={row}
+        className={`home-shelf-items ${expanded ? "expanded" : ""} ${clipped && !expanded ? "clipped" : ""}`}
+      >
         {section.items.map((item) => (
           <article
             className={`home-card ${item.kind === "artist" ? "artist-card" : ""}`}

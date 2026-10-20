@@ -2747,3 +2747,17 @@ test("Space plays and pauses after clicking any button, but not while searching"
   await page.waitForTimeout(100);
   expect((await requests()).length).toBe(before);
 });
+
+test("clicking outside the device popup closes it", async ({ page }) => {
+  await startClient(page);
+  const devices = page.locator("footer").getByTitle("Devices", { exact: true });
+  await devices.click();
+  await expect(page.locator(".device-menu")).toBeVisible();
+  await page.locator(".device-menu h3").click();
+  await expect(page.locator(".device-menu")).toBeVisible();
+  await page.locator(".center-panel").click({ position: { x: 40, y: 200 } });
+  await expect(page.locator(".device-menu")).toHaveCount(0);
+  await devices.click();
+  await devices.click();
+  await expect(page.locator(".device-menu")).toHaveCount(0);
+});

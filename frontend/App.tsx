@@ -176,6 +176,18 @@ function App() {
   const [rightWidth, setRightWidth] = useState(360);
   const [target, setTarget] = useState("native");
   const [deviceMenu, setDeviceMenu] = useState(false);
+  useEffect(() => {
+    if (!deviceMenu) return;
+    // Clicking anywhere outside the device popup closes it. The Devices
+    // button toggles it itself, so it is left out here.
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest('.device-menu, [title="Devices"]'))
+        setDeviceMenu(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [deviceMenu]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [picker, setPicker] = useState<Track[] | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);

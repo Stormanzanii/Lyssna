@@ -1,39 +1,25 @@
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
+import { Ambience } from "./ambience";
+import type { Track } from "./types";
 
 /**
- * Blurred artwork behind the whole window so Liquid Glass panels have colour
- * to refract. New artwork fades in over the previous one once it has loaded.
+ * The playing track's warped, moving artwork behind the whole window, the
+ * same ambience the lyrics page uses, so Liquid Glass panels have colour to
+ * refract. It animates while playing and holds still when paused or when
+ * motion is reduced.
  */
 export const GlassBackdrop = memo(function GlassBackdrop({
-  image,
+  track,
+  playing,
+  reduceMotion,
 }: {
-  image?: string;
+  track?: Track;
+  playing: boolean;
+  reduceMotion: boolean;
 }) {
-  const [layers, setLayers] = useState<string[]>([]);
-  useEffect(() => {
-    if (!image) return;
-    let cancelled = false;
-    const loader = new Image();
-    loader.onload = () => {
-      if (!cancelled)
-        setLayers((previous) =>
-          previous.at(-1) === image ? previous : [...previous.slice(-1), image],
-        );
-    };
-    loader.src = image;
-    return () => {
-      cancelled = true;
-    };
-  }, [image]);
   return (
     <div className="glass-backdrop" aria-hidden="true">
-      {layers.map((url) => (
-        <div
-          key={url}
-          className="glass-backdrop-art"
-          style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
-        />
-      ))}
+      <Ambience track={track} animate={playing} reduceMotion={reduceMotion} />
       <div className="glass-backdrop-shade" />
     </div>
   );

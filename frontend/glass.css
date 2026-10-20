@@ -1,6 +1,6 @@
 /* Liquid Glass: an optional theme (Settings > Appearance). The playing
-   track's artwork, heavily blurred, sits behind the window; panels become
-   frosted, translucent sheets with a bright specular rim. */
+   track's artwork moves behind the window as the lyrics ambience does;
+   panels become frosted, translucent sheets with a bright specular rim. */
 .liquid-glass {
   --glass-fill: #1c1c2161;
   --glass-fill-strong: #1e1e23b8;
@@ -19,20 +19,6 @@
   pointer-events: none;
   background: radial-gradient(circle at 30% 20%, #2b2b3a, #0b0b0d 70%);
 }
-.glass-backdrop-art {
-  position: absolute;
-  inset: -12%;
-  background-size: cover;
-  background-position: center;
-  filter: blur(90px) saturate(1.7) brightness(0.62);
-  transform: scale(1.1);
-  animation: glass-art-in 0.9s ease-out both;
-}
-@keyframes glass-art-in {
-  from {
-    opacity: 0;
-  }
-}
 .glass-backdrop-shade {
   position: absolute;
   inset: 0;
@@ -40,8 +26,8 @@
     radial-gradient(ellipse at 50% 0%, transparent, #00000059 70%),
     linear-gradient(#0000002e, #00000066);
 }
-.liquid-glass.reduce-motion .glass-backdrop-art {
-  animation: none;
+.glass-backdrop .ambience {
+  z-index: 0;
 }
 
 /* Chrome around the panels lets the backdrop through. */

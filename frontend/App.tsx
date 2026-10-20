@@ -1031,7 +1031,11 @@ function App() {
       }}
     >
       {state.settings.liquid_glass && (
-        <GlassBackdrop image={state.playback.item?.album.images?.[0]?.url} />
+        <GlassBackdrop
+          track={state.playback.item}
+          playing={state.playback.is_playing}
+          reduceMotion={state.settings.reduce_motion}
+        />
       )}
       <header className="topbar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region aria-label="SpotiFlex">

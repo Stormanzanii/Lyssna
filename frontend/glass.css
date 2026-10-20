@@ -129,6 +129,17 @@
 .liquid-glass .search-box:focus-within {
   background: #ffffff1f;
 }
+.liquid-glass .playlist-flyout-search {
+  background: #ffffff14;
+  box-shadow: 0 1px 0 #ffffff1f inset;
+  border-radius: 10px;
+}
+.liquid-glass .playlist-flyout-search:focus-within {
+  background: #ffffff1f;
+  box-shadow:
+    0 1px 0 #ffffff1f inset,
+    0 0 0 1px #ffffff40 inset;
+}
 .liquid-glass .library-item:hover {
   background: #ffffff12;
 }
@@ -157,6 +168,10 @@
   border: 0;
   border-radius: 14px;
   box-shadow: 0 20px 60px #00000073;
+}
+/* Recent searches hang under the search box, not the window. */
+.liquid-glass .recent-searches {
+  position: absolute;
 }
 .liquid-glass .profile-menu,
 .liquid-glass .sort-menu {

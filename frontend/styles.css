@@ -2564,6 +2564,84 @@ input[type="range"]:hover {
 .song-menu > button:hover {
   background: #ffffff0b;
 }
+.song-menu > button.active {
+  background: #ffffff14;
+}
+.song-menu .menu-chevron {
+  margin-left: auto;
+  color: #b3b3b3;
+}
+/* Add to playlist flyout beside the song menu. */
+.playlist-flyout {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  max-height: min(460px, calc(100vh - 16px));
+  padding: 6px;
+}
+.playlist-flyout-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 2px 6px;
+  padding: 0 12px;
+  height: 40px;
+  border-radius: 6px;
+  background: #3e3e3e;
+  color: #b3b3b3;
+}
+.playlist-flyout-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+}
+.playlist-flyout-new,
+.playlist-flyout-list > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 4px;
+  font-size: 15px;
+  text-align: left;
+  color: #e8e8e8;
+}
+.playlist-flyout-new {
+  padding-bottom: 13px;
+  border-bottom: 1px solid #ffffff1a;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: 4px;
+}
+.playlist-flyout-new:hover,
+.playlist-flyout-list > button:hover {
+  background: #ffffff12;
+}
+.playlist-flyout-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+.playlist-flyout-list > button span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playlist-flyout-list > button svg {
+  flex: none;
+  color: #b3b3b3;
+}
+.playlist-flyout-list > p {
+  padding: 12px 14px;
+  color: #a7a7a7;
+  font-size: 14px;
+}
 /* Covers the whole window so a left click anywhere outside an open menu,
    including the header and player bar, closes it first. */
 .popover-dismiss {
@@ -2626,14 +2704,6 @@ input[type="range"]:hover {
 .dialog .inline-actions {
   justify-content: flex-end;
   margin-top: 24px;
-}
-.playlist-picker > div:last-child {
-  max-height: 55vh;
-  overflow: auto;
-}
-.playlist-picker .library-item strong {
-  font-size: 14px;
-  font-weight: 550;
 }
 .setup-dialog {
   width: min(100%, 510px);

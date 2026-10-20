@@ -210,25 +210,13 @@ pub async fn add_to_playlist(session: &Session, id: &str, tracks: &[Track]) -> R
     };
     let existing: HashSet<String> = playlist.tracks().map(SpotifyUri::to_uri).collect();
     let additions = crate::model::unique_additions(&existing, tracks);
-    let mut revision = playlist.revision;
     let mut added = 0;
     for batch in additions.chunks(100) {
-        let written = async {
-            let body = add_changes(&revision, batch, &session.username());
-            let bytes = tokio::time::timeout(
-                Duration::from_secs(15),
-                session.spclient().request_with_protobuf(
-                    &reqwest::Method::POST,
-                    &format!("/playlist/v2/playlist/{id}/changes"),
-                    None,
-                    &body,
-                ),
-            )
-            .await
-            .context("Playlist change timed out")??;
-            ensure!(bytes.len() <= 16_000_000, "Playlist response is too large");
-            Ok::<_, anyhow::Error>(bytes)
-        }
+        let written = playlist_json(
+            session,
+            &format!("/playlist/v2/playlist/{id}/changes"),
+            &add_changes(batch),
+        )
         .await;
         let confirmed = match written {
             Ok(_) => read().await,
@@ -244,7 +232,6 @@ pub async fn add_to_playlist(session: &Session, id: &str, tracks: &[Track]) -> R
                     }
                     return Err(error);
                 }
-                revision = after.revision;
                 added += batch.len();
             }
             Err(error) if added == 0 => return Ok(Added::NotWritten(error)),
@@ -256,41 +243,119 @@ pub async fn add_to_playlist(session: &Session, id: &str, tracks: &[Track]) -> R
     Ok(Added::Count(added))
 }
 
-fn add_changes(
-    revision: &[u8],
-    uris: &[String],
-    user: &str,
-) -> librespot_protocol::playlist4_external::ListChanges {
-    use librespot_protocol::playlist4_external::{
-        Add, ChangeInfo, Delta, Item, ItemAttributes, ListChanges, Op, op::Kind,
-    };
-    let now = time::OffsetDateTime::now_utc().unix_timestamp() * 1000;
-    let mut add = Add::new();
-    add.set_add_last(true);
-    for uri in uris {
-        let mut attributes = ItemAttributes::new();
-        attributes.set_added_by(user.into());
-        attributes.set_timestamp(now);
-        let mut item = Item::new();
-        item.set_uri(uri.clone());
-        item.attributes = Some(attributes).into();
-        add.items.push(item);
+/// Create a private playlist and put it first in the library. Returns its ID.
+pub async fn create_playlist(session: &Session, name: &str) -> Result<String> {
+    let name = name.trim();
+    ensure!(
+        !name.is_empty() && name.chars().count() <= 100 && !name.chars().any(char::is_control),
+        "Choose a playlist name up to 100 characters"
+    );
+    // Same body as Spotify's web player: one list-attribute update.
+    let reply = playlist_json(
+        session,
+        "/playlist/v2/playlist",
+        &json!({"ops": [{
+            "kind": 6,
+            "updateListAttributes": {"newAttributes": {"values": {"name": name}}}
+        }]}),
+    )
+    .await
+    .context("Spotify could not create the playlist")?;
+    let id = reply["uri"]
+        .as_str()
+        .unwrap_or_default()
+        .rsplit_once("playlist:")
+        .map(|(_, id)| id)
+        .filter(|id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+        .context("Spotify returned an invalid playlist")?
+        .to_owned();
+    rootlist_change(session, rootlist_add(&format!("spotify:playlist:{id}"))).await?;
+    Ok(id)
+}
+
+/// JSON request to Spotify's playlist service, as the web player sends it.
+async fn playlist_json(session: &Session, path: &str, body: &Value) -> Result<Value> {
+    use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    let body = serde_json::to_vec(body)?;
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(15),
+        session
+            .spclient()
+            .request(&reqwest::Method::POST, path, Some(headers), Some(&body)),
+    )
+    .await
+    .context("Spotify playlist request timed out")??;
+    ensure!(bytes.len() <= 16_000_000, "Playlist response is too large");
+    if bytes.is_empty() {
+        return Ok(Value::Null);
     }
-    let mut op = Op::new();
-    op.set_kind(Kind::ADD);
-    op.add = Some(add).into();
-    let mut info = ChangeInfo::new();
-    info.set_user(user.into());
-    info.set_timestamp(now);
-    let mut delta = Delta::new();
-    delta.set_base_version(revision.to_vec());
-    delta.ops.push(op);
-    delta.info = Some(info).into();
-    let mut changes = ListChanges::new();
-    changes.set_base_revision(revision.to_vec());
-    changes.deltas.push(delta);
-    changes.set_want_resulting_revisions(true);
-    changes
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+/// Remove a playlist from the library, as Spotify's Delete does for owners.
+pub async fn remove_from_library(session: &Session, id: &str) -> Result<()> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid playlist ID"
+    );
+    rootlist_change(
+        session,
+        json!({"kind": 3, "rem": {
+            "items": [{"uri": format!("spotify:playlist:{id}")}],
+            "itemsAsKey": true
+        }}),
+    )
+    .await
+}
+
+fn rootlist_add(uri: &str) -> Value {
+    json!({"kind": 2, "add": {
+        "items": [{"uri": uri, "attributes": {
+            "timestamp": (time::OffsetDateTime::now_utc().unix_timestamp() * 1000).to_string()
+        }}],
+        "addFirst": true
+    }})
+}
+
+async fn rootlist_change(session: &Session, op: Value) -> Result<()> {
+    let user: String =
+        url::form_urlencoded::byte_serialize(session.username().as_bytes()).collect();
+    playlist_json(
+        session,
+        &format!("/playlist/v2/user/{user}/rootlist/changes"),
+        &json!({
+            "deltas": [{"ops": [op], "info": {"source": {"client": 5}}}],
+            "wantResultingRevisions": false,
+            "wantSyncResult": false,
+            "nonces": []
+        }),
+    )
+    .await
+    .context("Spotify could not change the library")?;
+    Ok(())
+}
+
+/// Append songs, in the web player's change format.
+fn add_changes(uris: &[String]) -> Value {
+    let now = (time::OffsetDateTime::now_utc().unix_timestamp() * 1000).to_string();
+    json!({
+        "deltas": [{
+            "ops": [{"kind": 2, "add": {
+                "items": uris
+                    .iter()
+                    .map(|uri| json!({"uri": uri, "attributes": {"timestamp": now}}))
+                    .collect::<Vec<_>>(),
+                "addLast": true
+            }}],
+            "info": {"source": {"client": 5}}
+        }],
+        "wantResultingRevisions": false,
+        "wantSyncResult": false,
+        "nonces": []
+    })
 }
 
 static OWNER_NAMES: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
@@ -717,29 +782,71 @@ mod library_write_tests {
         assert!(recent_plays(&json!({})).is_err());
     }
     #[test]
-    fn playlist_change_appends_items_from_the_current_revision() {
-        let changes = add_changes(
-            b"rev",
-            &["spotify:track:a".into(), "spotify:track:b".into()],
-            "me",
-        );
-        assert_eq!(changes.base_revision(), b"rev");
-        let delta = &changes.deltas[0];
-        assert_eq!(delta.base_version(), b"rev");
-        assert_eq!(delta.info.user(), "me");
-        let op = &delta.ops[0];
-        assert_eq!(
-            op.kind(),
-            librespot_protocol::playlist4_external::op::Kind::ADD
-        );
-        assert!(op.add.add_last());
-        let uris: Vec<_> = op.add.items.iter().map(|item| item.uri()).collect();
+    fn playlist_change_appends_items_at_the_end() {
+        let changes = add_changes(&["spotify:track:a".into(), "spotify:track:b".into()]);
+        let op = &changes["deltas"][0]["ops"][0];
+        assert_eq!(op["kind"], 2);
+        assert_eq!(op["add"]["addLast"], true);
+        let uris: Vec<_> = op["add"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["uri"].as_str().unwrap())
+            .collect();
         assert_eq!(uris, ["spotify:track:a", "spotify:track:b"]);
-        assert!(
-            op.add
-                .items
-                .iter()
-                .all(|item| item.attributes.added_by() == "me")
-        );
+    }
+}
+
+#[cfg(test)]
+mod live_playlist_tests {
+    use super::*;
+    #[test]
+    #[ignore = "Creates a temporary private playlist with the saved sign-in, adds songs twice, then removes it"]
+    fn live_playlist_create_add_and_remove() {
+        crate::native::with_live_session(async |session: &Session| {
+            let id = create_playlist(session, "SpotiFlex write test")
+                .await
+                .expect("Native playlist creation failed");
+            let checked = async {
+                let listed = library(session).await?;
+                ensure!(
+                    listed.iter().any(|playlist| playlist.id == id),
+                    "New playlist missing from library"
+                );
+                let recent = recent(session).await?;
+                let mut picks: Vec<Track> = Vec::new();
+                for track in recent {
+                    if picks.len() < 3 && !picks.iter().any(|pick| pick.uri == track.uri) {
+                        picks.push(track);
+                    }
+                }
+                let first = add_to_playlist(session, &id, &picks).await?;
+                let again = add_to_playlist(session, &id, &picks).await?;
+                Ok::<_, anyhow::Error>((picks.len(), first, again))
+            }
+            .await;
+            let removed = remove_from_library(session, &id).await;
+            let gone = library(session)
+                .await
+                .map(|listed| !listed.iter().any(|playlist| playlist.id == id));
+            let (picked, first, again) = checked.expect("Native playlist checks failed");
+            removed.expect("Native playlist removal failed");
+            assert!(
+                gone.expect("Library reread failed"),
+                "Playlist still listed"
+            );
+            match (first, again) {
+                (Added::Count(first), Added::Count(again)) => {
+                    assert_eq!(first, picked);
+                    assert_eq!(again, 0);
+                    eprintln!(
+                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, removed"
+                    );
+                }
+                (Added::NotWritten(error), _) | (_, Added::NotWritten(error)) => {
+                    panic!("Native playlist change was not written: {error:#}")
+                }
+            }
+        });
     }
 }

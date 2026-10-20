@@ -301,6 +301,9 @@ impl NativeControls {
             crate::native_browse::add_to_playlist(session, playlist_id, tracks).await
         })
     }
+    pub fn create_playlist(&self, name: &str) -> Result<String> {
+        self.run(async |session| crate::native_browse::create_playlist(session, name).await)
+    }
     fn run<T>(&self, task: impl AsyncFnOnce(&Session) -> Result<T>) -> Result<T> {
         let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()

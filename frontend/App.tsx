@@ -56,6 +56,7 @@ import {
   Copy,
   ExternalLink,
   Pin,
+  ChevronRight,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
@@ -131,6 +132,7 @@ import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
+import { PlaylistFlyout } from "./playlist-flyout";
 /** Lyrics use Inter unless the user picks a lyrics font. */
 const DEFAULT_LYRIC_FONT = '"Inter Variable", "Segoe UI", sans-serif';
 /** Inputs that take no typing, so Space still toggles playback. */
@@ -197,7 +199,11 @@ function App() {
     return () => document.removeEventListener("pointerdown", outside);
   }, [deviceMenu]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [picker, setPicker] = useState<Track[] | null>(null);
+  const [picker, setPicker] = useState<{
+    tracks: Track[];
+    x: number;
+    y: number;
+  } | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [songMenu, setSongMenu] = useState<{
@@ -1719,13 +1725,16 @@ function App() {
                   <span>{selected.size} selected</span>
                   <button
                     className="pill"
-                    onClick={() =>
-                      setPicker(
-                        displayTracks.filter((track) =>
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setPicker({
+                        tracks: displayTracks.filter((track) =>
                           selected.has(track.uri),
                         ),
-                      )
-                    }
+                        x: rect.left,
+                        y: rect.bottom + 6,
+                      });
+                    }}
                   >
                     <Plus size={15} />
                     Add to playlist
@@ -2330,7 +2339,13 @@ function App() {
       )}
       {songMenu && (
         <>
-          <div className="popover-dismiss" onClick={() => setSongMenu(null)} />
+          <div
+            className="popover-dismiss"
+            onClick={() => {
+              setSongMenu(null);
+              setPicker(null);
+            }}
+          />
           <div
             className="song-menu popover"
             role="menu"
@@ -2365,7 +2380,7 @@ function App() {
                 ListMusic,
                 () => play({ command: "enqueue", uri: songMenu.track.uri }),
               ],
-              ["Add to playlist", Plus, () => setPicker([songMenu.track])],
+              ["Add to playlist", Plus, () => {}],
               ["Open album", Music2, () => openAlbum(songMenu.track.album)],
               [
                 "Go to artist",
@@ -2389,17 +2404,36 @@ function App() {
               ],
             ].map(([label, Icon, action]) => {
               const ItemIcon = Icon as typeof Play;
+              // Add to playlist opens a flyout beside the menu, like Spotify.
+              const submenu = label === "Add to playlist";
+              const openFlyout = (button: HTMLElement) => {
+                const rect = button.getBoundingClientRect(),
+                  right = rect.right + 300 + 8 <= window.innerWidth;
+                setPicker({
+                  tracks: [songMenu.track],
+                  x: right ? rect.right + 4 : rect.left - 304,
+                  y: rect.top - 8,
+                });
+              };
               return (
                 <button
                   key={String(label)}
                   role="menuitem"
-                  onClick={() => {
+                  aria-haspopup={submenu ? "menu" : undefined}
+                  aria-expanded={submenu ? !!picker : undefined}
+                  className={submenu && picker ? "active" : undefined}
+                  onMouseEnter={(event) =>
+                    submenu ? openFlyout(event.currentTarget) : setPicker(null)
+                  }
+                  onClick={(event) => {
+                    if (submenu) return openFlyout(event.currentTarget);
                     (action as () => void)();
                     setSongMenu(null);
                   }}
                 >
                   <ItemIcon size={17} />
                   {String(label)}
+                  {submenu && <ChevronRight size={17} className="menu-chevron" />}
                 </button>
               );
             })}
@@ -2536,44 +2570,43 @@ function App() {
           );
         })()}
       {picker && (
-        <div className="modal-backdrop" onClick={() => setPicker(null)}>
-          <section
-            className="dialog playlist-picker"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2>Add to playlist</h2>
-              <button className="icon-button" onClick={() => setPicker(null)}>
-                <X />
-              </button>
-            </div>
-            <p>
-              {picker.length} song{picker.length === 1 ? "" : "s"} · existing
-              songs will be skipped
-            </p>
-            <div>
-              {state.playlists
-                .filter(
-                  (playlist) =>
-                    playlist.owner.id === state.profile?.id ||
-                    playlist.collaborative,
-                )
-                .map((playlist) => (
-                  <button
-                    className="library-item"
-                    key={playlist.id}
-                    onClick={() => {
-                      void call("add_tracks", { playlist, tracks: picker });
-                      setPicker(null);
-                    }}
-                  >
-                    <Cover images={playlist.images} />
-                    <strong>{playlist.name}</strong>
-                  </button>
-                ))}
-            </div>
-          </section>
-        </div>
+        <>
+          {!songMenu && (
+            <div
+              className="popover-dismiss"
+              onClick={() => setPicker(null)}
+            />
+          )}
+          <PlaylistFlyout
+            key={`${picker.x}:${picker.y}`}
+            x={picker.x}
+            y={picker.y}
+            playlists={state.playlists.filter(
+              (playlist) =>
+                playlist.owner.id === state.profile?.id ||
+                playlist.collaborative,
+            )}
+            onPick={(playlist) => {
+              void call("add_tracks", { playlist, tracks: picker.tracks });
+              setPicker(null);
+              setSongMenu(null);
+            }}
+            onCreate={() => {
+              const own = state.playlists.filter(
+                (playlist) => playlist.owner.id === state.profile?.id,
+              ).length;
+              void call("create_playlist", {
+                name:
+                  picker.tracks.length === 1
+                    ? picker.tracks[0].name
+                    : `My Playlist #${own + 1}`,
+                tracks: picker.tracks,
+              });
+              setPicker(null);
+              setSongMenu(null);
+            }}
+          />
+        </>
       )}
       {folderDialog && (
         <div className="modal-backdrop" onClick={() => setFolderDialog(false)}>

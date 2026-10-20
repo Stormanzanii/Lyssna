@@ -1971,6 +1971,24 @@ fn add_tracks(
         .send(Command::Add { playlist, tracks })
         .map_err(error)
 }
+#[tauri::command]
+fn create_playlist(
+    name: String,
+    tracks: Vec<Track>,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    if tracks.len() > 10_000 {
+        return Err("Choose fewer songs".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::CreatePlaylist { name, tracks })
+        .map_err(error)
+}
 /// Hides scrollbars in the creator profile sheet; wheel and touch scrolling
 /// still work.
 const HIDE_SCROLLBARS: &str = r#"(() => {
@@ -2263,6 +2281,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             retry_lyrics,
             import_lyrics,
             add_tracks,
+            create_playlist,
             open_link,
             open_creator_profile,
             resolve_album,

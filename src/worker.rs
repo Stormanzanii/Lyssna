@@ -42,6 +42,11 @@ pub enum Command {
         playlist: Playlist,
         tracks: Vec<Track>,
     },
+    /// Create a private playlist holding these songs.
+    CreatePlaylist {
+        name: String,
+        tracks: Vec<Track>,
+    },
     SaveTrack(String),
     FetchLyrics(Track),
     RetryAudio,
@@ -875,6 +880,28 @@ impl Backend {
                     "Added {count} tracks to {}. Existing tracks skipped.",
                     playlist.name
                 )));
+            }
+            Command::CreatePlaylist { name, tracks } => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then create the playlist."
+                );
+                let id = self.native_controls.create_playlist(&name)?;
+                let added = match self.native_controls.add_to_playlist(&id, &tracks) {
+                    Ok(crate::native_browse::Added::Count(count)) => count,
+                    Ok(crate::native_browse::Added::NotWritten(error)) | Err(error) => {
+                        self.refresh_library()?;
+                        return Err(
+                            error.context(format!("Created {name} but could not add songs"))
+                        );
+                    }
+                };
+                self.refresh_library()?;
+                self.emit(Event::Notice(if added == 0 {
+                    format!("Created {name}")
+                } else {
+                    format!("Added to {name}")
+                }));
             }
             Command::SaveTrack(uri) => {
                 if !self.native_ready() || self.native_controls.set_saved(&uri, true).is_err() {

@@ -500,6 +500,9 @@ export function reducer(state: AppState, action: Action): AppState {
     case "media_control":
       // App handles these through the playback commands.
       return state;
+    case "window_activity":
+      // Held outside React state so animations update without re-rendering.
+      return state;
     case "update":
       return {
         ...state,

@@ -2100,6 +2100,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     64,
                     64,
                 ))?;
+                // WebView2 keeps rendering while minimized, so tell the page
+                // when to suspend or throttle its GPU animations.
+                let activity = window.clone();
+                window.on_window_event(move |event| {
+                    if matches!(
+                        event,
+                        tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)
+                    ) {
+                        let minimized = activity.is_minimized().unwrap_or(false);
+                        let focused = activity.is_focused().unwrap_or(true);
+                        let _ = activity.emit(
+                            "spotiflex",
+                            json!({"type":"window_activity","minimized":minimized,"focused":focused}),
+                        );
+                    }
+                });
             }
             app.manage(Desktop::start(app.handle().clone())?);
             let handle = app.handle().clone();

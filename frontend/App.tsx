@@ -114,6 +114,7 @@ import {
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
 import { GlassBackdrop } from "./liquid-glass";
+import { setWindowActivity } from "./window-activity";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
@@ -293,6 +294,10 @@ function App() {
       let bootstrapped = false;
       const pending: AppEvent[] = [];
       const receive = (event: AppEvent) => {
+        if (event.type === "window_activity") {
+          setWindowActivity(event);
+          return;
+        }
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);
         if (event.type === "session")
           void preloadImage(imageOf(event.profile.images));

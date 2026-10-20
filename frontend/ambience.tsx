@@ -1,6 +1,11 @@
 import { memo, useEffect, useRef } from "react";
 import Kawarp from "@kawarp/core";
 import type { Track } from "./types";
+import {
+  ambienceFps,
+  onWindowActivity,
+  windowActivity,
+} from "./window-activity";
 export const Ambience = memo(function Ambience({
   track,
   image,
@@ -57,14 +62,19 @@ export const Ambience = memo(function Ambience({
         !disposed &&
         visible &&
         !document.hidden &&
+        ambienceFps(windowActivity()) > 0 &&
         motion.current.animate &&
         !motion.current.reduceMotion &&
         !reduced.matches;
     const settling = () =>
-      !disposed && visible && !document.hidden && performance.now() < settle;
+      !disposed &&
+      visible &&
+      !document.hidden &&
+      !windowActivity().minimized &&
+      performance.now() < settle;
     const tick = (time: number) => {
       if (!allowed() && !settling()) return;
-      if (time - last >= 1000 / 30) {
+      if (time - last >= 1000 / Math.max(1, ambienceFps(windowActivity()))) {
         engine.renderFrame();
         last = time;
       }
@@ -103,6 +113,7 @@ export const Ambience = memo(function Ambience({
     });
     observer.observe(canvas);
     document.addEventListener("visibilitychange", restart);
+    const stopActivity = onWindowActivity(restart);
     reduced.addEventListener("change", restart);
     return () => {
       disposed = true;
@@ -110,6 +121,7 @@ export const Ambience = memo(function Ambience({
       sizes.disconnect();
       observer.disconnect();
       document.removeEventListener("visibilitychange", restart);
+      stopActivity();
       reduced.removeEventListener("change", restart);
       resume.current = null;
       renderer.current = null;

@@ -221,6 +221,7 @@ export type PlayerRequest = {
   track?: Track;
 };
 export type AppEvent =
+  | { type: "window_activity"; minimized: boolean; focused: boolean }
   | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }
   | { type: "narration"; active: boolean }
   /** A Spicy Lyrics creator profile sheet opened or closed. */

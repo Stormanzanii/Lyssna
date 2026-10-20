@@ -2663,6 +2663,7 @@ input[type="range"]:hover {
   padding: 6px;
 }
 .playlist-flyout-search {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2673,9 +2674,17 @@ input[type="range"]:hover {
   background: #3e3e3e;
   color: #b3b3b3;
 }
+.playlist-flyout-search:focus-within {
+  box-shadow: 0 0 0 1px #ffffff59 inset;
+}
+.playlist-flyout-search input:focus-visible {
+  outline: none;
+}
 .playlist-flyout-search input {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  padding: 0;
   background: none;
   border: 0;
   outline: none;
@@ -2696,6 +2705,7 @@ input[type="range"]:hover {
   color: #e8e8e8;
 }
 .playlist-flyout-new {
+  flex: none;
   padding-bottom: 13px;
   border-bottom: 1px solid #ffffff1a;
   border-radius: 4px 4px 0 0;
@@ -2708,6 +2718,15 @@ input[type="range"]:hover {
 .playlist-flyout-list {
   overflow-y: auto;
   min-height: 0;
+}
+.playlist-flyout-list > button {
+  padding: 6px 10px;
+}
+.playlist-flyout-list .cover {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 4px;
 }
 .playlist-flyout-list > button span {
   flex: 1;

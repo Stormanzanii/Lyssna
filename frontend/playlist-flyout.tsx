@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, Search, Users } from "lucide-react";
+import { Cover } from "./components";
 import type { Playlist } from "./types";
 
 const WIDTH = 300;
@@ -61,6 +62,7 @@ export function PlaylistFlyout({
             title={playlist.name}
             onClick={() => onPick(playlist)}
           >
+            <Cover images={playlist.images} />
             <span>{playlist.name}</span>
             {playlist.collaborative && (
               <Users size={17} aria-label="Collaborative playlist" />

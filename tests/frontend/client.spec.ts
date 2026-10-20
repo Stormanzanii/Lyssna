@@ -2394,6 +2394,37 @@ test("narrow Canvas lyrics stack the title above the lyrics", async ({
   await page.screenshot({ path: "target/diagnostics/canvas-narrow.png" });
 });
 
+test("compact lyrics centre the title and artists against cover and Canvas thumbnails", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Compact lyrics", { exact: true })
+    .click();
+  const alignment = () =>
+    page.evaluate(() => {
+      const root = document.querySelector(".lyrics-page")!;
+      const cover = root
+        .querySelector(".lyrics-album > .cover")!
+        .getBoundingClientRect();
+      const title = root
+        .querySelector(".lyrics-title")!
+        .getBoundingClientRect();
+      const artists = root
+        .querySelector(".lyrics-artists")!
+        .getBoundingClientRect();
+      return Math.abs(
+        (title.top + artists.bottom) / 2 - (cover.top + cover.bottom) / 2,
+      );
+    });
+  await expect.poll(alignment).toBeLessThan(1);
+  await emitCanvas(page);
+  await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
+  await expect.poll(alignment).toBeLessThan(1);
+});
+
 test("unsung split words keep their syllables together", async ({ page }) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();

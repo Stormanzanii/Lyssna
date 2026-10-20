@@ -117,3 +117,5 @@ The artwork-side toggle also moves the sharp Canvas video and its track metadata
 
 
 App font and Lyrics font accept typed installed font-family names and apply each edit immediately. Windows resolves installed fonts, including those in its Fonts directory, without importing a copy. Both fields show a live preview, suggest common and imported fonts, and restore their defaults when cleared. Imported font files remain selectable by their display names. Browser checks cover typing a multiword name, a font outside the presets, immediate previews, persistence and reset; pure checks cover international names and safe CSS quoting.
+
+Compact lyric headers use two rows for the title and artist metadata, matching the thumbnail's row span. Removing the unused third row centres the combined text block vertically against both album artwork and Canvas thumbnails. A browser regression measures alignment for both media types.

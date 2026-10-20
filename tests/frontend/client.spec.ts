@@ -1562,6 +1562,7 @@ test("playlist search spans unloaded pages and play counts drive sorting", async
     .locator(".library-item")
     .filter({ hasText: "Liked Songs" })
     .click();
+  await page.getByTitle("Search in playlist", { exact: true }).click();
   await page.getByLabel("Search songs in this playlist").fill("Song 125");
   await expect(page.locator(".track-row")).toHaveCount(1);
   await expect(page.locator(".track-row")).toContainText("Song 125");

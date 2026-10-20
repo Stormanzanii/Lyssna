@@ -115,6 +115,7 @@ import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity } from "./window-activity";
+import { useArtworkColor } from "./artwork-color";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
@@ -189,11 +190,13 @@ function App() {
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
+  const [songSearch, setSongSearch] = useState(false);
   const [songQuery, setSongQuery] = useState(""),
     [songGenre, setSongGenre] = useState(""),
     [songAge, setSongAge] = useState(""),
     [songSort, setSongSort] = useState("order");
   useEffect(() => {
+    setSongSearch(false);
     setSongQuery("");
     setSongGenre("");
     setSongAge("");
@@ -814,6 +817,13 @@ function App() {
     : fallbackInfo;
   const artistBanner = useLoadedImage(entity?.overview?.header_image);
   const heroImages = entity?.images.length ? entity.images : playlist?.images;
+  const artworkColor = useArtworkColor(
+    state.route === "liked" ? undefined : imageOf(heroImages),
+  );
+  const heroColor =
+    state.route === "liked"
+      ? "rgb(80 56 160)"
+      : (artworkColor ?? "rgb(83 83 83)");
   const playlistInfo = entity?.playlist;
   const personalizedMix = playlistInfo?.format.startsWith("daily-mix");
   const playlistDuration =
@@ -1379,16 +1389,9 @@ function App() {
                 />
               ) : (
                 <div
-                  className={`entity-header ${entity?.artist ? "artist-header" : ""} ${state.route === "liked" ? "liked-header" : ""}`}
+                  className={`entity-header ${entity?.artist ? "artist-header" : ""}`}
+                  style={{ "--hero": heroColor } as CSSProperties}
                 >
-                  {imageOf(heroImages) && !(entity?.artist && artistBanner) && (
-                    <div
-                      className="entity-tint"
-                      style={{
-                        backgroundImage: `url("${imageOf(heroImages)}")`,
-                      }}
-                    />
-                  )}
                   <section
                     className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
                     style={
@@ -1549,61 +1552,37 @@ function App() {
                       >
                         <RefreshCw size={22} />
                       </button>
-                      <span>
-                        {state.tracks.length > 0 && !entity?.artist
-                          ? `${state.tracks.length}${state.more ? "+" : ""} songs loaded`
-                          : ""}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {selected.size > 0 && (
-                <div className="selection-bar">
-                  <span>{selected.size} selected</span>
-                  <button
-                    className="pill"
-                    onClick={() =>
-                      setPicker(
-                        displayTracks.filter((track) =>
-                          selected.has(track.uri),
-                        ),
-                      )
-                    }
-                  >
-                    <Plus size={15} />
-                    Add to playlist
-                  </button>
-                  <button
-                    className="text-link"
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-              <div className={entity?.artist ? "artist-top" : "track-section"}>
-                <section>
-                  {entity?.artist && displayTracks.length > 0 && (
-                    <div className="browse-section-title">
-                      <h2>Popular</h2>
-                    </div>
-                  )}
-                  {showTrackList && (
-                    <>
                       {collection && (
                         <div className="song-filters">
-                          <label className="playlist-search">
-                            <Search size={17} />
-                            <input
-                              aria-label="Search songs in this playlist"
-                              placeholder="Search songs in this playlist"
-                              value={songQuery}
-                              onChange={(event) =>
-                                setSongQuery(event.target.value)
-                              }
-                            />
-                          </label>
+                          {songSearch || songQuery ? (
+                            <label className="playlist-search">
+                              <Search size={16} />
+                              <input
+                                autoFocus
+                                aria-label="Search songs in this playlist"
+                                placeholder="Search in playlist"
+                                value={songQuery}
+                                onChange={(event) =>
+                                  setSongQuery(event.target.value)
+                                }
+                                onBlur={() => setSongSearch(false)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Escape") {
+                                    setSongQuery("");
+                                    setSongSearch(false);
+                                  }
+                                }}
+                              />
+                            </label>
+                          ) : (
+                            <button
+                              className="icon-button"
+                              title="Search in playlist"
+                              onClick={() => setSongSearch(true)}
+                            >
+                              <Search size={18} />
+                            </button>
+                          )}
                           <select
                             aria-label="Genre"
                             value={songGenre}
@@ -1642,13 +1621,49 @@ function App() {
                             <option value="popular">Most played</option>
                           </select>
                           <small aria-live="polite">
-                            {displayTracks.length} songs
-                            {filtering && state.more
-                              ? " · Loading remaining songs…"
+                            {filtering
+                              ? `${displayTracks.length} songs${state.more ? " · loading the rest…" : ""}`
                               : ""}
                           </small>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selected.size > 0 && (
+                <div className="selection-bar">
+                  <span>{selected.size} selected</span>
+                  <button
+                    className="pill"
+                    onClick={() =>
+                      setPicker(
+                        displayTracks.filter((track) =>
+                          selected.has(track.uri),
+                        ),
+                      )
+                    }
+                  >
+                    <Plus size={15} />
+                    Add to playlist
+                  </button>
+                  <button
+                    className="text-link"
+                    onClick={() => setSelected(new Set())}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              <div className={entity?.artist ? "artist-top" : "track-section"}>
+                <section>
+                  {entity?.artist && displayTracks.length > 0 && (
+                    <div className="browse-section-title">
+                      <h2>Popular</h2>
+                    </div>
+                  )}
+                  {showTrackList && (
+                    <>
                       <div
                         className={`track-table ${collectionPlays ? "collection-table" : ""} ${entity?.album ? "album-table" : ""}`}
                       >

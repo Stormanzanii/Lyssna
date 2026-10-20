@@ -418,6 +418,7 @@ impl SpotiFlex {
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
                 Event::BrowseInfo { .. }
+                | Event::SearchPlaylists { .. }
                 | Event::PlayingDetails { .. }
                 | Event::ArtistStats { .. }
                 | Event::Canvas { .. }

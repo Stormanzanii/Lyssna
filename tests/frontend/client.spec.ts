@@ -3242,3 +3242,143 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
   await expect(page.locator(".settings-page")).toBeVisible();
 });
+
+test("Spotify search shows public and curated playlist cards with open and play actions", async ({
+  page,
+}) => {
+  await startClient(page);
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("workout");
+  await search.press("Enter");
+  await page.waitForFunction(() =>
+    (window as any).__clientTest.commands.some(
+      (entry: any) =>
+        entry.command === "browse" && entry.args.key === "search:workout",
+    ),
+  );
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const request = host.commands
+      .filter(
+        (entry: any) =>
+          entry.command === "browse" && entry.args.key === "search:workout",
+      )
+      .at(-1).args;
+    host.emit({
+      type: "search_playlists",
+      account: "test-user",
+      key: request.key,
+      generation: request.generation,
+      message: "",
+      playlists: [
+        {
+          id: "0123456789abcdefghijkl",
+          name: "Public Workout",
+          images: [],
+          owner: { id: "listener", display_name: "Playlist creator" },
+          collaborative: false,
+        },
+        {
+          id: "1123456789abcdefghijkl",
+          name: "Curated Workout",
+          images: [],
+          owner: { id: "spotify", display_name: "Spotify" },
+          collaborative: false,
+        },
+      ],
+    });
+  });
+  const shelf = page.getByRole("region", { name: "Playlists", exact: true });
+  await expect(
+    shelf.getByRole("button", { name: "Open Public Workout", exact: true }),
+  ).toBeVisible();
+  await expect(shelf).toContainText("By Spotify");
+  await expect(
+    page.getByRole("heading", { name: "Songs", exact: true }),
+  ).toBeVisible();
+  await shelf
+    .getByRole("button", { name: "Play Curated Workout", exact: true })
+    .click();
+  const playback = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .at(-1).args.request,
+  );
+  expect(playback).toMatchObject({
+    command: "play_home",
+    context: "spotify:playlist:1123456789abcdefghijkl",
+  });
+  await shelf
+    .getByRole("button", { name: "Open Public Workout", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1).args.key,
+      ),
+    )
+    .toBe("playlist:0123456789abcdefghijkl");
+  await expect(page.locator(".search-playlists")).toHaveCount(0);
+});
+
+test("playlist-only search results stay visible when songs are empty or playlists need retry", async ({
+  page,
+}) => {
+  await startClient(page);
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("chill");
+  await search.press("Enter");
+  await expect(page.locator(".search-playlists")).toBeVisible();
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const request = host.commands
+      .filter(
+        (entry: any) =>
+          entry.command === "browse" && entry.args.key === "search:chill",
+      )
+      .at(-1).args;
+    host.emit({
+      type: "tracks",
+      ...request,
+      offset: 0,
+      tracks: [],
+      more: false,
+    });
+    host.emit({
+      type: "search_playlists",
+      account: "test-user",
+      key: request.key,
+      generation: request.generation,
+      message: "Some Spotify-curated playlists may be unavailable.",
+      playlists: [
+        {
+          id: "0123456789abcdefghijkl",
+          name: "Chill playlist",
+          images: [],
+          owner: { id: "listener" },
+          collaborative: false,
+        },
+      ],
+    });
+  });
+  await expect(
+    page.getByRole("button", { name: "Open Chill playlist", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No songs found" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".search-playlists")).toContainText(
+    "Some Spotify-curated playlists may be unavailable.",
+  );
+});

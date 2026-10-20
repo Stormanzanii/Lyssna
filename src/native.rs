@@ -348,6 +348,13 @@ impl NativeControls {
             .build()?
             .block_on(crate::home::fetch(&session, timezone))
     }
+    pub fn search_playlists(&self, query: &str) -> Result<Vec<crate::model::Playlist>> {
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::search::playlists(&session, query))
+    }
     pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
         use librespot_protocol::extension_kind::ExtensionKind;
         anyhow::ensure!(
@@ -1811,6 +1818,63 @@ mod tests {
             .is_none()
         );
         assert!(preload_selection(&PlayerAction::Next).is_none());
+    }
+
+    #[test]
+    #[ignore = "Uses saved native sign-in for read-only playlist search; never starts playback"]
+    fn live_playlist_search_without_playback() {
+        let settings = crate::config::Settings::load().expect("Settings unavailable");
+        let tokens = crate::auth::Tokens::load(&settings.client_id)
+            .ok()
+            .flatten()
+            .expect("Saved sign-in required");
+        let account = tokens
+            .profile
+            .as_ref()
+            .expect("Saved profile required")
+            .id
+            .clone();
+        let credentials = load_credentials(&account)
+            .expect("Cannot read saved native sign-in")
+            .expect("Saved native sign-in required");
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let session = Session::new(
+                    SessionConfig {
+                        client_id: crate::auth::AUDIO_CLIENT_ID.into(),
+                        ..SessionConfig::default()
+                    },
+                    None,
+                );
+                tokio::time::timeout(Duration::from_secs(30), session.connect(credentials, false))
+                    .await
+                    .expect("Native connection timed out")
+                    .expect("Native connection failed");
+                let results = crate::search::playlists(&session, "workout").await;
+                session.shutdown();
+                let results = results.expect("Native playlist search failed");
+                assert!(!results.is_empty(), "Expected workout playlists");
+                assert!(
+                    results
+                        .iter()
+                        .any(|playlist| playlist.owner.id == "spotify"),
+                    "Expected Spotify-curated playlists"
+                );
+                assert!(
+                    results
+                        .iter()
+                        .any(|playlist| !playlist.owner.id.is_empty()
+                            && playlist.owner.id != "spotify"),
+                    "Expected public user playlists"
+                );
+                eprintln!(
+                    "Native search returned {} playlists, including Spotify and public creators",
+                    results.len()
+                );
+            });
     }
 
     #[test]

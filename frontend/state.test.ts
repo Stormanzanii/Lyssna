@@ -21,6 +21,51 @@ const track: Track = {
   is_local: false,
 };
 describe("asynchronous playback and browsing", () => {
+  it("rejects playlists from old searches, refreshes and signed-out accounts", () => {
+    const playlist = {
+      id: "public",
+      name: "Public",
+      images: [],
+      owner: { id: "listener" },
+      collaborative: false,
+    };
+    const state = {
+      ...emptyState,
+      profile: { id: "listener" },
+      route: "search:workout",
+      generation: 2,
+      search_playlists_loading: true,
+    };
+    const event = {
+      type: "search_playlists" as const,
+      account: "listener",
+      key: state.route,
+      generation: 2,
+      playlists: [playlist],
+      message: "",
+    };
+    expect(reducer(state, { ...event, key: "search:chill" })).toBe(state);
+    expect(reducer(state, { ...event, generation: 1 })).toBe(state);
+    expect(reducer(state, { ...event, account: "other" })).toBe(state);
+    expect(reducer(emptyState, event)).toBe(emptyState);
+    const loaded = reducer(state, event);
+    expect(loaded.search_playlists).toEqual([playlist]);
+    expect(loaded.search_playlists_loading).toBe(false);
+    const next = reducer(loaded, {
+      type: "navigate",
+      key: "liked",
+      generation: 3,
+    });
+    expect(next.search_playlists).toEqual([]);
+    const back = reducer(next, {
+      type: "navigate",
+      key: event.key,
+      generation: 4,
+    });
+    expect(back.search_playlists).toEqual([playlist]);
+    expect(back.search_playlists_loading).toBe(true);
+    expect(reducer(back, { type: "signed_out" }).search_playlists).toEqual([]);
+  });
   it("clears a connecting notification once native audio becomes ready", () => {
     const connecting = reducer(emptyState, {
       type: "notice",

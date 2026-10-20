@@ -17,7 +17,7 @@ import { Cover } from "./components";
 import { DJ_COVER } from "./brand";
 import "./HomePage.css";
 
-function Shelf({
+export function Shelf({
   section,
   navigate,
   play,

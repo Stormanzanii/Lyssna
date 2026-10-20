@@ -52,6 +52,9 @@ pub struct Snapshot {
     route: String,
     generation: u64,
     tracks: Vec<Track>,
+    search_playlists: Vec<Playlist>,
+    search_playlists_loading: bool,
+    search_playlists_error: String,
     browse_info: Option<BrowseInfo>,
     loading: bool,
     more: bool,
@@ -283,6 +286,9 @@ impl Desktop {
                 route,
                 generation: 0,
                 tracks: Vec::new(),
+                search_playlists: Vec::new(),
+                search_playlists_loading: false,
+                search_playlists_error: String::new(),
                 browse_info: None,
                 loading: false,
                 more: false,
@@ -529,6 +535,9 @@ impl Desktop {
                             snapshot.canvas_url = None;
                             snapshot.details = PlayingDetails::default();
                             snapshot.tracks.clear();
+                            snapshot.search_playlists.clear();
+                            snapshot.search_playlists_loading = false;
+                            snapshot.search_playlists_error.clear();
                             emit(json!({"type":"signed_out"}));
                         }
                         Event::LoginFailed(issue) => {
@@ -644,6 +653,29 @@ impl Desktop {
                             }
                             emit(
                                 json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":changed}),
+                            );
+                        }
+                        Event::SearchPlaylists {
+                            account,
+                            key,
+                            generation,
+                            playlists,
+                            message,
+                        } => {
+                            if snapshot.generation != generation
+                                || snapshot.route != key
+                                || snapshot
+                                    .profile
+                                    .as_ref()
+                                    .is_none_or(|profile| profile.id != account)
+                            {
+                                continue;
+                            }
+                            snapshot.search_playlists = playlists.clone();
+                            snapshot.search_playlists_loading = false;
+                            snapshot.search_playlists_error = message.clone();
+                            emit(
+                                json!({"type":"search_playlists","account":account,"key":key,"generation":generation,"playlists":playlists,"message":message}),
                             );
                         }
                         Event::Tracks {
@@ -1397,6 +1429,9 @@ fn browse(
             snapshot.route = key.clone();
             snapshot.generation = generation;
             snapshot.tracks.clear();
+            snapshot.search_playlists.clear();
+            snapshot.search_playlists_loading = key.starts_with("search:");
+            snapshot.search_playlists_error.clear();
             snapshot.browse_info = snapshot
                 .profile
                 .as_ref()

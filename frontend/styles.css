@@ -457,6 +457,13 @@ small {
   display: flex;
   gap: 2px;
 }
+.search-playlists {
+  padding: 20px 24px;
+}
+.search-playlists > p {
+  color: var(--text-subdued, #b3b3b3);
+  margin: 12px 0;
+}
 .search-group {
   display: flex;
   gap: 10px;

@@ -28,6 +28,7 @@ mod playback_intent;
 pub mod provider;
 mod reconnect;
 pub mod resume;
+pub mod search;
 pub mod track_facts;
 #[cfg(feature = "legacy-ui")]
 pub mod ui;

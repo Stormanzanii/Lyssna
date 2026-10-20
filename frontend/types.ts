@@ -188,6 +188,9 @@ export interface Snapshot {
   route: string;
   generation: number;
   tracks: Track[];
+  search_playlists: Playlist[];
+  search_playlists_loading: boolean;
+  search_playlists_error: string;
   browse_info?: BrowseInfo;
   loading: boolean;
   more: boolean;
@@ -256,6 +259,14 @@ export type AppEvent =
   | { type: "provider_configured"; kind?: "spicy" | "legacy" }
   | { type: "native"; ready: boolean; status: string }
   | { type: "library"; playlists: Playlist[] }
+  | {
+      type: "search_playlists";
+      account: string;
+      key: string;
+      generation: number;
+      playlists: Playlist[];
+      message: string;
+    }
   | {
       type: "playback";
       loading?: boolean;

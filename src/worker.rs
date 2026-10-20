@@ -66,6 +66,13 @@ pub enum Command {
 }
 
 pub enum Event {
+    SearchPlaylists {
+        account: String,
+        key: String,
+        generation: u64,
+        playlists: Vec<Playlist>,
+        message: String,
+    },
     TrackFacts(std::collections::HashMap<String, crate::track_facts::Facts>),
     LastPlayed {
         account: String,
@@ -723,6 +730,40 @@ impl Backend {
                 offset,
                 generation,
             } => {
+                if offset == 0
+                    && let Some(query) = key.strip_prefix("search:")
+                {
+                    let mut spotify = self.api()?.background();
+                    let native = self.native_controls.clone();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    let account = self.profile.id.clone();
+                    let query = query.to_owned();
+                    let key = key.clone();
+                    thread::spawn(move || {
+                        let (playlists, message) = match native.search_playlists(&query) {
+                            Ok(playlists) => (playlists, String::new()),
+                            Err(_) => match spotify.search_playlists(&query) {
+                                Ok(playlists) => (
+                                    playlists,
+                                    "Some Spotify-curated playlists may be unavailable.".into(),
+                                ),
+                                Err(_) => (
+                                    Vec::new(),
+                                    "Could not load playlists. Try searching again.".into(),
+                                ),
+                            },
+                        };
+                        let _ = events.send(Event::SearchPlaylists {
+                            account,
+                            key,
+                            generation,
+                            playlists,
+                            message,
+                        });
+                        context.request_repaint();
+                    });
+                }
                 let result = self.fetch_tracks(&key, offset);
                 match result {
                     Ok(tracks) => {

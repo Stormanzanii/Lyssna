@@ -4,11 +4,13 @@ import type {
   Device,
   Snapshot,
   Track,
+  Playlist,
   TrackFacts,
   Word,
 } from "./types";
 /** A page as last loaded, shown instantly when revisited or prefetched. */
 export interface CachedPage {
+  search_playlists?: Playlist[];
   tracks?: Track[];
   more?: boolean;
   info?: BrowseInfo;
@@ -139,6 +141,9 @@ export const emptyState: AppState = {
   route: "home",
   generation: 0,
   tracks: [],
+  search_playlists: [],
+  search_playlists_loading: false,
+  search_playlists_error: "",
   loading: false,
   more: false,
   update_status: "Checking for updates…",
@@ -314,6 +319,22 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case "library":
       return { ...state, playlists: action.playlists };
+    case "search_playlists":
+      if (
+        action.account !== state.profile?.id ||
+        action.generation !== state.generation ||
+        action.key !== state.route
+      )
+        return state;
+      return {
+        ...state,
+        search_playlists: action.playlists,
+        search_playlists_loading: false,
+        search_playlists_error: action.message,
+        pages: rememberPage(state.pages, action.key, {
+          search_playlists: action.playlists,
+        }),
+      };
     case "page_loading":
       return action.generation === state.generation
         ? { ...state, loading: true }
@@ -346,6 +367,9 @@ export function reducer(state: AppState, action: Action): AppState {
         route: action.key,
         generation: action.generation,
         tracks: cached?.tracks ?? [],
+        search_playlists: cached?.search_playlists ?? [],
+        search_playlists_loading: action.key.startsWith("search:"),
+        search_playlists_error: "",
         browse_info: info,
         pages: info
           ? rememberPage(state.pages, action.key, { info })

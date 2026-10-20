@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
+import { SearchPlaylists } from "./SearchPlaylists";
 import { Logo } from "./brand";
 import {
   emptyState,
@@ -1715,8 +1716,21 @@ function App() {
                   </button>
                 </div>
               )}
+              {state.route.startsWith("search:") && (
+                <SearchPlaylists
+                  state={state}
+                  navigate={homeNavigate}
+                  play={homePlay}
+                />
+              )}
               <div className={entity?.artist ? "artist-top" : "track-section"}>
                 <section>
+                  {state.route.startsWith("search:") &&
+                    state.tracks.length > 0 && (
+                      <div className="browse-section-title">
+                        <h2>Songs</h2>
+                      </div>
+                    )}
                   {entity?.artist && displayTracks.length > 0 && (
                     <div className="browse-section-title">
                       <h2>Popular</h2>
@@ -2154,6 +2168,9 @@ function App() {
                 !state.loading &&
                 !state.pageError &&
                 !state.tracks.length &&
+                (!state.route.startsWith("search:") ||
+                  (!state.search_playlists_loading &&
+                    !state.search_playlists.length)) &&
                 !entity?.artist && (
                   <div className="empty-page">
                     <Search size={32} />

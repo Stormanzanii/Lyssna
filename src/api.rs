@@ -196,6 +196,20 @@ impl Spotify {
         Ok(serde_json::from_value(response["tracks"]["items"].clone())?)
     }
 
+    pub fn search_playlists(&mut self, text: &str) -> Result<Vec<Playlist>> {
+        let response = self.request(
+            Method::GET,
+            "search",
+            &[
+                ("q", text.to_owned()),
+                ("type", "playlist".into()),
+                ("limit", "10".into()),
+            ],
+            None,
+        )?;
+        crate::search::parse_public(&response)
+    }
+
     pub fn saved_tracks(&mut self, offset: usize) -> Result<Vec<Track>> {
         let response = self.request(
             Method::GET,

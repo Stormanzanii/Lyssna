@@ -27,6 +27,22 @@ const lyrics = (...lines: Line[]): Lyrics => ({
 });
 
 describe("word sync", () => {
+  it("estimates word timing for flat paragraph lyrics using track duration", () => {
+    const plain = {
+      ...lyrics(line("Hello there. Come back tonight! Stay with me.", 0, 0)),
+      synced: false,
+    };
+    const converted = displayLyrics(plain, true, false, 180000);
+    expect(converted.synced).toBe(true);
+    expect(converted.estimated_words).toBe(true);
+    expect(converted.lines.length).toBeGreaterThan(1);
+    expect(converted.lines.every((item) => item.words.length > 0)).toBe(true);
+    expect(converted.lines.at(-1)!.words.at(-1)!.end_ms).toBeLessThanOrEqual(
+      180000,
+    );
+    expect(plain.synced).toBe(false);
+    expect(plain.lines[0].words).toEqual([]);
+  });
   it("splits time across words by letter weight", () => {
     const [converted] = convertToWordSync(
       lyrics(line("I love everything", 0, 1600)),
@@ -44,6 +60,54 @@ describe("word sync", () => {
     expect(durations[2]).toBeGreaterThan(durations[1]);
     expect(durations[1]).toBeGreaterThan(durations[0]);
     expect(converted.words.every((word) => word.estimated)).toBe(true);
+  });
+
+  it("recomputes static timing when track duration arrives or changes", () => {
+    const plain = {
+      ...lyrics(line("First line\nSecond line", 0, 0)),
+      synced: false,
+    };
+    expect(displayLyrics(plain, true)).toBe(plain);
+    expect(displayLyrics(plain, false, false, 180000)).toBe(plain);
+    const short = displayLyrics(plain, true, false, 90000);
+    const long = displayLyrics(plain, true, false, 180000);
+    expect(short.lines.at(-1)!.end_ms).toBeLessThan(long.lines.at(-1)!.end_ms);
+    expect(long).toBe(displayLyrics(plain, true, false, 180000));
+    expect(long.lines.map((item) => item.text)).toEqual([
+      "First line",
+      "Second line",
+    ]);
+  });
+
+  it("breaks an unpunctuated paragraph into timed phrases without dropping words", () => {
+    const text = Array.from({ length: 31 }, (_, index) => `word${index}`).join(
+      " ",
+    );
+    const plain = { ...lyrics(line(text, 0, 0)), synced: false };
+    const converted = displayLyrics(plain, true, false, 180000);
+    expect(converted.lines).toHaveLength(4);
+    expect(converted.lines.map((item) => item.text).join(" ")).toBe(text);
+    const words = converted.lines.flatMap((item) => item.words);
+    expect(words).toHaveLength(31);
+    expect(
+      words.every(
+        (word, index) =>
+          word.start_ms >= (words[index - 1]?.end_ms ?? 0) &&
+          word.end_ms >= word.start_ms &&
+          word.end_ms <= 180000,
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves instrumentals, blank lyrics and invalid durations unchanged", () => {
+    const plain = { ...lyrics(line("Hello there", 0, 0)), synced: false };
+    for (const duration of [0, -1, NaN, Infinity]) {
+      expect(displayLyrics(plain, true, false, duration)).toBe(plain);
+    }
+    const instrumental = { ...plain, instrumental: true };
+    expect(displayLyrics(instrumental, true, false, 180000)).toBe(instrumental);
+    const blank = { ...plain, lines: [line("\n  ", 0, 0)] };
+    expect(displayLyrics(blank, true, false, 180000)).toBe(blank);
   });
 
   it("turns bracketed parts into background vocals after their line", () => {

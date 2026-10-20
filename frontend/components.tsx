@@ -620,7 +620,10 @@ const LyricCredits = memo(function LyricCredits({
   return (
     <div className={`lyric-source ${expanded ? "expanded" : ""}`}>
       Lyrics provided by: {source}
-      {lyrics.estimated_words && " (+ estimated word timing)"}
+      {lyrics.estimated_words &&
+        (lyrics.estimated_lines
+          ? " (+ estimated line and word timing)"
+          : " (+ estimated word timing)")}
       {lyrics.source === "spicy_lyrics" &&
         (
           [
@@ -698,6 +701,7 @@ function TimedLyricsPreview({
     state.lyrics,
     !!state.settings.experimental_word_sync,
     state.settings.romanized,
+    state.playback.item?.duration_ms,
   );
   return lyrics ? (
     <LyricsDisplay
@@ -826,17 +830,19 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
-  // Space Gravity needs word timing, so it estimates it for line-synced
-  // lyrics even when experimental word sync is off.
+  // Space Gravity needs word timing, including estimates for static lyrics.
   const gravity = !!(
     state.settings.space_gravity &&
-    state.lyrics?.synced &&
+    state.lyrics &&
+    !state.lyrics.instrumental &&
+    (state.lyrics.synced || track?.duration_ms) &&
     motionAllowed
   );
   const lyrics = displayLyrics(
     state.lyrics,
     !!state.settings.experimental_word_sync || gravity,
     state.settings.romanized,
+    track?.duration_ms,
   );
   return (
     <section

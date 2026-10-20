@@ -2,16 +2,15 @@ import type { Line, Lyrics, Word } from "./types";
 import { romanizedLyrics } from "./romanization";
 
 /*
- * Experimental word sync: estimated word timing for line-synced lyrics.
+ * Experimental word sync: estimated timing for line-synced and static lyrics.
  *
  * Reimplements the behaviour of Spicy Lyrics' ExperimentalWordSync
  * (iPixelGalaxy/spicy-lyrics, AGPL-3.0) for SpotiFlex's lyric model. Each
  * line's time is spread over its words by letter weight, bracketed parts
  * become background vocals, and a line whose end runs straight into the next
  * line but lasts far longer than its words need is trimmed to a speech-rate
- * estimate. Spotify's audio analysis, which upstream uses to snap boundaries
- * and to time unsynced lyrics, is not available to SpotiFlex, so only those
- * text-based estimates are used.
+ * estimate. Static lyrics use the track duration and text weights to estimate
+ * lines first. These estimates do not detect vocals or instrumental sections.
  */
 
 type Segment = { background: boolean; text: string };
@@ -200,13 +199,72 @@ export function effectiveLineEnd(lines: Line[], index: number) {
   return Math.min(line.end_ms, Math.round(line.start_ms + predicted * trim));
 }
 
-/** True when lyrics are synced by line only and could gain word timing. */
-export function needsWordSync(lyrics: Lyrics | null | undefined) {
+/** Untimed words need either authored line timing or a valid track duration. */
+export function needsWordSync(
+  lyrics: Lyrics | null | undefined,
+  durationMs = 0,
+) {
   return !!(
-    lyrics?.synced &&
-    lyrics.lines.length &&
+    lyrics &&
+    !lyrics.instrumental &&
+    (lyrics.synced || (Number.isFinite(durationMs) && durationMs > 0)) &&
+    lyrics.lines.some((line) => normalize(line.text)) &&
     lyrics.lines.every((line) => !line.words.length)
   );
+}
+
+/** Break paragraphs into readable phrases before estimating their time. */
+function timeStaticLyrics(lyrics: Lyrics, durationMs: number): Lyrics {
+  const phrases = lyrics.lines.flatMap((line) => {
+    const texts = line.text
+      .split(/\r?\n/)
+      .flatMap((row) =>
+        row
+          .split(/(?<=[.!?。！？])\s+|(?<=[。！？])(?=\S)/u)
+          .flatMap((sentence) => {
+            const units = splitUnits(sentence);
+            const chunks: string[] = [];
+            for (let index = 0; index < units.length; index += 10) {
+              const group = units.slice(index, index + 10);
+              chunks.push(
+                group
+                  .map(
+                    (unit, i) =>
+                      `${i && !group[i - 1].partOfWord ? " " : ""}${unit.text}`,
+                  )
+                  .join(""),
+              );
+            }
+            return chunks;
+          }),
+      )
+      .filter((text) => normalize(text));
+    return texts.map((text) => ({
+      ...line,
+      text,
+      // Translations cannot be aligned to newly split phrases reliably.
+      translation: texts.length === 1 ? line.translation : "",
+      romanization: texts.length === 1 ? line.romanization : "",
+    }));
+  });
+  const start = Math.min(4000, durationMs * 0.05);
+  const end = durationMs - Math.min(6000, durationMs * 0.05);
+  const weights = phrases.flatMap((line, index) =>
+    index < phrases.length - 1
+      ? [spokenDuration(line.text), /[.!?。！？]$/.test(line.text) ? 350 : 150]
+      : [spokenDuration(line.text)],
+  );
+  const ranges = distribute(start, end, weights);
+  return {
+    ...lyrics,
+    synced: true,
+    estimated_lines: true,
+    lines: phrases.map((line, index) => ({
+      ...line,
+      start_ms: ranges[index * 2].start,
+      end_ms: ranges[index * 2].end,
+    })),
+  };
 }
 
 function backgroundOnly(line: Line | undefined) {
@@ -214,14 +272,17 @@ function backgroundOnly(line: Line | undefined) {
   return parts.length > 0 && parts.every((part) => part.background);
 }
 
-/** Converts line-synced lyrics to estimated word timing. */
-export function convertToWordSync(lyrics: Lyrics): Lyrics {
-  if (!needsWordSync(lyrics)) return lyrics;
+/** Converts line-synced or static lyrics to estimated word timing. */
+export function convertToWordSync(lyrics: Lyrics, durationMs = 0): Lyrics {
+  if (!needsWordSync(lyrics, durationMs)) return lyrics;
+  if (!lyrics.synced) lyrics = timeStaticLyrics(lyrics, durationMs);
   const source = lyrics.lines.filter((line) => normalize(line.text));
   const output: Line[] = [];
   let lastLead: Line | undefined;
   source.forEach((line, index) => {
-    const end = effectiveLineEnd(source, index);
+    const end = lyrics.estimated_lines
+      ? line.end_ms
+      : effectiveLineEnd(source, index);
     const parts = segments(line.text);
     const ranges = distribute(
       line.start_ms,
@@ -298,19 +359,24 @@ export function convertToWordSync(lyrics: Lyrics): Lyrics {
   return { ...lyrics, lines: output, estimated_words: true };
 }
 
-const cache = new WeakMap<Lyrics, Lyrics>();
+const cache = new WeakMap<Lyrics, { durationMs: number; lyrics: Lyrics }>();
 /** Lyrics as displayed: converted when word sync is on and applies. */
 export function displayLyrics<T extends Lyrics | null | undefined>(
   lyrics: T,
   wordSync: boolean,
   romanized = false,
+  durationMs = 0,
 ): T {
   if (lyrics && romanized) lyrics = romanizedLyrics(lyrics) as T;
-  if (!lyrics || !wordSync || !needsWordSync(lyrics)) return lyrics;
+  if (!lyrics || !wordSync || !needsWordSync(lyrics, durationMs)) return lyrics;
+  const timingDuration = lyrics.synced ? 0 : durationMs;
   let converted = cache.get(lyrics);
-  if (!converted) {
-    converted = convertToWordSync(lyrics);
+  if (!converted || converted.durationMs !== timingDuration) {
+    converted = {
+      durationMs: timingDuration,
+      lyrics: convertToWordSync(lyrics, durationMs),
+    };
     cache.set(lyrics, converted);
   }
-  return converted as T;
+  return converted.lyrics as T;
 }

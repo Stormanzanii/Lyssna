@@ -3243,6 +3243,60 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await expect(page.locator(".settings-page")).toBeVisible();
 });
 
+test("flat paragraph lyrics gain estimated word timing and revert when disabled", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const text = "Hello there. Come back tonight! Stay with me.";
+  await page.evaluate(
+    ({ uri, text }) => {
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "test",
+          synced: false,
+          instrumental: false,
+          lines: [
+            {
+              text,
+              start_ms: 0,
+              end_ms: 180000,
+              words: [],
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+            },
+          ],
+        },
+      });
+    },
+    { uri: track.uri, text },
+  );
+  await expect(page.locator(".lyrics-page .lyrics-display")).toHaveClass(
+    /static-lyrics/,
+  );
+  const button = page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Experimental word sync", { exact: true });
+  await button.click();
+  await expect(page.locator(".lyrics-page .lyrics-display")).not.toHaveClass(
+    /static-lyrics/,
+  );
+  await expect(page.locator(".lyrics-page .lyric-main")).toHaveCount(3);
+  await expect(page.locator(".lyrics-page .lyric-source")).toContainText(
+    "estimated line and word timing",
+  );
+  await expect(page.locator(".lyrics-page .lyric-word").first()).toBeVisible();
+  await button.click();
+  await expect(page.locator(".lyrics-page .lyrics-display")).toHaveClass(
+    /static-lyrics/,
+  );
+  await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(text);
+});
+
 test("Spotify search shows public and curated playlist cards with open and play actions", async ({
   page,
 }) => {

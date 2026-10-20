@@ -122,8 +122,10 @@ export interface Lyrics {
   source: string;
   instrumental: boolean;
   synced: boolean;
-  /** Word timing was estimated from line timing (experimental word sync). */
+  /** Word timing was estimated (experimental word sync). */
   estimated_words?: boolean;
+  /** Line boundaries were estimated from static text and track duration. */
+  estimated_lines?: boolean;
 }
 export interface Contributor {
   id: string;

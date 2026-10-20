@@ -353,7 +353,7 @@ export function SettingsPage({
                 [
                   "experimental_word_sync",
                   "Experimental word sync",
-                  "Estimate word timing for lyrics that are only synced by line. Timing may be off.",
+                  "Estimate word timing for line-synced or plain lyrics. Plain lyrics also use estimated line timing. Timing may be off.",
                 ],
               ] as const
             ).map(([key, label, help]) => (

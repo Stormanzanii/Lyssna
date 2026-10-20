@@ -1900,6 +1900,13 @@ small {
 .lyrics-page .lyric-line.background-vocal {
   font-size: clamp(18px, 2.1cqw, calc(var(--lyric-size) * 0.58));
 }
+/* Stacked (narrow) layouts give lyrics the full width, so size them from it. */
+.lyrics-page.narrow .lyric-line {
+  font-size: clamp(26px, 5.4cqw, var(--lyric-size));
+}
+.lyrics-page.narrow .lyric-line.background-vocal {
+  font-size: clamp(19px, 3.1cqw, calc(var(--lyric-size) * 0.58));
+}
 .lyric-line:focus,
 .lyric-line:focus-visible {
   outline: none;

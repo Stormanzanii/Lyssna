@@ -338,7 +338,7 @@ export function SettingsPage({
                 [
                   "romanized",
                   "Show romanized lyrics",
-                  "Show a Latin-alphabet reading under lyrics that use other scripts.",
+                  "Display Latin-alphabet readings. Supplied readings are preferred; automatic transliteration is approximate.",
                 ],
                 [
                   "canvas_lyrics",

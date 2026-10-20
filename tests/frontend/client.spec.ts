@@ -3135,6 +3135,77 @@ test("clicking outside the device popup closes it", async ({ page }) => {
   await expect(page.locator(".device-menu")).toHaveCount(0);
 });
 
+test("romanization replaces non-Latin lyrics in normal, floating and preview views", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const romanization = page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Romanization", { exact: true });
+  await romanization.click();
+  const samples = [
+    ["안녕하세요", "", "annyeonghaseyo"],
+    ["Привет", "", "Privet"],
+    ["مرحبا", "", "mrHb"],
+    ["你好", "", "Ni Hao"],
+    ["東京", "Tokyo", "Tokyo"],
+  ];
+  const emit = async (text: string, reading: string) => {
+    await page.evaluate(
+      ({ uri, text, reading }) => {
+        (window as any).__clientTest.emit({
+          type: "lyrics",
+          uri,
+          lyrics: {
+            source: "Test",
+            synced: true,
+            instrumental: false,
+            lines: [
+              {
+                text,
+                romanization: reading,
+                translation: "",
+                start_ms: 1000,
+                end_ms: 3000,
+                words: [{ text, start_ms: 1000, end_ms: 3000 }],
+                background: false,
+                opposite: false,
+              },
+            ],
+          },
+        });
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms: 1500,
+          playing: false,
+          observed_at: Date.now(),
+        });
+      },
+      { uri: track.uri, text, reading },
+    );
+  };
+  for (const [text, reading, expected] of samples) {
+    await emit(text, reading);
+    await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(expected);
+  }
+  await romanization.click();
+  await expect(page.locator(".lyrics-page .lyric-main")).toHaveText("東京");
+  await romanization.click();
+  await openSettings(page);
+  await page.getByLabel("Space Gravity").check();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  for (const [text, reading, expected] of samples) {
+    await emit(text, reading);
+    await expect(page.locator(".gravity-word:not(.exiting)")).toHaveText([
+      expected,
+    ]);
+  }
+  await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyric-preview .lyric-main")).toHaveText("Tokyo");
+});
+
 test("lyrics toolbar toggles romanization, word sync and layout", async ({
   page,
 }) => {

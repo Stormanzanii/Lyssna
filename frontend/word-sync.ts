@@ -1,4 +1,5 @@
 import type { Line, Lyrics, Word } from "./types";
+import { romanizedLyrics } from "./romanization";
 
 /*
  * Experimental word sync: estimated word timing for line-synced lyrics.
@@ -302,7 +303,9 @@ const cache = new WeakMap<Lyrics, Lyrics>();
 export function displayLyrics<T extends Lyrics | null | undefined>(
   lyrics: T,
   wordSync: boolean,
+  romanized = false,
 ): T {
+  if (lyrics && romanized) lyrics = romanizedLyrics(lyrics) as T;
   if (!lyrics || !wordSync || !needsWordSync(lyrics)) return lyrics;
   let converted = cache.get(lyrics);
   if (!converted) {

@@ -578,11 +578,6 @@ export function LyricsDisplay({
                 <span className="lyric-main">
                   <LyricWords line={line} />
                 </span>
-                {settings.romanized && line.romanization && (
-                  <span className="lyric-romanization">
-                    {line.romanization}
-                  </span>
-                )}
                 {line.translation && (
                   <span className="lyric-translation">{line.translation}</span>
                 )}
@@ -702,6 +697,7 @@ function TimedLyricsPreview({
   const lyrics = displayLyrics(
     state.lyrics,
     !!state.settings.experimental_word_sync,
+    state.settings.romanized,
   );
   return lyrics ? (
     <LyricsDisplay
@@ -840,6 +836,7 @@ function SongLyricsPage({
   const lyrics = displayLyrics(
     state.lyrics,
     !!state.settings.experimental_word_sync || gravity,
+    state.settings.romanized,
   );
   return (
     <section

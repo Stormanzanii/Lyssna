@@ -1123,9 +1123,27 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
         let added: Vec<_> = (offset..offset + uris.len())
             .map(|index| listing.added.get(index).copied().unwrap_or_default())
             .collect();
-        (uris, added)
+        // The rest of the list loads right after the first page; fetch its
+        // songs in the background so those pages come from the cache.
+        let rest: Vec<String> = if offset == 0 {
+            listing
+                .uris
+                .iter()
+                .skip(50)
+                .take(5_000)
+                .filter(|uri| uri.starts_with("spotify:track:"))
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        };
+        (uris, added, rest)
     };
-    let (uris, added) = uris;
+    let (uris, added, rest) = uris;
+    if !rest.is_empty() {
+        let session = session.clone();
+        tokio::spawn(async move { warm_tracks(&session, &rest).await });
+    }
     let mut tracks = resolve_tracks(session, &uris).await?;
     for (track, added) in tracks.iter_mut().zip(added) {
         track.added_at = added_date(added);
@@ -1150,57 +1168,79 @@ fn added_date(ms: i64) -> String {
 pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result<Vec<Track>> {
     ensure!(uris.len() <= 50, "Too many queued tracks");
     let identity = session.username();
+    let cached = |uri: &String| {
+        TRACKS
+            .get_or_init(Default::default)
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&(identity.clone(), uri.clone())).cloned())
+    };
+    let missing: Vec<String> = uris
+        .iter()
+        .filter(|uri| uri.starts_with("spotify:track:") && cached(uri).is_none())
+        .cloned()
+        .collect();
+    // One batched request, as Spotify's clients make; a page of 50 took up
+    // to 1.4 s as single-song requests and about 0.1 s batched.
+    if !missing.is_empty() {
+        warm_tracks(session, &missing).await;
+    }
     let mut result = Vec::with_capacity(uris.len());
-    for batch in uris.chunks(10) {
-        let mut requests = tokio::task::JoinSet::new();
-        for (index, uri) in batch.iter().cloned().enumerate() {
-            let session = session.clone();
-            let identity = identity.clone();
-            requests.spawn(async move {
-                let cache_key = (identity, uri.clone());
-                let cached = TRACKS
-                    .get_or_init(Default::default)
-                    .lock()
-                    .ok()
-                    .and_then(|cache| cache.get(&cache_key).cloned());
-                let track = if let Some(track) = cached {
-                    track
-                } else {
-                    let fallback = Track {
-                        uri: uri.clone(),
-                        name: "Unavailable track".into(),
-                        is_local: true,
-                        ..Track::default()
-                    };
-                    let value = match SpotifyUri::from_uri(&uri) {
-                        Ok(uri) => librespot_metadata::Track::get(&session, &uri)
-                            .await
-                            .ok()
-                            .and_then(|item| crate::native::metadata_track(&item))
-                            .unwrap_or(fallback),
-                        Err(_) => fallback,
-                    };
-                    if !value.is_local
-                        && let Ok(mut cache) = TRACKS.get_or_init(Default::default).lock()
-                    {
-                        if cache.len() >= 8192 {
-                            cache.clear();
-                        }
-                        cache.insert(cache_key, value.clone());
-                    }
-                    value
-                };
-                (index, track)
-            });
+    for uri in uris {
+        if let Some(track) = cached(uri) {
+            result.push(track);
+            continue;
         }
-        let mut ordered = Vec::new();
-        while let Some(item) = requests.join_next().await {
-            ordered.push(item.context("Track metadata request interrupted")?);
+        // Batch misses (rare) and non-song items fall back to one request each.
+        let track = match SpotifyUri::from_uri(uri) {
+            Ok(id) => tokio::time::timeout(
+                Duration::from_secs(6),
+                librespot_metadata::Track::get(session, &id),
+            )
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .and_then(|item| crate::native::metadata_track(&item)),
+            Err(_) => None,
+        };
+        match track {
+            Some(track) => {
+                remember_track(&identity, uri, &track);
+                result.push(track);
+            }
+            None => result.push(Track {
+                uri: uri.clone(),
+                name: "Unavailable track".into(),
+                is_local: true,
+                ..Track::default()
+            }),
         }
-        ordered.sort_by_key(|(index, _)| *index);
-        result.extend(ordered.into_iter().map(|(_, track)| track));
     }
     Ok(result)
+}
+
+fn remember_track(identity: &str, uri: &str, track: &Track) {
+    if let Ok(mut cache) = TRACKS.get_or_init(Default::default).lock() {
+        if cache.len() >= 8192 {
+            cache.clear();
+        }
+        cache.insert((identity.to_owned(), uri.to_owned()), track.clone());
+    }
+}
+
+/// Fetch song metadata in batches of up to 500 into the track cache.
+async fn warm_tracks(session: &Session, uris: &[String]) {
+    let identity = session.username();
+    for chunk in uris.chunks(500) {
+        let Ok(Ok(tracks)) =
+            tokio::time::timeout(Duration::from_secs(10), tracks_batched(session, chunk)).await
+        else {
+            continue;
+        };
+        for (uri, track) in tracks {
+            remember_track(&identity, &uri, &track);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1676,6 +1716,118 @@ mod live_liked_artist_tests {
                     .any(|item| item.id.as_deref() == Some(artist.as_str()))
             }));
             eprintln!("liked-by-artist count: {count}");
+        });
+    }
+}
+
+/// Track metadata for many songs in one extended-metadata request, as
+/// Spotify's own clients batch it. Missing or unparsable entries are left out.
+pub(crate) async fn tracks_batched(
+    session: &Session,
+    uris: &[String],
+) -> Result<HashMap<String, Track>> {
+    use librespot_protocol::extended_metadata::{
+        BatchedEntityRequest, EntityRequest, ExtensionQuery,
+    };
+    use librespot_protocol::extension_kind::ExtensionKind;
+    use protobuf::{EnumOrUnknown, Message};
+    let request = BatchedEntityRequest {
+        entity_request: uris
+            .iter()
+            .map(|uri| EntityRequest {
+                entity_uri: uri.clone(),
+                query: vec![ExtensionQuery {
+                    extension_kind: EnumOrUnknown::new(ExtensionKind::TRACK_V4),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let response = session.spclient().get_extended_metadata(request).await?;
+    let mut tracks = HashMap::new();
+    for array in response.extended_metadata {
+        for entry in array.extension_data {
+            let Some(data) = entry.extension_data.as_ref() else {
+                continue;
+            };
+            let Ok(message) = librespot_protocol::metadata::Track::parse_from_bytes(&data.value)
+            else {
+                continue;
+            };
+            if let Some(track) = librespot_metadata::Track::try_from(&message)
+                .ok()
+                .and_then(|item| crate::native::metadata_track(&item))
+            {
+                tracks.insert(entry.entity_uri.clone(), track);
+            }
+        }
+    }
+    Ok(tracks)
+}
+
+#[cfg(test)]
+mod live_timing_tests {
+    use super::*;
+    #[test]
+    #[ignore = "Times read-only playlist loads with the saved sign-in; never writes"]
+    fn live_playlist_load_timing() {
+        crate::native::with_live_session(async |session: &Session| {
+            let started = Instant::now();
+            let playlists = library(session).await.expect("Library unreadable");
+            eprintln!(
+                "library: {} playlists in {:?}",
+                playlists.len(),
+                started.elapsed()
+            );
+            let mut biggest = (0, String::new(), Vec::new());
+            for playlist in playlists.iter().take(12) {
+                let started = Instant::now();
+                let Ok(read) = read_playlist(session, &playlist.id).await else {
+                    continue;
+                };
+                let uris: Vec<String> = read.tracks().map(|uri| uri.to_uri()).collect();
+                eprintln!(
+                    "playlist get: {} tracks in {:?}",
+                    uris.len(),
+                    started.elapsed()
+                );
+                if uris.len() > biggest.0 {
+                    biggest = (uris.len(), playlist.id.clone(), uris);
+                }
+            }
+            let uris: Vec<String> = biggest
+                .2
+                .into_iter()
+                .filter(|uri| uri.starts_with("spotify:track:"))
+                .collect();
+            let started = Instant::now();
+            let mut offset = 0;
+            let mut slowest = Duration::ZERO;
+            let mut unavailable = 0;
+            loop {
+                let page = Instant::now();
+                let tracks = read(session, &biggest.1, offset)
+                    .await
+                    .expect("Read failed");
+                slowest = slowest.max(page.elapsed());
+                if tracks.is_empty() {
+                    break;
+                }
+                assert!(tracks.iter().all(|track| !track.name.is_empty()));
+                unavailable += tracks
+                    .iter()
+                    .filter(|track| track.name == "Unavailable track")
+                    .count();
+                offset += tracks.len();
+            }
+            eprintln!(
+                "read: {offset} items ({} songs, {unavailable} unavailable) in {:?}, slowest page {:?}",
+                uris.len(),
+                started.elapsed(),
+                slowest
+            );
         });
     }
 }

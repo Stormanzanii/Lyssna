@@ -122,7 +122,9 @@ static SPIRC_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Playback destination advertised by the signed-in account's Connect cluster.
 pub struct ConnectedDevice {
-    is_offline: bool,
+    /// Spotify reports this destination on standby; transfers to it fail
+    /// until the speaker reconnects to Spotify itself.
+    pub is_offline: bool,
     /// Spotify Connect device identifier.
     pub id: String,
     /// User-visible device name.
@@ -131,6 +133,21 @@ pub struct ConnectedDevice {
     pub is_active: bool,
     /// Adjustable volume, or None for fixed-volume destinations.
     pub volume_percent: Option<u8>,
+}
+
+/// The device a Connect identifier belongs to. The put-state response lists
+/// Alexa speakers once per alias, as `<device>_amzn_<alias>`, while dealer
+/// cluster updates list the bare `<device>`; both name the same speaker.
+fn speaker_id(id: &str) -> &str {
+    id.rsplit_once('_')
+        .filter(|(_, alias)| !alias.is_empty() && alias.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|(rest, _)| rest.rsplit_once('_'))
+        .filter(|(device, vendor)| {
+            !device.is_empty()
+                && !vendor.is_empty()
+                && vendor.bytes().all(|b| b.is_ascii_alphabetic())
+        })
+        .map_or(id, |(device, _)| device)
 }
 
 /// True for names that are really identifiers, such as the UUIDs some
@@ -265,8 +282,13 @@ impl ConnectedDevices {
         if let Ok(current) = self.0.lock() {
             let remembered: Vec<_> = current
                 .iter()
+                // A remembered alias ID stops working once Spotify lists the
+                // speaker under another form, so keep only one entry per speaker.
                 .filter(|device| {
-                    device.is_offline && !devices.iter().any(|next| next.id == device.id)
+                    device.is_offline
+                        && !devices
+                            .iter()
+                            .any(|next| speaker_id(&next.id) == speaker_id(&device.id))
                 })
                 .take(256)
                 .cloned()
@@ -340,6 +362,66 @@ mod connected_device_tests {
         );
         assert_eq!(devices.snapshot()[0].id, "offline");
         assert!(ConnectedDevices::default().snapshot().is_empty());
+    }
+
+    #[test]
+    fn alias_ids_from_put_state_do_not_outlive_the_dealer_listing() {
+        use crate::protocol::devices::DeviceAlias;
+        let echo = DeviceInfo {
+            name: "Kitchen Echo".into(),
+            can_play: true,
+            is_offline: true,
+            ..Default::default()
+        };
+        let devices = ConnectedDevices::default();
+        // Shape of the put-state response: one entry per Alexa alias.
+        let mut put_state = Cluster::default();
+        put_state
+            .device
+            .insert("2c5fe5dc-echo_amzn_1".into(), echo.clone());
+        devices.update(&put_state);
+        assert_eq!(devices.snapshot()[0].id, "2c5fe5dc-echo_amzn_1");
+        assert!(devices.snapshot()[0].is_offline);
+        // Shape of a dealer cluster update: the bare device with its aliases.
+        let mut dealer = Cluster::default();
+        let mut bare = DeviceInfo {
+            name: "2c5fe5dc-0000-4000-8000-000000000000".into(),
+            ..echo
+        };
+        bare.device_aliases.insert(
+            "".into(),
+            DeviceAlias {
+                id: 1,
+                display_name: "Kitchen Echo".into(),
+                ..Default::default()
+            },
+        );
+        dealer.device.insert("2c5fe5dc-echo".into(), bare);
+        devices.update(&dealer);
+        let snapshot = devices.snapshot();
+        assert_eq!(
+            snapshot
+                .iter()
+                .map(|device| device.id.as_str())
+                .collect::<Vec<_>>(),
+            ["2c5fe5dc-echo"],
+            "A stale alias ID must not stay listed as a second speaker"
+        );
+        assert_eq!(snapshot[0].name, "Kitchen Echo");
+        assert!(snapshot[0].is_offline);
+        // A reconnect lists aliases again; the bare form is not kept beside them.
+        devices.update(&put_state);
+        assert_eq!(devices.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn speaker_ids_strip_only_vendor_alias_suffixes() {
+        assert_eq!(speaker_id("2c5fe5dc_amzn_1"), "2c5fe5dc");
+        assert_eq!(speaker_id("2c5fe5dc_amzn_12"), "2c5fe5dc");
+        assert_eq!(speaker_id("2c5fe5dc"), "2c5fe5dc");
+        assert_eq!(speaker_id("cast_group_x"), "cast_group_x");
+        assert_eq!(speaker_id("_amzn_1"), "_amzn_1");
+        assert_eq!(speaker_id("device_2"), "device_2");
     }
 }
 

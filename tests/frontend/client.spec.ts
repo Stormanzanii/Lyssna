@@ -3983,3 +3983,29 @@ test("Create folder adds a Spotify folder that shows while empty", async ({
     "Folder · 0 playlists",
   );
 });
+
+test("folders rename from their right-click menu", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "library_folders",
+      folders: [{ id: "workouts", name: "Workouts", parents: [] }],
+    }),
+  );
+  await page
+    .locator(".library-list .spotify-folder > summary")
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const dialog = page.locator("form.edit-playlist");
+  await expect(dialog.getByLabel("Name")).toHaveValue("Workouts");
+  await dialog.getByLabel("Name").fill("Gym");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "rename_folder")
+        .at(-1)?.args,
+    ),
+  ).toEqual({ id: "workouts", name: "Gym" });
+});

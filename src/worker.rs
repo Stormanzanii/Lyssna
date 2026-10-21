@@ -55,6 +55,11 @@ pub enum Command {
     },
     /// Create an empty Spotify folder at the top of the library.
     CreateFolder(String),
+    /// Rename a Spotify folder.
+    RenameFolder {
+        id: String,
+        name: String,
+    },
     /// Rename a playlist you own and set its description.
     EditPlaylist {
         playlist: Playlist,
@@ -948,6 +953,15 @@ impl Backend {
                 self.native_controls.create_folder(&name)?;
                 self.refresh_library()?;
                 self.emit(Event::Notice(format!("Created {}", name.trim())));
+            }
+            Command::RenameFolder { id, name } => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then rename the folder."
+                );
+                self.native_controls.rename_folder(&id, &name)?;
+                self.refresh_library()?;
+                self.emit(Event::Notice(format!("Renamed to {}", name.trim())));
             }
             Command::EditPlaylist {
                 playlist,

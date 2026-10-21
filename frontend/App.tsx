@@ -76,6 +76,7 @@ import {
 } from "./state";
 import type { AppState } from "./state";
 import type {
+  FolderRef,
   Album,
   Artist,
   PlayerRequest,
@@ -219,6 +220,15 @@ function App() {
     y: number;
   } | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
+  const [folderMenu, setFolderMenu] = useState<{
+    folder: FolderRef;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [renameFolder, setRenameFolder] = useState<{
+    folder: FolderRef;
+    name: string;
+  } | null>(null);
   const [editDialog, setEditDialog] = useState<{
     playlist: Playlist;
     name: string;
@@ -678,6 +688,8 @@ function App() {
         setFolderDialog(false);
         setRemoveDialog(null);
         setEditDialog(null);
+        setFolderMenu(null);
+        setRenameFolder(null);
       }
     };
     // A focused button activates on Space keyup; cancel that so Space never
@@ -1152,7 +1164,19 @@ function App() {
       playlistRow(entry.playlist)
     ) : (
       <details className="library-folder spotify-folder" key={entry.folder.id}>
-        <summary className="library-item">
+        <summary
+          className="library-item"
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setSongMenu(null);
+            setEntityMenu(null);
+            setFolderMenu({
+              folder: entry.folder,
+              x: event.clientX,
+              y: event.clientY,
+            });
+          }}
+        >
           <div className="folder-cover">
             <Folder size={22} />
           </div>
@@ -2900,6 +2924,84 @@ function App() {
             }}
           />
         </>
+      )}
+      {folderMenu && (
+        <>
+          <div
+            className="popover-dismiss"
+            onClick={() => setFolderMenu(null)}
+          />
+          <div
+            role="menu"
+            aria-label="Folder actions"
+            className="song-menu popover entity-menu"
+            style={{
+              left: Math.max(8, Math.min(folderMenu.x, window.innerWidth - 250)),
+              top: Math.max(8, Math.min(folderMenu.y, window.innerHeight - 160)),
+            }}
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                setRenameFolder({
+                  folder: folderMenu.folder,
+                  name: folderMenu.folder.name,
+                });
+                setFolderMenu(null);
+              }}
+            >
+              Rename
+            </button>
+          </div>
+        </>
+      )}
+      {renameFolder && (
+        <div className="modal-backdrop" onClick={() => setRenameFolder(null)}>
+          <form
+            className="dialog edit-playlist"
+            aria-labelledby="rename-folder-title"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renameFolder.name.trim()) return;
+              void call("rename_folder", {
+                id: renameFolder.folder.id,
+                name: renameFolder.name.trim(),
+              });
+              setRenameFolder(null);
+            }}
+          >
+            <h2 id="rename-folder-title">Rename folder</h2>
+            <label>
+              <span>Name</span>
+              <input
+                className="field"
+                autoFocus
+                maxLength={100}
+                value={renameFolder.name}
+                onChange={(event) =>
+                  setRenameFolder({ ...renameFolder, name: event.target.value })
+                }
+              />
+            </label>
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="pill"
+                onClick={() => setRenameFolder(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="pill primary"
+                disabled={!renameFolder.name.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       )}
       {editDialog && (
         <div className="modal-backdrop" onClick={() => setEditDialog(null)}>

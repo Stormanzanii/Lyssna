@@ -19,6 +19,9 @@ struct Listing {
 type Key = (String, String);
 static LISTINGS: OnceLock<tokio::sync::Mutex<HashMap<Key, Listing>>> = OnceLock::new();
 static TRACKS: OnceLock<std::sync::Mutex<HashMap<Key, Track>>> = OnceLock::new();
+/// Playlist contexts already checked for Spotify's hidden Liked Songs
+/// playlist, so each is looked up once per run.
+static LIKED_PLAYLISTS: OnceLock<std::sync::Mutex<HashMap<Key, bool>>> = OnceLock::new();
 fn listing_pages(context: librespot_protocol::context::Context) -> VecDeque<Value> {
     context.pages.into_iter().map(|page|json!({"tracks":page.tracks.into_iter().filter(|track|track.uri.is_some()).map(|track|json!({"uri":track.uri,"added_at":track.metadata.get("added_at")})).collect::<Vec<_>>(),"page_url":page.page_url,"next_page_url":page.next_page_url})).collect()
 }
@@ -195,11 +198,54 @@ pub async fn recent(session: &Session) -> Result<Vec<Track>> {
     let plays = recent_plays(&serde_json::from_slice(&bytes)?)?;
     let uris: Vec<String> = plays.iter().map(|play| play.track.clone()).collect();
     let mut tracks = resolve_tracks(session, &uris).await?;
+    // Spotify records Liked Songs plays under a hidden playlist (format
+    // "liked-songs"); show them as Liked Songs, as Spotify's Recents does.
+    let collection = format!("spotify:user:{}:collection", session.username());
+    let mut checks = tokio::task::JoinSet::new();
+    let contexts: HashSet<String> = plays.iter().map(|play| play.context.clone()).collect();
+    for context in contexts {
+        if let Some(id) = context.strip_prefix("spotify:playlist:").map(str::to_owned) {
+            let session = session.clone();
+            checks.spawn(async move { is_liked_playlist(&session, &id).await.then_some(context) });
+        }
+    }
+    let mut liked = HashSet::new();
+    while let Some(result) = checks.join_next().await {
+        liked.extend(result.ok().flatten());
+    }
     for (track, play) in tracks.iter_mut().zip(plays) {
         track.added_at = play.played_at;
-        track.played_context = play.context;
+        track.played_context = if liked.contains(&play.context) {
+            collection.clone()
+        } else {
+            play.context
+        };
     }
     Ok(tracks)
+}
+
+async fn is_liked_playlist(session: &Session, id: &str) -> bool {
+    let key = (session.username(), id.to_owned());
+    let known = LIKED_PLAYLISTS
+        .get_or_init(Default::default)
+        .lock()
+        .ok()
+        .and_then(|checked| checked.get(&key).copied());
+    if let Some(liked) = known {
+        return liked;
+    }
+    let Ok(playlist) = read_playlist(session, id).await else {
+        // Not remembered: a failed lookup is tried again next time.
+        return false;
+    };
+    let liked = playlist.attributes.format == "liked-songs";
+    if let Ok(mut checked) = LIKED_PLAYLISTS.get_or_init(Default::default).lock() {
+        if checked.len() >= 1024 {
+            checked.clear();
+        }
+        checked.insert(key, liked);
+    }
+    liked
 }
 
 #[derive(Debug, PartialEq)]
@@ -1828,6 +1874,30 @@ mod live_timing_tests {
                 started.elapsed(),
                 slowest
             );
+        });
+    }
+}
+
+#[cfg(test)]
+mod live_recent_tests {
+    use super::*;
+    #[test]
+    #[ignore = "Uses saved native sign-in for read-only play history checks; never writes"]
+    fn live_recents_label_liked_songs_plays() {
+        crate::native::with_live_session(async |session: &Session| {
+            for pass in ["first", "second"] {
+                let started = Instant::now();
+                let tracks = recent(session).await.expect("Play history unreadable");
+                let liked = tracks
+                    .iter()
+                    .filter(|track| track.played_context.ends_with(":collection"))
+                    .count();
+                eprintln!(
+                    "{pass} load: {} plays, {liked} from Liked Songs, {:?}",
+                    tracks.len(),
+                    started.elapsed()
+                );
+            }
         });
     }
 }

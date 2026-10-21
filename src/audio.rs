@@ -637,6 +637,8 @@ mod tests {
                     )
                     .unwrap();
             }
+            // Keep the sink alive in the join result while output drains.
+            audio
         });
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         while queued.load(Ordering::Acquire) < MAX_SAMPLES {
@@ -646,7 +648,7 @@ mod tests {
         paused.store(true, Ordering::Release);
         let samples = SAMPLE_RATE as usize * CHANNELS as usize * 150 / 1000;
         let gaps = (0..samples).filter(|_| output.next() != Some(0.25)).count();
-        producer.join().unwrap();
+        let _audio = producer.join().unwrap();
         assert_eq!(gaps, 0, "audio ran dry during a 150 ms scheduling gap");
     }
     #[test]

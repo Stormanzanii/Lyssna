@@ -356,8 +356,13 @@ pub async fn remove_from_playlist(
 
 /// One playlist change in the web player's JSON format.
 fn playlist_changes(op: Value) -> Value {
+    playlist_change_ops(vec![op])
+}
+
+/// Several operations applied together as one atomic change.
+fn playlist_change_ops(ops: Vec<Value>) -> Value {
     json!({
-        "deltas": [{"ops": [op], "info": {"source": {"client": 5}}}],
+        "deltas": [{"ops": ops, "info": {"source": {"client": 5}}}],
         "wantResultingRevisions": false,
         "wantSyncResult": false,
         "nonces": []
@@ -495,6 +500,202 @@ fn remove_changes(uri: &str, row: &str) -> Value {
     })
 }
 
+/// Every library row in order: its URI and item ID (base64), folder markers included.
+async fn library_rows(session: &Session) -> Result<Vec<(String, String)>> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use protobuf::Message;
+    let mut rows = Vec::new();
+    for _ in 0..100 {
+        let bytes = tokio::time::timeout(
+            Duration::from_secs(10),
+            session
+                .spclient()
+                .get_rootlist(rows.len(), Some(ROOTLIST_PAGE)),
+        )
+        .await
+        .context("Spotify library request timed out")??;
+        let page =
+            librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(&bytes)
+                .context("Invalid Spotify library page")?;
+        let items = &page.contents.get_or_default().items;
+        rows.extend(items.iter().map(|item| {
+            let id = item
+                .attributes
+                .as_ref()
+                .map(|attributes| STANDARD.encode(attributes.item_id()))
+                .unwrap_or_default();
+            (item.uri().to_owned(), id)
+        }));
+        let total = usize::try_from(page.length()).unwrap_or_default();
+        if items.is_empty() || rows.len() >= total {
+            return Ok(rows);
+        }
+    }
+    anyhow::bail!("Spotify library has too many pages")
+}
+
+fn row_key((uri, id): &(String, String)) -> Value {
+    if id.is_empty() {
+        json!({"uri": uri})
+    } else {
+        json!({"uri": uri, "attributes": {"itemId": id}})
+    }
+}
+
+fn valid_folder_id(id: &str) -> Result<()> {
+    ensure!(
+        !id.is_empty() && id.len() <= 64 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid folder ID"
+    );
+    Ok(())
+}
+
+fn folder_name(name: &str) -> Result<String> {
+    let name = name.trim();
+    ensure!(
+        !name.is_empty() && name.chars().count() <= 100 && !name.chars().any(char::is_control),
+        "Choose a folder name up to 100 characters"
+    );
+    Ok(url::form_urlencoded::byte_serialize(name.as_bytes()).collect())
+}
+
+/// Create an empty Spotify folder at the top of the library. Returns its ID.
+pub async fn create_folder(session: &Session, name: &str) -> Result<String> {
+    let encoded = folder_name(name)?;
+    let mut bytes = [0; 8];
+    getrandom::fill(&mut bytes).map_err(|_| anyhow::anyhow!("Cannot create a folder ID"))?;
+    let id: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    let (start, end) = (
+        format!("spotify:start-group:{id}:{encoded}"),
+        format!("spotify:end-group:{id}"),
+    );
+    rootlist_change(
+        session,
+        json!({"kind": 2, "add": {
+            "items": [{"uri": start}, {"uri": end}],
+            "addFirst": true
+        }}),
+    )
+    .await?;
+    let rows = library_rows(session).await?;
+    ensure!(
+        rows.windows(2)
+            .any(|pair| pair[0].0 == start && pair[1].0 == end),
+        "Spotify did not confirm the new folder"
+    );
+    Ok(id)
+}
+
+/// Rename a Spotify folder; its name lives in its start marker.
+pub async fn rename_folder(session: &Session, id: &str, name: &str) -> Result<()> {
+    valid_folder_id(id)?;
+    let encoded = folder_name(name)?;
+    let prefix = format!("spotify:start-group:{id}:");
+    let rows = library_rows(session).await?;
+    let index = rows
+        .iter()
+        .position(|(uri, _)| uri.starts_with(&prefix))
+        .context("This folder is no longer in Your Library")?;
+    let next = rows
+        .get(index + 1)
+        .context("This folder has no end marker")?;
+    let renamed = format!("{prefix}{encoded}");
+    // Positional edits are rejected; swap the marker by URI in one change,
+    // re-adding it before the row that followed it.
+    rootlist_changes(
+        session,
+        vec![
+            json!({"kind": 3, "rem": {"items": [row_key(&rows[index])], "itemsAsKey": true}}),
+            json!({"kind": 2, "add": {"items": [{"uri": renamed}], "addBeforeItem": row_key(next)}}),
+        ],
+    )
+    .await?;
+    ensure!(
+        library_rows(session)
+            .await?
+            .iter()
+            .any(|(uri, _)| *uri == renamed),
+        "Spotify did not confirm the new folder name"
+    );
+    Ok(())
+}
+
+/// Move a playlist into the end of a folder, or out to the end of the library.
+pub async fn move_to_folder(session: &Session, playlist: &str, folder: Option<&str>) -> Result<()> {
+    valid_playlist_id(playlist)?;
+    if let Some(folder) = folder {
+        valid_folder_id(folder)?;
+    }
+    let rows = library_rows(session).await?;
+    let suffix = format!("playlist:{playlist}");
+    let row = rows
+        .iter()
+        .find(|(uri, _)| uri.starts_with("spotify:") && uri.ends_with(&suffix))
+        .context("This playlist is not in Your Library")?;
+    // Positional moves are rejected; remove and re-add the playlist by URI in
+    // one change, before the folder's end marker or at the end.
+    let mut add = json!({"items": [row_key(row)]});
+    match folder {
+        Some(folder) => {
+            let end = format!("spotify:end-group:{folder}");
+            let end = rows
+                .iter()
+                .find(|(uri, _)| *uri == end)
+                .context("This folder is no longer in Your Library")?;
+            add["addBeforeItem"] = row_key(end);
+        }
+        None => add["addLast"] = json!(true),
+    }
+    rootlist_changes(
+        session,
+        vec![
+            json!({"kind": 3, "rem": {"items": [row_key(row)], "itemsAsKey": true}}),
+            json!({"kind": 2, "add": add}),
+        ],
+    )
+    .await?;
+    let placed = library(session).await?;
+    let now = placed
+        .iter()
+        .find(|item| item.id == playlist)
+        .context("This playlist is not in Your Library")?;
+    ensure!(
+        now.folders.last().map(|item| item.id.as_str()) == folder,
+        "Spotify did not confirm the move"
+    );
+    Ok(())
+}
+
+/// Delete a Spotify folder but keep its playlists, which move up a level.
+pub async fn delete_folder(session: &Session, id: &str) -> Result<()> {
+    valid_folder_id(id)?;
+    let prefix = format!("spotify:start-group:{id}:");
+    let end = format!("spotify:end-group:{id}");
+    let rows = library_rows(session).await?;
+    let markers: Vec<Value> = rows
+        .iter()
+        .filter(|(uri, _)| uri.starts_with(&prefix) || *uri == end)
+        .map(row_key)
+        .collect();
+    ensure!(
+        markers.len() == 2,
+        "This folder is no longer in Your Library"
+    );
+    rootlist_change(
+        session,
+        json!({"kind": 3, "rem": {"items": markers, "itemsAsKey": true}}),
+    )
+    .await?;
+    ensure!(
+        !library_rows(session)
+            .await?
+            .iter()
+            .any(|(uri, _)| uri.starts_with(&prefix) || *uri == end),
+        "Spotify did not confirm the folder removal"
+    );
+    Ok(())
+}
+
 /// Remove a playlist from the library, as Spotify's Delete does for owners.
 pub async fn remove_from_library(session: &Session, id: &str) -> Result<()> {
     ensure!(
@@ -521,12 +722,17 @@ fn rootlist_add(uri: &str) -> Value {
 }
 
 async fn rootlist_change(session: &Session, op: Value) -> Result<()> {
+    rootlist_changes(session, vec![op]).await
+}
+
+/// Library edits applied together, so a remove and re-add cannot half-happen.
+async fn rootlist_changes(session: &Session, ops: Vec<Value>) -> Result<()> {
     let user: String =
         url::form_urlencoded::byte_serialize(session.username().as_bytes()).collect();
     playlist_json(
         session,
         &format!("/playlist/v2/user/{user}/rootlist/changes"),
-        &playlist_changes(op),
+        &playlist_change_ops(ops),
     )
     .await
     .context("Spotify could not change the library")?;
@@ -1136,6 +1342,59 @@ mod live_playlist_tests {
                     panic!("Native playlist change was not written: {error:#}")
                 }
             }
+        });
+    }
+}
+
+#[cfg(test)]
+mod live_folder_tests {
+    use super::*;
+    #[test]
+    #[ignore = "Creates a temporary folder and playlist with the saved sign-in, edits them, then removes both"]
+    fn live_folder_create_move_rename_and_delete() {
+        crate::native::with_live_session(async |session: &Session| {
+            let folder = create_folder(session, "SpotiFlex folder test")
+                .await
+                .expect("Native folder creation failed");
+            let playlist = create_playlist(session, "SpotiFlex folder playlist").await;
+            let checked = async {
+                let playlist = playlist
+                    .as_ref()
+                    .map_err(|error| anyhow::anyhow!("{error:#}"))?;
+                move_to_folder(session, playlist, Some(&folder)).await?;
+                let listed = library(session).await?;
+                let inside = listed
+                    .iter()
+                    .find(|item| item.id == *playlist)
+                    .context("Playlist missing")?;
+                ensure!(
+                    inside.folders.len() == 1 && inside.folders[0].name == "SpotiFlex folder test",
+                    "Folder path not read back"
+                );
+                rename_folder(session, &folder, "SpotiFlex folder & test 2").await?;
+                let renamed = library(session).await?;
+                ensure!(
+                    renamed.iter().any(|item| item
+                        .folders
+                        .iter()
+                        .any(|f| f.name == "SpotiFlex folder & test 2")),
+                    "Renamed folder not read back"
+                );
+                move_to_folder(session, playlist, None).await?;
+                Ok::<_, anyhow::Error>(())
+            }
+            .await;
+            let deleted = delete_folder(session, &folder).await;
+            if let Ok(playlist) = &playlist {
+                let _ = remove_from_library(session, playlist).await;
+            }
+            checked
+                .map_err(|error| anyhow::anyhow!("{error:#}"))
+                .expect("Native folder checks failed");
+            deleted.expect("Native folder removal failed");
+            eprintln!(
+                "Native folders: created, moved a playlist in, read its folder path, renamed, moved it out, deleted"
+            );
         });
     }
 }

@@ -614,12 +614,40 @@ function App() {
     },
     [call, target, updateSettings],
   );
+  // A card already knows its name and picture: show them at once while
+  // Spotify sends the rest of the page (about half a second for artists).
+  const openCard = useCallback(
+    (route: string, item?: HomeItem) => {
+      const [kind, id] = route.split(":");
+      if (
+        item &&
+        id &&
+        (kind === "artist" || kind === "album") &&
+        !stateRef.current.pages[route]?.info?.title
+      )
+        dispatch({
+          type: "info_prefetch",
+          info: {
+            key: route,
+            title: item.name,
+            subtitle: kind === "artist" ? "Artist" : item.subtitle,
+            images: item.images,
+            albums: [],
+            ...(kind === "artist"
+              ? { artist: { id, uri: item.uri, name: item.name, images: item.images } }
+              : {}),
+          },
+        });
+      navigate(route);
+    },
+    [navigate],
+  );
   const homeNavigate = useCallback(
-    (route: string) =>
+    (route: string, item?: HomeItem) =>
       route === "playlist:37i9dQZF1EYkqdzj48dyYq"
         ? play({ command: "dj" })
-        : navigate(route),
-    [navigate, play],
+        : openCard(route, item),
+    [openCard, play],
   );
   const homePlay = useCallback(
     (item: HomeItem) => {
@@ -2650,7 +2678,7 @@ function App() {
                   <div className="artist-shelf" key={section.uri}>
                     <Shelf
                       section={section}
-                      navigate={navigate}
+                      navigate={openCard}
                       play={homePlay}
                       ready={state.native_ready}
                     />

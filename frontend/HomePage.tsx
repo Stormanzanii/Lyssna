@@ -13,7 +13,7 @@ import type {
   HomeSection,
   Playlist,
 } from "./types";
-import { Cover } from "./components";
+import { Cover, cancelPrefetch, prefetchPage } from "./components";
 import { SpotifyText } from "./SpotifyText";
 import { DJ_COVER } from "./brand";
 import "./HomePage.css";
@@ -27,6 +27,10 @@ export function shelfHeading(section: HomeSection) {
     ? { label: match[1], title: match[2] }
     : { label: section.subtitle, title: section.title };
 }
+/** Load a card's page while the pointer rests on it, so opening is instant. */
+export const prefetchCard = (item: HomeItem) => {
+  if (/^(artist|album|playlist):/.test(item.route)) prefetchPage(item.route);
+};
 /** Spotify's label for an item type: "Artist", "Album", "Song". */
 export const kindLabel = (kind: string) =>
   kind === "track" ? "Song" : kind.charAt(0).toUpperCase() + kind.slice(1);
@@ -42,7 +46,8 @@ export function Shelf({
   defaultExpanded = false,
 }: {
   section: HomeSection;
-  navigate: (route: string) => void;
+  /** Opens a route; cards pass themselves so the page can show at once. */
+  navigate: (route: string, item?: HomeItem) => void;
   play: (item: HomeItem) => void;
   ready: boolean;
   defaultExpanded?: boolean;
@@ -90,12 +95,14 @@ export function Shelf({
             key={item.uri}
             data-context-route={item.route}
             data-context-name={item.name}
+            onMouseEnter={() => prefetchCard(item)}
+            onMouseLeave={cancelPrefetch}
           >
             <div className="home-card-art">
               <button
                 className="home-card-open"
                 onClick={() =>
-                  item.kind === "track" ? play(item) : navigate(item.route)
+                  item.kind === "track" ? play(item) : navigate(item.route, item)
                 }
                 aria-label={`Open ${item.name}`}
               >
@@ -114,7 +121,7 @@ export function Shelf({
               <button
                 className="home-card-title"
                 onClick={() =>
-                  item.kind === "track" ? play(item) : navigate(item.route)
+                  item.kind === "track" ? play(item) : navigate(item.route, item)
                 }
               >
                 {item.name}
@@ -142,7 +149,8 @@ function FeaturedShelf({
   onSave,
 }: {
   section: HomeSection;
-  navigate: (route: string) => void;
+  /** Opens a route; cards pass themselves so the page can show at once. */
+  navigate: (route: string, item?: HomeItem) => void;
   play: (item: HomeItem) => void;
   ready: boolean;
   saved: Record<string, boolean>;
@@ -157,6 +165,8 @@ function FeaturedShelf({
       aria-label={section.title}
       data-context-route={item.route}
       data-context-name={item.name}
+      onMouseEnter={() => prefetchCard(item)}
+      onMouseLeave={cancelPrefetch}
     >
       <div className="home-featured-heading">
         <Cover
@@ -170,7 +180,7 @@ function FeaturedShelf({
       <div className="home-featured-body">
         <button
           className="home-featured-art"
-          onClick={() => navigate(item.route)}
+          onClick={() => navigate(item.route, item)}
           aria-label={`Open ${item.name}`}
         >
           <Cover images={item.images} />
@@ -182,7 +192,7 @@ function FeaturedShelf({
           </p>
           <button
             className="home-featured-title"
-            onClick={() => navigate(item.route)}
+            onClick={() => navigate(item.route, item)}
           >
             {item.name}
           </button>
@@ -254,7 +264,8 @@ export const HomePage = memo(function HomePage({
   loading: boolean;
   error: string;
   ready: boolean;
-  navigate: (route: string) => void;
+  /** Opens a route; cards pass themselves so the page can show at once. */
+  navigate: (route: string, item?: HomeItem) => void;
   play: (item: HomeItem) => void;
   dj: () => void;
   refresh: () => void;

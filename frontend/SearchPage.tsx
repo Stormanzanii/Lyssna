@@ -6,7 +6,7 @@ import {
   Play,
   Search,
 } from "lucide-react";
-import { ArtistLinks, Cover } from "./components";
+import { ArtistLinks, Cover, cancelPrefetch, prefetchPage } from "./components";
 import { Shelf } from "./HomePage";
 import type { AppState } from "./state";
 import type { Album, Artist, HomeItem, Track } from "./types";
@@ -104,6 +104,12 @@ export function SearchPage({
         data-context-route={entry.route}
         data-context-name={entry.name}
         aria-label={featured ? "Top result" : undefined}
+        onMouseEnter={() =>
+          !entry.track &&
+          /^(artist|album|playlist):/.test(entry.route) &&
+          prefetchPage(entry.route)
+        }
+        onMouseLeave={cancelPrefetch}
       >
         <button
           className="search-result-art"

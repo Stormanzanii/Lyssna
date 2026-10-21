@@ -1950,7 +1950,7 @@ test("timed syllables lift independently and font choices apply separately", asy
   ).toContain("Consolas");
 });
 
-test("typed Windows font names apply immediately with a live preview", async ({
+test("typed Windows font names apply immediately", async ({
   page,
 }) => {
   await startClient(page);
@@ -1971,8 +1971,8 @@ test("typed Windows font names apply immediately with a live preview", async ({
   await expect(page.locator(".settings-page")).toBeVisible();
   expect(
     await page
-      .getByLabel("Lyrics font preview", { exact: true })
-      .evaluate((node) => getComputedStyle(node).fontFamily),
+      .locator(".application")
+      .evaluate((node) => getComputedStyle(node).getPropertyValue("--lyric-font")),
   ).toContain("Bahnschrift");
   await expect
     .poll(() =>
@@ -1987,8 +1987,8 @@ test("typed Windows font names apply immediately with a live preview", async ({
   await lyricFont.clear();
   expect(
     await page
-      .getByLabel("Lyrics font preview", { exact: true })
-      .evaluate((node) => getComputedStyle(node).fontFamily),
+      .locator(".application")
+      .evaluate((node) => getComputedStyle(node).getPropertyValue("--lyric-font")),
   ).toContain("Inter");
   await appFont.clear();
   expect(
@@ -5466,4 +5466,60 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
   await expect
     .poll(layout)
     .toEqual({ albumRight: true, toolbarRight: true, overArtwork: true });
+});
+
+test("Home artist cards open with their name and photo at once and prefetch on hover", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "home",
+      page: {
+        account: "test-user",
+        greeting: "Hello",
+        cached: false,
+        sections: [
+          {
+            uri: "artists",
+            title: "Your favourite artists",
+            subtitle: "",
+            items: [
+              {
+                uri: "spotify:artist:3123456789abcdefghijkl",
+                route: "artist:3123456789abcdefghijkl",
+                name: "Card artist",
+                subtitle: "Artist",
+                images: [{ url: "https://artwork.example.test/card-artist.svg" }],
+                kind: "artist",
+                playable: true,
+                format: "",
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  // A one-card section shows large, as Spotify's featured shelf.
+  const card = page.getByRole("region", { name: "Your favourite artists" });
+  await card.hover();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (entry: any) =>
+            entry.command === "prefetch_page" &&
+            entry.args.key === "artist:3123456789abcdefghijkl",
+        ),
+      ),
+    )
+    .toBe(true);
+  await card.getByRole("button", { name: "Card artist", exact: true }).click();
+  // Spotify has not answered yet: the card's own name and photo show.
+  await expect(page.locator(".hero-copy h1")).toHaveText("Card artist");
+  await expect(page.locator(".hero-cover img")).toHaveAttribute(
+    "src",
+    /card-artist\.svg/,
+  );
 });

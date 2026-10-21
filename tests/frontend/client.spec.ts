@@ -5729,3 +5729,54 @@ test("closing and opening Now playing animates the panel", async ({ page }) => {
     await page.evaluate(() => Promise.all((window as any).__transitions)),
   ).toEqual(["ran", "ran"]);
 });
+
+test("lyrics toolbar icons animate their parts on hover", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const toolbar = page.getByRole("toolbar", { name: "Lyrics" });
+  const scaleOf = (selector: string) =>
+    page.evaluate((selector) => {
+      const value = getComputedStyle(document.querySelector(selector)!).scale;
+      return value === "none" ? 1 : Number(value.split(" ")[0]);
+    }, selector);
+  const front = async () =>
+    (await scaleOf("[data-icon='romanized'] .part-symbol")) >
+    (await scaleOf("[data-icon='romanized'] .part-latin"))
+      ? "symbol"
+      : "latin";
+  // The A is in front until hovered; romanizing keeps the symbol in front.
+  await page.mouse.move(5, 5);
+  await expect.poll(front).toBe("latin");
+  const translate = toolbar.getByTitle("Romanization", { exact: true });
+  await translate.hover();
+  await expect.poll(front).toBe("symbol");
+  await translate.click();
+  await page.mouse.move(5, 5);
+  await expect.poll(front).toBe("symbol");
+  await translate.hover();
+  await translate.click();
+  await page.mouse.move(5, 5);
+  await expect.poll(front).toBe("latin");
+  // The other icons run their own animation while hovered.
+  for (const [icon, part] of [
+    ["upload", ".part-arrow"],
+    ["retry", ".part-spinner"],
+    ["fullscreen", ".part-corner-out"],
+    ["lyrics_artwork_right", ".part-left"],
+    ["experimental_word_sync", ".part-bar"],
+  ]) {
+    await toolbar.locator(`[data-icon="${icon}"]`).hover();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          ({ icon, part }) =>
+            document
+              .querySelector(`[data-icon="${icon}"] ${part}`)!
+              .getAnimations().length,
+          { icon, part },
+        ),
+      )
+      .toBeGreaterThan(0);
+  }
+});

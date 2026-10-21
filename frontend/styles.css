@@ -1461,6 +1461,9 @@ small {
   background: #ffffff14;
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
+.load-ttml-mode > span:last-child {
+  padding-top: 5px;
+}
 .load-ttml-mode strong {
   display: block;
   font-size: 14px;
@@ -2961,120 +2964,239 @@ small {
 .lyrics-toolbar .icon-button:active {
   transform: scale(0.92);
 }
-/* Each icon moves in its own way while hovered. */
-.lyrics-toolbar .icon-button:hover svg {
-  animation: 0.5s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+/* Each icon moves in its own way while hovered (see toolbar-icons.tsx). */
+.toolbar-icon g,
+.toolbar-icon path,
+.toolbar-icon rect {
+  transform-box: fill-box;
+  transform-origin: center;
 }
-.lyrics-toolbar [data-icon="romanized"]:hover svg {
-  animation-name: icon-tilt;
+/* 文A: the A is in front until hovered or romanizing, then the symbol. */
+.toolbar-icon-translate g {
+  transition:
+    opacity 0.3s,
+    scale 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
-.lyrics-toolbar [data-icon="experimental_word_sync"]:hover svg {
-  animation: icon-pulse 0.7s ease-in-out infinite;
+.toolbar-icon-translate .part-symbol {
+  opacity: 0.5;
+  scale: 0.86;
 }
-.lyrics-toolbar [data-icon="lyrics_compact"]:hover svg {
-  animation-name: icon-squash;
+.toolbar-icon-translate .part-latin {
+  scale: 1.08;
 }
-.lyrics-toolbar [data-icon="lyrics_hide_artwork"]:hover svg {
-  animation-name: icon-nudge-left;
+[data-icon="romanized"]:hover .part-symbol,
+[data-icon="romanized"].active .part-symbol {
+  opacity: 1;
+  scale: 1.12;
 }
-.lyrics-toolbar [data-icon="lyrics_artwork_right"]:hover svg {
-  animation-name: icon-sway;
+[data-icon="romanized"]:hover .part-latin,
+[data-icon="romanized"].active .part-latin {
+  opacity: 0.5;
+  scale: 0.86;
 }
-.lyrics-toolbar [data-icon="upload"]:hover svg {
-  animation-name: icon-lift;
+/* Word sync: a level meter. */
+[data-icon="experimental_word_sync"]:hover .part-bar {
+  animation: icon-bar 0.6s ease-in-out infinite alternate;
 }
-.lyrics-toolbar [data-icon="retry"]:hover svg {
-  animation-name: icon-turn;
+[data-icon="experimental_word_sync"]:hover .part-bar-1 {
+  animation-delay: -0.2s;
 }
-.lyrics-toolbar [data-icon="fullscreen"]:hover svg {
-  animation-name: icon-expand;
+[data-icon="experimental_word_sync"]:hover .part-bar-2 {
+  animation-delay: -0.4s;
 }
-.lyrics-toolbar [data-icon="settings"]:hover svg {
-  animation: icon-spin 1.2s linear infinite;
+[data-icon="experimental_word_sync"]:hover .part-bar-3 {
+  animation-delay: -0.1s;
 }
-@keyframes icon-tilt {
-  30% { rotate: -12deg; }
-  65% { rotate: 8deg; }
+[data-icon="experimental_word_sync"]:hover .part-bar-4 {
+  animation-delay: -0.3s;
 }
-@keyframes icon-pulse {
-  50% { scale: 1 0.7; }
+@keyframes icon-bar {
+  to {
+    scale: 1 0.45;
+  }
 }
-@keyframes icon-squash {
-  40% { scale: 1.1 0.8; }
-  70% { scale: 0.95 1.05; }
+/* Compact: the rows squeeze together. */
+.toolbar-icon-compact rect,
+.toolbar-icon-compact path {
+  transition:
+    scale 0.25s,
+    translate 0.25s;
 }
-@keyframes icon-nudge-left {
-  45% { translate: -3px 0; }
+[data-icon="lyrics_compact"]:hover .part-frame {
+  scale: 1 0.82;
 }
-@keyframes icon-sway {
-  30% { translate: -3px 0; }
-  65% { translate: 3px 0; }
+[data-icon="lyrics_compact"]:hover .part-row-top {
+  translate: 0 1.5px;
 }
-@keyframes icon-lift {
-  45% { translate: 0 -3px; }
+[data-icon="lyrics_compact"]:hover .part-row-bottom {
+  translate: 0 -1.5px;
 }
-@keyframes icon-turn {
-  to { rotate: 180deg; }
+/* Hide artwork: the panel slides shut and the chevron pushes left. */
+[data-icon="lyrics_hide_artwork"]:hover .part-divider,
+[data-icon="lyrics_hide_artwork"]:hover .part-chevron {
+  animation: icon-push-left 0.9s ease-in-out infinite;
 }
-@keyframes icon-expand {
-  45% { scale: 1.2; }
+@keyframes icon-push-left {
+  50% {
+    translate: -3px 0;
+  }
+}
+/* Swap sides: the arrows pulse left and right in turn. */
+[data-icon="lyrics_artwork_right"]:hover .part-left {
+  animation: icon-pulse-left 0.9s ease-in-out infinite;
+}
+[data-icon="lyrics_artwork_right"]:hover .part-right {
+  animation: icon-pulse-right 0.9s ease-in-out infinite;
+}
+@keyframes icon-pulse-left {
+  25% {
+    translate: -3px 0;
+  }
+  50% {
+    translate: 0 0;
+  }
+}
+@keyframes icon-pulse-right {
+  50% {
+    translate: 0 0;
+  }
+  75% {
+    translate: 3px 0;
+  }
+}
+/* Upload: the arrow shoots up and a new one rises from the tray. */
+[data-icon="upload"]:hover .part-arrow {
+  animation: icon-shoot 1.1s ease-in-out infinite;
+}
+@keyframes icon-shoot {
+  35% {
+    translate: 0 -10px;
+    opacity: 0;
+  }
+  36% {
+    translate: 0 6px;
+    opacity: 0;
+  }
+  75%,
+  100% {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+/* Retry: spins like a refresh. */
+[data-icon="retry"]:hover .part-spinner {
+  animation: icon-spin 0.9s linear infinite;
+}
+/* Full screen: the corners push out and draw back in. */
+[data-icon="fullscreen"]:hover .part-corner-out {
+  animation: icon-corner-out 0.9s ease-in-out infinite alternate;
+}
+[data-icon="fullscreen"]:hover .part-corner-in {
+  animation: icon-corner-in 0.9s ease-in-out infinite alternate;
+}
+@keyframes icon-corner-out {
+  from {
+    translate: -1px 1px;
+  }
+  to {
+    translate: 1.5px -1.5px;
+  }
+}
+@keyframes icon-corner-in {
+  from {
+    translate: 1px -1px;
+  }
+  to {
+    translate: -1.5px 1.5px;
+  }
+}
+/* Settings: the gear turns. */
+[data-icon="settings"]:hover svg {
+  animation: icon-spin 1.4s linear infinite;
 }
 @keyframes icon-spin {
-  to { rotate: 360deg; }
+  to {
+    rotate: 360deg;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
+  .lyrics-toolbar .icon-button:hover *,
   .lyrics-toolbar .icon-button:hover svg {
     animation: none !important;
   }
 }
+.reduce-motion .lyrics-toolbar .icon-button:hover *,
 .reduce-motion .lyrics-toolbar .icon-button:hover svg {
   animation: none !important;
 }
-/* Layout changes morph between positions (see layout-transition.ts). */
-.center-panel {
+/* Layout changes morph between positions (see layout-transition.ts). Only
+   the parts a change moves are named. */
+[data-layout-change="panels"] .center-panel {
   view-transition-name: center-panel;
 }
-.now-playing {
+[data-layout-change="panels"] .now-playing {
   view-transition-name: now-playing;
 }
-.center-panel .lyrics-page > .lyrics-album {
+[data-layout-change="lyrics"] .center-panel .lyrics-page > .lyrics-album {
   view-transition-name: lyrics-artwork;
 }
-.center-panel .lyrics-page .lyrics-canvas-cover {
+[data-layout-change="lyrics"]
+  .center-panel
+  .lyrics-page:not(.narrow)
+  .lyrics-canvas-cover {
   view-transition-name: lyrics-canvas;
 }
-.center-panel .lyrics-page .lyrics-body {
+[data-layout-change="lyrics"] .center-panel .lyrics-page .lyrics-body {
   view-transition-name: lyrics-text;
+}
+/* Canvas is drawn 9% past the top and bottom of the page, which clips it;
+   the moving snapshot is not clipped, so crop it to the page. */
+::view-transition-new(lyrics-canvas) {
+  clip-path: inset(7.63% 0);
 }
 ::view-transition-group(*) {
   animation-duration: 0.32s;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-/* Resizing panels clip instead of stretching their text. */
+/* Only the new layout is drawn while it moves: cross-fading the old and
+   new snapshots showed lyrics and titles twice, wrapped differently. */
 ::view-transition-old(center-panel),
-::view-transition-new(center-panel),
 ::view-transition-old(lyrics-text),
+::view-transition-old(lyrics-artwork),
+::view-transition-old(lyrics-canvas) {
+  display: none;
+}
+::view-transition-new(center-panel),
+::view-transition-new(lyrics-artwork),
+::view-transition-new(lyrics-canvas) {
+  animation: none;
+}
+/* Panels and lyrics change size: crop them instead of stretching text. */
+::view-transition-new(center-panel),
 ::view-transition-new(lyrics-text) {
+  animation: none;
+  width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: none;
   object-position: left top;
+  overflow: clip;
 }
 ::view-transition-new(now-playing):only-child {
   animation: now-playing-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 ::view-transition-old(now-playing):only-child {
-  animation: now-playing-out 0.24s ease-in forwards;
+  animation: now-playing-out 0.28s cubic-bezier(0.5, 0, 0.8, 0.4) forwards;
 }
+/* Now playing slides fully in and out over the centre, which already
+   shows its new width, so nothing shows through a half-faded panel. */
 @keyframes now-playing-in {
   from {
-    opacity: 0;
-    transform: translateX(40px);
+    transform: translateX(105%);
   }
 }
 @keyframes now-playing-out {
   to {
-    opacity: 0;
-    transform: translateX(40px);
+    transform: translateX(105%);
   }
 }
 .lyric-preview {

@@ -14,13 +14,8 @@ import { createDJReminder } from "./djHint";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowLeftRight,
-  AudioLines,
   BadgeCheck,
   Check,
-  Languages,
-  PanelLeftClose,
-  Rows3,
   Settings as SettingsIcon,
   ChevronDown,
   Clock3,
@@ -53,7 +48,6 @@ import {
   VolumeX,
   X,
   ListMusic,
-  Upload,
   Copy,
   ExternalLink,
   Pin,
@@ -66,6 +60,16 @@ import { rpc, subscribe } from "./bridge";
 import { startIdleTrim } from "./memory-trim";
 import { useRowWindow } from "./track-window";
 import { animateLayout } from "./layout-transition";
+import {
+  CompactIcon,
+  FullScreenIcon,
+  HideArtworkIcon,
+  RetryIcon,
+  SwapSidesIcon,
+  TranslateIcon,
+  UploadIcon,
+  WordSyncIcon,
+} from "./toolbar-icons";
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
@@ -1830,18 +1834,18 @@ function App() {
               >
                 {(
                   [
-                    ["romanized", "Romanization", Languages],
+                    ["romanized", "Romanization", TranslateIcon],
                     [
                       "experimental_word_sync",
                       "Experimental word sync",
-                      AudioLines,
+                      WordSyncIcon,
                     ],
-                    ["lyrics_compact", "Compact lyrics", Rows3],
-                    ["lyrics_hide_artwork", "Hide artwork", PanelLeftClose],
+                    ["lyrics_compact", "Compact lyrics", CompactIcon],
+                    ["lyrics_hide_artwork", "Hide artwork", HideArtworkIcon],
                     [
                       "lyrics_artwork_right",
                       "Artwork on the right",
-                      ArrowLeftRight,
+                      SwapSidesIcon,
                     ],
                   ] as const
                 ).map(([key, label, Icon]) => {
@@ -1860,12 +1864,13 @@ function App() {
                         key === "lyrics_compact"
                           ? animateLayout(
                               () => updateSettings({ [key]: !on }),
+                              "lyrics",
                               state.settings.reduce_motion,
                             )
                           : updateSettings({ [key]: !on })
                       }
                     >
-                      <Icon size={18} />
+                      <Icon />
                     </button>
                   );
                 })}
@@ -1876,7 +1881,7 @@ function App() {
                   data-icon="upload"
                   onClick={() => setTtmlOpen(true)}
                 >
-                  <Upload size={18} />
+                  <UploadIcon />
                 </button>
                 <button
                   className="icon-button"
@@ -1884,7 +1889,7 @@ function App() {
                   data-icon="retry"
                   onClick={() => void call("retry_lyrics")}
                 >
-                  <RefreshCw size={18} />
+                  <RetryIcon />
                 </button>
                 <button
                   className="icon-button"
@@ -1892,7 +1897,7 @@ function App() {
                   data-icon="fullscreen"
                   onClick={() => void fullscreen()}
                 >
-                  <Maximize2 size={18} />
+                  <FullScreenIcon />
                 </button>
                 <button
                   className="icon-button"
@@ -3011,7 +3016,7 @@ function App() {
               setSidebar(!sidebar);
               setPanel("now");
             }
-          }, state.settings.reduce_motion)
+          }, "panels", state.settings.reduce_motion)
         }
         onFullscreen={() => void fullscreen()}
         lyricsActive={center === "lyrics"}

@@ -400,7 +400,8 @@ async function startClient(page: Page, initialRoute = "liked") {
             return;
           }
           if (command === "browse") {
-            if (args.key === "home") return;
+            // Recents tests supply their own dated play history.
+            if (args.key === "home" || args.key === "recent") return;
             if (args.key.startsWith("search:")) {
               setTimeout(
                 () =>

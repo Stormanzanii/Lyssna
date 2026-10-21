@@ -13,6 +13,7 @@ export const Ambience = memo(function Ambience({
   animate = false,
   warp = 1,
   speed = 1,
+  shade = true,
 }: {
   track?: Track;
   /** Artwork URL used instead of the track's album art. */
@@ -23,6 +24,8 @@ export const Ambience = memo(function Ambience({
   warp?: number;
   /** Kawarp animation speed; 1 matches the lyrics page. */
   speed?: number;
+  /** Omit when the parent applies this same gradient with its other shading. */
+  shade?: boolean;
 }) {
   const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
@@ -160,7 +163,7 @@ export const Ambience = memo(function Ambience({
         ref={surface}
         className="ambient-layer"
       />
-      <div className="ambient-shade" />
+      {shade && <div className="ambient-shade" />}
     </div>
   );
 });

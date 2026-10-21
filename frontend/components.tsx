@@ -73,7 +73,7 @@ export function Cover({
 }) {
   const src = imageOf(images);
   const inner = src ? (
-    <img src={src} alt="" draggable={false} />
+    <img src={src} alt="" draggable={false} loading="lazy" decoding="async" />
   ) : (
     <Music2 aria-hidden="true" />
   );

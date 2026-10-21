@@ -4198,6 +4198,157 @@ async function startFolderDeletionClient(page: Page) {
   return { playlists, folders };
 }
 
+test("Liquid Glass combines shading without changing backdrop pixels", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await page.evaluate(
+    ({ settings, playback, track }) => {
+      const emit = (window as any).__clientTest.emit;
+      emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: false },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      emit({ type: "settings", settings: { ...settings, liquid_glass: true } });
+    },
+    { settings: emptyState.settings, playback: emptyState.playback, track },
+  );
+  const backdrop = page.locator(".glass-backdrop");
+  await expect(backdrop.locator(".ambient-layer")).toBeVisible();
+  await expect(backdrop.locator(".ambient-shade")).toHaveCount(0);
+  await expect(page.locator(".now-playing .ambient-shade")).toHaveCount(1);
+  // Finish the existing 500 ms artwork transition before comparing paint.
+  await page.waitForTimeout(700);
+  const mask = [page.locator(".marquee")];
+  const optimized = await backdrop.screenshot({ animations: "disabled", mask });
+  await backdrop.locator(".ambience").evaluate((element) => {
+    const shade = document.createElement("div");
+    shade.className = "ambient-shade";
+    element.append(shade);
+  });
+  await page.addStyleTag({
+    content:
+      ".glass-backdrop-shade { background: radial-gradient(ellipse at 50% 0%, transparent, #00000059 70%), linear-gradient(#0000002e, #00000066); }",
+  });
+  const original = await backdrop.screenshot({ animations: "disabled", mask });
+  const difference = await page.evaluate(
+    async ({ original, optimized }) => {
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      const pixels = async (base64: string) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        canvas.width = image.width;
+        canvas.height = image.height;
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, image.width, image.height).data;
+      };
+      const before = await pixels(original),
+        after = await pixels(optimized);
+      let changed = 0;
+      for (let index = 0; index < before.length; index += 4) {
+        if (
+          [0, 1, 2].some(
+            (channel) =>
+              Math.abs(before[index + channel] - after[index + channel]) > 2,
+          )
+        )
+          changed++;
+      }
+      return changed / (before.length / 4);
+    },
+    {
+      original: original.toString("base64"),
+      optimized: optimized.toString("base64"),
+    },
+  );
+  expect(difference).toBeLessThan(0.001);
+});
+
+test("playlist artwork loads near the viewport and still loads after scrolling", async ({
+  page,
+}) => {
+  await startClient(page);
+  const requests = new Set<number>();
+  await page.route("https://artwork.example.test/memory/**", (route) => {
+    const index = Number(
+      new URL(route.request().url()).pathname.split("/").at(-1)?.split(".")[0],
+    );
+    requests.add(index);
+    return route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640"><rect width="640" height="640" fill="#9670a7"/></svg>',
+    });
+  });
+  const count = 300;
+  await page.evaluate(
+    ({ track, count }) => {
+      const host = (window as any).__clientTest;
+      const browse = host.commands
+        .filter((entry: any) => entry.command === "browse")
+        .at(-1).args;
+      host.emit({
+        type: "tracks",
+        key: browse.key,
+        generation: browse.generation,
+        offset: 0,
+        more: false,
+        tracks: Array.from({ length: count }, (_, index) => ({
+          ...track,
+          id: `memory${index}`,
+          uri: `spotify:track:memory${index}`,
+          name: `Memory song ${index + 1}`,
+          album: {
+            ...track.album,
+            images: [
+              { url: `https://artwork.example.test/memory/${index}.svg` },
+            ],
+          },
+        })),
+      });
+    },
+    { track, count },
+  );
+  const rows = page.locator(".track-row");
+  await expect(rows).toHaveCount(count);
+  await expect
+    .poll(() =>
+      rows
+        .first()
+        .locator("img")
+        .evaluate(
+          (image) =>
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
+  expect(requests.has(count - 1)).toBe(false);
+  expect(requests.size).toBeLessThan(count / 3);
+  await rows.last().scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      rows
+        .last()
+        .locator("img")
+        .evaluate(
+          (image) =>
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
+  expect(requests.has(count - 1)).toBe(true);
+  await expect(rows.last().locator(".track-number > span")).toHaveText(
+    String(count),
+  );
+});
+
 async function openFolderDeletion(page: Page) {
   await page
     .locator(".library-list .spotify-folder > summary")

@@ -22,9 +22,11 @@
 .glass-backdrop-shade {
   position: absolute;
   inset: 0;
+  /* Keep all three original gradients in one full-window paint layer. */
   background:
     radial-gradient(ellipse at 50% 0%, transparent, #00000059 70%),
-    linear-gradient(#0000002e, #00000066);
+    linear-gradient(#0000002e, #00000066),
+    linear-gradient(#0004, #0005);
 }
 .glass-backdrop .ambience {
   z-index: 0;

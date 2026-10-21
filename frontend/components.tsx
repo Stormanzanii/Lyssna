@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { artworkFor } from "./artwork";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
@@ -58,6 +59,17 @@ export const imageOf = (images?: { url: string }[]) =>
   images?.find((image) => image.url.startsWith("https://"))?.url;
 export const artistNames = (track?: Track) =>
   track?.artists.map((artist) => artist.name).join(", ") ?? "";
+// Cover sizes are read during layout effects and applied together after
+// them, so setting one image's src never forces layout for the next read.
+const pendingSources: [HTMLImageElement, string][] = [];
+function setSourceSoon(element: HTMLImageElement, url: string) {
+  if (!pendingSources.length)
+    queueMicrotask(() => {
+      for (const [image, source] of pendingSources.splice(0))
+        if (image.getAttribute("src") !== source) image.src = source;
+    });
+  pendingSources.push([element, url]);
+}
 export function Cover({
   images,
   className = "",
@@ -65,15 +77,36 @@ export function Cover({
   contextRoute,
   contextName,
 }: {
-  images?: { url: string }[];
+  images?: { url: string; width?: number | null }[];
   className?: string;
   onClick?: () => void;
   contextRoute?: string;
   contextName?: string;
 }) {
   const src = imageOf(images);
+  const picture = useRef<HTMLImageElement>(null);
+  const sources = images?.map((image) => image.url).join(" ");
+  // Load the smallest Spotify size that fills the laid-out cover. Set here,
+  // not through srcset/sizes="auto": Chromium keeps every image with
+  // sizes="auto" (and its page) alive after it leaves the page.
+  useLayoutEffect(() => {
+    const element = picture.current;
+    if (!element) return;
+    const width = element.parentElement?.clientWidth ?? 0;
+    const url = artworkFor(
+      images,
+      width ? Math.ceil(width * devicePixelRatio) : undefined,
+    );
+    if (url) setSourceSoon(element, url);
+  }, [sources]);
   const inner = src ? (
-    <img src={src} alt="" draggable={false} loading="lazy" decoding="async" />
+    <img
+      ref={picture}
+      alt=""
+      draggable={false}
+      loading="lazy"
+      decoding="async"
+    />
   ) : (
     <Music2 aria-hidden="true" />
   );

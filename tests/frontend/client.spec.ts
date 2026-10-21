@@ -5249,3 +5249,50 @@ test("playlists show Date added and sort by oldest added", async ({ page }) => {
   await page.getByRole("button", { name: "Oldest added" }).click();
   await expect(rows.nth(0)).toContainText("Older");
 });
+
+test("song row covers load a small Spotify size without sizes=auto", async ({
+  page,
+}) => {
+  // Cover files are not fetched in this test; only the chosen URL matters.
+  await page.route("https://i.scdn.co/**", (route) => route.abort());
+  await startClient(page);
+  const id = "b11c3ab5cb818192b7a61fdd";
+  await page.evaluate(
+    ({ track, id, generation }) => {
+      (window as any).__clientTest.emit({
+        type: "tracks",
+        key: "liked",
+        generation,
+        offset: 0,
+        more: false,
+        tracks: [
+          {
+            ...track,
+            album: {
+              ...track.album,
+              images: [{ url: `https://i.scdn.co/image/ab67616d0000b273${id}` }],
+            },
+          },
+        ],
+      });
+    },
+    {
+      track,
+      id,
+      generation: await page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1).args.generation,
+      ),
+    },
+  );
+  const cover = page.locator(".track-row .cover img").first();
+  // A 40-pixel row cover takes Spotify's 64-pixel file, not the 640 one.
+  await expect(cover).toHaveAttribute(
+    "src",
+    `https://i.scdn.co/image/ab67616d00004851${id}`,
+  );
+  // sizes="auto" keeps removed images alive in Chromium; never use it.
+  await expect(page.locator("img[sizes]")).toHaveCount(0);
+});

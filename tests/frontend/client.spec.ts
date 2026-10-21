@@ -526,7 +526,15 @@ async function startClient(page: Page, initialRoute = "liked") {
   else await expect(page.locator(".track-row")).toHaveCount(50);
 }
 
+/** The player's DJ button only shows while a DJ session is playing. */
+async function inDJSession(page: Page) {
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "dj_context", active: true }),
+  );
+}
+
 async function askDJ(page: Page) {
+  await inDJSession(page);
   await page.getByRole("button", { name: "Refresh DJ", exact: true }).focus();
   await page.keyboard.press("Shift+Enter");
   await expect(page.getByRole("dialog", { name: "Ask DJ" })).toBeVisible();
@@ -1006,6 +1014,8 @@ test("player DJ button requests a fresh DJ selection on every click", async ({
 }) => {
   await startClient(page);
   const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
+  await expect(button).toHaveCount(0);
+  await inDJSession(page);
   await button.click();
   await button.click();
   await expect
@@ -1024,6 +1034,7 @@ test("player DJ button requests a fresh DJ selection on every click", async ({
 test("holding DJ opens requests without refreshing", async ({ page }) => {
   await startClient(page);
   await page.clock.install();
+  await inDJSession(page);
   const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
   await button.hover();
   await page.mouse.down();
@@ -1061,6 +1072,7 @@ test("cancelled DJ holds stay silent and preserve keyboard refresh", async ({
 }) => {
   await startClient(page);
   await page.clock.install();
+  await inDJSession(page);
   const button = page.getByRole("button", { name: "Refresh DJ", exact: true });
   await button.hover();
   await page.mouse.down();
@@ -1317,15 +1329,12 @@ test("Home shelves keep header, player and DJ inside the window", async ({
     const player = await page.locator(".player-bar").boundingBox();
     expect(player!.y + player!.height).toBeLessThanOrEqual(viewport.height + 1);
   }
+  // One row clipped at the edge with a fade, like Spotify; Show all wraps it.
   const shelf = page.locator(".home-shelf-items");
-  await page
-    .getByRole("button", { name: "Scroll Daily Mixes right", exact: true })
-    .click();
-  await expect
-    .poll(() => shelf.evaluate((element) => element.scrollLeft))
-    .toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Expand", exact: true }).click();
+  await expect(shelf).toHaveClass(/clipped/);
+  await page.getByRole("button", { name: "Show all", exact: true }).click();
   await expect(shelf).toHaveClass(/expanded/);
+  await expect(shelf).not.toHaveClass(/clipped/);
   const width = await shelf.evaluate((element) => ({
     scroll: element.scrollWidth,
     client: element.clientWidth,
@@ -1334,7 +1343,7 @@ test("Home shelves keep header, player and DJ inside the window", async ({
   const footer = await page.locator(".player-bar").boundingBox();
   expect(footer!.y + footer!.height).toBeLessThanOrEqual(601);
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await page.getByRole("button", { name: "Collapse", exact: true }).click();
+  await page.getByRole("button", { name: "Show less", exact: true }).click();
   await page.screenshot({ path: "target/diagnostics/home-layout-fixed.png" });
 });
 
@@ -2714,8 +2723,8 @@ test("home quick tiles keep small square covers with a centred heart", async ({
       ],
     };
   });
-  for (const height of layout.tiles) expect(height).toBeCloseTo(56, 0);
-  expect(layout.dj).toEqual([56, 56]);
+  for (const height of layout.tiles) expect(height).toBeCloseTo(72, 0);
+  expect(layout.dj).toEqual([72, 72]);
   for (const offset of layout.offset) expect(Math.abs(offset)).toBeLessThan(1);
 });
 

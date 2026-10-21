@@ -814,9 +814,16 @@ impl Backend {
             )
         {
             let transferred = self.native_controls.transfer(id);
-            // The device picker follows the active device, so a failed
-            // transfer must not leave controls aimed at the unreachable one.
-            if let Ok(devices) = self.native_controls.devices() {
+            // The device picker follows the active device: after a failure
+            // it must return to the current one, and after a success it must
+            // not see the old one still active and send controls back.
+            let devices = match transferred {
+                Ok(()) => self
+                    .native_controls
+                    .devices_after_transfer(id, Duration::from_secs(8)),
+                Err(_) => self.native_controls.devices(),
+            };
+            if let Ok(devices) = devices {
                 let _ = self.events.send(Event::Devices(devices));
             }
             return transferred;

@@ -562,6 +562,30 @@ impl NativeControls {
             Ok(())
         })
     }
+    /// The device list once Spotify reports `requested` active, or the
+    /// latest list after `timeout`. Spotify accepts a transfer a few seconds
+    /// before its cluster names the new device, and the picker follows the
+    /// active device, so an earlier list would send controls back here.
+    pub fn devices_after_transfer(
+        &self,
+        requested: &str,
+        timeout: Duration,
+    ) -> Result<Vec<crate::model::Device>> {
+        let local = self.session()?.device_id().to_owned();
+        let target = if requested == "native" {
+            local.as_str()
+        } else {
+            requested
+        };
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let devices = self.devices()?;
+            if transfer_settled(target, &devices) || std::time::Instant::now() >= deadline {
+                return Ok(devices);
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+    }
     pub fn home(&self, timezone: &str) -> Result<crate::home::HomePage> {
         let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()
@@ -1143,6 +1167,11 @@ fn transfer_target(
     listed_device(target, devices)
         .and_then(|device| device.id.clone())
         .context("Refresh devices before connecting to this speaker")
+}
+
+/// Whether Spotify's device list names the transfer destination active.
+fn transfer_settled(target: &str, devices: &[crate::model::Device]) -> bool {
+    listed_device(target, devices).is_some_and(|device| device.is_active)
 }
 
 /// The listed device for an identifier the UI may have kept from an earlier
@@ -3185,6 +3214,23 @@ mod tests {
         );
         assert!(listed_device("other-echo_amzn_1", &bare).is_none());
         assert!(transfer_target("other-echo", "local-player", &bare).is_err());
+    }
+
+    #[test]
+    fn transfers_settle_only_once_spotify_names_the_destination_active() {
+        let device = |id: &str, active: bool| crate::model::Device {
+            id: Some(id.into()),
+            is_active: active,
+            ..Default::default()
+        };
+        // Live: Spotify accepted the transfer about 2.4 s before its device
+        // list stopped naming this computer active.
+        let accepted = [device("local-player", true), device("echo", false)];
+        assert!(!transfer_settled("echo", &accepted));
+        let moved = [device("local-player", false), device("echo", true)];
+        assert!(transfer_settled("echo", &moved));
+        assert!(transfer_settled("echo_amzn_1", &moved));
+        assert!(!transfer_settled("local-player", &moved));
     }
 
     #[test]

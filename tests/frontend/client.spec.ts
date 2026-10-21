@@ -3670,6 +3670,9 @@ test("Spotify search shows public and curated playlist cards with open and play 
         entry.command === "browse" && entry.args.key === "search:workout",
     ),
   );
+  // The mock's own search results (with no playlists) land 20 ms after the
+  // request; send the playlists after them so they are not replaced.
+  await expect(page.getByText("Song 1", { exact: true }).first()).toBeVisible();
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
     const request = host.commands

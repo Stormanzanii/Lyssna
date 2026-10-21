@@ -2499,6 +2499,41 @@ struct Media(crate::media::Session);
 fn media_state(state: crate::media::MediaState, app: tauri::AppHandle, media: State<'_, Media>) {
     media.0.update(&app, state);
 }
+/// Ask WebView2 to hold little memory (it drops GPU textures, decoded images
+/// and other caches, about half its footprint on a 4K screen) or to return
+/// to normal. The page keeps rendering either way.
+#[cfg(windows)]
+fn memory_target(window: &tauri::WebviewWindow, low: bool) {
+    let _ = window.with_webview(move |webview| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL, ICoreWebView2_19,
+        };
+        use windows::core::Interface;
+        if let Ok(core) = webview.controller().CoreWebView2()
+            && let Ok(core) = core.cast::<ICoreWebView2_19>()
+        {
+            let _ = core.SetMemoryUsageTargetLevel(if low {
+                COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+            } else {
+                COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+            });
+        }
+    });
+}
+#[cfg(not(windows))]
+fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
+/// Drop WebView2 caches once after browsing, while the window stays usable.
+#[tauri::command]
+fn trim_memory(window: tauri::WebviewWindow) {
+    memory_target(&window, true);
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        if window.is_focused().unwrap_or(true) {
+            memory_target(&window, false);
+        }
+    });
+}
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_window_state::StateFlags;
     let app = tauri::Builder::default()
@@ -2519,6 +2554,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let activity = window.clone();
                 #[cfg(windows)]
                 let was_minimized = AtomicBool::new(false);
+                let was_lean = AtomicBool::new(false);
                 window.on_window_event(move |event| {
                     // Space Gravity lyrics react to the window being dragged.
                     if let tauri::WindowEvent::Moved(position) = event {
@@ -2546,6 +2582,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             let _ = activity.with_webview(move |webview| unsafe {
                                 let _ = webview.controller().SetIsVisible(!minimized);
                             });
+                        }
+                        // In the background (music playing behind other
+                        // windows) the page needs few caches; keep it lean.
+                        let lean = minimized || !focused;
+                        if was_lean.swap(lean, Ordering::SeqCst) != lean {
+                            memory_target(&activity, lean);
                         }
                         let _ = activity.emit(
                             "spotiflex",
@@ -2582,6 +2624,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             retry_sign_in,
             prefetch_canvas,
             prefetch_page,
+            trim_memory,
             prefetch_metadata,
             sign_out,
             browse,

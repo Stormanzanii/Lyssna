@@ -144,6 +144,28 @@ describe("asynchronous playback and browsing", () => {
       reducer(failed, { type: "native", ready: true, status: "Ready" }).toast,
     ).toEqual(failed.toast);
   });
+  it("keeps bundled lyrics configured after sign-out and sign-in", () => {
+    const loaded = reducer(emptyState, {
+      type: "bootstrap",
+      snapshot: {
+        ...emptyState,
+        provider_builtin: true,
+        provider_configured: true,
+        provider_kind: "spicy",
+      },
+    });
+    const signedOut = reducer(loaded, { type: "signed_out" });
+    const signedIn = reducer(signedOut, {
+      type: "session",
+      profile: { id: "listener", display_name: "Listener", images: [] },
+      can_follow: true,
+    });
+    expect(signedIn.provider_builtin).toBe(true);
+    expect(signedIn.provider_configured).toBe(true);
+    expect(signedIn.provider_kind).toBe("spicy");
+    expect(signedOut.profile).toBeUndefined();
+    expect(signedOut.playlists).toEqual([]);
+  });
   it("keeps first-run setup hidden until saved sign-in restoration finishes", () => {
     expect(sessionScreen(emptyState)).toBe("restoring");
     const restoring = reducer(emptyState, {

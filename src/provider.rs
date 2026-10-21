@@ -619,6 +619,16 @@ impl Decoder<'_> {
 mod tests {
     use super::*;
     #[test]
+    fn standard_builds_bundle_a_publishable_lyrics_client_key() {
+        assert!(
+            builtin_configured(),
+            "Standard builds must include the publishable lyrics client key"
+        );
+        assert!(load().unwrap().spicy_api);
+        assert!(!requires_spotify_token());
+    }
+
+    #[test]
     fn creator_profile_verification_is_not_treated_as_unpublished() {
         assert_eq!(
             creator_redirect("/identity/captcha?returnTo=%2Fuid%2F123456789012345678")

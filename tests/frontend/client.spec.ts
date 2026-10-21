@@ -269,6 +269,34 @@ test("audio output selection saves headphones and can return to system default",
     .toBe(1);
 });
 
+test("bundled lyrics stay ready after sign-out and another sign-in", async ({
+  page,
+}) => {
+  await startClient(page, "liked", true);
+  await openSettings(page);
+  await expect(
+    page.getByRole("button", { name: "Save lyrics key", exact: true }),
+  ).toHaveCount(0);
+  await page.evaluate(() => {
+    const emit = (window as any).__clientTest.emit;
+    emit({ type: "signed_out" });
+    emit({
+      type: "session",
+      profile: { id: "another-listener", display_name: "Listener", images: [] },
+      can_follow: true,
+    });
+  });
+  await expect(page.locator(".application")).toBeVisible();
+  await openSettings(page);
+  await expect(
+    page.getByRole("button", { name: "Save lyrics key", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Lyrics API key", { exact: true })).toHaveCount(
+    0,
+  );
+});
+
+
 test("first-run Spotify sign-in needs no developer Client ID", async ({
   page,
 }) => {
@@ -431,7 +459,11 @@ async function openSettings(page: Page) {
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
 }
-async function startClient(page: Page, initialRoute = "liked") {
+async function startClient(
+  page: Page,
+  initialRoute = "liked",
+  bundledLyrics = false,
+) {
   await page.route("https://artwork.example.test/**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
@@ -693,6 +725,9 @@ async function startClient(page: Page, initialRoute = "liked") {
     {
       snapshot: {
         ...emptyState,
+        provider_builtin: bundledLyrics,
+        provider_configured: bundledLyrics,
+        provider_kind: bundledLyrics ? "spicy" : undefined,
         route: initialRoute,
         profile: { id: "test-user" },
         local_device_name: "SpotiFlex (test)",

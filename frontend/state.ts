@@ -293,6 +293,9 @@ export function reducer(state: AppState, action: Action): AppState {
         restoring_session: false,
         booted: true,
         settings: state.settings,
+        provider_builtin: state.provider_builtin,
+        provider_configured: state.provider_configured,
+        provider_kind: state.provider_kind,
         native_status: "Waiting for sign-in",
       };
     case "home_loading":

@@ -40,9 +40,9 @@ Native mode uses the existing librespot session for browsing, library changes, a
 
 ## Lyrics
 
-Release builds include SpotiFlex's publishable Spicy Lyrics client key. Users do not need a separate Spicy Lyrics account or API key. Requests contain the Spotify track ID; Spotify access tokens, refresh tokens, and client secrets are not sent to Spicy Lyrics.
+All standard builds include SpotiFlex's publishable Spicy Lyrics client key. Users do not need a separate Spicy Lyrics account or API key. Requests contain the Spotify track ID; Spotify access tokens, refresh tokens, and client secrets are not sent to Spicy Lyrics.
 
-Maintainers set the `SPOTIFLEX_SPICY_LYRICS_KEY` repository variable for release builds, or the environment variable before a local build. Only publishable `sl_pk_` keys are accepted. Build validation rejects secret keys before compilation. Development builds without a bundled key can save a publishable key in Settings using Windows Credential Manager.
+The public client key in `config/spicy-lyrics-client-key.txt` is the default for local and release builds. Maintainers can override it with `SPOTIFLEX_SPICY_LYRICS_KEY`; the release workflow uses the repository variable when set. Only publishable `sl_pk_` keys are accepted, and build validation rejects secret `sl_sk_` keys. Signing out preserves this application-wide provider configuration, so Settings does not ask for a lyrics key after another sign-in.
 
 Existing self-hosted deployments can still provision their protected HTTPS host through standard input. This legacy mode requires explicit consent before sharing a short-lived Spotify access token:
 

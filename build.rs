@@ -4,18 +4,22 @@ include!("src/ui/icon_pixels.rs");
 
 fn main() {
     println!("cargo:rerun-if-env-changed=SPOTIFLEX_SPICY_LYRICS_KEY");
-    if let Ok(key) = std::env::var("SPOTIFLEX_SPICY_LYRICS_KEY")
-        && !key.is_empty()
-    {
-        assert!(
-            key.starts_with("sl_pk_")
-                && (16..=512).contains(&key.len())
-                && key
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
-            "SPOTIFLEX_SPICY_LYRICS_KEY must contain a publishable sl_pk_ client key"
-        );
-    }
+    println!("cargo:rerun-if-changed=config/spicy-lyrics-client-key.txt");
+    // This is a public client identifier, never a secret key or Spotify token.
+    let key = std::env::var("SPOTIFLEX_SPICY_LYRICS_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+        .unwrap_or_else(|| include_str!("config/spicy-lyrics-client-key.txt").into());
+    let key = key.trim();
+    assert!(
+        key.starts_with("sl_pk_")
+            && (16..=512).contains(&key.len())
+            && key
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
+        "SPOTIFLEX_SPICY_LYRICS_KEY must contain a publishable sl_pk_ client key"
+    );
+    println!("cargo:rustc-env=SPOTIFLEX_SPICY_LYRICS_KEY={key}");
     if std::env::var_os("CARGO_FEATURE_DESKTOP").is_some() {
         println!("cargo:rerun-if-changed=dist");
         tauri_build::build();

@@ -27,6 +27,9 @@ export function shelfHeading(section: HomeSection) {
     ? { label: match[1], title: match[2] }
     : { label: section.subtitle, title: section.title };
 }
+/** Spotify's label for an item type: "Artist", "Album", "Song". */
+export const kindLabel = (kind: string) =>
+  kind === "track" ? "Song" : kind.charAt(0).toUpperCase() + kind.slice(1);
 /** Spotify-made playlists carry their name in the artwork; show only the description. */
 export const titleInArt = (item: HomeItem) =>
   item.kind === "playlist" && !!item.format;
@@ -119,7 +122,7 @@ export function Shelf({
             )}
             <p>
               <SpotifyText
-                text={item.subtitle || item.kind}
+                text={item.subtitle || kindLabel(item.kind)}
                 navigate={navigate}
               />
             </p>
@@ -147,7 +150,7 @@ function FeaturedShelf({
 }) {
   const item = section.items[0];
   const heading = shelfHeading(section);
-  const kind = item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
+  const kind = kindLabel(item.kind);
   return (
     <section
       className="home-shelf home-featured"

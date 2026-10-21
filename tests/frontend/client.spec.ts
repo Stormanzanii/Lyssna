@@ -5428,3 +5428,42 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
   await expect.poll(route).toBe("liked");
   await expect.poll(lastPlayer).toMatchObject({ command: "play_uris" });
 });
+
+test("lyrics toolbar sits over the cover art and follows it when flipped", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-album")).toBeVisible();
+  const layout = () =>
+    page.evaluate(() => {
+      const box = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const page = box(".lyrics-page");
+      const album = box(".lyrics-album");
+      const toolbar = box(".lyrics-toolbar");
+      return {
+        albumRight: album.left > page.left + page.width / 2,
+        toolbarRight: toolbar.left > page.left + page.width / 2,
+        // Stays over the artwork column, not the lyrics.
+        overArtwork:
+          toolbar.left >= page.left + (toolbar.left > page.left + page.width / 2
+            ? page.width / 2
+            : 0) &&
+          (toolbar.left > page.left + page.width / 2
+            ? toolbar.left >= album.left - 40
+            : toolbar.right <= album.right + 40),
+      };
+    });
+  await expect
+    .poll(layout)
+    .toEqual({ albumRight: false, toolbarRight: false, overArtwork: true });
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Artwork on the right", { exact: true })
+    .click();
+  await expect
+    .poll(layout)
+    .toEqual({ albumRight: true, toolbarRight: true, overArtwork: true });
+});

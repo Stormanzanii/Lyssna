@@ -4228,6 +4228,19 @@ input[type="range"]:hover {
 .lyrics-toolbar .icon-button.active {
   color: #fff;
 }
+/* Wide lyrics: the toolbar sits over the cover-art side and follows the
+   artwork when it is flipped, as it does with Canvas. */
+.lyrics-page:not(.narrow):not(.no-artwork):not(.canvas-lyrics) > .lyrics-toolbar {
+  left: 16px;
+  right: auto;
+  max-width: calc(42.5% - 32px);
+  flex-wrap: wrap;
+}
+.lyrics-page.artwork-right:not(.narrow):not(.no-artwork):not(.canvas-lyrics)
+  > .lyrics-toolbar {
+  left: auto;
+  right: 16px;
+}
 .toolbar-divider {
   align-self: center;
   width: 1px;

@@ -4982,8 +4982,19 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   );
   const photo = dialog.locator(".artist-about-gallery img");
   await expect(photo).toHaveAttribute("src", /one\.svg/);
+  await expect(
+    dialog.getByRole("button", { name: "Previous photo" }),
+  ).toHaveCount(0);
+  // Stats and biography sit side by side under the photo, like Spotify.
+  const facts = (await dialog.locator(".artist-about-facts").boundingBox())!;
+  const text = (await dialog.locator(".artist-about-text").boundingBox())!;
+  expect(text.x).toBeGreaterThan(facts.x + facts.width);
+  await page.screenshot({ path: "target/diagnostics/artist-about.png" });
   await dialog.getByRole("button", { name: "Next photo" }).click();
   await expect(photo).toHaveAttribute("src", /two\.svg/);
+  await expect(
+    dialog.getByRole("button", { name: "Previous photo" }),
+  ).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 

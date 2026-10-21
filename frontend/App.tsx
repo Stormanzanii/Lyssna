@@ -2581,8 +2581,9 @@ function App() {
                                 />
                                 {photos.length > 1 && (
                                   <>
-                                    <button
-                                      className="gallery-step previous"
+                                    {shown > 0 && (
+                                      <button
+                                        className="gallery-step previous"
                                       aria-label="Previous photo"
                                       onClick={() =>
                                         setAboutPhoto(
@@ -2593,6 +2594,7 @@ function App() {
                                     >
                                       <ChevronLeft size={24} />
                                     </button>
+                                    )}
                                     <button
                                       className="gallery-step next"
                                       aria-label="Next photo"

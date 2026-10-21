@@ -1704,6 +1704,7 @@ test("album pages retain play counts, release date and licensing", async ({
         album: {
           ...track.album,
           artists: track.artists,
+          album_type: "SINGLE",
           total_tracks: 50,
           release_date: "2026-10-15",
           copyrights: [{ text: "© 2026 Test Label", type: "C" }],
@@ -1719,6 +1720,8 @@ test("album pages retain play counts, release date and licensing", async ({
       },
     });
   }, track);
+  // Spotify sends "SINGLE"; the header reads "Single", like Spotify's.
+  await expect(page.locator(".hero-copy .eyebrow")).toHaveText("Single");
   await expect(page.locator(".track-table-head")).toContainText("Plays");
   await expect(page.locator(".track-streams").first()).toHaveText("2,470");
   await expect(page.locator(".album-release-details")).toContainText(

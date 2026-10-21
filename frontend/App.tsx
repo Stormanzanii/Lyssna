@@ -137,6 +137,7 @@ import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
+import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
@@ -1928,7 +1929,7 @@ function App() {
                       {!artistPage && (
                         <span className="eyebrow">
                           {state.route.startsWith("album:")
-                            ? entity?.album?.album_type || "Album"
+                            ? albumTypeLabel(entity?.album?.album_type)
                             : state.route.startsWith("search:")
                               ? "Search"
                               : state.route === "queue"
@@ -2526,7 +2527,7 @@ function App() {
                       ["album", "Albums"],
                       ["single", "Singles and EPs"],
                       ...((entity?.artist ? entity.albums : []).some(
-                        (album) => album.album_type === "compilation",
+                        (album) => albumKind(album.album_type) === "compilation",
                       )
                         ? [["compilation", "Compilations"]]
                         : []),
@@ -2546,9 +2547,7 @@ function App() {
                       : entity?.album_details?.more || []
                     )
                       .filter(
-                        (album) =>
-                          albumFilter === "all" ||
-                          album.album_type === albumFilter,
+                        (album) => albumMatches(album.album_type, albumFilter),
                       )
                       .slice(0, allAlbums ? undefined : 10)
                       .map((album) => (
@@ -2562,7 +2561,7 @@ function App() {
                           <strong>{album.name}</strong>
                           <small>
                             {album.release_date?.slice(0, 4)} ·{" "}
-                            {album.album_type || "Album"}
+                            {albumTypeLabel(album.album_type)}
                           </small>
                         </button>
                       ))}

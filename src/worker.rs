@@ -794,7 +794,6 @@ impl Backend {
                 self.profile.clone(),
             )?);
         }
-        self.emit(Event::Notice("Connecting native audio…".into()));
         Ok(())
     }
 
@@ -857,7 +856,10 @@ impl Backend {
     }
 
     fn poll(&mut self) -> Result<()> {
-        if self.native_controls.has_track() || self.api()?.cooling_down() {
+        if self.native_connecting()
+            || self.native_controls.has_track()
+            || self.api()?.cooling_down()
+        {
             return Ok(());
         }
         let observed = Instant::now();
@@ -926,6 +928,7 @@ impl Backend {
                 audio_deleted?;
                 deleted?;
             }
+            Command::Refresh if self.native_connecting() => {}
             Command::Refresh => match self.native_controls.devices() {
                 Ok(devices) => self.emit(Event::Devices(devices)),
                 Err(_) if self.api()?.cooling_down() => {}
@@ -1526,6 +1529,14 @@ impl Backend {
         Ok(())
     }
 
+    fn native_connecting(&self) -> bool {
+        self.spotify.as_ref().is_some_and(Spotify::is_native)
+            && !self.native_ready()
+            && self
+                .native_controls
+                .connected_or_connecting(&self.profile.id)
+    }
+
     fn native_ready(&self) -> bool {
         matches!(
             self.native_controls
@@ -1695,6 +1706,44 @@ mod session_tests {
             },
             receive,
         )
+    }
+
+    #[test]
+    fn automatic_refresh_during_native_startup_does_not_report_a_playback_error() {
+        let (mut backend, events) = empty_backend();
+        backend.profile.id = "startup-listener".into();
+        let (controls, _commands) = NativeControls::test_connecting(&backend.profile.id);
+        backend.native_controls = controls.clone();
+        backend.spotify = Some(
+            Spotify::native(backend.client.clone(), controls, backend.profile.clone()).unwrap(),
+        );
+        assert!(
+            backend
+                .native_controls
+                .connected_or_connecting(&backend.profile.id)
+        );
+        assert!(
+            backend.poll().is_ok(),
+            "Periodic startup polling must not report a connection error"
+        );
+        let result = backend.handle(Command::Refresh);
+        assert!(
+            result.is_ok(),
+            "Normal startup refresh must not create an error toast: {}",
+            result
+                .err()
+                .map(|error| error.to_string())
+                .unwrap_or_default()
+        );
+        assert!(events.try_recv().is_err());
+        assert!(
+            backend.native.is_none(),
+            "Refresh must not restart the player"
+        );
+        let (controls, _commands) = NativeControls::test_active(&backend.profile.id);
+        backend.native_controls = controls;
+        backend.handle(Command::Refresh).unwrap();
+        assert!(matches!(events.try_recv(), Ok(Event::Devices(_))));
     }
 
     #[test]

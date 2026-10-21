@@ -170,6 +170,21 @@ impl NativeControls {
         }))));
         (controls, receiver)
     }
+    #[cfg(test)]
+    pub(crate) fn test_connecting(
+        account: &str,
+    ) -> (Self, async_channel::UnboundedReceiver<PlayerAction>) {
+        let (controls, receiver) = Self::test_active(account);
+        {
+            let connection = controls.0.lock().unwrap();
+            let connection = connection.as_ref().unwrap();
+            connection.ready.store(false, Ordering::Release);
+            connection.loaded.store(false, Ordering::Release);
+            *connection.status.lock().unwrap() = None;
+        }
+        (controls, receiver)
+    }
+
     pub fn connected_or_connecting(&self, account: &str) -> bool {
         self.0.lock().is_ok_and(|connection| {
             connection.as_ref().is_some_and(|connection| {

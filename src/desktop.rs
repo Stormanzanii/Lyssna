@@ -26,6 +26,17 @@ use tauri::{Emitter, Manager, State};
 
 /// Drop playback queued during connect if audio took longer than this.
 const QUEUED_NATIVE_TTL: Duration = Duration::from_secs(45);
+fn send_queued_native(
+    queued: &Mutex<Option<(PlayerAction, Instant)>>,
+    controls: &NativeControls,
+) -> bool {
+    queued
+        .lock()
+        .ok()
+        .and_then(|mut queued| queued.take())
+        .filter(|(_, at)| at.elapsed() < QUEUED_NATIVE_TTL)
+        .is_some_and(|(action, _)| controls.send(action).is_ok())
+}
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
     narrating: bool,
@@ -918,13 +929,7 @@ impl Desktop {
                             snapshot.native_status = "Ready · this computer".into();
                             // Reload playlists from Spotify's own library list.
                             let _ = pump.commands.send(Command::Library);
-                            if let Some((action, _)) = pump
-                                .queued_native
-                                .lock()
-                                .ok()
-                                .and_then(|mut queued| queued.take())
-                                .filter(|(_, at)| at.elapsed() < QUEUED_NATIVE_TTL)
-                                && pump.controls.send(action).is_ok()
+                            if send_queued_native(&pump.queued_native, &pump.controls)
                                 && let Ok(mut last) = pump.last_native.lock()
                             {
                                 *last = Some(Instant::now());
@@ -1422,7 +1427,8 @@ async fn home(
             .id
             .clone();
         if !snapshot.native_ready {
-            return Err("Native audio is connecting".into());
+            // The frontend retries Home when the native-ready event arrives.
+            return Ok(());
         }
         if timezone.len() > 100 || timezone.chars().any(char::is_control) {
             return Err("Invalid time zone".into());
@@ -2748,6 +2754,45 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn early_play_requests_start_once_when_native_audio_is_ready() {
+        for context in [
+            "spotify:track:0123456789abcdefghijkl",
+            "spotify:playlist:0123456789abcdefghijkl",
+            crate::home::DJ_URI,
+        ] {
+            let request: PlayerRequest =
+                serde_json::from_value(json!({"command":"play_home", "context":context})).unwrap();
+            let queued = Mutex::new(Some((request.action().unwrap(), Instant::now())));
+            let (controls, mut commands) = NativeControls::test_active("startup-listener");
+            assert!(commands.try_recv().is_err());
+            assert!(send_queued_native(&queued, &controls));
+            match commands.try_recv().unwrap() {
+                PlayerAction::Play(Some(uri)) | PlayerAction::PlayContext { context: uri, .. } => {
+                    assert_eq!(uri, context)
+                }
+                _ => panic!("Expected the queued playback request"),
+            }
+            assert!(!send_queued_native(&queued, &controls));
+            assert!(
+                commands.try_recv().is_err(),
+                "Readiness updates must not replay the request"
+            );
+        }
+    }
+
+    #[test]
+    fn expired_or_cancelled_startup_requests_do_not_start_later() {
+        let (controls, mut commands) = NativeControls::test_active("startup-listener");
+        let queued = Mutex::new(Some((
+            PlayerAction::Play(Some("spotify:track:0123456789abcdefghijkl".into())),
+            Instant::now() - QUEUED_NATIVE_TTL,
+        )));
+        assert!(!send_queued_native(&queued, &controls));
+        assert!(!send_queued_native(&Mutex::new(None), &controls));
+        assert!(commands.try_recv().is_err());
+    }
+
     #[test]
     fn dj_launch_keeps_session_context_without_playlist_tracks() {
         let request: PlayerRequest = serde_json::from_value(json!({"command":"dj"})).unwrap();

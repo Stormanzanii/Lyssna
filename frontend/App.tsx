@@ -524,6 +524,7 @@ function App() {
   }, [entityMenu, songMenu]);
   const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
   const refreshHome = useCallback(() => {
+    if (!stateRef.current.profile || !stateRef.current.native_ready) return;
     void call("home", {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     });

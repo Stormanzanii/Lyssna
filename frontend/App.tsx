@@ -225,6 +225,14 @@ function App() {
     x: number;
     y: number;
   } | null>(null);
+  const [folderPicker, setFolderPicker] = useState<{
+    playlist: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const folderPlaylist = state.playlists.find(
+    (playlist) => playlist.id === folderPicker?.playlist,
+  );
   const [renameFolder, setRenameFolder] = useState<{
     folder: FolderRef;
     name: string;
@@ -243,6 +251,13 @@ function App() {
     own: boolean;
   } | null>(null);
   const [folderName, setFolderName] = useState("");
+  useEffect(() => {
+    setEntityMenu(null);
+    setFolderDialog(false);
+    setFolderMenu(null);
+    setRenameFolder(null);
+    setFolderPicker(null);
+  }, [state.profile?.id]);
   const [songMenu, setSongMenu] = useState<{
     track: Track;
     fromList?: boolean;
@@ -690,6 +705,7 @@ function App() {
         setEditDialog(null);
         setFolderMenu(null);
         setRenameFolder(null);
+        setFolderPicker(null);
       }
     };
     // A focused button activates on Space keyup; cancel that so Space never
@@ -2795,6 +2811,16 @@ function App() {
             const saved =
               menu.kind === "playlist" &&
               current.playlists.find((item) => item.id === menu.id);
+            if (
+              saved &&
+              ((current.library_folders?.length ?? 0) > 0 ||
+                !!saved.folders?.length)
+            )
+              actions.push({
+                label: "Move to folder",
+                run: () =>
+                  setFolderPicker({ playlist: saved.id, x: menu.x, y: menu.y }),
+              });
             if (saved) {
               const own = saved.owner.id === current.profile?.id;
               if (own)
@@ -2952,6 +2978,65 @@ function App() {
             >
               Rename
             </button>
+          </div>
+        </>
+      )}
+      {state.profile && folderPicker && folderPlaylist && (
+        <>
+          <div
+            className="popover-dismiss"
+            onClick={() => setFolderPicker(null)}
+          />
+          <div
+            role="menu"
+            aria-label="Move to folder"
+            className="song-menu popover entity-menu folder-picker"
+            style={{
+              left: Math.max(
+                8,
+                Math.min(folderPicker.x, window.innerWidth - 270),
+              ),
+              top: Math.max(
+                8,
+                Math.min(folderPicker.y, window.innerHeight - 360),
+              ),
+            }}
+          >
+            {!!folderPlaylist.folders?.length && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  void call("move_to_folder", {
+                    playlist: folderPlaylist.id,
+                    folder: null,
+                  });
+                  setFolderPicker(null);
+                }}
+              >
+                Remove from folder
+              </button>
+            )}
+            {(state.library_folders ?? []).map((folder) => {
+              const current = folderPlaylist.folders?.at(-1)?.id === folder.id;
+              return (
+                <button
+                  role="menuitem"
+                  key={folder.id}
+                  disabled={current}
+                  style={{ paddingLeft: 12 + folder.parents.length * 16 }}
+                  onClick={() => {
+                    void call("move_to_folder", {
+                      playlist: folderPlaylist.id,
+                      folder: folder.id,
+                    });
+                    setFolderPicker(null);
+                  }}
+                >
+                  <Folder size={16} />
+                  {folder.name}
+                </button>
+              );
+            })}
           </div>
         </>
       )}

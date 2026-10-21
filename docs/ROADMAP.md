@@ -19,6 +19,7 @@ The existing Spotify Web API cooldown still applies to operations using that API
 ## 3. Playlist tools: mostly implemented
 
 - Done (native, each change confirmed by a re-read, live-tested on a temporary playlist on 2026-10-21): create playlists, add with duplicate skipping, edit names and descriptions, drag to reorder, remove songs, delete or remove playlists from the library.
+- Spotify folders: shown as nested sidebar groups, including empty folders; create and rename from the sidebar; move saved playlists into folders or back to the library root from their menus. Browser checks cover moves, cancellation, library updates and sign-out. Native folder deletion exists but still needs a desktop action.
 - Remaining: public/private visibility (the internal change format is not yet known), cover images, and server-concurrent duplicate protection.
 
 ## 4. Lyrics
@@ -55,4 +56,4 @@ The existing Spotify Web API cooldown still applies to operations using that API
 
 ## Needs a supported implementation path
 
-Offline playback remains a research item. Spotify's public API does not provide folder metadata, but the native library list SpotiFlex now reads includes folder markers, so showing Spotify folders has an implementation path; it is not built yet.
+Offline playback remains a research item. Spotify folders use the native rootlist service; Spotify's public API does not provide folder metadata. These internal services can change without notice.

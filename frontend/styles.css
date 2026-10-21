@@ -820,6 +820,14 @@ small {
 .folder-entries {
   padding-left: 14px;
 }
+.folder-picker {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.folder-picker > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .compact-library .folder-entries {
   padding-left: 0;
 }

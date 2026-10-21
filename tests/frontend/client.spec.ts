@@ -4009,3 +4009,153 @@ test("folders rename from their right-click menu", async ({ page }) => {
     ),
   ).toEqual({ id: "workouts", name: "Gym" });
 });
+
+test("playlists move into and out of folders from their menu", async ({
+  page,
+}) => {
+  await startClient(page);
+  const id = "5123456789abcdefghijkl";
+  await page.evaluate((id) => {
+    const test = (window as any).__clientTest;
+    test.emit({
+      type: "library",
+      playlists: [
+        {
+          id,
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    });
+    test.emit({
+      type: "library_folders",
+      folders: [
+        { id: "gym", name: "Gym", parents: [] },
+        { id: "legs", name: "Legs", parents: ["gym"] },
+      ],
+    });
+  }, id);
+  const last = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "move_to_folder")
+          .at(-1)?.args,
+    );
+  await page
+    .locator(".library-row", { hasText: "Road trip" })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to folder" }).click();
+  const picker = page.getByRole("menu", { name: "Move to folder" });
+  await expect(picker.getByRole("menuitem")).toHaveText(["Gym", "Legs"]);
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  expect(await last()).toBeUndefined();
+  await page
+    .locator(".library-row", { hasText: "Road trip" })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to folder" }).click();
+  await picker.getByRole("menuitem", { name: "Legs" }).click();
+  expect(await last()).toEqual({ playlist: id, folder: "legs" });
+
+  // Once inside a folder, the picker also offers to take it out.
+  await page.evaluate(
+    (id) =>
+      (window as any).__clientTest.emit({
+        type: "library",
+        playlists: [
+          {
+            id,
+            name: "Road trip",
+            images: [],
+            owner: { id: "test-user" },
+            collaborative: false,
+            folders: [
+              { id: "gym", name: "Gym" },
+              { id: "legs", name: "Legs" },
+            ],
+          },
+        ],
+      }),
+    id,
+  );
+  await page.locator(".spotify-folder > summary").first().click();
+  await page.locator(".spotify-folder .spotify-folder > summary").click();
+  await page
+    .locator(".library-row", { hasText: "Road trip" })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to folder" }).click();
+  await expect(picker.getByRole("menuitem", { name: "Legs" })).toBeDisabled();
+  await picker.getByRole("menuitem", { name: "Remove from folder" }).click();
+  expect(await last()).toEqual({ playlist: id, folder: null });
+});
+
+test("folder picker follows library updates and closes on sign-out", async ({
+  page,
+}) => {
+  await startClient(page);
+  const playlist = {
+    id: "5123456789abcdefghijkl",
+    name: "Shared road trip",
+    images: [],
+    owner: { id: "friend" },
+    collaborative: false,
+  };
+  await page.evaluate((playlist) => {
+    const emit = (window as any).__clientTest.emit;
+    emit({ type: "library", playlists: [playlist] });
+    emit({
+      type: "library_folders",
+      folders: [{ id: "gym", name: "Gym", parents: [] }],
+    });
+  }, playlist);
+  await page
+    .locator(".library-row", { hasText: playlist.name })
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to folder" }).click();
+  const picker = page.getByRole("menu", { name: "Move to folder" });
+  await expect(picker.getByRole("menuitem", { name: "Gym" })).toBeEnabled();
+  await expect(
+    picker.getByRole("menuitem", { name: "Remove from folder" }),
+  ).toHaveCount(0);
+  await page.evaluate((playlist) => {
+    (window as any).__clientTest.emit({
+      type: "library",
+      playlists: [{ ...playlist, folders: [{ id: "gym", name: "Gym" }] }],
+    });
+  }, playlist);
+  await expect(picker.getByRole("menuitem", { name: "Gym" })).toBeDisabled();
+  await expect(
+    picker.getByRole("menuitem", { name: "Remove from folder" }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toContainText(
+    "Spotify Premium required",
+  );
+  await page.evaluate((playlist) => {
+    const emit = (window as any).__clientTest.emit;
+    emit({ type: "session", profile: { id: "another-user" } });
+    emit({ type: "library", playlists: [playlist] });
+    emit({
+      type: "library_folders",
+      folders: [{ id: "gym", name: "Gym", parents: [] }],
+    });
+  }, playlist);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(picker).toHaveCount(0);
+  await expect(
+    page.locator(".library-row", { hasText: playlist.name }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.filter(
+        (entry: any) => entry.command === "move_to_folder",
+      ),
+    ),
+  ).toEqual([]);
+});

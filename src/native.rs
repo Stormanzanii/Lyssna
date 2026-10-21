@@ -290,6 +290,11 @@ impl NativeControls {
     )> {
         self.run(crate::native_browse::library_with_folders)
     }
+    pub fn move_to_folder(&self, playlist: &str, folder: Option<&str>) -> Result<()> {
+        self.run(async |session| {
+            crate::native_browse::move_to_folder(session, playlist, folder).await
+        })
+    }
     pub fn rename_folder(&self, id: &str, name: &str) -> Result<()> {
         self.run(async |session| crate::native_browse::rename_folder(session, id, name).await)
     }

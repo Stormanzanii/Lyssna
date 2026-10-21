@@ -55,6 +55,11 @@ pub enum Command {
     },
     /// Create an empty Spotify folder at the top of the library.
     CreateFolder(String),
+    /// Move a library playlist into a Spotify folder, or out with `None`.
+    MoveToFolder {
+        playlist: String,
+        folder: Option<String>,
+    },
     /// Rename a Spotify folder.
     RenameFolder {
         id: String,
@@ -953,6 +958,23 @@ impl Backend {
                 self.native_controls.create_folder(&name)?;
                 self.refresh_library()?;
                 self.emit(Event::Notice(format!("Created {}", name.trim())));
+            }
+            Command::MoveToFolder { playlist, folder } => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then move the playlist."
+                );
+                self.native_controls
+                    .move_to_folder(&playlist, folder.as_deref())?;
+                self.refresh_library()?;
+                self.emit(Event::Notice(
+                    if folder.is_some() {
+                        "Moved to folder"
+                    } else {
+                        "Moved out of folder"
+                    }
+                    .into(),
+                ));
             }
             Command::RenameFolder { id, name } => {
                 anyhow::ensure!(

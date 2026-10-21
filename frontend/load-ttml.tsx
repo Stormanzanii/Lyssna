@@ -101,7 +101,7 @@ export function LoadTtml({
           )}
           <h2>{view === "load" ? "Load TTML" : "TTML Database"}</h2>
           <button className="icon-button" aria-label="Close" onClick={onClose}>
-            <X size={22} />
+            <X size={20} />
           </button>
         </header>
         {view === "load" ? (
@@ -110,15 +110,15 @@ export function LoadTtml({
               <p>For: {song}</p>
               <div className="load-ttml-actions">
                 <button onClick={onGuide} disabled={busy}>
-                  <BookOpen size={15} />
+                  <BookOpen size={14} />
                   Guide
                 </button>
                 <button onClick={onReset} disabled={busy}>
-                  <RotateCcw size={15} />
+                  <RotateCcw size={14} />
                   Reset TTML
                 </button>
                 <button onClick={() => setView("database")} disabled={busy}>
-                  <Database size={15} />
+                  <Database size={14} />
                   TTML Database
                 </button>
               </div>
@@ -145,7 +145,7 @@ export function LoadTtml({
                   disabled={busy}
                 >
                   <span className="load-ttml-icon">
-                    <Upload size={17} />
+                    <Upload size={15} />
                   </span>
                   <span>
                     <strong>{title}</strong>

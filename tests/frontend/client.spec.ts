@@ -5048,6 +5048,12 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   await page.getByTitle("Load TTML", { exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Load TTML" });
   await expect(dialog).toContainText("For: Timing test");
+  // The title sits level with the close button.
+  const heading = (await dialog.locator(".load-ttml-head h2").boundingBox())!;
+  const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
+  expect(
+    Math.abs(heading.y + heading.height / 2 - (close.y + close.height / 2)),
+  ).toBeLessThan(2);
   await expect(dialog.locator(".load-ttml-mode strong")).toHaveText([
     "Persistent Load",
     "Temporary Load",

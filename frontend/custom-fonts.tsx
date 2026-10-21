@@ -183,18 +183,6 @@ export function FontSettings({
                 <option key={font.family} value={font.name} />
               ))}
             </datalist>
-            <span
-              className="font-preview"
-              aria-label={`${label} preview`}
-              style={{
-                fontFamily:
-                  key === "lyric_font"
-                    ? "var(--lyric-font)"
-                    : fontFamily(settings[key]),
-              }}
-            >
-              The quick brown fox
-            </span>
           </div>
         </SettingRow>
       ))}

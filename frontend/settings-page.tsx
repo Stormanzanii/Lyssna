@@ -249,33 +249,6 @@ export function SettingsPage({
           </section>
 
           <section className="settings-section">
-            <h2>Storage</h2>
-            <SettingRow
-              label={`Cache: ${cacheBytes === null ? "…" : `${Math.round(cacheBytes / 1_048_576).toLocaleString()} MB`}`}
-              help="Songs you have played, kept on this computer so they start faster and use less data."
-              keywords="cache storage disk offline data clear"
-            >
-              <button
-                className="pill outline"
-                disabled={clearingCache || !cacheBytes}
-                onClick={() => {
-                  setClearingCache(true);
-                  void onCall<number>("clear_audio_cache")
-                    .then((freed) => {
-                      setCacheBytes(0);
-                      onNotice(
-                        `Cleared ${Math.round((freed ?? 0) / 1_048_576).toLocaleString()} MB of cached songs.`,
-                      );
-                    })
-                    .finally(() => setClearingCache(false));
-                }}
-              >
-                Clear cache
-              </button>
-            </SettingRow>
-          </section>
-
-          <section className="settings-section">
             <h2>Appearance</h2>
             <SettingRow
               label="Liquid Glass"
@@ -501,6 +474,33 @@ export function SettingsPage({
               )}
             </section>
           )}
+
+          <section className="settings-section">
+            <h2>Storage</h2>
+            <SettingRow
+              label={`Cache: ${cacheBytes === null ? "…" : `${Math.round(cacheBytes / 1_048_576).toLocaleString()} MB`}`}
+              help="Songs you have played, kept on this computer so they start faster and use less data."
+              keywords="cache storage disk offline data clear"
+            >
+              <button
+                className="pill outline"
+                disabled={clearingCache || !cacheBytes}
+                onClick={() => {
+                  setClearingCache(true);
+                  void onCall<number>("clear_audio_cache")
+                    .then((freed) => {
+                      setCacheBytes(0);
+                      onNotice(
+                        `Cleared ${Math.round((freed ?? 0) / 1_048_576).toLocaleString()} MB of cached songs.`,
+                      );
+                    })
+                    .finally(() => setClearingCache(false));
+                }}
+              >
+                Clear cache
+              </button>
+            </SettingRow>
+          </section>
 
           <section className="settings-section">
             <h2>About SpotiFlex</h2>

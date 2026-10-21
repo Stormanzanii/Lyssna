@@ -315,7 +315,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
             })
             .and_then(|image| image["url"].as_str())
             .filter(|url| url.starts_with("https://"))
-            .map(str::to_owned),
+            .map(larger_gallery_photo),
         sections: related_sections(artist),
         pick: artist_pick(&artist["profile"]["pinnedItem"]),
         gallery: artist["visuals"]["gallery"]["items"]
@@ -331,7 +331,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
                     .max_by_key(|image| image["width"].as_u64().unwrap_or_default())?["url"]
                     .as_str()
                     .filter(|url| url.starts_with("https://"))
-                    .map(str::to_owned)
+                    .map(larger_gallery_photo)
             })
             .collect(),
         top_cities: artist["stats"]["topCities"]["items"]
@@ -526,12 +526,61 @@ fn plain_text(html: &str) -> String {
             _ => {}
         }
     }
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
+    decode_entities(&text.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// Decode HTML character references Spotify leaves in biographies, such as
+/// `&#64;` ("@") and `&#34;` ("\""), as well as the common named ones.
+fn decode_entities(text: &str) -> String {
+    let mut decoded = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('&') {
+        decoded.push_str(&rest[..start]);
+        let tail = &rest[start..];
+        let reference = tail
+            .find(';')
+            .filter(|end| *end <= 10)
+            .map(|end| (&tail[1..end], end));
+        let character = reference.and_then(|(name, _)| match name {
+            "amp" => Some('&'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "nbsp" => Some(' '),
+            _ => name
+                .strip_prefix("#x")
+                .or_else(|| name.strip_prefix("#X"))
+                .map_or_else(
+                    || name.strip_prefix('#').and_then(|n| n.parse().ok()),
+                    |hex| u32::from_str_radix(hex, 16).ok(),
+                )
+                .and_then(char::from_u32)
+                .filter(|c| !c.is_control()),
+        });
+        match (character, reference) {
+            (Some(character), Some((_, end))) => {
+                decoded.push(character);
+                rest = &tail[end + 1..];
+            }
+            _ => {
+                decoded.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    decoded.push_str(rest);
+    decoded
+}
+
+/// Spotify serves gallery photos at 640 px (`dd22`) and 1000 px (`c46c`)
+/// under the same image ID; the About card and window use the sharper one.
+fn larger_gallery_photo(url: &str) -> String {
+    url.replacen(
+        "https://i.scdn.co/image/ab6772690000dd22",
+        "https://i.scdn.co/image/ab6772690000c46c",
+        1,
+    )
 }
 
 #[cfg(test)]
@@ -585,6 +634,26 @@ mod tests {
 #[cfg(test)]
 mod section_tests {
     use super::*;
+    #[test]
+    fn biographies_decode_character_references() {
+        assert_eq!(
+            plain_text(
+                "&#64;johnmichaelhowell Hi! &#34;Nuvo&#34; &amp; <b>more</b> &#x2764; &bogus; a & b"
+            ),
+            "@johnmichaelhowell Hi! \"Nuvo\" & more \u{2764} &bogus; a & b"
+        );
+    }
+    #[test]
+    fn gallery_photos_use_the_sharper_size() {
+        assert_eq!(
+            larger_gallery_photo(
+                "https://i.scdn.co/image/ab6772690000dd2206766a59ddd2f3a14f80328f"
+            ),
+            "https://i.scdn.co/image/ab6772690000c46c06766a59ddd2f3a14f80328f"
+        );
+        let old = "https://i.scdn.co/image/184c822d252ceb7561539063a904ef433ac43562";
+        assert_eq!(larger_gallery_photo(old), old);
+    }
     use serde_json::json;
     #[test]
     fn artist_pick_keeps_spotify_subtitle_and_artwork() {

@@ -1203,8 +1203,8 @@ small {
 .dialog.artist-about-dialog {
   position: relative;
   container-type: inline-size;
-  width: min(100% - 48px, 1260px);
-  max-height: 88vh;
+  width: min(100% - 48px, 900px);
+  max-height: 86vh;
   overflow-y: auto;
   padding: 0;
   border-radius: 8px;
@@ -1232,7 +1232,7 @@ small {
 .artist-about-gallery img {
   display: block;
   width: 100%;
-  height: min(62vh, 710px);
+  height: min(48vh, 500px);
   object-fit: contain;
 }
 .gallery-step {
@@ -1259,23 +1259,23 @@ small {
 }
 .artist-about-dialog .artist-about-body {
   display: grid;
-  grid-template-columns: minmax(200px, 0.55fr) minmax(0, 1.45fr);
-  gap: 56px;
-  padding: 64px 64px 72px;
+  grid-template-columns: minmax(170px, 0.55fr) minmax(0, 1.45fr);
+  gap: 40px;
+  padding: 40px 48px 48px;
 }
 .artist-about-dialog .artist-about-facts {
   display: flex;
   flex-direction: column;
-  gap: 48px;
+  gap: 32px;
 }
 .artist-about-dialog .artist-about-facts .artist-rank {
   position: static;
-  width: 130px;
-  height: 130px;
-  font-size: 18px;
+  width: 104px;
+  height: 104px;
+  font-size: 14px;
 }
 .artist-about-dialog .artist-about-facts .artist-rank strong {
-  font-size: 36px;
+  font-size: 28px;
 }
 .artist-about-dialog .artist-fact,
 .artist-about-dialog .artist-city {
@@ -1283,30 +1283,30 @@ small {
   flex-direction: column;
   margin: 0;
   color: #b3b3b3;
-  font-size: 18px;
+  font-size: 15px;
 }
 .artist-about-dialog .artist-fact strong {
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 800;
   line-height: 1.1;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
   color: #fff;
 }
 .artist-about-dialog .artist-city {
   gap: 2px;
-  font-size: 16px;
+  font-size: 14px;
 }
 /* Cities sit close together as one list under the counts. */
 .artist-about-dialog .artist-city + .artist-city {
-  margin-top: -32px;
+  margin-top: -20px;
 }
 .artist-about-dialog .artist-city strong {
-  font-size: 18px;
+  font-size: 15px;
   color: #fff;
 }
 .artist-about-dialog .artist-about-text > p {
-  margin: 0 0 28px;
-  font-size: 22px;
+  margin: 0 0 24px;
+  font-size: 16px;
   line-height: 1.6;
   color: #e4e4e4;
   white-space: pre-line;

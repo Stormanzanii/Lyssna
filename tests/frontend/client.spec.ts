@@ -5069,6 +5069,10 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   await expect(card).toContainText("72,847,177 monthly listeners");
   await card.click();
   const dialog = page.getByRole("dialog", { name: "About Test artist" });
+  // Spotify's About window is a compact sheet, not most of the screen.
+  const sheet = (await dialog.boundingBox())!;
+  expect(sheet.width).toBeLessThanOrEqual(900);
+  await page.screenshot({ path: "target/diagnostics/artist-about.png" });
   await expect(dialog.locator(".artist-fact")).toHaveText([
     "112,804,519Followers",
     "72,847,177Monthly Listeners",

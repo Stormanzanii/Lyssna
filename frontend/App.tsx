@@ -506,16 +506,16 @@ function App() {
     if (
       state.profile &&
       state.native_ready &&
-      state.route === "home" &&
-      (state.home?.account !== state.profile.id || state.home.cached)
+      center === "browse" &&
+      state.route === "home"
     )
       refreshHome();
   }, [
     state.profile?.id,
     state.native_ready,
+    center,
     state.route,
-    state.home?.account,
-    state.home?.cached,
+    state.playback.item?.uri,
     refreshHome,
   ]);
   const metadataKeys = useMemo(

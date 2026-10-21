@@ -1232,6 +1232,150 @@ test("cached Home shows at once and refreshes when native audio connects", async
   ).toHaveCount(0);
 });
 
+test("Home refreshes fresh-looking cached shelves on return and on song changes", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  await expect(
+    page.getByRole("heading", { name: "New releases for you", exact: true }),
+  ).toBeVisible();
+  const homeCalls = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "home",
+        ).length,
+    );
+  const before = await homeCalls();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const invoke = (window as any).__TAURI_INTERNALS__.invoke;
+    const album = {
+      uri: "spotify:album:2123456789abcdefghijkl",
+      route: "album:2123456789abcdefghijkl",
+      name: "Latest release",
+      subtitle: "Your artist",
+      images: [],
+      kind: "album",
+      playable: true,
+      format: "",
+    };
+    const mix = {
+      ...album,
+      uri: "spotify:playlist:1123456789abcdefghijkl",
+      route: "playlist:1123456789abcdefghijkl",
+      name: "Personal mix",
+      kind: "playlist",
+    };
+    const artist = {
+      ...album,
+      uri: "spotify:artist:3123456789abcdefghijkl",
+      route: "artist:3123456789abcdefghijkl",
+      name: "Your artist",
+      kind: "artist",
+    };
+    (window as any).__TAURI_INTERNALS__.invoke = async (
+      command: string,
+      args: any,
+    ) => {
+      if (command !== "home") return invoke(command, args);
+      host.commands.push({ command, args });
+      host.emit({
+        type: "home",
+        page: {
+          account: "test-user",
+          greeting: "Hello",
+          cached: false,
+          sections: [
+            {
+              uri: "spotlight",
+              title: "New release from Your artist",
+              subtitle: "",
+              items: [album],
+            },
+            {
+              uri: "jump-back",
+              title: "Jump back in",
+              subtitle: "",
+              items: [artist, mix],
+            },
+            {
+              uri: "recent",
+              title: "Recents",
+              subtitle: "",
+              items: [mix, album],
+            },
+            {
+              uri: "made-for",
+              title: "Made For Listener",
+              subtitle: "",
+              items: [mix, album],
+            },
+          ],
+        },
+      });
+    };
+  });
+  await page
+    .locator(".home-quick-links")
+    .getByRole("button", { name: "Liked Songs", exact: true })
+    .click();
+  await page.getByTitle("Home", { exact: true }).click();
+  await expect.poll(homeCalls).toBe(before + 1);
+  await expect(page.locator(".home-pair")).toContainText("New release from");
+  await expect(page.locator(".home-pair")).toContainText("Jump back in");
+  await expect(
+    page.getByRole("heading", { name: "Recents", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Listener", exact: true }),
+  ).toBeVisible();
+  await page.evaluate(
+    ({ playback, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: {
+            ...track,
+            uri: "spotify:track:2123456789abcdefghijkl",
+            id: "2123456789abcdefghijkl",
+          },
+          is_playing: true,
+        },
+        observed_at: Date.now(),
+        changed: true,
+      }),
+    { playback: emptyState.playback, track },
+  );
+  await expect.poll(homeCalls).toBe(before + 2);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+  await page.evaluate(
+    ({ playback, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: {
+            ...track,
+            name: "Later song",
+            uri: "spotify:track:3123456789abcdefghijkl",
+            id: "3123456789abcdefghijkl",
+          },
+          is_playing: true,
+        },
+        observed_at: Date.now(),
+        changed: true,
+      }),
+    { playback: emptyState.playback, track },
+  );
+  await expect(page.locator(".lyrics-page")).toContainText("Later song");
+  expect(await homeCalls()).toBe(before + 2);
+  await page.getByTitle("Home", { exact: true }).click();
+  await expect.poll(homeCalls).toBe(before + 3);
+});
+
 test("Daily Mix navigation retains title, artwork and description", async ({
   page,
 }) => {

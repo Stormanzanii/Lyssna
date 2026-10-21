@@ -1092,7 +1092,7 @@ impl SpircTask {
 
     fn handle_player_event(&mut self, event: PlayerEvent) -> Result<(), Error> {
         let playing_event = matches!(&event, PlayerEvent::Playing { .. });
-        if let PlayerEvent::TrackChanged { audio_item } = event {
+        if let PlayerEvent::TrackChanged { audio_item, .. } = event {
             self.connect_state.update_duration(audio_item.duration_ms);
             self.update_state = true;
             if self

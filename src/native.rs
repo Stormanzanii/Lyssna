@@ -30,6 +30,61 @@ mod scoped_tests {
     use super::*;
 
     #[test]
+    fn alternative_audio_keeps_the_requested_track_for_progress_events() {
+        use librespot_core::SpotifyUri;
+        use librespot_metadata::audio::item::{AudioItem, UniqueFields};
+        let requested = SpotifyUri::from_uri("spotify:track:0123456789abcdefghijkl").unwrap();
+        for uri in [
+            requested.to_uri(),
+            "spotify:track:1123456789abcdefghijkl".into(),
+        ] {
+            let audio_id = SpotifyUri::from_uri(&uri).unwrap();
+            let event = PlayerEvent::TrackChanged {
+                track_id: requested.clone(),
+                audio_item: Box::new(AudioItem {
+                    track_id: audio_id,
+                    uri,
+                    files: Default::default(),
+                    name: "Playable version".into(),
+                    covers: Vec::new(),
+                    language: Vec::new(),
+                    duration_ms: 82_000,
+                    is_explicit: false,
+                    availability: Ok(()),
+                    alternatives: None,
+                    unique_fields: UniqueFields::Track {
+                        artists: Default::default(),
+                        album: "Album".into(),
+                        album_artists: Vec::new(),
+                        popularity: 0,
+                        number: 1,
+                        disc_number: 1,
+                    },
+                }),
+            };
+            let track = public_track_change(&event).unwrap();
+            let mut playback = crate::model::Playback::default();
+            playback.load_native_track(track, Some("native-session"), "SpotiFlex");
+            assert!(
+                playback.apply_native_position(
+                    Some("native-session"),
+                    "SpotiFlex",
+                    &requested.to_uri(),
+                    1500,
+                    Some(true)
+                ),
+                "Playing events must update an available alternative, rather than leave it loading"
+            );
+            assert!(playback.is_playing);
+            assert_eq!(playback.progress_ms, Some(1500));
+            assert_eq!(
+                playback.item.unwrap().id.as_deref(),
+                requested.to_uri().rsplit(':').next()
+            );
+        }
+    }
+
+    #[test]
     fn scoped_background_connection_cannot_follow_an_account_switch() {
         let (controls, _) = NativeControls::test_active("alice");
         let scoped = controls.scoped("alice").unwrap();
@@ -755,7 +810,9 @@ fn event_summary(event: &PlayerEvent) -> Option<(&'static str, String)> {
         PlayerEvent::EndOfTrack { track_id, .. } => ("end-of-track", track_id.to_uri()),
         PlayerEvent::Unavailable { track_id, .. } => ("unavailable", track_id.to_uri()),
         PlayerEvent::Seeked { track_id, .. } => ("seeked", track_id.to_uri()),
-        PlayerEvent::TrackChanged { audio_item } => ("track-changed", audio_item.track_id.to_uri()),
+        PlayerEvent::TrackChanged { audio_item, .. } => {
+            ("track-changed", audio_item.track_id.to_uri())
+        }
         _ => return None,
     })
 }
@@ -1074,6 +1131,22 @@ fn transfer_target(
         "Refresh devices before connecting to this speaker"
     );
     Ok(target.into())
+}
+
+fn public_track_change(event: &PlayerEvent) -> Option<crate::model::Track> {
+    let PlayerEvent::TrackChanged {
+        track_id,
+        audio_item,
+    } = event
+    else {
+        return None;
+    };
+    let mut track = public_track(audio_item)?;
+    // Metadata may describe an available alternative. Transport and queue
+    // events still use the originally requested track, so keep that identity.
+    track.uri = track_id.to_uri();
+    track.id = track.uri.rsplit(':').next().map(str::to_owned);
+    Some(track)
 }
 
 fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<crate::model::Track> {
@@ -1818,7 +1891,7 @@ async fn run(
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;paused_position=None;loaded.store(false,Ordering::Release);},
                     Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;paused_position=None;intent.reset();emit(NativeEvent::Stopped);},
-                    Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(event @ PlayerEvent::TrackChanged { .. }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track_change(&event) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
                         let uri = track_id.to_uri();
                         unavailable.playing(&uri);

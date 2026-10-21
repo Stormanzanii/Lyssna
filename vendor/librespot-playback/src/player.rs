@@ -245,6 +245,8 @@ pub enum PlayerEvent {
         position_ms: u32,
     },
     TrackChanged {
+        /// Requested queue item, which can differ from an available audio alternative.
+        track_id: SpotifyUri,
         audio_item: Box<AudioItem>,
     },
     SessionConnected {
@@ -2091,7 +2093,10 @@ impl PlayerInternal {
         self.sink.set_track(&track_id);
         let audio_item = Box::new(loaded_track.audio_item.clone());
 
-        self.send_event(PlayerEvent::TrackChanged { audio_item });
+        self.send_event(PlayerEvent::TrackChanged {
+            track_id: track_id.clone(),
+            audio_item,
+        });
 
         let position_ms = loaded_track.stream_position_ms;
 

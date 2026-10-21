@@ -143,6 +143,15 @@ test("artist portraits replace missing banners and metadata stays below either h
   await expect(hero).not.toHaveClass(/artist-fallback/);
   await expect(hero.locator(".hero-cover")).toHaveCount(0);
   await expect(hero).toHaveCSS("background-image", /banner\.svg/);
+  await expect(hero).toHaveCSS("background-size", "cover, cover");
+  // Liquid Glass clears header backgrounds; the banner must still cover.
+  await page.evaluate(() =>
+    document.querySelector(".application")!.classList.add("liquid-glass"),
+  );
+  await expect(hero).toHaveCSS("background-size", "cover, cover");
+  await page.evaluate(() =>
+    document.querySelector(".application")!.classList.remove("liquid-glass"),
+  );
   await expect(hero.locator(".artist-verified")).toHaveText(
     "Verified by Spotify",
   );

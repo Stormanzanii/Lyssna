@@ -108,6 +108,12 @@
 .liquid-glass .page-hero {
   background: none;
 }
+/* The shorthand above also resets size and position; artist banners set
+   their image inline and still need to cover the header. */
+.liquid-glass .artist-hero {
+  background-size: cover;
+  background-position: center 22%;
+}
 .liquid-glass .browse-actions {
   background: none;
 }

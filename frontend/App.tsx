@@ -1850,6 +1850,7 @@ function App() {
                     <button
                       key={key}
                       className={`icon-button ${on ? "active" : ""}`}
+                      data-icon={key}
                       title={label}
                       aria-pressed={on}
                       onClick={() =>
@@ -1872,6 +1873,7 @@ function App() {
                 <button
                   className="icon-button"
                   title="Load TTML"
+                  data-icon="upload"
                   onClick={() => setTtmlOpen(true)}
                 >
                   <Upload size={18} />
@@ -1879,6 +1881,7 @@ function App() {
                 <button
                   className="icon-button"
                   title="Retry lyrics"
+                  data-icon="retry"
                   onClick={() => void call("retry_lyrics")}
                 >
                   <RefreshCw size={18} />
@@ -1886,6 +1889,7 @@ function App() {
                 <button
                   className="icon-button"
                   title="Full screen"
+                  data-icon="fullscreen"
                   onClick={() => void fullscreen()}
                 >
                   <Maximize2 size={18} />
@@ -1893,6 +1897,7 @@ function App() {
                 <button
                   className="icon-button"
                   title="Lyrics settings"
+                  data-icon="settings"
                   onClick={() => {
                     if (immersive) void fullscreen(false);
                     setCenter("settings");

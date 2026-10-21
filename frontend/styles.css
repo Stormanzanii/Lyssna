@@ -1188,7 +1188,8 @@ small {
   color: #fff;
   background-color: #282828;
   background-size: cover;
-  background-position: center 25%;
+  /* Spotify frames the About photo lower, keeping faces near the top. */
+  background-position: center 60%;
   transition: transform 0.2s;
 }
 .artist-about-card:hover {
@@ -1362,7 +1363,7 @@ small {
 }
 /* Load TTML window, after Spicy Lyrics' upload modal. */
 .dialog.load-ttml {
-  width: min(100% - 48px, 880px);
+  width: min(100% - 48px, 720px);
   padding: 0;
   border-radius: 16px;
   background: #1c1414f2;
@@ -1371,7 +1372,7 @@ small {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 28px;
+  padding: 14px 20px;
   border-bottom: 1px solid #ffffff14;
 }
 /* Scoped under .dialog: the generic dialog heading margin, defined later,
@@ -1380,23 +1381,23 @@ small {
   flex: 1;
   margin: 0;
   line-height: 1.2;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
 }
 .load-ttml-body {
-  padding: 24px 32px 32px;
+  padding: 18px 22px 22px;
 }
 .load-ttml-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 .dialog .load-ttml-row p {
   margin: 0;
   min-width: 0;
-  font-size: 15px;
+  font-size: 13.5px;
   color: #b3b3b3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1410,11 +1411,11 @@ small {
 .load-ttml-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 13px;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
   font-weight: 500;
   color: #fff;
   background: #ffffff0f;
@@ -1428,15 +1429,15 @@ small {
 .load-ttml-modes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 .load-ttml-mode {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
-  gap: 12px;
-  padding: 18px 18px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 13px 14px;
+  border-radius: 10px;
   text-align: left;
   color: #fff;
   background: #ffffff0f;
@@ -1454,21 +1455,21 @@ small {
 .load-ttml-icon {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   background: #ffffff14;
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
 .load-ttml-mode strong {
   display: block;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
 }
 .load-ttml-mode small {
   display: block;
-  margin-top: 6px;
-  font-size: 13.5px;
+  margin-top: 4px;
+  font-size: 12px;
   line-height: 1.45;
   color: #b3b3b3;
 }
@@ -1481,18 +1482,18 @@ small {
 .load-ttml-tools {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .load-ttml-back,
 .load-ttml-reset {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 16px;
-  border-radius: 10px;
-  font-size: 16px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
   font-weight: 600;
   flex-shrink: 0;
   transition: background 0.15s, box-shadow 0.15s;
@@ -1518,10 +1519,10 @@ small {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 10px;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
   color: #b3b3b3;
   background: #ffffff0a;
   box-shadow: inset 0 0 0 1px #ffffff1f;
@@ -1537,13 +1538,13 @@ small {
   background: transparent;
   color: #fff;
   font: inherit;
-  font-size: 16px;
+  font-size: 13.5px;
 }
 .load-ttml-saved {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 60vh;
+  gap: 2px;
+  max-height: 64vh;
   overflow-y: auto;
   margin: 0;
   padding: 0;
@@ -1552,9 +1553,9 @@ small {
 .load-ttml-saved li {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
   transition: background 0.15s;
 }
 .load-ttml-saved li:hover {
@@ -1562,9 +1563,9 @@ small {
 }
 .load-ttml-saved img,
 .load-ttml-art {
-  width: 64px;
-  height: 64px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 5px;
   flex-shrink: 0;
   object-fit: cover;
   background: #ffffff14;
@@ -1586,12 +1587,12 @@ small {
   white-space: nowrap;
 }
 .load-ttml-saved strong {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 500;
 }
 .load-ttml-saved small {
-  margin-top: 4px;
-  font-size: 16px;
+  margin-top: 2px;
+  font-size: 13px;
   color: #b3b3b3;
 }
 .load-ttml-row-actions {
@@ -1602,9 +1603,9 @@ small {
 .load-ttml-row-actions button {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
   color: #fff;
   background: #ffffff0f;
   box-shadow: inset 0 0 0 1px #ffffff1f;
@@ -2955,6 +2956,75 @@ small {
 .lyrics-toolbar .icon-button:active {
   transform: scale(0.92);
 }
+/* Each icon moves in its own way while hovered. */
+.lyrics-toolbar .icon-button:hover svg {
+  animation: 0.5s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+.lyrics-toolbar [data-icon="romanized"]:hover svg {
+  animation-name: icon-tilt;
+}
+.lyrics-toolbar [data-icon="experimental_word_sync"]:hover svg {
+  animation: icon-pulse 0.7s ease-in-out infinite;
+}
+.lyrics-toolbar [data-icon="lyrics_compact"]:hover svg {
+  animation-name: icon-squash;
+}
+.lyrics-toolbar [data-icon="lyrics_hide_artwork"]:hover svg {
+  animation-name: icon-nudge-left;
+}
+.lyrics-toolbar [data-icon="lyrics_artwork_right"]:hover svg {
+  animation-name: icon-sway;
+}
+.lyrics-toolbar [data-icon="upload"]:hover svg {
+  animation-name: icon-lift;
+}
+.lyrics-toolbar [data-icon="retry"]:hover svg {
+  animation-name: icon-turn;
+}
+.lyrics-toolbar [data-icon="fullscreen"]:hover svg {
+  animation-name: icon-expand;
+}
+.lyrics-toolbar [data-icon="settings"]:hover svg {
+  animation: icon-spin 1.2s linear infinite;
+}
+@keyframes icon-tilt {
+  30% { rotate: -12deg; }
+  65% { rotate: 8deg; }
+}
+@keyframes icon-pulse {
+  50% { scale: 1 0.7; }
+}
+@keyframes icon-squash {
+  40% { scale: 1.1 0.8; }
+  70% { scale: 0.95 1.05; }
+}
+@keyframes icon-nudge-left {
+  45% { translate: -3px 0; }
+}
+@keyframes icon-sway {
+  30% { translate: -3px 0; }
+  65% { translate: 3px 0; }
+}
+@keyframes icon-lift {
+  45% { translate: 0 -3px; }
+}
+@keyframes icon-turn {
+  to { rotate: 180deg; }
+}
+@keyframes icon-expand {
+  45% { scale: 1.2; }
+}
+@keyframes icon-spin {
+  to { rotate: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-toolbar .icon-button:hover svg {
+    animation: none !important;
+  }
+}
+.reduce-motion .lyrics-toolbar .icon-button:hover svg {
+  animation: none !important;
+}
 /* Layout changes morph between positions (see layout-transition.ts). */
 .center-panel {
   view-transition-name: center-panel;
@@ -3998,11 +4068,12 @@ input[type="range"]:hover {
 .canvas-lyrics .lyrics-body {
   padding-bottom: 0;
 }
+/* Same spot as over the cover, so switching to Canvas does not shift it. */
 .canvas-lyrics:not(.narrow):not(.no-artwork) > .lyrics-toolbar {
-  top: 12px;
-  left: 12px;
+  top: 14px;
+  left: 16px;
   right: auto;
-  max-width: calc(var(--canvas-width) - 24px);
+  max-width: calc(var(--canvas-width) - 32px);
   flex-wrap: wrap;
 }
 .canvas-lyrics.artwork-right:not(.narrow) {
@@ -4019,7 +4090,7 @@ input[type="range"]:hover {
 }
 .canvas-lyrics.artwork-right:not(.narrow):not(.no-artwork) > .lyrics-toolbar {
   left: auto;
-  right: 12px;
+  right: 16px;
 }
 /* Narrow Canvas view: the video becomes the header thumbnail, the title sits
    beside it, and the blurred backdrop fills the page evenly. */

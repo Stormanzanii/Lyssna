@@ -172,11 +172,11 @@ export function LoadTtml({
                 aria-label="Back to Load TTML"
                 onClick={() => setView("load")}
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={16} />
                 Back
               </button>
               <label className="load-ttml-search">
-                <Search size={18} />
+                <Search size={15} />
                 <input
                   type="search"
                   placeholder="Search saved lyrics…"
@@ -186,7 +186,7 @@ export function LoadTtml({
                 />
               </label>
               <button className="load-ttml-reset" onClick={onReset}>
-                <RotateCcw size={16} />
+                <RotateCcw size={14} />
                 Reset TTML
               </button>
             </div>
@@ -208,7 +208,7 @@ export function LoadTtml({
                         <img src={item.image} alt="" loading="lazy" />
                       ) : (
                         <span className="load-ttml-art" aria-hidden="true">
-                          <Music2 size={22} />
+                          <Music2 size={18} />
                         </span>
                       )}
                       <span className="load-ttml-song">
@@ -224,14 +224,14 @@ export function LoadTtml({
                           disabled={!item.uri.startsWith("spotify:track:")}
                           onClick={() => onPlay(item.uri)}
                         >
-                          <Play size={16} fill="currentColor" />
+                          <Play size={14} fill="currentColor" />
                         </button>
                         <button
                           aria-label={`Download lyrics for ${name}`}
                           title={`Download ${item.kind.toUpperCase()}`}
                           onClick={() => onDownload(item)}
                         >
-                          <Download size={16} />
+                          <Download size={14} />
                         </button>
                         <button
                           aria-label={`Delete saved lyrics for ${name}`}
@@ -246,7 +246,7 @@ export function LoadTtml({
                             )
                           }
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </button>
                       </span>
                     </li>

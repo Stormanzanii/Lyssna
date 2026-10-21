@@ -1801,8 +1801,17 @@ test("Canvas and its toolbar move together without restarting the video", async 
   await page.setViewportSize({ width: 1920, height: 1080 });
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
+  const toolbarBox = () =>
+    page.evaluate(() => {
+      const box = document.querySelector(".lyrics-toolbar")!.getBoundingClientRect();
+      return { x: Math.round(box.left), y: Math.round(box.top) };
+    });
+  await expect(page.locator(".lyrics-album")).toBeVisible();
+  const overCover = await toolbarBox();
   await emitCanvas(page);
   await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
+  // Canvas replacing the cover leaves the toolbar exactly where it was.
+  await expect.poll(toolbarBox).toEqual(overCover);
   await page.evaluate(() => {
     (window as any).__canvasBeforeMove = document.querySelector(
       ".lyrics-canvas-cover video",
@@ -1826,11 +1835,11 @@ test("Canvas and its toolbar move together without restarting the video", async 
         right: cover.left >= section.left + section.width / 2,
         anchorX: Math.abs(
           cover.left >= section.left + section.width / 2
-            ? toolbar.right - (section.right - 12)
-            : toolbar.left - (Math.max(section.left, cover.left) + 12),
+            ? toolbar.right - (section.right - 16)
+            : toolbar.left - (Math.max(section.left, cover.left) + 16),
         ),
         anchorY: Math.abs(
-          toolbar.top - (Math.max(section.top, cover.top) + 12),
+          toolbar.top - (Math.max(section.top, cover.top) + 14),
         ),
         contained:
           toolbar.right <= Math.min(section.right, cover.right) &&

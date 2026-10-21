@@ -138,7 +138,7 @@ pub struct ConnectedDevice {
 /// The device a Connect identifier belongs to. The put-state response lists
 /// Alexa speakers once per alias, as `<device>_amzn_<alias>`, while dealer
 /// cluster updates list the bare `<device>`; both name the same speaker.
-fn speaker_id(id: &str) -> &str {
+pub fn speaker_id(id: &str) -> &str {
     id.rsplit_once('_')
         .filter(|(_, alias)| !alias.is_empty() && alias.bytes().all(|b| b.is_ascii_digit()))
         .and_then(|(rest, _)| rest.rsplit_once('_'))

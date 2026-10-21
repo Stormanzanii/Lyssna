@@ -121,12 +121,9 @@ impl NativeControls {
                     .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
             "Invalid Spotify playback device"
         );
-        ensure!(
-            devices
-                .iter()
-                .any(|device| device.id.as_deref() == Some(&target)),
-            "Spotify playback device is no longer available"
-        );
+        let target = crate::native::listed_device(&target, &devices)
+            .and_then(|device| device.id.clone())
+            .context("Spotify playback device is no longer available")?;
         if target == session.device_id() {
             return self
                 .send(action)
@@ -233,8 +230,10 @@ fn command_body(action: &PlayerAction) -> Result<Value> {
                     && !context.chars().any(char::is_control),
                 "Invalid Spotify context"
             );
+            // Without a context url Spotify rejects the command for Alexa
+            // speakers with 403 `command_not_allowed`.
             play_command(
-                json!({"uri":context}),
+                json!({"uri":context,"url":format!("context://{context}")}),
                 json!({"skip_to":{"track_uri":offset}}),
             )
         }
@@ -352,6 +351,24 @@ mod tests {
             ));
         }
         assert!(command_body(&PlayerAction::Enqueue("https://example.test/".into())).is_err());
+    }
+    #[test]
+    fn context_play_carries_the_url_alexa_speakers_require() {
+        // Live: Spotify answered 403 `command_not_allowed` for an Echo until
+        // the context named its url.
+        let value = command_body(&PlayerAction::PlayContext {
+            context: "spotify:album:0123456789abcdefghijkl".into(),
+            offset: Some("spotify:track:0123456789abcdefghijkl".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            value["context"]["url"],
+            "context://spotify:album:0123456789abcdefghijkl"
+        );
+        assert_eq!(
+            value["options"]["skip_to"]["track_uri"],
+            "spotify:track:0123456789abcdefghijkl"
+        );
     }
     #[test]
     fn remote_clock_holds_when_paused_and_clamps_to_duration() {

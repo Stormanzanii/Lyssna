@@ -1137,14 +1137,33 @@ fn transfer_target(
                 .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')),
         "Invalid Spotify Connect destination"
     );
-    anyhow::ensure!(
-        target == local
-            || devices
-                .iter()
-                .any(|device| device.id.as_deref() == Some(target)),
-        "Refresh devices before connecting to this speaker"
-    );
-    Ok(target.into())
+    if target == local {
+        return Ok(target.into());
+    }
+    listed_device(target, devices)
+        .and_then(|device| device.id.clone())
+        .context("Refresh devices before connecting to this speaker")
+}
+
+/// The listed device for an identifier the UI may have kept from an earlier
+/// device list. Alexa speakers switch between alias and bare identifiers as
+/// Spotify's listings arrive; both reach the same speaker.
+pub(crate) fn listed_device<'a>(
+    requested: &str,
+    devices: &'a [crate::model::Device],
+) -> Option<&'a crate::model::Device> {
+    devices
+        .iter()
+        .find(|device| device.id.as_deref() == Some(requested))
+        .or_else(|| {
+            let speaker = librespot_connect::speaker_id(requested);
+            devices.iter().find(|device| {
+                device
+                    .id
+                    .as_deref()
+                    .is_some_and(|id| librespot_connect::speaker_id(id) == speaker)
+            })
+        })
 }
 
 /// Spotify answers a transfer to a speaker it cannot reach with HTTP 410,
@@ -3143,6 +3162,29 @@ mod tests {
         );
         assert!(transfer_target("unknown-speaker", "local-player", &devices).is_err());
         assert!(transfer_target("../other-account", "local-player", &devices).is_err());
+    }
+
+    #[test]
+    fn alexa_alias_and_bare_ids_reach_the_listed_speaker() {
+        let listed = |id: &str| crate::model::Device {
+            id: Some(id.into()),
+            name: "Gameroom".into(),
+            ..Default::default()
+        };
+        // The picker kept the alias ID; the latest list has the bare one.
+        let bare = [listed("6402d6ca-echo")];
+        assert_eq!(
+            transfer_target("6402d6ca-echo_amzn_1", "local-player", &bare).unwrap(),
+            "6402d6ca-echo"
+        );
+        // And the reverse after a reconnect lists aliases again.
+        let alias = [listed("6402d6ca-echo_amzn_1")];
+        assert_eq!(
+            listed_device("6402d6ca-echo", &alias).and_then(|device| device.id.as_deref()),
+            Some("6402d6ca-echo_amzn_1")
+        );
+        assert!(listed_device("other-echo_amzn_1", &bare).is_none());
+        assert!(transfer_target("other-echo", "local-player", &bare).is_err());
     }
 
     #[test]

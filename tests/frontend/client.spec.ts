@@ -4619,7 +4619,8 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
     { track, count },
   );
   const rows = page.locator(".track-row");
-  await expect(rows).toHaveCount(count);
+  // Long lists render a window of rows around the viewport.
+  await expect(rows.first()).toContainText("Memory song 1");
   await expect
     .poll(() =>
       rows
@@ -4635,11 +4636,16 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
     .toBe(true);
   expect(requests.has(count - 1)).toBe(false);
   expect(requests.size).toBeLessThan(count / 3);
-  await rows.last().scrollIntoViewIfNeeded();
+  await page.locator(".browse-scroll").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const last = page.locator(".track-row", {
+    hasText: `Memory song ${count}`,
+  });
+  await expect(last).toBeVisible();
   await expect
     .poll(() =>
-      rows
-        .last()
+      last
         .locator("img")
         .evaluate(
           (image) =>
@@ -4650,7 +4656,7 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
     )
     .toBe(true);
   expect(requests.has(count - 1)).toBe(true);
-  await expect(rows.last().locator(".track-number > span")).toHaveText(
+  await expect(last.locator(".track-number > span")).toHaveText(
     String(count),
   );
 });
@@ -5302,4 +5308,51 @@ test("song row covers load a small Spotify size without sizes=auto", async ({
   );
   // sizes="auto" keeps removed images alive in Chromium; never use it.
   await expect(page.locator("img[sizes]")).toHaveCount(0);
+});
+
+test("long playlists render only the rows near the viewport", async ({
+  page,
+}) => {
+  await startClient(page);
+  const count = 800;
+  await page.evaluate(
+    ({ track, count }) => {
+      const host = (window as any).__clientTest;
+      const browse = host.commands
+        .filter((entry: any) => entry.command === "browse")
+        .at(-1).args;
+      host.emit({
+        type: "tracks",
+        key: browse.key,
+        generation: browse.generation,
+        offset: 0,
+        more: false,
+        tracks: Array.from({ length: count }, (_, index) => ({
+          ...track,
+          id: `long${index}`,
+          uri: `spotify:track:long${index}`,
+          name: `Long song ${index + 1}`,
+        })),
+      });
+    },
+    { track, count },
+  );
+  const rows = page.locator(".track-row");
+  await expect(rows.first()).toContainText("Long song 1");
+  // Every song is loaded, but only a window of rows is in the page.
+  expect(await rows.count()).toBeLessThan(120);
+  const scroller = page.locator(".browse-scroll");
+  // The list keeps its full height so the scrollbar matches 800 songs.
+  expect(
+    await scroller.evaluate((element) => element.scrollHeight),
+  ).toBeGreaterThan(count * 50);
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(page.getByText("Long song 800", { exact: true })).toBeVisible();
+  expect(await rows.count()).toBeLessThan(120);
+  // Rows keep their place in the list for playback and selection.
+  await expect(
+    page.locator(".track-row", { hasText: "Long song 800" }).locator(".track-number"),
+  ).toContainText("800");
 });

@@ -63,6 +63,8 @@ import {
   Folder,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import { startIdleTrim } from "./memory-trim";
+import { useRowWindow } from "./track-window";
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
@@ -277,6 +279,11 @@ function App() {
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState(false);
+  // Let WebView2 drop its caches once the user rests after browsing.
+  useEffect(
+    () => startIdleTrim(() => void rpc("trim_memory").catch(() => {})),
+    [],
+  );
   const [aboutPhoto, setAboutPhoto] = useState(0);
   // The artist header has scrolled away; show the compact sticky bar.
   const [heroGone, setHeroGone] = useState(false);
@@ -303,6 +310,7 @@ function App() {
     fileInput = useRef<HTMLInputElement>(null),
     searchInput = useRef<HTMLInputElement>(null),
     mainScroll = useRef<HTMLDivElement>(null),
+    trackTable = useRef<HTMLDivElement>(null),
     pageSentinel = useRef<HTMLDivElement>(null),
     pendingPage = useRef<string>("");
   stateRef.current = state;
@@ -1376,6 +1384,14 @@ function App() {
   };
   const showTrackList =
     state.route !== "home" && (!entity?.artist || displayTracks.length > 0);
+  const listedTracks =
+    entity?.artist && !popularMore ? displayTracks.slice(0, 5) : displayTracks;
+  const rows = useRowWindow(
+    mainScroll,
+    trackTable,
+    listedTracks.length,
+    state.route,
+  );
   return (
     <div
       className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
@@ -2156,6 +2172,7 @@ function App() {
                   {showTrackList && (
                     <>
                       <div
+                        ref={trackTable}
                         className={`track-table ${collectionPlays ? "collection-table" : ""} ${collection ? "dated-table" : ""} ${entity?.album ? "album-table" : ""}`}
                       >
                         <div className="track-table-head">
@@ -2174,10 +2191,15 @@ function App() {
                             <Clock3 size={16} />
                           </span>
                         </div>
-                        {(entity?.artist && !popularMore
-                          ? displayTracks.slice(0, 5)
-                          : displayTracks
-                        ).map((track, index) => {
+                        {rows.before > 0 && (
+                          <div
+                            className="track-spacer"
+                            style={{ height: rows.before }}
+                            aria-hidden="true"
+                          />
+                        )}
+                        {listedTracks.slice(rows.start, rows.end).map((track, offset) => {
+                          const index = rows.start + offset;
                           const current =
                             track.uri === state.playback.item?.uri;
                           return (
@@ -2405,6 +2427,13 @@ function App() {
                             </div>
                           );
                         })}
+                        {rows.after > 0 && (
+                          <div
+                            className="track-spacer"
+                            style={{ height: rows.after }}
+                            aria-hidden="true"
+                          />
+                        )}
                       </div>
                       {entity?.artist && displayTracks.length > 5 && (
                         <button

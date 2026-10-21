@@ -58,6 +58,7 @@ import {
   ExternalLink,
   Pin,
   ChevronRight,
+  ChevronLeft,
   Trash2,
   Folder,
 } from "lucide-react";
@@ -273,6 +274,7 @@ function App() {
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutPhoto, setAboutPhoto] = useState(0);
   // The artist header has scrolled away; show the compact sticky bar.
   const [heroGone, setHeroGone] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
@@ -2151,14 +2153,22 @@ function App() {
                                 dragRow.current = null;
                                 setDropAt(null);
                               }}
-                              onClick={(event) =>
+                              onClick={(event) => {
+                                // An artist or album link opens its page;
+                                // only plain row clicks select the song.
+                                if (
+                                  (event.target as HTMLElement).closest(
+                                    "a, button",
+                                  )
+                                )
+                                  return;
                                 select(
                                   track,
                                   event.ctrlKey ||
                                     event.metaKey ||
                                     event.shiftKey,
-                                )
-                              }
+                                );
+                              }}
                               onDoubleClick={() => playTrack(track, index)}
                               onMouseEnter={() => prefetchCanvas(track.uri)}
                               onContextMenu={(event) => {
@@ -2512,7 +2522,10 @@ function App() {
                             : undefined
                         }
                         aria-label={`About ${entity.artist.name}`}
-                        onClick={() => setAboutOpen(true)}
+                        onClick={() => {
+                          setAboutPhoto(0);
+                          setAboutOpen(true);
+                        }}
                       >
                         {overview.world_rank != null && (
                           <span className="artist-rank">
@@ -2552,45 +2565,112 @@ function App() {
                           >
                             <X size={20} />
                           </button>
-                          {photo && (
-                            <div
-                              className="artist-about-photo"
-                              style={{ backgroundImage: `url("${photo}")` }}
-                            />
-                          )}
+                          {(() => {
+                            const photos = overview.gallery?.length
+                              ? overview.gallery
+                              : photo
+                                ? [photo]
+                                : [];
+                            if (!photos.length) return null;
+                            const shown = aboutPhoto % photos.length;
+                            return (
+                              <div className="artist-about-gallery">
+                                <img
+                                  src={photos[shown]}
+                                  alt={`${entity.artist.name}, photo ${shown + 1} of ${photos.length}`}
+                                />
+                                {photos.length > 1 && (
+                                  <>
+                                    <button
+                                      className="gallery-step previous"
+                                      aria-label="Previous photo"
+                                      onClick={() =>
+                                        setAboutPhoto(
+                                          (shown + photos.length - 1) %
+                                            photos.length,
+                                        )
+                                      }
+                                    >
+                                      <ChevronLeft size={24} />
+                                    </button>
+                                    <button
+                                      className="gallery-step next"
+                                      aria-label="Next photo"
+                                      onClick={() =>
+                                        setAboutPhoto((shown + 1) % photos.length)
+                                      }
+                                    >
+                                      <ChevronRight size={24} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <div className="artist-about-body">
-                            <div className="artist-stats">
-                              {overview.followers != null && (
-                                <span>
-                                  <strong>{overview.followers.toLocaleString()}</strong>
-                                  Followers
+                            <aside className="artist-about-facts">
+                              {overview.world_rank != null && (
+                                <span className="artist-rank">
+                                  <strong>#{overview.world_rank}</strong>
+                                  in the world
                                 </span>
                               )}
+                              {overview.followers != null && (
+                                <p className="artist-fact">
+                                  <strong>{overview.followers.toLocaleString()}</strong>
+                                  Followers
+                                </p>
+                              )}
                               {overview.monthly_listeners != null && (
-                                <span>
+                                <p className="artist-fact">
                                   <strong>
                                     {overview.monthly_listeners.toLocaleString()}
                                   </strong>
-                                  Monthly listeners
-                                </span>
+                                  Monthly Listeners
+                                </p>
                               )}
-                              {overview.world_rank != null && (
-                                <span>
-                                  <strong>#{overview.world_rank}</strong>
-                                  In the world
-                                </span>
+                              {overview.top_cities?.map((city) => (
+                                <p
+                                  className="artist-city"
+                                  key={`${city.city}-${city.country}`}
+                                >
+                                  <strong>
+                                    {city.city}
+                                    {city.country ? `, ${city.country}` : ""}
+                                  </strong>
+                                  {city.listeners.toLocaleString()} listeners
+                                </p>
+                              ))}
+                            </aside>
+                            <div className="artist-about-text">
+                              {(overview.biography_html || overview.biography) && (
+                                <p>
+                                  <SpotifyText
+                                    text={
+                                      overview.biography_html ||
+                                      overview.biography
+                                    }
+                                    navigate={(route) => {
+                                      setAboutOpen(false);
+                                      navigate(route);
+                                    }}
+                                  />
+                                </p>
                               )}
+                              <button
+                                className="text-link muted"
+                                onClick={() =>
+                                  void call("open_link", {
+                                    url: overview.source_url,
+                                  })
+                                }
+                              >
+                                Source: Spotify · Updated{" "}
+                                {new Date(
+                                  overview.fetched_at * 1000,
+                                ).toLocaleString()}
+                              </button>
                             </div>
-                            {overview.biography && <p>{overview.biography}</p>}
-                            <button
-                              className="text-link muted"
-                              onClick={() =>
-                                void call("open_link", { url: overview.source_url })
-                              }
-                            >
-                              Source: Spotify · Updated{" "}
-                              {new Date(overview.fetched_at * 1000).toLocaleString()}
-                            </button>
                           </div>
                         </section>
                       </div>

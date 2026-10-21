@@ -179,6 +179,12 @@ export interface BrowseInfo {
     world_rank?: number;
     /** A large artist photo for the About card. */
     gallery_image?: string;
+    /** Every gallery photo, for the About window. */
+    gallery?: string[];
+    /** Cities with the most listeners. */
+    top_cities?: { city: string; country: string; listeners: number }[];
+    /** The biography with Spotify's links kept. */
+    biography_html?: string;
     /** Featuring, Discovered on, Artist Playlists, Fans also like, Appears On. */
     sections?: HomeSection[];
   };

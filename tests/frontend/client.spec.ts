@@ -4925,6 +4925,13 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
             world_rank: 21,
             gallery_image: track.album.images[0].url,
             biography: "A long biography. ".repeat(80),
+            biography_html:
+              'Thanks to <a href="spotify:artist:0123456789abcdefghij07">Mentor</a>, a long story.',
+            gallery: [
+              "https://artwork.example.test/artist/one.svg",
+              "https://artwork.example.test/artist/two.svg",
+            ],
+            top_cities: [{ city: "London", country: "GB", listeners: 1_076_135 }],
             popular: [{ track, streams: 3_271_340_476 }],
             sections,
             source_url: "",
@@ -4965,8 +4972,18 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   await expect(card).toContainText("72,847,177 monthly listeners");
   await card.click();
   const dialog = page.getByRole("dialog", { name: "About Test artist" });
-  await expect(dialog).toContainText("112,804,519");
-  await expect(dialog).toContainText("#21");
+  await expect(dialog.locator(".artist-fact")).toHaveText([
+    "112,804,519Followers",
+    "72,847,177Monthly Listeners",
+  ]);
+  await expect(dialog.locator(".artist-rank")).toHaveText("#21in the world");
+  await expect(dialog.locator(".artist-city")).toHaveText(
+    "London, GB1,076,135 listeners",
+  );
+  const photo = dialog.locator(".artist-about-gallery img");
+  await expect(photo).toHaveAttribute("src", /one\.svg/);
+  await dialog.getByRole("button", { name: "Next photo" }).click();
+  await expect(photo).toHaveAttribute("src", /two\.svg/);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 
@@ -4981,4 +4998,33 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   await page.screenshot({ path: "target/diagnostics/artist-sticky-glass.png" });
   await page.locator(".browse-scroll").evaluate((node) => node.scrollTo(0, 0));
   await expect(sticky).not.toHaveClass(/shown/);
+
+  // Linked artists in the biography open their page.
+  await page.locator(".artist-about-card").click();
+  await page.getByRole("link", { name: "Mentor" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "browse")
+          .at(-1)?.args.key,
+    ),
+  ).toBe("artist:0123456789abcdefghij07");
+});
+
+test("clicking an artist in a song row opens it without selecting the song", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.locator(".track-row .track-artists .artist-link").first().click();
+  await expect(page.locator(".selection-bar")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "browse")
+          .at(-1)?.args.key,
+    ),
+  ).toMatch(/^artist:/);
 });

@@ -30,11 +30,26 @@ pub struct ArtistOverview {
     /// A large artist photo for the About card.
     #[serde(default)]
     pub gallery_image: Option<String>,
+    /// Every gallery photo, for the About window.
+    #[serde(default)]
+    pub gallery: Vec<String>,
+    /// Cities with the most listeners.
+    #[serde(default)]
+    pub top_cities: Vec<TopCity>,
+    /// The biography with Spotify's links kept, for the About window.
+    #[serde(default)]
+    pub biography_html: String,
     /// Featuring, Discovered on, Artist Playlists, Fans also like, Appears On.
     #[serde(default)]
     pub sections: Vec<crate::home::HomeSection>,
     pub source_url: String,
     pub fetched_at: u64,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TopCity {
+    pub city: String,
+    pub country: String,
+    pub listeners: u64,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PopularTrack {
@@ -120,6 +135,14 @@ pub(crate) fn public_entity(client: &Client, kind: &str, id: &str) -> Result<Val
         "Catalogue page does not match request"
     );
     Ok(entity)
+}
+
+/// Spotify moved the verified flag; read the current place first.
+fn verified(artist: &Value) -> Option<bool> {
+    artist["onPlatformReputationTrait"]["verification"]["isVerified"]
+        .as_bool()
+        .or_else(|| artist["profile"]["verified"].as_bool())
+        .or_else(|| artist["profile"]["isVerified"].as_bool())
 }
 
 fn parse_artist(data: &Value, id: &str) -> Result<ArtistOverview> {
@@ -270,9 +293,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
             .and_then(|image| image["url"].as_str())
             .filter(|url| url.starts_with("https://"))
             .map(str::to_owned),
-        verified: artist["profile"]["verified"]
-            .as_bool()
-            .or_else(|| artist["profile"]["isVerified"].as_bool()),
+        verified: verified(artist),
         biography: plain_text(
             artist["profile"]["biography"]["text"]
                 .as_str()
@@ -293,6 +314,42 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
             .filter(|url| url.starts_with("https://"))
             .map(str::to_owned),
         sections: related_sections(artist),
+        gallery: artist["visuals"]["gallery"]["items"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .take(30)
+            .filter_map(|item| {
+                item["sources"]
+                    .as_array()?
+                    .iter()
+                    .max_by_key(|image| image["width"].as_u64().unwrap_or_default())?["url"]
+                    .as_str()
+                    .filter(|url| url.starts_with("https://"))
+                    .map(str::to_owned)
+            })
+            .collect(),
+        top_cities: artist["stats"]["topCities"]["items"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .take(5)
+            .filter_map(|item| {
+                Some(TopCity {
+                    city: item["city"].as_str()?.to_owned(),
+                    country: item["country"].as_str().unwrap_or_default().to_owned(),
+                    listeners: item["numberOfListeners"].as_u64()?,
+                })
+            })
+            .collect(),
+        biography_html: artist["profile"]["biography"]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .chars()
+            .take(20_000)
+            .collect(),
         source_url: format!("https://open.spotify.com/artist/{id}"),
         fetched_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -477,6 +534,16 @@ mod section_tests {
     use super::*;
     use serde_json::json;
     #[test]
+    fn verified_reads_the_reputation_trait_then_older_fields() {
+        let current = json!({"onPlatformReputationTrait": {"verification": {"isVerified": true}}});
+        assert_eq!(verified(&current), Some(true));
+        assert_eq!(
+            verified(&json!({"profile": {"verified": false}})),
+            Some(false)
+        );
+        assert_eq!(verified(&json!({})), None);
+    }
+    #[test]
     fn related_shelves_follow_spotify_order_and_skip_errors() {
         let playlist = |id: &str, name: &str, description: &str| {
             json!({"data": {"__typename": "Playlist", "uri": format!("spotify:playlist:{id}"),
@@ -540,6 +607,16 @@ mod live_tests {
                 .collect();
             assert!(overview.world_rank.is_some(), "Expected a world rank");
             assert!(overview.gallery_image.is_some(), "Expected a gallery photo");
+            assert!(
+                overview.gallery.len() > 1,
+                "Expected several gallery photos"
+            );
+            assert!(!overview.top_cities.is_empty(), "Expected top cities");
+            assert!(
+                overview.biography_html.contains("spotify:artist:"),
+                "Expected linked artists in the biography"
+            );
+            assert_eq!(overview.verified, Some(true), "Expected a verified artist");
             assert!(shelves.len() >= 4, "Expected related shelves: {shelves:?}");
             eprintln!(
                 "Artist page: rank #{:?}, shelves {shelves:?}",

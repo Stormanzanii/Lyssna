@@ -131,6 +131,29 @@ pub fn restore_action(uri: &str, queue: &[String], position_ms: u64) -> crate::a
         position_ms,
     }
 }
+/// Next or Previous on a restored, not yet loaded song: start the saved queue
+/// one song on or back. Previous restarts the song once past three seconds,
+/// as Spotify does. None when there is no song in that direction.
+pub fn skip_action(
+    uri: &str,
+    queue: &[String],
+    position_ms: u64,
+    forward: bool,
+) -> Option<crate::api::PlayerAction> {
+    let index = queue.iter().position(|entry| entry == uri)?;
+    let offset = if forward {
+        Some(index + 1).filter(|next| *next < queue.len())?
+    } else if position_ms > 3_000 {
+        index
+    } else {
+        index.checked_sub(1)?
+    };
+    Some(crate::api::PlayerAction::Resume {
+        uris: queue.to_vec(),
+        offset,
+        position_ms: 0,
+    })
+}
 pub fn queue(account: &str) -> Vec<String> {
     QUEUES
         .lock()
@@ -251,6 +274,34 @@ pub fn save(account: &str, playback: &Playback, observed_at: u64, force: bool) -
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn skipping_a_restored_song_moves_through_the_saved_queue() {
+        use crate::api::PlayerAction;
+        let queue: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+        let offset = |action: Option<PlayerAction>| match action {
+            Some(PlayerAction::Resume {
+                offset,
+                position_ms: 0,
+                ..
+            }) => Some(offset),
+            _ => None,
+        };
+        assert_eq!(
+            offset(super::skip_action("b", &queue, 60_000, true)),
+            Some(2)
+        );
+        assert_eq!(
+            offset(super::skip_action("b", &queue, 1_000, false)),
+            Some(0)
+        );
+        assert_eq!(
+            offset(super::skip_action("b", &queue, 60_000, false)),
+            Some(1)
+        );
+        assert_eq!(offset(super::skip_action("c", &queue, 0, true)), None);
+        assert_eq!(offset(super::skip_action("a", &queue, 0, false)), None);
+        assert_eq!(offset(super::skip_action("x", &queue, 0, true)), None);
+    }
     use super::*;
     #[test]
     fn reopening_dj_restores_session_position_and_can_skip_without_refresh() {

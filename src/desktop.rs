@@ -1782,6 +1782,51 @@ fn player(
                 snapshot.playback.progress_ms.unwrap_or_default(),
             );
         }
+        // After a restart the player shows the saved song without loading it;
+        // skipping starts the saved queue one song on or back.
+        if local
+            && matches!(action, PlayerAction::Next | PlayerAction::Previous)
+            && !state.0.controls.has_track()
+        {
+            if snapshot.playback.item.is_none()
+                && let Some(saved) = snapshot
+                    .profile
+                    .as_ref()
+                    .and_then(|profile| crate::resume::load(&profile.id))
+            {
+                restore_playback(&mut snapshot, saved);
+            }
+            let track = snapshot
+                .playback
+                .item
+                .clone()
+                .context("Choose a song to start playback")?;
+            let queue = snapshot
+                .profile
+                .as_ref()
+                .map(|profile| crate::resume::queue(&profile.id))
+                .filter(|queue| queue.contains(&track.uri))
+                .unwrap_or_else(|| {
+                    snapshot
+                        .tracks
+                        .iter()
+                        .filter(|item| !item.is_local)
+                        .take(100)
+                        .map(|item| item.uri.clone())
+                        .collect()
+                });
+            action = crate::resume::skip_action(
+                &track.uri,
+                &queue,
+                snapshot.playback.progress_ms.unwrap_or_default(),
+                matches!(action, PlayerAction::Next),
+            )
+            .context(if matches!(action, PlayerAction::Next) {
+                "No next song in the saved queue"
+            } else {
+                "No previous song in the saved queue"
+            })?;
+        }
         if local && action.supports_native() {
             if matches!(action, PlayerAction::Enqueue(_)) {
                 ensure!(

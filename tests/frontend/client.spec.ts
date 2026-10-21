@@ -5049,6 +5049,14 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
     "Fans also like",
     "Appears On",
   ]);
+  // Shelves keep the page's left gutter, aligned with About.
+  const aboutLeft = (await page.locator(".artist-about > h2").boundingBox())!.x;
+  for (const heading of await page
+    .locator(".artist-shelf .home-shelf-heading h2")
+    .all())
+    expect(
+      Math.abs((await heading.boundingBox())!.x - aboutLeft),
+    ).toBeLessThan(1);
   // Popular rows carry badges, not artist names, like Spotify.
   await expect(
     page.locator(".artist-top .track-row .track-artists .artist-link"),

@@ -1132,6 +1132,10 @@ small {
   background: #fff;
   color: #131313;
 }
+/* Artist shelves line up with the About section and Popular. */
+.artist-shelf {
+  padding: 0 24px;
+}
 /* Artist page, Spotify style: About card that opens the full biography. */
 .artist-about {
   padding: 32px 24px 8px;

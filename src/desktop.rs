@@ -763,6 +763,12 @@ impl Desktop {
                         }
                         Event::PageChanged(key) => {
                             if snapshot.route == key {
+                                if key.starts_with("playlist:") {
+                                    let _ = pump.commands.send(Command::BrowseInfo {
+                                        key: key.clone(),
+                                        generation: snapshot.generation,
+                                    });
+                                }
                                 let _ = pump.commands.send(Command::Tracks {
                                     key,
                                     offset: 0,
@@ -2052,6 +2058,26 @@ fn saved_status(uris: Vec<String>, state: State<'_, Desktop>) -> std::result::Re
         .map_err(error)
 }
 #[tauri::command]
+fn edit_playlist(
+    playlist: Playlist,
+    name: String,
+    description: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::EditPlaylist {
+            playlist,
+            name,
+            description,
+        })
+        .map_err(error)
+}
+#[tauri::command]
 fn remove_from_playlist(
     playlist: Playlist,
     index: usize,
@@ -2399,6 +2425,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             create_playlist,
             remove_playlist,
             remove_from_playlist,
+            edit_playlist,
             saved_status,
             open_link,
             open_creator_profile,

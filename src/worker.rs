@@ -53,6 +53,12 @@ pub enum Command {
         index: usize,
         uri: String,
     },
+    /// Rename a playlist you own and set its description.
+    EditPlaylist {
+        playlist: Playlist,
+        name: String,
+        description: String,
+    },
     /// Delete an owned playlist or unfollow another, as Spotify does.
     RemovePlaylist {
         id: String,
@@ -921,6 +927,25 @@ impl Backend {
                 }
                 removed?;
                 self.emit(Event::Notice(format!("Removed from {}", playlist.name)));
+            }
+            Command::EditPlaylist {
+                playlist,
+                name,
+                description,
+            } => {
+                anyhow::ensure!(
+                    playlist.owner.id == self.profile.id,
+                    "Only the owner can edit this playlist's details"
+                );
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then edit the playlist."
+                );
+                self.native_controls
+                    .edit_playlist(&playlist.id, &name, &description)?;
+                self.refresh_library()?;
+                self.emit(Event::PageChanged(format!("playlist:{}", playlist.id)));
+                self.emit(Event::Notice(format!("Saved {}", name.trim())));
             }
             Command::CreatePlaylist { name, tracks } => {
                 anyhow::ensure!(

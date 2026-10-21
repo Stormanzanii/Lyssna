@@ -216,6 +216,11 @@ function App() {
     y: number;
   } | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState<{
+    playlist: Playlist;
+    name: string;
+    description: string;
+  } | null>(null);
   const [removeDialog, setRemoveDialog] = useState<{
     id: string;
     name: string;
@@ -666,6 +671,7 @@ function App() {
         setPicker(null);
         setFolderDialog(false);
         setRemoveDialog(null);
+        setEditDialog(null);
       }
     };
     // A focused button activates on Space keyup; cancel that so Space never
@@ -785,6 +791,17 @@ function App() {
     },
     [call],
   );
+  const openEditDialog = useCallback((playlist: Playlist) => {
+    const current = stateRef.current;
+    setEditDialog({
+      playlist,
+      name: playlist.name,
+      description:
+        current.browse_info?.key === `playlist:${playlist.id}`
+          ? current.browse_info.subtitle
+          : "",
+    });
+  }, []);
   const removeFromPlaylist = useCallback(
     (track: Track) => {
       const current = stateRef.current,
@@ -1020,6 +1037,11 @@ function App() {
     songSort !== "order"
   );
 
+  const ownPlaylist = state.playlists.find(
+    (item) =>
+      `playlist:${item.id}` === state.route &&
+      item.owner.id === state.profile?.id,
+  );
   const displayTracks = entity?.artist
     ? (entity.overview?.popular.map((item) => item.track) ?? [])
     : collection
@@ -1696,6 +1718,13 @@ function App() {
                         <span
                           data-context-route={state.route}
                           data-context-name={title}
+                          className={ownPlaylist ? "editable-title" : undefined}
+                          title={ownPlaylist ? "Edit details" : undefined}
+                          onClick={
+                            ownPlaylist
+                              ? () => openEditDialog(ownPlaylist)
+                              : undefined
+                          }
                         >
                           {title}
                         </span>
@@ -2648,6 +2677,11 @@ function App() {
               current.playlists.find((item) => item.id === menu.id);
             if (saved) {
               const own = saved.owner.id === current.profile?.id;
+              if (own)
+                actions.push({
+                  label: "Edit details",
+                  run: () => openEditDialog(saved),
+                });
               actions.push({
                 label: own ? "Delete" : "Remove from Your Library",
                 run: () =>
@@ -2770,6 +2804,71 @@ function App() {
             }}
           />
         </>
+      )}
+      {editDialog && (
+        <div className="modal-backdrop" onClick={() => setEditDialog(null)}>
+          <form
+            className="dialog edit-playlist"
+            aria-labelledby="edit-playlist-title"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editDialog.name.trim()) return;
+              void call("edit_playlist", {
+                playlist: editDialog.playlist,
+                name: editDialog.name,
+                description: editDialog.description,
+              });
+              setEditDialog(null);
+            }}
+          >
+            <h2 id="edit-playlist-title">Edit details</h2>
+            <label>
+              <span>Name</span>
+              <input
+                className="field"
+                autoFocus
+                maxLength={100}
+                value={editDialog.name}
+                onChange={(event) =>
+                  setEditDialog({ ...editDialog, name: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea
+                className="field"
+                rows={4}
+                maxLength={300}
+                placeholder="Add an optional description"
+                value={editDialog.description}
+                onChange={(event) =>
+                  setEditDialog({
+                    ...editDialog,
+                    description: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="pill"
+                onClick={() => setEditDialog(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="pill primary"
+                disabled={!editDialog.name.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       )}
       {removeDialog && (
         <div className="modal-backdrop" onClick={() => setRemoveDialog(null)}>

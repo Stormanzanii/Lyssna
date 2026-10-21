@@ -352,6 +352,78 @@ pub async fn remove_from_playlist(
     Ok(())
 }
 
+/// One playlist change in the web player's JSON format.
+fn playlist_changes(op: Value) -> Value {
+    json!({
+        "deltas": [{"ops": [op], "info": {"source": {"client": 5}}}],
+        "wantResultingRevisions": false,
+        "wantSyncResult": false,
+        "nonces": []
+    })
+}
+
+fn valid_playlist_id(id: &str) -> Result<()> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid playlist ID"
+    );
+    Ok(())
+}
+
+async fn read_playlist(session: &Session, id: &str) -> Result<Playlist> {
+    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    let playlist = tokio::time::timeout(Duration::from_secs(10), Playlist::get(session, &uri))
+        .await
+        .context("Playlist request timed out")??;
+    ensure!(
+        playlist.contents.position == 0 && !playlist.contents.is_truncated,
+        "Spotify returned an incomplete playlist"
+    );
+    Ok(playlist)
+}
+
+/// Rename a playlist and set its description; an empty description clears it.
+pub async fn edit_details(
+    session: &Session,
+    id: &str,
+    name: &str,
+    description: &str,
+) -> Result<()> {
+    valid_playlist_id(id)?;
+    let (name, description) = (name.trim(), description.trim());
+    ensure!(
+        !name.is_empty() && name.chars().count() <= 100 && !name.chars().any(char::is_control),
+        "Choose a playlist name up to 100 characters"
+    );
+    ensure!(
+        description.chars().count() <= 300
+            && !description.chars().any(|c| c.is_control() && c != '\n'),
+        "Keep the description under 300 characters"
+    );
+    let mut values = json!({"name": name});
+    let mut empty = Vec::new();
+    if description.is_empty() {
+        empty.push("LIST_DESCRIPTION");
+    } else {
+        values["description"] = json!(description);
+    }
+    playlist_json(
+        session,
+        &format!("/playlist/v2/playlist/{id}/changes"),
+        &playlist_changes(json!({"kind": 6, "updateListAttributes": {
+            "newAttributes": {"values": values, "noValue": empty}
+        }})),
+    )
+    .await
+    .context("Spotify could not change the playlist details")?;
+    let after = read_playlist(session, id).await?;
+    ensure!(
+        after.attributes.name == name && after.attributes.description == description,
+        "Spotify did not confirm the new details"
+    );
+    Ok(())
+}
+
 fn remove_changes(uri: &str, row: &str) -> Value {
     json!({
         "deltas": [{
@@ -398,12 +470,7 @@ async fn rootlist_change(session: &Session, op: Value) -> Result<()> {
     playlist_json(
         session,
         &format!("/playlist/v2/user/{user}/rootlist/changes"),
-        &json!({
-            "deltas": [{"ops": [op], "info": {"source": {"client": 5}}}],
-            "wantResultingRevisions": false,
-            "wantSyncResult": false,
-            "nonces": []
-        }),
+        &playlist_changes(op),
     )
     .await
     .context("Spotify could not change the library")?;
@@ -894,6 +961,8 @@ mod live_playlist_tests {
                 }
                 let first = add_to_playlist(session, &id, &picks).await?;
                 let again = add_to_playlist(session, &id, &picks).await?;
+                edit_details(session, &id, "SpotiFlex edit test", "Temporary test").await?;
+                edit_details(session, &id, "SpotiFlex edit test", "").await?;
                 remove_from_playlist(session, &id, 0, &picks[0].uri).await?;
                 Ok::<_, anyhow::Error>((picks.len(), first, again))
             }
@@ -915,7 +984,7 @@ mod live_playlist_tests {
                     assert_eq!(first, picked);
                     assert_eq!(again, 0);
                     eprintln!(
-                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, removed one song, removed playlist"
+                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, edited details, removed one song, removed playlist"
                     );
                 }
                 (Added::NotWritten(error), _) | (_, Added::NotWritten(error)) => {

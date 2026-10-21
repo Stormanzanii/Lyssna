@@ -306,6 +306,11 @@ impl NativeControls {
     pub fn create_playlist(&self, name: &str) -> Result<String> {
         self.run(async |session| crate::native_browse::create_playlist(session, name).await)
     }
+    pub fn edit_playlist(&self, id: &str, name: &str, description: &str) -> Result<()> {
+        self.run(async |session| {
+            crate::native_browse::edit_details(session, id, name, description).await
+        })
+    }
     pub fn remove_from_playlist(&self, id: &str, index: usize, uri: &str) -> Result<()> {
         self.run(async |session| {
             crate::native_browse::remove_from_playlist(session, id, index, uri).await

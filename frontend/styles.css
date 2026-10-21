@@ -2751,6 +2751,26 @@ input[type="range"]:hover {
   inset: 0;
   z-index: 40;
 }
+.editable-title {
+  cursor: pointer;
+}
+.edit-playlist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(100%, 520px);
+}
+.edit-playlist label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #b3b3b3;
+}
+.edit-playlist textarea {
+  resize: vertical;
+  font: inherit;
+}
 .modal-backdrop,
 .setup-backdrop {
   position: fixed;

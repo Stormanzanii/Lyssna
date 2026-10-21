@@ -3816,3 +3816,50 @@ test("Space after clicking a player button only plays or pauses", async ({
   await page.keyboard.press("Enter");
   await expect.poll(player).toEqual(["shuffle", "next", "pause"]);
 });
+
+test("owners edit playlist name and description", async ({
+  page,
+}) => {
+  await startClient(page);
+  const id = "4123456789abcdefghijkl";
+  await page.evaluate(
+    (id) =>
+      (window as any).__clientTest.emit({
+        type: "library",
+        playlists: [
+          {
+            id,
+            name: "Road trip",
+            images: [],
+            owner: { id: "test-user" },
+            collaborative: false,
+          },
+        ],
+      }),
+    id,
+  );
+  await page.locator(".library-item", { hasText: "Road trip" }).first().click();
+  const rows = page.locator(".track-row");
+  await expect(rows).toHaveCount(150);
+  const last = (command: string) =>
+    page.evaluate(
+      (command) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === command)
+          .at(-1)?.args,
+      command,
+    );
+
+  await page.locator(".editable-title").click();
+  const dialog = page.locator("form.edit-playlist");
+  await expect(dialog.getByLabel("Name")).toHaveValue("Road trip");
+  await dialog.getByLabel("Name").fill("Night drive");
+  await dialog.getByLabel("Description").fill("Late roads");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await last("edit_playlist")).toMatchObject({
+    name: "Night drive",
+    description: "Late roads",
+    playlist: { id },
+  });
+});

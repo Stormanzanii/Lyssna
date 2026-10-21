@@ -521,6 +521,7 @@ impl NativeControls {
                 name: device.name,
                 is_active: device.is_active,
                 volume_percent: device.volume_percent,
+                is_offline: device.is_offline,
             })
             .collect())
     }
@@ -541,10 +542,13 @@ impl NativeControls {
         let session = self.session()?;
         let devices = self.devices()?;
         let target = transfer_target(requested, session.device_id(), &devices)?;
+        let device = devices
+            .iter()
+            .find(|device| device.id.as_deref() == Some(target.as_str()));
         tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
             tokio::time::timeout(Duration::from_secs(15), session.spclient().transfer(session.device_id(), &target, None))
                 .await.map_err(|_| anyhow::anyhow!("Speaker connection timed out. Check its power and Spotify connection, then retry."))?
-                .map_err(|error| anyhow::anyhow!("Could not transfer playback ({}). Check the speaker's power and Spotify connection, then retry.", error.kind))?;
+                .map_err(|error| anyhow::anyhow!(transfer_failure(error.kind, device)))?;
             Ok(())
         })
     }
@@ -1131,6 +1135,30 @@ fn transfer_target(
         "Refresh devices before connecting to this speaker"
     );
     Ok(target.into())
+}
+
+/// Spotify answers a transfer to a speaker it cannot reach with HTTP 410,
+/// which librespot reports as `NotFound`. Standby Alexa speakers do this
+/// until they reconnect to Spotify from the speaker side.
+fn transfer_failure(
+    kind: librespot_core::error::ErrorKind,
+    device: Option<&crate::model::Device>,
+) -> String {
+    let name = device
+        .map(|device| device.name.as_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("The speaker");
+    match (kind, device.is_some_and(|device| device.is_offline)) {
+        (librespot_core::error::ErrorKind::NotFound, true) => format!(
+            "{name} is on standby in Spotify Connect, so Spotify could not reach it. Start Spotify on the speaker itself (for Alexa, ask it to play Spotify), then retry."
+        ),
+        (librespot_core::error::ErrorKind::NotFound, false) => format!(
+            "Spotify could not reach {name}. Refresh devices and retry; if it still fails, start Spotify on the speaker itself."
+        ),
+        (kind, _) => format!(
+            "Could not transfer playback ({kind}). Check the speaker's power and Spotify connection, then retry."
+        ),
+    }
 }
 
 fn public_track_change(event: &PlayerEvent) -> Option<crate::model::Track> {
@@ -3105,6 +3133,46 @@ mod tests {
         );
         assert!(transfer_target("unknown-speaker", "local-player", &devices).is_err());
         assert!(transfer_target("../other-account", "local-player", &devices).is_err());
+    }
+
+    #[test]
+    fn standby_speakers_stay_selectable_and_explain_spotify_rejections() {
+        use librespot_core::error::ErrorKind;
+        let echo = crate::model::Device {
+            id: Some("echo".into()),
+            name: "Kitchen Echo".into(),
+            is_offline: true,
+            ..Default::default()
+        };
+        // Spotify may have woken the speaker since the last cluster update.
+        assert_eq!(
+            transfer_target("echo", "local-player", std::slice::from_ref(&echo)).unwrap(),
+            "echo"
+        );
+        // HTTP 410 from connect-state arrives as NotFound ("Requested entity
+        // was not found"), which used to read as a power problem.
+        let standby = transfer_failure(ErrorKind::NotFound, Some(&echo));
+        assert!(
+            standby.starts_with("Kitchen Echo is on standby"),
+            "{standby}"
+        );
+        assert!(!standby.contains("Requested entity"));
+        let online = crate::model::Device {
+            is_offline: false,
+            ..echo
+        };
+        assert!(
+            transfer_failure(ErrorKind::NotFound, Some(&online))
+                .starts_with("Spotify could not reach Kitchen Echo")
+        );
+        assert!(
+            transfer_failure(ErrorKind::NotFound, None)
+                .starts_with("Spotify could not reach The speaker")
+        );
+        assert!(
+            transfer_failure(ErrorKind::Unavailable, Some(&online))
+                .contains("(Service unavailable)")
+        );
     }
 
     #[test]

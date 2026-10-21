@@ -222,6 +222,49 @@ test("Connect retains registered speakers and transfers back to this computer", 
   ]);
 });
 
+test("standby speakers are labelled and a failed transfer keeps controls on the active device", async ({
+  page,
+}) => {
+  await startClient(page);
+  const devices = [
+    { id: "phone", name: "Test Phone", is_active: true },
+    {
+      id: "standby-echo",
+      name: "Test Echo",
+      is_active: false,
+      is_offline: true,
+    },
+  ];
+  await page.evaluate(
+    (devices) =>
+      (window as any).__clientTest.emit({ type: "devices", devices }),
+    devices,
+  );
+  await page.getByTitle("Devices", { exact: true }).click();
+  const echo = page.getByRole("button", { name: /Test Echo/ });
+  await expect(echo).toContainText("Standby");
+  await expect(
+    page.getByRole("button", { name: /Test Phone/ }),
+  ).toContainText("Active device");
+  await echo.click();
+  // The backend re-sends the device list after Spotify rejects the transfer.
+  await page.evaluate(
+    (devices) =>
+      (window as any).__clientTest.emit({ type: "devices", devices }),
+    devices,
+  );
+  await page
+    .locator("footer")
+    .getByRole("button", { name: "Play", exact: true })
+    .click();
+  const sent = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "player")
+      .map((entry: any) => entry.args.target),
+  );
+  expect(sent).toEqual(["standby-echo", "phone"]);
+});
+
 test("audio output selection saves headphones and can return to system default", async ({
   page,
 }) => {

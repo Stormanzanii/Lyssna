@@ -42,6 +42,7 @@ export interface Device {
   name: string;
   is_active: boolean;
   volume_percent?: number;
+  is_offline?: boolean;
 }
 export interface TrackFacts {
   plays?: number;

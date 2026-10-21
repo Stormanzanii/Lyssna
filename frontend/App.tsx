@@ -211,6 +211,17 @@ function App() {
   const [rightWidth, setRightWidth] = useState(360);
   const [target, setTarget] = useState("native");
   const [deviceMenu, setDeviceMenu] = useState(false);
+  // Controls follow the device Spotify reports active, so a failed
+  // transfer does not leave them aimed at an unreachable speaker.
+  useEffect(() => {
+    const active = state.devices.find((device) => device.is_active);
+    if (!active) return;
+    setTarget(
+      active.name === state.local_device_name || !active.id
+        ? "native"
+        : active.id,
+    );
+  }, [state.devices, state.local_device_name]);
   useEffect(() => {
     if (!deviceMenu) return;
     // Clicking anywhere outside the device popup closes it. The Devices
@@ -3076,7 +3087,11 @@ function App() {
                 <div>
                   <strong>{device.name}</strong>
                   <small>
-                    {device.is_active ? "Active device" : "Spotify Connect"}
+                    {device.is_active
+                      ? "Active device"
+                      : device.is_offline
+                        ? "Standby · start Spotify on the speaker first"
+                        : "Spotify Connect"}
                   </small>
                 </div>
               </button>

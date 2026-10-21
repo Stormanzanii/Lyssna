@@ -813,7 +813,13 @@ impl Backend {
                 Some(crate::native::NativeEvent::Ready(_))
             )
         {
-            return self.native_controls.transfer(id);
+            let transferred = self.native_controls.transfer(id);
+            // The device picker follows the active device, so a failed
+            // transfer must not leave controls aimed at the unreachable one.
+            if let Ok(devices) = self.native_controls.devices() {
+                let _ = self.events.send(Event::Devices(devices));
+            }
+            return transferred;
         }
         if action.supports_native()
             && let Some(crate::native::NativeEvent::Ready(id)) = self

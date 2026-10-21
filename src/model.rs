@@ -162,6 +162,9 @@ pub struct Device {
     pub is_active: bool,
     #[serde(default)]
     pub volume_percent: Option<u8>,
+    /// Spotify Connect lists the speaker on standby.
+    #[serde(default)]
+    pub is_offline: bool,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -439,7 +442,7 @@ mod tests {
             id: Some(id.into()),
             name: name.into(),
             is_active: active,
-            volume_percent: None,
+            ..Default::default()
         };
         let devices = vec![
             device("phone", "Phone", true),
@@ -471,7 +474,7 @@ mod tests {
             id: Some("phone".into()),
             name: "Phone".into(),
             is_active: true,
-            volume_percent: None,
+            ..Default::default()
         }];
         assert_eq!(
             resolve_device(&devices, Some("not-yet-listed-native-id"), "SpotiFlex (PC)"),

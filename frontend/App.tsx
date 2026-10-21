@@ -682,12 +682,24 @@ function App() {
       )
         event.preventDefault();
     };
+    // A mouse click must not leave the button focused, or Space and Enter
+    // would press it again; Space is only for play and pause. Runs after
+    // React's handlers, and skips buttons that moved focus elsewhere.
+    const click = (event: MouseEvent) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+        'button,[role="button"],[role="menuitem"],[role="tab"],[role="option"],summary',
+      );
+      if (event.detail > 0 && button && document.activeElement === button)
+        button.blur();
+    };
+    document.addEventListener("click", click);
     // Capture so no other handler can see or stop Space first.
     window.addEventListener("keydown", keydown, true);
     window.addEventListener("keyup", keyup, true);
     return () => {
       window.removeEventListener("keydown", keydown, true);
       window.removeEventListener("keyup", keyup, true);
+      document.removeEventListener("click", click);
     };
   }, [toggle, call, navigate]);
   const prefetchOn = useCallback(

@@ -3786,3 +3786,32 @@ test("playlist descriptions preserve formatting without executing or loading pro
   ).toBeUndefined();
   expect(resourceRequests).toEqual([]);
 });
+
+test("Space after clicking a player button only plays or pauses", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  const player = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request.command),
+    );
+  await page.getByTitle("Shuffle", { exact: true }).click();
+  await page.getByTitle("Next song", { exact: true }).click();
+  await expect.poll(player).toEqual(["shuffle", "next"]);
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Enter");
+  await expect.poll(player).toEqual(["shuffle", "next", "pause"]);
+});

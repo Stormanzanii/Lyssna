@@ -1465,6 +1465,7 @@ async fn run(
     let mut active = false;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
+    let mut unavailable = crate::playback_intent::UnavailableWatch::default();
     let mut intent_tick = tokio::time::interval(Duration::from_millis(20));
     let mut dj_prewarm = tokio::time::interval(Duration::from_secs(300));
     dj_prewarm.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1539,7 +1540,7 @@ async fn run(
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);
                     },
-                    Some(PlayerEvent::Loading{track_id,..})=>{loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
+                    Some(PlayerEvent::Loading{track_id,..})=>{unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
@@ -1549,6 +1550,7 @@ async fn run(
                     Some(PlayerEvent::TrackChanged { audio_item }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track(&audio_item) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
                         let uri = track_id.to_uri();
+                        unavailable.playing(&uri);
                         let resumed = paused_position.take().filter(|(track, _)| track == &uri).map(|(_, position)| position);
                         let position_ms = playing_position(position_ms, audio_buffer.latency_ms(), resumed);
                         audio_playing = true;
@@ -1568,7 +1570,9 @@ async fn run(
                     },
                     Some(PlayerEvent::Seeked { track_id, position_ms, .. }) => {let uri=track_id.to_uri();flush_audio.store(true,Ordering::Release);if audio_playing{pending_seek=Some((uri,position_ms.into()));}else{paused_position=Some((uri.clone(),position_ms.into()));emit(NativeEvent::Position { uri, position_ms: position_ms.into(), playing: Some(false), seeked: true });}},
                     Some(PlayerEvent::PositionChanged { track_id, position_ms, .. } | PlayerEvent::PositionCorrection { track_id, position_ms, .. }) => {if pending_seek.is_none(){emit(NativeEvent::Position { uri: track_id.to_uri(), position_ms: u64::from(position_ms).saturating_sub(audio_buffer.latency_ms()), playing: None, seeked: false });}},
-                    Some(PlayerEvent::Unavailable { .. }) => {loaded.store(false,Ordering::Release);intent.reset();emit(NativeEvent::ControlError("This track is unavailable for your account. Choose another song.".into()));},
+                    // Spotify skips unplayable tracks itself and also reports failed
+                    // preloads; only a current track that stays stuck is an error.
+                    Some(PlayerEvent::Unavailable { track_id, .. }) => unavailable.unavailable(&track_id.to_uri(), std::time::Instant::now()),
                     None => { connection_lost = true; break; },
                     _ => {}
                 }
@@ -1609,6 +1613,13 @@ async fn run(
                     emit(NativeEvent::ControlError("No audio output is available. Connect speakers or headphones, then press Play.".into()));
                 }
             }
+        }
+        if unavailable.due(now) {
+            loaded.store(false, Ordering::Release);
+            intent.reset();
+            emit(NativeEvent::ControlError(
+                "This track is unavailable for your account. Choose another song.".into(),
+            ));
         }
         if let Some(playing) = intent.next(audio_playing, std::time::Instant::now()) {
             // Local transport must not queue behind Spotify Connect HTTP notifications.

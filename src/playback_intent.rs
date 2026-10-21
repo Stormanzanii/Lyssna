@@ -70,6 +70,79 @@ impl PlaybackIntent {
         *self = Self::default();
     }
 }
+/// Decides when "unavailable" from the player is worth reporting. The player
+/// also reports preloads that failed and tracks it skips past by itself, so
+/// only the current track counts, and only if nothing plays soon after.
+#[derive(Default)]
+pub(crate) struct UnavailableWatch {
+    current: Option<String>,
+    pending: Option<Instant>,
+}
+impl UnavailableWatch {
+    const GRACE: Duration = Duration::from_secs(5);
+    /// A track started loading or playing.
+    pub fn track(&mut self, uri: &str) {
+        if self.current.as_deref() != Some(uri) {
+            self.pending = None;
+        }
+        self.current = Some(uri.to_owned());
+    }
+    /// Audio is playing again, so any skip worked.
+    pub fn playing(&mut self, uri: &str) {
+        self.current = Some(uri.to_owned());
+        self.pending = None;
+    }
+    pub fn unavailable(&mut self, uri: &str, now: Instant) {
+        if self.current.as_deref() == Some(uri) && self.pending.is_none() {
+            self.pending = Some(now);
+        }
+    }
+    /// True once, when the current track stayed unplayable for the grace period.
+    pub fn due(&mut self, now: Instant) -> bool {
+        if self
+            .pending
+            .is_some_and(|since| now.saturating_duration_since(since) >= Self::GRACE)
+        {
+            self.pending = None;
+            return true;
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+mod unavailable_tests {
+    use super::*;
+    #[test]
+    fn preload_failures_never_report() {
+        let now = Instant::now();
+        let mut watch = UnavailableWatch::default();
+        watch.track("current");
+        watch.unavailable("next", now);
+        assert!(!watch.due(now + Duration::from_secs(10)));
+    }
+    #[test]
+    fn automatic_skips_stay_quiet() {
+        let now = Instant::now();
+        let mut watch = UnavailableWatch::default();
+        watch.track("broken");
+        watch.unavailable("broken", now);
+        watch.track("next");
+        watch.playing("next");
+        assert!(!watch.due(now + Duration::from_secs(10)));
+    }
+    #[test]
+    fn a_stuck_current_track_reports_once_after_the_grace_period() {
+        let now = Instant::now();
+        let mut watch = UnavailableWatch::default();
+        watch.track("broken");
+        watch.unavailable("broken", now);
+        assert!(!watch.due(now + Duration::from_secs(4)));
+        assert!(watch.due(now + Duration::from_secs(5)));
+        assert!(!watch.due(now + Duration::from_secs(6)));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

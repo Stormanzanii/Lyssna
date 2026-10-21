@@ -538,6 +538,16 @@ impl NativeControls {
             .cluster();
         Ok(cluster)
     }
+    /// How far this computer's clock runs ahead of Spotify's, if measured.
+    pub(crate) fn server_clock_offset_ms(&self) -> Option<i64> {
+        let connection = self.0.lock().ok()?;
+        connection
+            .as_ref()?
+            .devices
+            .lock()
+            .ok()?
+            .server_clock_offset_ms()
+    }
     pub fn transfer(&self, requested: &str) -> Result<()> {
         let session = self.session()?;
         let devices = self.devices()?;

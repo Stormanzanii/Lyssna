@@ -68,6 +68,7 @@ impl NativeControls {
             .unwrap_or_default()
             .as_millis()
             .min(i64::MAX as u128) as i64;
+        let now = server_now_ms(now, self.server_clock_offset_ms());
         Ok(playback_from_state(state, device, track, now))
     }
 
@@ -265,6 +266,11 @@ fn play_command(context: Value, options: Value) -> Value {
     json!({"endpoint":"play","context":context,"options":options,"play_origin":{"feature_identifier":"spotiflex"}})
 }
 
+/// This computer's time on Spotify's clock, which stamps remote positions.
+fn server_now_ms(local_ms: i64, offset_ms: Option<i64>) -> i64 {
+    local_ms.saturating_sub(offset_ms.unwrap_or_default())
+}
+
 fn playback_from_state(
     state: &librespot_protocol::player::PlayerState,
     device: Device,
@@ -370,5 +376,24 @@ mod tests {
             playback_from_state(&state, Device::default(), None, 5000).progress_ms,
             Some(2000)
         );
+    }
+    #[test]
+    fn remote_progress_uses_spotify_clock_despite_local_skew() {
+        // Live sample: this PC ran about 2 s ahead, so a playing Echo read
+        // 103.9 s and then 102.1 s once paused.
+        let state = librespot_protocol::player::PlayerState {
+            timestamp: 1_000_000,
+            position_as_of_timestamp: 100_000,
+            duration: 240_000,
+            is_playing: true,
+            ..Default::default()
+        };
+        let local = 1_000_000 + 3_000 + 2_000;
+        let now = server_now_ms(local, Some(2_000));
+        assert_eq!(
+            playback_from_state(&state, Device::default(), None, now).progress_ms,
+            Some(103_000)
+        );
+        assert_eq!(server_now_ms(local, None), local);
     }
 }

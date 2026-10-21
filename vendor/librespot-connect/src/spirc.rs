@@ -245,6 +245,7 @@ mod display_name_tests {
 pub struct ConnectedDevices(
     Arc<Mutex<Vec<ConnectedDevice>>>,
     Arc<Mutex<Option<Cluster>>>,
+    Arc<Mutex<Option<i64>>>,
 );
 
 impl ConnectedDevices {
@@ -260,7 +261,27 @@ impl ConnectedDevices {
             .unwrap_or_default()
     }
 
+    /// Milliseconds this computer's clock runs ahead of Spotify's, measured
+    /// when the latest cluster arrived. Remote positions are stamped with
+    /// Spotify's clock, so extrapolating them with a skewed local clock
+    /// shows progress running ahead while playing and jumping back on pause.
+    pub fn server_clock_offset_ms(&self) -> Option<i64> {
+        self.2.lock().ok().and_then(|offset| *offset)
+    }
+
     fn update(&self, cluster: &Cluster) {
+        let received = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |now| now.as_millis().min(i64::MAX as u128) as i64);
+        self.update_at(cluster, received);
+    }
+
+    fn update_at(&self, cluster: &Cluster, received_ms: i64) {
+        if cluster.server_timestamp_ms > 0
+            && let Ok(mut offset) = self.2.lock()
+        {
+            *offset = Some(received_ms.saturating_sub(cluster.server_timestamp_ms));
+        }
         if let Ok(mut current) = self.1.lock() {
             *current = Some(cluster.clone());
         }
@@ -412,6 +433,23 @@ mod connected_device_tests {
         // A reconnect lists aliases again; the bare form is not kept beside them.
         devices.update(&put_state);
         assert_eq!(devices.snapshot().len(), 1);
+    }
+
+    #[test]
+    fn cluster_receipt_measures_local_clock_skew() {
+        let devices = ConnectedDevices::default();
+        assert_eq!(devices.server_clock_offset_ms(), None);
+        devices.update_at(
+            &Cluster {
+                server_timestamp_ms: 1_000_000,
+                ..Default::default()
+            },
+            1_002_400,
+        );
+        assert_eq!(devices.server_clock_offset_ms(), Some(2_400));
+        // Clusters without a server timestamp keep the last measurement.
+        devices.update_at(&Cluster::default(), 5_000_000);
+        assert_eq!(devices.server_clock_offset_ms(), Some(2_400));
     }
 
     #[test]

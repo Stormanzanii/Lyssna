@@ -438,12 +438,14 @@ function App() {
   }, [state.profile, navigate, call]);
   useEffect(() => {
     if (!state.profile || !query.trim()) return;
+    const requestGeneration = generation.current;
     const timer = setTimeout(() => {
+      if (generation.current !== requestGeneration) return;
       const key = `search:${query.trim()}`;
       if (routeRef.current !== key) navigate(key);
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, state.profile, navigate]);
+  }, [query, state.profile?.id, navigate]);
   useEffect(() => {
     if (state.toast) {
       const timer = setTimeout(() => dispatch({ type: "toast_clear" }), 6000);

@@ -3496,6 +3496,35 @@ test("flat paragraph lyrics gain estimated word timing and revert when disabled"
   await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(text);
 });
 
+test("pending search debounce cannot reopen search after navigating Home", async ({
+  page,
+}) => {
+  await startClient(page);
+  const now = new Date();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(new Date(now.getTime() + 1000));
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("workout");
+  await search.press("Enter");
+  await page.clock.runFor(50);
+  await page.getByTitle("Home", { exact: true }).click();
+  await page.clock.runFor(350);
+  await expect(page.locator(".personal-home")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1)?.args.key,
+      ),
+    )
+    .toBe("home");
+});
+
 test("Spotify search shows public and curated playlist cards with open and play actions", async ({
   page,
 }) => {

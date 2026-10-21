@@ -641,6 +641,65 @@ fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUr
     Some((librespot_core::SpotifyUri::from_uri(uri).ok()?, position))
 }
 
+/// Transport commands for the local player diagnostics log.
+fn command_kind(action: &PlayerAction) -> Option<&'static str> {
+    Some(match action {
+        PlayerAction::Play(None) => "play",
+        PlayerAction::Play(Some(_)) => "play-track",
+        PlayerAction::Pause => "pause",
+        PlayerAction::Next => "next",
+        PlayerAction::Previous => "previous",
+        PlayerAction::Seek(_) => "seek",
+        PlayerAction::PlayUris { .. } => "play-list",
+        PlayerAction::PlayContext { .. } => "play-context",
+        _ => return None,
+    })
+}
+
+/// Player events for the local diagnostics log: the kind and track only.
+/// Position updates are left out; they arrive many times a second.
+fn event_summary(event: &PlayerEvent) -> Option<(&'static str, String)> {
+    Some(match event {
+        PlayerEvent::Stopped { track_id, .. } => ("stopped", track_id.to_uri()),
+        PlayerEvent::Loading { track_id, .. } => ("loading", track_id.to_uri()),
+        PlayerEvent::Preloading { track_id } => ("preloaded", track_id.to_uri()),
+        PlayerEvent::Playing { track_id, .. } => ("playing", track_id.to_uri()),
+        PlayerEvent::Paused { track_id, .. } => ("paused", track_id.to_uri()),
+        PlayerEvent::TimeToPreloadNextTrack { track_id, .. } => ("preload-due", track_id.to_uri()),
+        PlayerEvent::EndOfTrack { track_id, .. } => ("end-of-track", track_id.to_uri()),
+        PlayerEvent::Unavailable { track_id, .. } => ("unavailable", track_id.to_uri()),
+        PlayerEvent::Seeked { track_id, .. } => ("seeked", track_id.to_uri()),
+        PlayerEvent::TrackChanged { audio_item } => ("track-changed", audio_item.track_id.to_uri()),
+        _ => return None,
+    })
+}
+
+/// Append one line to a small local log of transport commands and player
+/// events, for diagnosing stalls. Holds no account data or credentials.
+fn diagnostic(line: &str) {
+    use std::io::Write;
+    let Ok(dir) = crate::config::data_dir().map(|dir| dir.join("diagnostics")) else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = dir.join("player-events.log");
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 256 * 1024) {
+        let _ = std::fs::remove_file(&path);
+    }
+    let when = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{when} {line}");
+    }
+}
+
 fn is_dj_context(uri: &str) -> bool {
     uri == crate::home::DJ_URI
         || uri.starts_with("spotify:lexicon:")
@@ -1511,6 +1570,9 @@ async fn run(
             }
             _ = &mut task => { connection_lost = true; break; }
             Some(action) = commands.recv() => {
+                if let Some(kind) = command_kind(&action) {
+                    diagnostic(&format!("command {kind}"));
+                }
                 if let PlayerAction::PreparedDJ{cancelled,..}=&action && cancelled.load(Ordering::Acquire){continue;}
                 if let Some((uri, position)) = preload_selection(&action) {
                     local_player.preload_at(uri, position);
@@ -1527,6 +1589,9 @@ async fn run(
                 if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
             event = player_events.recv() => {
+                if let Some((kind, uri)) = event.as_ref().and_then(event_summary) {
+                    diagnostic(&format!("event {kind} {uri}"));
+                }
                 match event {
                     Some(event @ PlayerEvent::SetQueue{..})=>{
                         if let PlayerEvent::SetQueue { next_tracks, .. } = &event

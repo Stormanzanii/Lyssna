@@ -142,6 +142,17 @@ fn targets_local_device(target: Option<&str>, native_id: Option<&str>, device: &
             && (target.is_none() || target == device.id.as_deref())
 }
 
+/// DJ narration exists only in this computer's player; every other command,
+/// including playing an album or playlist page, follows the chosen device.
+fn plays_locally(
+    command: &str,
+    target: Option<&str>,
+    native_id: Option<&str>,
+    device: &Device,
+) -> bool {
+    command == "dj" || targets_local_device(target, native_id, device)
+}
+
 fn load_native_catalogue(
     inner: Arc<Inner>,
     app: tauri::AppHandle,
@@ -1732,12 +1743,12 @@ fn player(
         ensure!(snapshot.profile.is_some(), "Sign in first");
         let mut action = request.action()?;
         let native_context = matches!(request.command.as_str(), "dj" | "play_home");
-        let local = native_context
-            || targets_local_device(
-                target.as_deref(),
-                lock(&state.0.native_id)?.as_deref(),
-                &snapshot.playback.device,
-            );
+        let local = plays_locally(
+            &request.command,
+            target.as_deref(),
+            lock(&state.0.native_id)?.as_deref(),
+            &snapshot.playback.device,
+        );
         if local
             && matches!(action, PlayerAction::Play(None))
             && !state.0.controls.has_track()
@@ -2883,6 +2894,34 @@ mod tests {
             None,
             Some("session-id"),
             &Device::default()
+        ));
+    }
+    #[test]
+    fn page_play_follows_the_selected_speaker_and_dj_stays_local() {
+        let speaker = Device {
+            id: Some("echo".into()),
+            name: "Gameroom".into(),
+            ..Device::default()
+        };
+        // The album page's Play button sends play_home; it used to start on
+        // this computer while a speaker was selected.
+        assert!(!plays_locally(
+            "play_home",
+            Some("echo"),
+            Some("session-id"),
+            &speaker
+        ));
+        assert!(plays_locally(
+            "play_home",
+            Some("native"),
+            Some("session-id"),
+            &speaker
+        ));
+        assert!(plays_locally(
+            "dj",
+            Some("echo"),
+            Some("session-id"),
+            &speaker
         ));
     }
     #[test]

@@ -64,7 +64,7 @@ mod scoped_tests {
             };
             let track = public_track_change(&event).unwrap();
             let mut playback = crate::model::Playback::default();
-            playback.load_native_track(track, Some("native-session"), "SpotiFlex");
+            playback.load_native_track(track, Some("native-session"), "SpotiFlex", 100);
             assert!(
                 playback.apply_native_position(
                     Some("native-session"),

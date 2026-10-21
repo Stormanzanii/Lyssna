@@ -212,16 +212,21 @@ pub struct PlayingDetails {
 
 impl Playback {
     /// Apply native decoder metadata, retaining richer catalogue fields for the same song.
+    /// `volume` is this computer's own volume: the device shown before may
+    /// have been a speaker with its own level.
     pub fn load_native_track(
         &mut self,
         track: Track,
         native_id: Option<&str>,
         own_name: &str,
+        volume: u8,
     ) -> bool {
         self.is_playing = false;
         self.device.name = own_name.into();
         self.device.id = native_id.map(str::to_owned);
         self.device.is_active = true;
+        self.device.is_offline = false;
+        self.device.volume_percent = Some(volume.min(100));
         if let Some(current) = self
             .item
             .as_mut()
@@ -357,11 +362,14 @@ mod tests {
             device: Device {
                 id: Some("spotify-desktop".into()),
                 name: "Spotify".into(),
+                volume_percent: Some(9),
                 ..Device::default()
             },
             ..Playback::default()
         };
-        assert!(!playback.load_native_track(track, Some("native-session"), "SpotiFlex"));
+        assert!(!playback.load_native_track(track, Some("native-session"), "SpotiFlex", 35));
+        // The speaker's level must not become this computer's.
+        assert_eq!(playback.device.volume_percent, Some(35));
         assert!(playback.apply_native_position(
             Some("native-session"),
             "SpotiFlex",

@@ -870,10 +870,12 @@ impl Desktop {
                             }
                             let native_id = pump.native_id.lock().ok().and_then(|id| id.clone());
                             snapshot.observed_at = now_ms();
+                            let volume = snapshot.settings.volume_percent;
                             if !snapshot.playback.load_native_track(
                                 track.clone(),
                                 native_id.as_deref(),
                                 &native::device_name(),
+                                volume,
                             ) {
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false,"loading":true}),
@@ -1139,12 +1141,15 @@ impl Desktop {
         self.0.dj_requests.cancel_all();
         self.0.dj_voice.cancel_all();
         if let Ok(mut snapshot) = self.0.snapshot.lock() {
-            snapshot.settings.volume_percent = snapshot
-                .playback
-                .device
-                .volume_percent
-                .unwrap_or(snapshot.settings.volume_percent)
-                .min(100);
+            // A remote speaker's level is not this computer's volume.
+            if snapshot.playback.device.name == native::device_name() {
+                snapshot.settings.volume_percent = snapshot
+                    .playback
+                    .device
+                    .volume_percent
+                    .unwrap_or(snapshot.settings.volume_percent)
+                    .min(100);
+            }
             let _ = snapshot.settings.save();
         }
         if let Ok(snapshot) = self.0.snapshot.lock()

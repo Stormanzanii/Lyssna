@@ -116,6 +116,13 @@ pub struct Owner {
     pub display_name: Option<String>,
 }
 
+/// A Spotify library folder a playlist sits in.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct FolderRef {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Playlist {
     pub id: String,
@@ -126,6 +133,9 @@ pub struct Playlist {
     pub owner: Owner,
     #[serde(default)]
     pub collaborative: bool,
+    /// Spotify folders containing this playlist, outermost first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<FolderRef>,
 }
 
 impl Playlist {

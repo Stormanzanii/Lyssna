@@ -792,6 +792,37 @@ small {
   float: right;
   color: var(--muted);
 }
+/* Spotify folders: a folder row that opens in place, like a playlist row. */
+.spotify-folder {
+  padding: 0;
+}
+.spotify-folder > summary {
+  list-style: none;
+  padding: 7px;
+  font-size: inherit;
+}
+.spotify-folder > summary::-webkit-details-marker {
+  display: none;
+}
+.folder-cover {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #282828;
+  color: #b3b3b3;
+}
+.spotify-folder[open] > summary .folder-cover {
+  color: #fff;
+}
+.folder-entries {
+  padding-left: 14px;
+}
+.compact-library .folder-entries {
+  padding-left: 0;
+}
 .compact-library {
   width: 84px;
 }

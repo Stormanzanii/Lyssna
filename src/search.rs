@@ -289,6 +289,7 @@ fn parse_native(response: &Value) -> Result<Vec<Playlist>> {
                     display_name: owner["name"].as_str().map(str::to_owned),
                 },
                 collaborative: false,
+                folders: Vec::new(),
             })
         })
         .collect())

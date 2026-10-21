@@ -443,9 +443,18 @@ mod tests {
                 .get(&(session.username(), "collection"))
                 .map_or(0, |mirror| mirror.uris.len());
             assert!(size > 0, "Expected saved songs");
+            let folders: HashSet<&str> = library
+                .iter()
+                .flat_map(|item| item.folders.iter().map(|folder| folder.id.as_str()))
+                .collect();
+            let foldered = library
+                .iter()
+                .filter(|item| !item.folders.is_empty())
+                .count();
             eprintln!(
-                "Native reads: {} playlists, {} recent plays, {size} saved songs and albums, latest saved {}",
+                "Native reads: {} playlists ({foldered} in {} folders), {} recent plays, {size} saved songs and albums, latest saved {}",
                 library.len(),
+                folders.len(),
                 recent.len(),
                 saved[0]
             );

@@ -61,12 +61,19 @@ export interface Profile {
   id: string;
   display_name?: string;
 }
+/** A Spotify library folder. */
+export interface FolderRef {
+  id: string;
+  name: string;
+}
 export interface Playlist {
   id: string;
   name: string;
   images: Artwork[];
   owner: { id: string; display_name?: string };
   collaborative: boolean;
+  /** Spotify folders containing the playlist, outermost first. */
+  folders?: FolderRef[];
 }
 export interface SearchResults {
   tracks: Track[];

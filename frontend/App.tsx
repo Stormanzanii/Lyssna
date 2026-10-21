@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DJRequest } from "./DJRequest";
@@ -58,6 +59,7 @@ import {
   Pin,
   ChevronRight,
   Trash2,
+  Folder,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { HomePage } from "./HomePage";
@@ -135,6 +137,7 @@ import { RecentsPage } from "./recents-page";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
+import { libraryTree, type LibraryEntry } from "./library-tree";
 import {
   loadRecentSearches,
   rememberSearch,
@@ -1095,6 +1098,74 @@ function App() {
           ? playlist.collaborative
           : true,
     );
+  const playlistRow = (playlist: Playlist) => (
+    <div
+      className="library-row"
+      key={playlist.id}
+      data-playlist-id={playlist.id}
+      data-context-route={`playlist:${playlist.id}`}
+      data-context-name={playlist.name}
+    >
+      <button
+        className={`library-item ${state.route === `playlist:${playlist.id}` ? "current" : ""}`}
+        onClick={() =>
+          playlist.id === DJ_ID
+            ? play({ command: "dj" })
+            : navigate(`playlist:${playlist.id}`)
+        }
+        {...(playlist.id === DJ_ID
+          ? {}
+          : prefetchOn(`playlist:${playlist.id}`))}
+      >
+        {playlist.id === DJ_ID ? (
+          <DJArtwork />
+        ) : (
+          <Cover images={playlist.images} />
+        )}
+        <div>
+          <strong>{playlist.name}</strong>
+          <small>
+            {accountOrder(state).pinned.includes(playlist.id) && (
+              <Pin size={12} className="pinned-mark" />
+            )}
+            {playlist.id === DJ_ID
+              ? "Click to start listening"
+              : `Playlist · ${playlist.owner.display_name || playlist.owner.id}`}
+          </small>
+        </div>
+      </button>
+      <button
+        className={`library-pin icon-button ${accountOrder(state).pinned.includes(playlist.id) ? "pinned" : ""}`}
+        title={`${accountOrder(state).pinned.includes(playlist.id) ? "Unpin" : "Pin"} ${playlist.name}`}
+        aria-pressed={accountOrder(state).pinned.includes(
+          playlist.id,
+        )}
+        onClick={() => togglePin(playlist)}
+      >
+        <Pin size={14} />
+      </button>
+    </div>
+  );
+  // Spotify folders open in place; their playlists use the same rows.
+  const libraryEntry = (entry: LibraryEntry): ReactNode =>
+    entry.kind === "playlist" ? (
+      playlistRow(entry.playlist)
+    ) : (
+      <details className="library-folder spotify-folder" key={entry.folder.id}>
+        <summary className="library-item">
+          <div className="folder-cover">
+            <Folder size={22} />
+          </div>
+          <div>
+            <strong>{entry.folder.name}</strong>
+            <small>
+              Folder · {entry.count} playlist{entry.count === 1 ? "" : "s"}
+            </small>
+          </div>
+        </summary>
+        <div className="folder-entries">{entry.entries.map(libraryEntry)}</div>
+      </details>
+    );
   const select = (track: Track, multiple: boolean) => {
     setSelected((old) => {
       const next = multiple ? new Set(old) : new Set<string>();
@@ -1467,54 +1538,16 @@ function App() {
                 <small>Playlist · Pinned</small>
               </div>
             </button>
-            {visibleLibrary.map((playlist) => (
-              <div
-                className="library-row"
-                key={playlist.id}
-                data-playlist-id={playlist.id}
-                data-context-route={`playlist:${playlist.id}`}
-                data-context-name={playlist.name}
-              >
-                <button
-                  className={`library-item ${state.route === `playlist:${playlist.id}` ? "current" : ""}`}
-                  onClick={() =>
-                    playlist.id === DJ_ID
-                      ? play({ command: "dj" })
-                      : navigate(`playlist:${playlist.id}`)
-                  }
-                  {...(playlist.id === DJ_ID
-                    ? {}
-                    : prefetchOn(`playlist:${playlist.id}`))}
-                >
-                  {playlist.id === DJ_ID ? (
-                    <DJArtwork />
-                  ) : (
-                    <Cover images={playlist.images} />
-                  )}
-                  <div>
-                    <strong>{playlist.name}</strong>
-                    <small>
-                      {accountOrder(state).pinned.includes(playlist.id) && (
-                        <Pin size={12} className="pinned-mark" />
-                      )}
-                      {playlist.id === DJ_ID
-                        ? "Click to start listening"
-                        : `Playlist · ${playlist.owner.display_name || playlist.owner.id}`}
-                    </small>
-                  </div>
-                </button>
-                <button
-                  className={`library-pin icon-button ${accountOrder(state).pinned.includes(playlist.id) ? "pinned" : ""}`}
-                  title={`${accountOrder(state).pinned.includes(playlist.id) ? "Unpin" : "Pin"} ${playlist.name}`}
-                  aria-pressed={accountOrder(state).pinned.includes(
-                    playlist.id,
-                  )}
-                  onClick={() => togglePin(playlist)}
-                >
-                  <Pin size={14} />
-                </button>
-              </div>
-            ))}
+            {(libraryQuery || libraryFilter !== "all"
+              ? visibleLibrary.map(
+                  (playlist): LibraryEntry => ({ kind: "playlist", playlist }),
+                )
+              : libraryTree(
+                  visibleLibrary,
+                  state.playlists,
+                  accountOrder(state).pinned,
+                )
+            ).map(libraryEntry)}
             {state.settings.folders.map((folder, index) => (
               <details
                 className="library-folder"

@@ -85,6 +85,8 @@ pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
     use protobuf::Message;
     let mut playlists = Vec::new();
     let mut ids = HashSet::new();
+    // Folders open across page boundaries.
+    let mut open = Vec::new();
     let mut from = 0;
     for _ in 0..100 {
         let bytes = tokio::time::timeout(
@@ -100,7 +102,7 @@ pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
         let page =
             librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(&bytes)
                 .context("Invalid Spotify library page")?;
-        let count = rootlist_page(&page, &mut ids, &mut playlists)?;
+        let count = rootlist_page(&page, &mut ids, &mut open, &mut playlists)?;
         from += count;
         let total = usize::try_from(page.length()).unwrap_or_default();
         if count == 0 || (from >= total && count < ROOTLIST_PAGE) {
@@ -616,9 +618,34 @@ fn owner_name(bytes: &[u8]) -> Option<String> {
 }
 
 /// Adds one rootlist page and returns how many rows it held.
+/// A folder marker: `spotify:start-group:<id>:<name>` or `spotify:end-group:<id>`.
+enum Marker {
+    Start(crate::model::FolderRef),
+    End(String),
+}
+
+fn folder_marker(uri: &str) -> Option<Marker> {
+    if let Some(rest) = uri.strip_prefix("spotify:start-group:") {
+        let (id, name) = rest.split_once(':').unwrap_or((rest, ""));
+        // Names are form-encoded: `+` for spaces, `%XX` for the rest.
+        let name = url::form_urlencoded::parse(format!("n={name}").as_bytes())
+            .next()
+            .map(|(_, value)| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "Folder".into());
+        return Some(Marker::Start(crate::model::FolderRef {
+            id: id.to_owned(),
+            name,
+        }));
+    }
+    uri.strip_prefix("spotify:end-group:")
+        .map(|id| Marker::End(id.to_owned()))
+}
+
 fn rootlist_page(
     page: &librespot_protocol::playlist4_external::SelectedListContent,
     ids: &mut HashSet<String>,
+    open: &mut Vec<crate::model::FolderRef>,
     playlists: &mut Vec<crate::model::Playlist>,
 ) -> Result<usize> {
     let contents = page.contents.get_or_default();
@@ -627,6 +654,21 @@ fn rootlist_page(
         "Spotify library page has no playlist details"
     );
     for (item, meta) in contents.items.iter().zip(&contents.meta_items) {
+        match folder_marker(item.uri()) {
+            Some(Marker::Start(folder)) if open.len() < 32 => {
+                open.push(folder);
+                continue;
+            }
+            Some(Marker::End(id)) => {
+                // Close back to the matching folder, tolerating a missed start.
+                if let Some(depth) = open.iter().rposition(|folder| folder.id == id) {
+                    open.truncate(depth);
+                }
+                continue;
+            }
+            Some(Marker::Start(_)) => continue,
+            None => {}
+        }
         let Some(id) = item
             .uri()
             .strip_prefix("spotify:")
@@ -649,6 +691,7 @@ fn rootlist_page(
                 display_name: None,
             },
             collaborative: attributes.collaborative(),
+            folders: open.clone(),
         });
     }
     Ok(contents.items.len())
@@ -875,8 +918,8 @@ mod rootlist_tests {
         page
     }
     #[test]
-    fn library_skips_folders_and_keeps_private_and_collaborative_playlists() {
-        let (mut ids, mut playlists) = (HashSet::new(), Vec::new());
+    fn library_keeps_private_and_collaborative_playlists_with_their_folders() {
+        let (mut ids, mut open, mut playlists) = (HashSet::new(), Vec::new(), Vec::new());
         let count = rootlist_page(
             &page(&[
                 ("spotify:start-group:abc:Folder", "", ""),
@@ -890,10 +933,14 @@ mod rootlist_tests {
                 ("spotify:playlist:0123456789abcdefghijkl", "Mine", "me"),
             ]),
             &mut ids,
+            &mut open,
             &mut playlists,
         )
         .unwrap();
         assert_eq!(count, 5);
+        assert!(open.is_empty());
+        assert_eq!(playlists[0].folders[0].name, "Folder");
+        assert_eq!(playlists[1].folders, playlists[0].folders);
         let names: Vec<_> = playlists.iter().map(|item| item.name.as_str()).collect();
         assert_eq!(names, ["Mine", "Shared"]);
         assert_eq!(playlists[1].id, "abcdefghijkl0123456789");
@@ -904,7 +951,49 @@ mod rootlist_tests {
     fn library_page_without_details_is_rejected() {
         let mut broken = page(&[("spotify:playlist:0123456789abcdefghijkl", "Mine", "me")]);
         broken.contents.mut_or_insert_default().meta_items.clear();
-        assert!(rootlist_page(&broken, &mut HashSet::new(), &mut Vec::new()).is_err());
+        assert!(
+            rootlist_page(
+                &broken,
+                &mut HashSet::new(),
+                &mut Vec::new(),
+                &mut Vec::new()
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn nested_folders_span_pages_and_decode_names() {
+        let (mut ids, mut open, mut playlists) = (HashSet::new(), Vec::new(), Vec::new());
+        for rows in [
+            &[
+                ("spotify:start-group:outer:Road+%26+Rain", "", ""),
+                ("spotify:playlist:0123456789abcdefghij01", "In outer", "me"),
+                ("spotify:start-group:inner:Night", "", ""),
+            ][..],
+            &[
+                ("spotify:playlist:0123456789abcdefghij02", "In inner", "me"),
+                ("spotify:end-group:inner", "", ""),
+                ("spotify:end-group:outer", "", ""),
+                ("spotify:playlist:0123456789abcdefghij03", "Top", "me"),
+            ][..],
+        ] {
+            rootlist_page(&page(rows), &mut ids, &mut open, &mut playlists).unwrap();
+        }
+        let paths: Vec<Vec<&str>> = playlists
+            .iter()
+            .map(|item| {
+                item.folders
+                    .iter()
+                    .map(|folder| folder.name.as_str())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            paths,
+            [vec!["Road & Rain"], vec!["Road & Rain", "Night"], vec![]]
+        );
+        assert_eq!(playlists[1].folders[1].id, "inner");
+        assert!(open.is_empty());
     }
 }
 

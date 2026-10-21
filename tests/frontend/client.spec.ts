@@ -3912,3 +3912,45 @@ test("songs drag into place in an editable playlist", async ({
   await expect(rows.nth(0)).toContainText("Song 2");
   await expect(rows.nth(2)).toContainText("Song 1");
 });
+
+test("Spotify folders group the sidebar and open in place", async ({
+  page,
+}) => {
+  await startClient(page);
+  const road = { id: "road", name: "Road & Rain" };
+  const night = { id: "night", name: "Night" };
+  const playlist = (index: number, folders: object[] = []) => ({
+    id: `${index}123456789abcdefghijkl`.slice(0, 22),
+    name: `List ${index}`,
+    images: [],
+    owner: { id: "test-user" },
+    collaborative: false,
+    folders,
+  });
+  await page.evaluate(
+    (playlists) =>
+      (window as any).__clientTest.emit({ type: "library", playlists }),
+    [
+      playlist(1, [road]),
+      playlist(2, [road, night]),
+      playlist(3),
+    ],
+  );
+  const sidebar = page.locator(".library-list");
+  const folder = sidebar.locator(".spotify-folder").first();
+  await expect(folder.locator(":scope > summary")).toContainText("Road & Rain");
+  await expect(folder.locator(":scope > summary")).toContainText("Folder · 2 playlists");
+  await expect(sidebar.getByText("List 1")).toBeHidden();
+  await folder.locator(":scope > summary").click();
+  await expect(sidebar.getByText("List 1")).toBeVisible();
+  const inner = folder.locator(".spotify-folder");
+  await expect(inner.locator(":scope > summary")).toContainText("Night");
+  await inner.locator(":scope > summary").click();
+  await expect(sidebar.getByText("List 2")).toBeVisible();
+  await sidebar.getByText("List 2").click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("List 2");
+  // Searching the library lists matching playlists without folders.
+  await page.getByLabel("Search library").fill("List 2");
+  await expect(sidebar.locator(".spotify-folder")).toHaveCount(0);
+  await expect(sidebar.getByText("List 2")).toBeVisible();
+});

@@ -46,6 +46,29 @@ Both maintained about 121 animation callbacks per second on the test display.
 Fewer compositor layers should not be reported as an equivalent number of
 megabytes saved.
 
+## Growth across songs
+
+A later transition test rose from 362.4 to 583.3 MiB of resident private
+memory. The renderer rose from 149.5 to 388.5 MiB. After three transitions,
+a diagnostic garbage collection reduced the total from 568.5 to 324.5 MiB
+and the renderer from 382.9 to 139.2 MiB. This identifies a large reclaimable
+portion; it does not prove that every source of growth is harmless.
+
+An active lyrics view replaced native click handlers about 5,535 times in
+one second with 45 lines. The playback clock recreated each line's callback
+and ref on every frame. Line callbacks and refs now stay stable for a lyric
+document, while a ref keeps the seek callback current. Track titles and
+artist links also skip clock-only renders when their props are unchanged.
+The animation clock, word rendering and video settings retain their rates.
+
+A browser regression test reproduced 320 click-handler assignments across
+15 clock frames with 20 lines before the fix. It now checks that assignments
+stay below 40 across the whole lyrics page, then clicks a line to verify its
+seek time. Existing tests cover Space controls, seeks and lyric motion.
+No periodic garbage collection or browser prototype patches ship in the app.
+The process RAM effect of this callback change still needs a repeatable
+comparison across matching songs and views.
+
 Memory depends on window size, track artwork, video resolution, browsing
 history and browser cache reclamation. This change does not promise a fixed
 600 MB ceiling. Microsoft describes the browser, renderer and GPU process

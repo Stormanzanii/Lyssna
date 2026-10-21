@@ -4272,6 +4272,7 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
   page,
 }) => {
   await startClient(page);
+  await expect(page.locator(".track-row")).toHaveCount(150);
   const requests = new Set<number>();
   await page.route("https://artwork.example.test/memory/**", (route) => {
     const index = Number(
@@ -4347,6 +4348,91 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
   await expect(rows.last().locator(".track-number > span")).toHaveText(
     String(count),
   );
+});
+
+test("lyric clock frames reuse click handlers and keep seeking functional", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate(
+    ({ track, playback }) => {
+      const { emit } = (window as any).__clientTest;
+      emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: true,
+          progress_ms: 1000,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: Array.from({ length: 20 }, (_, index) => ({
+            start_ms: index * 20_000,
+            end_ms: (index + 1) * 20_000,
+            text: `Line ${index + 1}`,
+            words: [
+              {
+                start_ms: index * 20_000,
+                end_ms: (index + 1) * 20_000,
+                text: `Line ${index + 1}`,
+              },
+            ],
+          })),
+        },
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  const lines = page.locator(".lyrics-page .lyric-line");
+  await expect(lines).toHaveCount(20);
+  const assignments = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const descriptor = Object.getOwnPropertyDescriptor(
+          HTMLElement.prototype,
+          "onclick",
+        )!;
+        let count = 0,
+          frames = 0;
+        Object.defineProperty(HTMLElement.prototype, "onclick", {
+          ...descriptor,
+          set(value) {
+            if (this.closest(".lyrics-page")) count++;
+            descriptor.set!.call(this, value);
+          },
+        });
+        const tick = () => {
+          if (++frames < 15) requestAnimationFrame(tick);
+          else {
+            Object.defineProperty(HTMLElement.prototype, "onclick", descriptor);
+            resolve(count);
+          }
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  expect(assignments).toBeLessThan(40);
+  await lines.nth(1).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({ command: "seek", positionMs: 20_000 });
 });
 
 async function openFolderDeletion(page: Page) {

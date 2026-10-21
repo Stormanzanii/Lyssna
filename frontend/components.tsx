@@ -224,7 +224,7 @@ export function useStickyLoadedImage(url: string | undefined, key: string) {
   return loaded ?? (last?.key === key ? last.url : undefined);
 }
 
-export function ArtistLinks({
+export const ArtistLinks = memo(function ArtistLinks({
   artists,
   onArtist,
 }: {
@@ -252,7 +252,7 @@ export function ArtistLinks({
       ))}
     </>
   );
-}
+});
 export function ExplicitBadge({ track }: { track: Track }) {
   return track.explicit ? (
     <span className="explicit-badge" aria-label="Explicit" title="Explicit">
@@ -260,7 +260,7 @@ export function ExplicitBadge({ track }: { track: Track }) {
     </span>
   ) : null;
 }
-export function TrackTitle({
+export const TrackTitle = memo(function TrackTitle({
   track,
   onAlbum,
   reduceMotion = false,
@@ -286,7 +286,7 @@ export function TrackTitle({
       </button>
     </Marquee>
   );
-}
+});
 
 export function usePosition(
   state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
@@ -348,6 +348,26 @@ export function LyricsDisplay({
   };
   useEffect(() => () => clearTimeout(resume.current), []);
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
+  const seek = useRef(onSeek);
+  useLayoutEffect(() => {
+    seek.current = onSeek;
+  }, [onSeek]);
+  // Clock frames must not replace each button's native click listener or ref.
+  const lineActions = useMemo(
+    () =>
+      lyrics.lines.map((line, index) => ({
+        ref: (element: HTMLButtonElement | null) => {
+          lines.current[index] = element;
+        },
+        click: () => {
+          if (lyrics.synced) {
+            seek.current(line.words[0]?.start_ms ?? line.start_ms);
+            setFollowing(true);
+          }
+        },
+      })),
+    [lyrics],
+  );
   const spring = useRef<ScrollSpring>({ position: 0, velocity: 0, target: 0 });
   const waiting = useRef<HTMLDivElement>(null);
   const gap = lyrics.synced ? vocalGap(lyrics.lines, positionMs) : undefined;
@@ -554,9 +574,7 @@ export function LyricsDisplay({
           return (
             <Fragment key={`${line.start_ms}-${index}`}>
               <button
-                ref={(element) => {
-                  lines.current[index] = element;
-                }}
+                ref={lineActions[index].ref}
                 key={`${line.start_ms}-${index}`}
                 className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${!playing && positionMs >= vocalEnd(line) ? "past" : ""}`}
                 style={
@@ -564,12 +582,7 @@ export function LyricsDisplay({
                     "--blur": `${compact || playing ? 0 : lineBlur(distance)}px`,
                   } as CSSProperties
                 }
-                onClick={() => {
-                  if (lyrics.synced) {
-                    onSeek(line.words[0]?.start_ms ?? line.start_ms);
-                    setFollowing(true);
-                  }
-                }}
+                onClick={lineActions[index].click}
                 disabled={!lyrics.synced}
                 // Clicking seeks without taking focus, so Space stays with
                 // play and pause.

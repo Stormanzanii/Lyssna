@@ -1013,10 +1013,11 @@ small {
   font-size: 23px;
   margin-bottom: 22px;
 }
-.artist-liked > div {
+.artist-liked-row {
   display: flex;
   gap: 16px;
   align-items: center;
+  margin-bottom: 32px;
 }
 .artist-liked .cover {
   width: 80px;
@@ -1037,16 +1038,76 @@ small {
   box-shadow: 0 0 0 4px #121212;
   border-radius: 50%;
 }
-.artist-liked span {
+.artist-liked-row > span {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
+  gap: 6px;
+  min-width: 0;
 }
-.artist-liked button {
-  font-size: 13px;
-  color: var(--muted);
+.artist-liked-count {
+  align-self: flex-start;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
   text-align: left;
+}
+.artist-liked-count:hover {
+  text-decoration: underline;
+}
+.artist-liked-row small {
+  font-size: 14px;
+  color: var(--muted);
+}
+/* Artist pick: the pinned item, under You Liked when both show. */
+.artist-pick {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  color: #fff;
+}
+.artist-liked .artist-pick .cover {
+  width: 112px;
+  height: 112px;
+  border-radius: 6px;
+}
+.artist-pick > span {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.artist-pick-posted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: #fff;
+  color: #000;
+}
+.artist-pick-posted img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.artist-pick strong {
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artist-pick:hover strong {
+  text-decoration: underline;
+}
+.artist-pick small {
+  font-size: 14px;
+  color: var(--muted);
 }
 @media (max-width: 1300px) {
   .artist-top {

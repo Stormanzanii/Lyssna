@@ -530,7 +530,33 @@ pub struct SavedLyrics {
 }
 
 pub fn saved_imports() -> Result<Vec<SavedLyrics>> {
-    Ok(saved_in(&data_dir()?.join("lyrics").join("local")))
+    let directory = data_dir()?.join("lyrics").join("local");
+    let mut saved = saved_in(&directory);
+    // Imports from before song names were kept are named only by a hash of
+    // the song's URI; match them against songs from cached pages, and keep
+    // the name beside the file so the lookup happens once.
+    if saved.iter().any(|item| item.name.is_empty()) {
+        let known = crate::library_cache::known_tracks();
+        name_unknown(&directory, &mut saved, |key| known.get(key).cloned());
+    }
+    Ok(saved)
+}
+
+fn name_unknown(
+    directory: &Path,
+    saved: &mut [SavedLyrics],
+    lookup: impl Fn(&str) -> Option<(String, String)>,
+) {
+    for item in saved.iter_mut().filter(|item| item.name.is_empty()) {
+        let Some((name, artists)) = lookup(&item.key) else {
+            continue;
+        };
+        item.name = name;
+        item.artists = artists;
+        if let Ok(bytes) = serde_json::to_vec(item) {
+            let _ = fs::write(directory.join(format!("{}.meta.json", item.key)), bytes);
+        }
+    }
 }
 
 fn saved_in(directory: &Path) -> Vec<SavedLyrics> {
@@ -889,6 +915,19 @@ mod tests {
         let saved = saved_in(&directory);
         let names: Vec<_> = saved.iter().map(|item| item.name.as_str()).collect();
         assert_eq!(names, ["New song", "Old song"]);
+        // An older import without a name is matched and the name kept.
+        let unnamed = "c".repeat(64);
+        fs::write(directory.join(format!("{unnamed}.ttml")), "<tt/>").unwrap();
+        let mut saved = saved_in(&directory);
+        name_unknown(&directory, &mut saved, |key| {
+            (key == unnamed).then(|| ("Found song".to_owned(), "Artist".to_owned()))
+        });
+        assert!(saved.iter().any(|item| item.name == "Found song"));
+        assert!(
+            saved_in(&directory)
+                .iter()
+                .any(|item| item.name == "Found song")
+        );
         assert_eq!(saved[0].kind, "ttml");
         assert!(delete_saved("not-a-key").is_err());
         let _ = fs::remove_dir_all(directory);

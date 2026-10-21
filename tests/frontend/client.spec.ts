@@ -416,6 +416,8 @@ async function startClient(page: Page, initialRoute = "liked") {
           commands.push({ command, args });
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
+          if (command === "artist_liked_count")
+            return host.__clientTest.artistLiked ?? 0;
           if (command === "test_audio_output") return true;
           if (command === "cancel_sign_in") {
             emit({ type: "login_finished" });
@@ -1507,7 +1509,7 @@ test("Daily Mix navigation retains title, artwork and description", async ({
   await page
     .getByRole("button", { name: "Open Daily Mix 1", exact: true })
     .click();
-  await expect(page.locator(".page-hero h1")).toHaveText("Daily Mix 1");
+  await expect(page.locator(".hero-copy h1")).toHaveText("Daily Mix 1");
   await expect(page.locator(".page-hero")).toContainText(
     "Your favorite artists",
   );
@@ -1541,7 +1543,7 @@ test("Daily Mix navigation retains title, artwork and description", async ({
   await page
     .getByRole("button", { name: "Open Daily Mix 1", exact: true })
     .click();
-  await expect(page.locator(".page-hero h1")).toHaveText("Daily Mix 1");
+  await expect(page.locator(".hero-copy h1")).toHaveText("Daily Mix 1");
 });
 
 test("Home shelves keep header, player and DJ inside the window", async ({
@@ -4876,6 +4878,90 @@ test("folder deletion closes on sign-out and cannot carry into another account",
   ).toEqual([]);
 });
 
+test("artist You Liked counts liked songs and opens Liked Songs by the artist", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  const pick = {
+    uri: "spotify:album:0123456789abcdefghij09",
+    route: "album:0123456789abcdefghij09",
+    name: "Picked album",
+    subtitle: "Album • New Release",
+    images: track.album.images,
+    kind: "album",
+    playable: true,
+    format: "",
+  };
+  const showArtist = async (withPick: boolean) =>
+    page.evaluate(
+      ({ key, track, pick }) => {
+        const host = (window as any).__clientTest;
+        const generation = host.commands
+          .filter(
+            (entry: any) => entry.command === "browse" && entry.args.key === key,
+          )
+          .at(-1).args.generation;
+        host.emit({
+          type: "browse_info",
+          generation,
+          info: {
+            key,
+            title: "Test artist",
+            subtitle: "Artist",
+            images: track.album.images,
+            artist: { ...track.artists[0], images: track.album.images },
+            albums: [],
+            overview: {
+              popular: [{ track, streams: 1 }],
+              pick,
+              source_url: "",
+              fetched_at: 0,
+              details_loaded: true,
+            },
+          },
+        });
+      },
+      { key: `artist:${track.artists[0].id}`, track, pick: withPick ? pick : undefined },
+    );
+  // No liked songs and no pick: nothing beside Popular.
+  await page.locator(".player-bar .artist-link").first().click();
+  await showArtist(false);
+  await expect(page.locator(".artist-top section")).toBeVisible();
+  await expect(page.locator(".artist-liked")).toHaveCount(0);
+  // A pick alone shows without You Liked.
+  await showArtist(true);
+  await expect(page.locator(".artist-liked h2")).toHaveText(["Artist pick"]);
+  await expect(page.locator(".artist-pick")).toContainText(
+    "Posted By Test artist",
+  );
+  await expect(page.locator(".artist-pick")).toContainText("Picked album");
+  // Liked songs put You Liked first, the pick below.
+  await page.evaluate(() => ((window as any).__clientTest.artistLiked = 3));
+  await page.locator(".home-button").click();
+  await page.locator(".player-bar .artist-link").first().click();
+  await showArtist(true);
+  await expect(page.locator(".artist-liked h2")).toHaveText([
+    "You Liked",
+    "Artist pick",
+  ]);
+  await expect(page.locator(".artist-liked-row small")).toHaveText(
+    "By Test artist",
+  );
+  await page.getByRole("button", { name: "3 songs" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "browse")
+          .at(-1)?.args.key,
+      ),
+    )
+    .toBe(`liked-artist:${track.artists[0].id}`);
+  await expect(page.locator(".hero-copy h1")).toHaveText(
+    "Liked Songs by Test artist",
+  );
+});
 test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   page,
 }) => {
@@ -5084,6 +5170,13 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   await dialog.getByRole("button", { name: "TTML Database" }).click();
   const database = page.getByRole("dialog", { name: "TTML Database" });
   await expect(database).toContainText("No saved lyrics yet");
+  const title = (await database.locator(".load-ttml-head h2").boundingBox())!;
+  const backButton = (await database
+    .getByRole("button", { name: "Back to Load TTML" })
+    .boundingBox())!;
+  expect(
+    Math.abs(title.y + title.height / 2 - (backButton.y + backButton.height / 2)),
+  ).toBeLessThan(2);
   await database.getByRole("button", { name: "Back to Load TTML" }).click();
   await dialog.getByRole("button", { name: "Reset TTML" }).click();
   await expect.poll(() => last("reset_lyrics")).not.toBeUndefined();
@@ -5092,6 +5185,16 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
     document.querySelector(".application")!.classList.add("liquid-glass"),
   );
   await page.getByTitle("Load TTML", { exact: true }).click();
+  // Glass: a translucent sheet over a backdrop that dims without blurring,
+  // so the ambience shows through.
+  await expect(page.locator(".load-ttml-backdrop")).toHaveCSS(
+    "backdrop-filter",
+    "none",
+  );
+  const fill = await dialog.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(Number(fill.match(/[\d.]+(?=\)$)/)?.[0] ?? 1)).toBeLessThan(0.6);
   await page.screenshot({ path: "target/diagnostics/load-ttml-glass.png" });
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);

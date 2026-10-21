@@ -547,14 +547,17 @@ export function reducer(state: AppState, action: Action): AppState {
     case "saved": {
       const saved = { ...state.saved, [action.uri]: action.saved };
       // An unliked song leaves the open Liked Songs list at once.
-      if (action.saved || state.route !== "liked")
+      if (
+        action.saved ||
+        (state.route !== "liked" && !state.route.startsWith("liked-artist:"))
+      )
         return { ...state, saved };
       const tracks = state.tracks.filter((track) => track.uri !== action.uri);
       return {
         ...state,
         saved,
         tracks,
-        pages: rememberPage(state.pages, "liked", {
+        pages: rememberPage(state.pages, state.route, {
           tracks,
           more: state.more,
         }),

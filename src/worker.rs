@@ -876,7 +876,9 @@ impl Backend {
                 match result {
                     Ok(tracks) => {
                         self.publish_saved(tracks.iter().map(|track| track.uri.clone()).collect());
-                        if (key == "liked" || key.starts_with("playlist:"))
+                        if (key == "liked"
+                            || key.starts_with("liked-artist:")
+                            || key.starts_with("playlist:"))
                             && let Some(spotify) = self.spotify.as_ref()
                         {
                             let _ = self.facts.try_send(FactsRequest {
@@ -1518,6 +1520,8 @@ fn fetch_live_tracks(
         native
             .playlist_tracks(key, offset)
             .or_else(|_| api.album_tracks(id, offset))
+    } else if key.starts_with("liked-artist:") {
+        native.playlist_tracks(key, offset)
     } else if key.starts_with("artist:") {
         Ok(Vec::new())
     } else {

@@ -1040,11 +1040,48 @@ function App() {
   const monthlyListeners =
     entity?.overview?.monthly_listeners ?? entity?.artist?.monthly_listeners;
   const heroImages = entity?.images.length ? entity.images : playlist?.images;
+  // Liked Songs, or one artist's songs in it ("Liked Songs by Eminem").
+  const likedArtist = state.route.startsWith("liked-artist:")
+    ? state.route.slice(13)
+    : "";
+  const likedRoute = state.route === "liked" || !!likedArtist;
+  const artistId = artistPage ? state.route.slice(7) : "";
+  const [artistLiked, setArtistLiked] = useState<{
+    id: string;
+    count: number;
+  } | null>(null);
+  const likedArtistNames = useRef(new Map<string, string>());
+  // Count again when a song on the page is liked or unliked.
+  const savedHere = (entity?.overview?.popular ?? [])
+    .map((item) => (state.saved[item.track.uri] ? "1" : "0"))
+    .join("");
+  useEffect(() => {
+    if (!artistId || !state.profile) return;
+    let live = true;
+    rpc<number>("artist_liked_count", { id: artistId }).then(
+      (count) => live && setArtistLiked({ id: artistId, count }),
+      () => live && setArtistLiked({ id: artistId, count: 0 }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [artistId, savedHere, state.profile]);
+  const likedHere = artistLiked?.id === artistId ? artistLiked.count : 0;
+  const openLikedByArtist = (id: string, name: string) => {
+    likedArtistNames.current.set(id, name);
+    navigate(`liked-artist:${id}`);
+  };
+  const likedArtistName =
+    likedArtist &&
+    (likedArtistNames.current.get(likedArtist) ||
+      state.tracks
+        .flatMap((track) => track.artists)
+        .find((artist) => artist.id === likedArtist)?.name);
   const artworkColor = useArtworkColor(
-    state.route === "liked" ? undefined : imageOf(heroImages),
+    likedRoute ? undefined : imageOf(heroImages),
   );
   const heroColor =
-    state.route === "liked"
+    likedRoute
       ? "rgb(80 56 160)"
       : (artworkColor ?? "rgb(83 83 83)");
   const playlistInfo = entity?.playlist;
@@ -1067,6 +1104,10 @@ function App() {
     playlist?.name ||
     (state.route === "liked"
       ? "Liked Songs"
+      : likedArtist
+        ? likedArtistName
+          ? `Liked Songs by ${likedArtistName}`
+          : "Liked Songs"
       : state.route === "queue"
         ? "Queue"
         : state.route === "recent"
@@ -1103,7 +1144,7 @@ function App() {
   // Native playlist info gives the owner's user ID; show their display name.
   const ownerId = playlistInfo?.owner || playlist?.owner.id;
   const ownerName =
-    state.route === "liked" || (ownerId && ownerId === state.profile?.id)
+    likedRoute || (ownerId && ownerId === state.profile?.id)
       ? profileName
       : ownerId === "spotify"
         ? "Spotify"
@@ -1114,11 +1155,10 @@ function App() {
           ownerId ||
           "Your collection";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
-  const collection =
-    state.route === "liked" || state.route.startsWith("playlist:");
+  const collection = likedRoute || state.route.startsWith("playlist:");
   const collectionPlays =
     collection &&
-    state.route !== "liked" &&
+    !likedRoute &&
     (playlist
       ? playlist.owner.id === "spotify"
       : entity?.playlist?.owner === "Spotify");
@@ -1869,7 +1909,7 @@ function App() {
                         contextRoute={state.route}
                         contextName={title}
                       />
-                    ) : state.route === "liked" ? (
+                    ) : likedRoute ? (
                       <div className="liked-cover hero-cover">
                         <Heart size={84} fill="currentColor" />
                       </div>
@@ -1948,7 +1988,7 @@ function App() {
                             </strong>
                           ) : (
                             <>
-                              {(state.route === "liked" ||
+                              {(likedRoute ||
                                 ownerId === state.profile?.id) &&
                                 profileImage && (
                                   <img
@@ -2376,67 +2416,71 @@ function App() {
                     </>
                   )}
                 </section>
-                {entity?.artist && (
+                {entity?.artist && (likedHere > 0 || entity.overview?.pick) && (
                   <aside className="artist-liked">
-                    <h2>You Liked</h2>
-                    <div>
-                      <div className="liked-artist-image">
-                        <Cover images={entity.images} />
-                        {displayTracks.some(
-                          (track) => state.saved[track.uri],
-                        ) && (
-                          <Heart
-                            className="liked-heart"
-                            fill="currentColor"
-                            size={25}
-                          />
-                        )}
-                      </div>
-                      <span>
-                        {displayTracks.filter((track) => state.saved[track.uri])
-                          .length > 0 ? (
-                          <>
-                            <strong>
-                              {
-                                displayTracks.filter(
-                                  (track) => state.saved[track.uri],
-                                ).length
-                              }{" "}
-                              song
-                              {displayTracks.filter(
-                                (track) => state.saved[track.uri],
-                              ).length === 1
-                                ? ""
-                                : "s"}
-                            </strong>
+                    {likedHere > 0 && (
+                      <>
+                        <h2>You Liked</h2>
+                        <div className="artist-liked-row">
+                          <div className="liked-artist-image">
+                            <Cover images={entity.images} />
+                            <Heart
+                              className="liked-heart"
+                              fill="currentColor"
+                              size={25}
+                            />
+                          </div>
+                          <span>
                             <button
-                              className="text-link"
+                              className="artist-liked-count"
                               onClick={() =>
-                                setSelected(
-                                  new Set(
-                                    displayTracks
-                                      .filter((track) => state.saved[track.uri])
-                                      .map((track) => track.uri),
-                                  ),
+                                openLikedByArtist(
+                                  artistId,
+                                  entity.artist?.name || entity.title,
                                 )
                               }
                             >
-                              By {entity.artist.name}
+                              {likedHere} song{likedHere === 1 ? "" : "s"}
                             </button>
-                          </>
-                        ) : (
-                          <>
-                            <strong>Your saved songs</strong>
-                            <button
-                              className="text-link"
-                              onClick={() => navigate("liked")}
-                            >
-                              Open Liked Songs
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </div>
+                            <small>By {entity.artist.name}</small>
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {entity.overview?.pick && (
+                      <>
+                        <h2>Artist pick</h2>
+                        <button
+                          className="artist-pick"
+                          data-context-route={entity.overview.pick.route}
+                          data-context-name={entity.overview.pick.name}
+                          onClick={() =>
+                            entity.overview!.pick!.kind === "track"
+                              ? homePlay(entity.overview!.pick!)
+                              : navigate(entity.overview!.pick!.route)
+                          }
+                        >
+                          <Cover images={entity.overview.pick.images} />
+                          <span>
+                            <span className="artist-pick-posted">
+                              {(entity.overview.avatar_image ||
+                                imageOf(entity.images)) && (
+                                <img
+                                  src={
+                                    entity.overview.avatar_image ||
+                                    imageOf(entity.images)
+                                  }
+                                  alt=""
+                                />
+                              )}
+                              Posted By {entity.artist.name}
+                            </span>
+                            <strong>{entity.overview.pick.name}</strong>
+                            <small>{entity.overview.pick.subtitle}</small>
+                          </span>
+                        </button>
+                      </>
+                    )}
                   </aside>
                 )}
               </div>

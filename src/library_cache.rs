@@ -205,6 +205,51 @@ pub fn tracks(account: &str, key: &str, offset: usize) -> Option<Vec<Track>> {
     }
     Some(tracks)
 }
+/// Every song seen in cached pages, by the SHA-256 of its URI, as
+/// (name, artists). Used to name lyric imports saved before names were kept.
+pub fn known_tracks() -> std::collections::HashMap<String, (String, String)> {
+    let mut known = std::collections::HashMap::new();
+    let Some(root) = crate::config::data_dir()
+        .ok()
+        .map(|dir| dir.join("browse-cache"))
+    else {
+        return known;
+    };
+    let accounts = std::fs::read_dir(root).into_iter().flatten().flatten();
+    let files = accounts
+        .filter_map(|account| std::fs::read_dir(account.path()).ok())
+        .flatten()
+        .flatten()
+        .take(20_000);
+    for file in files {
+        let path = file.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json")
+            || std::fs::metadata(&path).map_or(true, |meta| meta.len() > 4_000_000)
+        {
+            continue;
+        }
+        let Ok(tracks) = std::fs::read(&path)
+            .map_err(|_| ())
+            .and_then(|bytes| serde_json::from_slice::<Vec<Track>>(&bytes).map_err(|_| ()))
+        else {
+            continue;
+        };
+        for track in tracks {
+            let key = Sha256::digest(track.uri.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            let artists = track
+                .artists
+                .iter()
+                .map(|artist| artist.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            known.entry(key).or_insert((track.name, artists));
+        }
+    }
+    known
+}
 pub fn save_tracks(account: &str, key: &str, offset: usize, tracks: &[Track]) {
     let Some(path) = tracks_path(account, key, offset) else {
         return;

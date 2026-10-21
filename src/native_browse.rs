@@ -81,6 +81,52 @@ fn playlist_header(id: &str, playlist: &Playlist) -> crate::model::BrowseInfo {
 
 const ROOTLIST_PAGE: usize = 120;
 
+/// How many songs the user has liked by this artist, from Spotify's own
+/// per-artist view of the collection (what its "You Liked" card counts).
+pub async fn liked_by_artist(session: &Session, artist: &str) -> Result<usize> {
+    ensure!(
+        artist.len() == 22 && artist.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid artist ID"
+    );
+    let uri = format!(
+        "spotify:user:{}:collection:artist:{artist}",
+        session.username()
+    );
+    let context = tokio::time::timeout(
+        Duration::from_secs(10),
+        session.spclient().get_context(&uri),
+    )
+    .await
+    .context("Spotify library request timed out")??;
+    let mut pages = listing_pages(context);
+    let mut visited = HashSet::new();
+    let mut count = 0;
+    for _ in 0..512 {
+        let Some(page) = pages.pop_front() else {
+            return Ok(count);
+        };
+        let rows = page["tracks"].as_array();
+        // A page may arrive as only a URL; fetch it in place.
+        let url = if rows.is_none_or(Vec::is_empty) {
+            page["page_url"].as_str()
+        } else {
+            page["next_page_url"].as_str()
+        };
+        count += rows.map_or(0, Vec::len);
+        let Some(url) = url.filter(|url| !url.is_empty() && visited.insert(url.to_string())) else {
+            continue;
+        };
+        ensure!(
+            url.starts_with("hm://") || url.starts_with('/'),
+            "Rejected unexpected Spotify page URL"
+        );
+        let bytes = session.spclient().get_next_page(url).await?;
+        ensure!(bytes.len() <= 4_000_000, "Spotify page is too large");
+        pages.push_back(serde_json::from_slice(&bytes)?);
+    }
+    Ok(count)
+}
+
 /// Every saved playlist in Spotify library order, read from the account's
 /// rootlist like the desktop client. Folder markers are skipped.
 pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
@@ -998,6 +1044,8 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
             } else {
                 let uri = if key == "liked" {
                     format!("spotify:user:{identity}:collection")
+                } else if let Some(artist) = key.strip_prefix("liked-artist:") {
+                    format!("spotify:user:{identity}:collection:artist:{artist}")
                 } else if let Some(query) = key.strip_prefix("search:") {
                     let encoded = url::form_urlencoded::Serializer::new(String::new())
                         .append_pair("q", query)
@@ -1594,6 +1642,40 @@ mod live_folder_tests {
             eprintln!(
                 "Native folders: created, moved a playlist in, read its folder path, renamed, moved it out, deleted"
             );
+        });
+    }
+}
+
+#[cfg(test)]
+mod live_liked_artist_tests {
+    use super::*;
+    #[test]
+    #[ignore = "Uses saved native sign-in for read-only library checks; never writes"]
+    fn live_liked_by_artist_counts_and_lists_the_artists_liked_songs() {
+        crate::native::with_live_session(async |session: &Session| {
+            let liked = read(session, "liked", 0)
+                .await
+                .expect("Liked Songs unreadable");
+            let artist = liked
+                .iter()
+                .flat_map(|track| &track.artists)
+                .find_map(|artist| artist.id.clone())
+                .expect("No liked song with an artist");
+            let count = liked_by_artist(session, &artist)
+                .await
+                .expect("Artist liked count failed");
+            let listed = read(session, &format!("liked-artist:{artist}"), 0)
+                .await
+                .expect("Liked Songs by artist unreadable");
+            assert!(count >= 1, "A liked song's artist counted none");
+            assert_eq!(listed.len(), count.min(50));
+            assert!(listed.iter().all(|track| {
+                track
+                    .artists
+                    .iter()
+                    .any(|item| item.id.as_deref() == Some(artist.as_str()))
+            }));
+            eprintln!("liked-by-artist count: {count}");
         });
     }
 }

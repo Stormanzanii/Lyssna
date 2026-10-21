@@ -108,11 +108,28 @@
 .liquid-glass .page-hero {
   background: none;
 }
-/* Load TTML takes the frosted glass of other popovers. */
+/* Load TTML is a frosted sheet with the ambience showing through. The
+   backdrop only dims, without its own blur: a blurred backdrop would be
+   all the sheet's blur could see. */
+.liquid-glass .modal-backdrop.load-ttml-backdrop {
+  background: #0000004d;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .liquid-glass .dialog.load-ttml {
-  background: var(--glass-fill-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  background: #1e1e2380;
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+  border: 1px solid #ffffff1f;
+}
+.liquid-glass .load-ttml-head {
+  border-bottom-color: #ffffff1f;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass .dialog.load-ttml {
+    background: var(--glass-fill-strong);
+  }
 }
 /* The artist sticky bar is a frosted strip over the glass sheet. */
 .liquid-glass .artist-sticky {

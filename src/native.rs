@@ -282,6 +282,9 @@ impl NativeControls {
             .build()?
             .block_on(crate::native_browse::playlist_info(&session, id))
     }
+    pub fn liked_by_artist(&self, artist: &str) -> Result<usize> {
+        self.run(async |session| crate::native_browse::liked_by_artist(session, artist).await)
+    }
     pub fn library(
         &self,
     ) -> Result<(
@@ -528,9 +531,11 @@ impl NativeControls {
                     .is_some_and(|query| !query.trim().is_empty()
                         && query.len() <= 600
                         && !query.chars().any(char::is_control))
-                || id.strip_prefix("album:").is_some_and(
-                    |id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
-                ),
+                || ["album:", "liked-artist:"].into_iter().any(|prefix| id
+                    .strip_prefix(prefix)
+                    .is_some_and(
+                        |id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                    )),
             "Invalid browsing request"
         );
         let (reply, receive) = mpsc::channel();

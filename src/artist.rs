@@ -39,6 +39,9 @@ pub struct ArtistOverview {
     /// The biography with Spotify's links kept, for the About window.
     #[serde(default)]
     pub biography_html: String,
+    /// The item the artist pinned to their page ("Artist pick").
+    #[serde(default)]
+    pub pick: Option<crate::home::HomeItem>,
     /// Featuring, Discovered on, Artist Playlists, Fans also like, Appears On.
     #[serde(default)]
     pub sections: Vec<crate::home::HomeSection>,
@@ -314,6 +317,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
             .filter(|url| url.starts_with("https://"))
             .map(str::to_owned),
         sections: related_sections(artist),
+        pick: artist_pick(&artist["profile"]["pinnedItem"]),
         gallery: artist["visuals"]["gallery"]["items"]
             .as_array()
             .map(Vec::as_slice)
@@ -411,6 +415,54 @@ fn related_sections(artist: &Value) -> Vec<crate::home::HomeSection> {
         items,
     })
     .collect()
+}
+
+/// The pinned "Artist pick": Spotify's own subtitle ("Album • New Release",
+/// "Playlist") and the item's artwork, falling back to the pick thumbnail.
+fn artist_pick(pin: &Value) -> Option<crate::home::HomeItem> {
+    let data = &pin["itemV2"]["data"];
+    let uri = data["uri"].as_str()?;
+    let kind = uri.strip_prefix("spotify:")?.split(':').next()?.to_owned();
+    let mut images = crate::home::images(data);
+    if images.is_empty() {
+        images = pin["thumbnailImage"]["data"]["sources"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|image| image["url"].as_str())
+            .filter(|url| url.starts_with("https://"))
+            .map(|url| Artwork {
+                url: url.to_owned(),
+                width: None,
+            })
+            .collect();
+    }
+    Some(crate::home::HomeItem {
+        uri: uri.to_owned(),
+        route: crate::home::route(uri)?,
+        name: data["name"]
+            .as_str()
+            .filter(|name| !name.is_empty())?
+            .to_owned(),
+        subtitle: pin["subtitle"]
+            .as_str()
+            .filter(|text| !text.is_empty())
+            .map_or_else(
+                || {
+                    let mut kind = kind.clone();
+                    if let Some(first) = kind.get_mut(..1) {
+                        first.make_ascii_uppercase();
+                    }
+                    kind
+                },
+                str::to_owned,
+            ),
+        images,
+        playable: kind != "artist",
+        kind,
+        format: String::new(),
+    })
 }
 
 fn shelf_item(data: &Value, kind: &str) -> Option<crate::home::HomeItem> {
@@ -533,6 +585,23 @@ mod tests {
 mod section_tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn artist_pick_keeps_spotify_subtitle_and_artwork() {
+        let pin = json!({"subtitle": "Album • New Release", "comment": "Hi",
+            "itemV2": {"data": {"uri": "spotify:album:0123456789abcdefghij09", "name": "Showgirl",
+                "coverArt": {"sources": [{"url": "https://i.scdn.co/image/cover"}]}}}});
+        let pick = artist_pick(&pin).unwrap();
+        assert_eq!(pick.name, "Showgirl");
+        assert_eq!(pick.subtitle, "Album • New Release");
+        assert_eq!(pick.route, "album:0123456789abcdefghij09");
+        assert_eq!(pick.images[0].url, "https://i.scdn.co/image/cover");
+        let bare = json!({"itemV2": {"data": {"uri": "spotify:playlist:0123456789abcdefghij08", "name": "Essentials"}},
+            "thumbnailImage": {"data": {"sources": [{"url": "https://image-cdn-ak.spotifycdn.com/thumb"}]}}});
+        let pick = artist_pick(&bare).unwrap();
+        assert_eq!(pick.subtitle, "Playlist");
+        assert_eq!(pick.images.len(), 1);
+        assert!(artist_pick(&serde_json::Value::Null).is_none());
+    }
     #[test]
     fn verified_reads_the_reputation_trait_then_older_fields() {
         let current = json!({"onPlatformReputationTrait": {"verification": {"isVerified": true}}});

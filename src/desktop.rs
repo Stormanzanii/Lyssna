@@ -1391,7 +1391,7 @@ fn valid_route(key: &str) -> bool {
     if let Some(query) = key.strip_prefix("search:") {
         return !query.trim().is_empty() && query.len() <= 500;
     }
-    ["album:", "artist:", "playlist:"]
+    ["album:", "artist:", "playlist:", "liked-artist:"]
         .into_iter()
         .any(|prefix| {
             key.strip_prefix(prefix).is_some_and(|id| {
@@ -1569,7 +1569,7 @@ fn page_kind(route: &str) -> &'static str {
         "playlist" => "playlist",
         "album" => "album",
         "artist" => "artist",
-        "liked" => "liked",
+        "liked" | "liked-artist" => "liked",
         "recent" => "recent",
         "queue" => "queue",
         "home" => "home",
@@ -2059,6 +2059,18 @@ fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         .send(Command::FetchLyrics(track))
         .map_err(error)
 }
+/// Songs the user liked by an artist, for the artist page's "You Liked".
+#[tauri::command]
+async fn artist_liked_count(
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<usize, String> {
+    let controls = state.0.controls.clone();
+    tauri::async_runtime::spawn_blocking(move || controls.liked_by_artist(&id))
+        .await
+        .map_err(|_| "Library worker unavailable".to_owned())?
+        .map_err(error)
+}
 #[tauri::command]
 fn saved_lyrics() -> std::result::Result<Vec<crate::lyrics::SavedLyrics>, String> {
     crate::lyrics::saved_imports().map_err(error)
@@ -2541,6 +2553,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             import_lyrics,
             reset_lyrics,
             saved_lyrics,
+            artist_liked_count,
             delete_saved_lyrics,
             add_tracks,
             create_playlist,
@@ -2665,6 +2678,8 @@ mod tests {
         assert!(valid_route("search:Petite Meller"));
         assert!(valid_route("recent"));
         assert!(valid_route("album:0123456789abcdefghijkl"));
+        assert!(valid_route("liked-artist:0123456789abcdefghijkl"));
+        assert!(!valid_route("liked-artist:short"));
         assert!(!valid_route("https://example.com"));
         assert!(!valid_route("album:../secrets"));
         assert!(!valid_route("search:"));

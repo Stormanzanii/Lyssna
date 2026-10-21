@@ -187,6 +187,8 @@ export interface BrowseInfo {
     biography_html?: string;
     /** Featuring, Discovered on, Artist Playlists, Fans also like, Appears On. */
     sections?: HomeSection[];
+    /** The item the artist pinned ("Artist pick"). */
+    pick?: HomeItem;
   };
   key: string;
   title: string;

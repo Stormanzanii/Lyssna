@@ -82,7 +82,7 @@ export function LoadTtml({
     }
   };
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop load-ttml-backdrop" onClick={onClose}>
       <section
         className="dialog load-ttml"
         role="dialog"

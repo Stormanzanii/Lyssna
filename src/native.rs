@@ -1391,6 +1391,34 @@ impl NativePlayer {
         repaint: crate::notify::Notifier,
         controls: NativeControls,
     ) -> Self {
+        Self::start_with_login(account, generation, events, repaint, controls, None)
+    }
+
+    pub(crate) fn start_authenticated(
+        login: crate::native_login::Authenticated,
+        generation: u64,
+        events: mpsc::Sender<NativeMessage>,
+        repaint: crate::notify::Notifier,
+        controls: NativeControls,
+    ) -> Self {
+        Self::start_with_login(
+            login.profile.id.clone(),
+            generation,
+            events,
+            repaint,
+            controls,
+            Some(login),
+        )
+    }
+
+    fn start_with_login(
+        account: String,
+        generation: u64,
+        events: mpsc::Sender<NativeMessage>,
+        repaint: crate::notify::Notifier,
+        controls: NativeControls,
+        login: Option<crate::native_login::Authenticated>,
+    ) -> Self {
         let (stop, mut stopped) = oneshot::channel();
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel = cancelled.clone();
@@ -1444,30 +1472,42 @@ impl NativePlayer {
                 let _ = events.send(NativeMessage { generation, event });
                 repaint.request_repaint();
             };
-            let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(2)
-                .build()
-            else {
-                emit(NativeEvent::Error(
-                    "Cannot start native audio runtime".into(),
-                ));
-                return;
+            let (runtime, mut authenticated, mut last_credentials) = if let Some(login) = login {
+                (
+                    login.runtime,
+                    Some(login.connection),
+                    Some(login.credentials),
+                )
+            } else {
+                let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .worker_threads(2)
+                    .build()
+                else {
+                    emit(NativeEvent::Error(
+                        "Cannot start native audio runtime".into(),
+                    ));
+                    return;
+                };
+                (runtime, None, None)
             };
             let mut backoff = crate::reconnect::ReconnectBackoff::default();
-            let mut last_credentials = None;
             loop {
                 if cancel.load(Ordering::Acquire) {
                     break;
                 }
-                let stored = match load_credentials(&account) {
-                    Ok(credentials) => credentials,
-                    Err(error) => {
-                        emit(NativeEvent::Error(error.to_string()));
-                        return;
+                let stored = if authenticated.is_some() {
+                    last_credentials.clone()
+                } else {
+                    match load_credentials(&account) {
+                        Ok(credentials) => credentials,
+                        Err(error) => {
+                            emit(NativeEvent::Error(error.to_string()));
+                            return;
+                        }
                     }
-                }
-                .or_else(|| last_credentials.clone());
+                    .or_else(|| last_credentials.clone())
+                };
                 let started = std::time::Instant::now();
                 let outcome = connect_with_credentials(
                     stored,
@@ -1480,8 +1520,12 @@ impl NativePlayer {
                     },
                     |credentials| {
                         last_credentials = Some(credentials.clone());
+                        let connected = authenticated.take();
                         runtime.block_on(run(
-                            credentials,
+                            ConnectionLogin {
+                                credentials,
+                                session: connected.as_ref().map(|connection| connection.0.clone()),
+                            },
                             &account,
                             &cancel,
                             &mut stopped,
@@ -1539,8 +1583,13 @@ impl NativePlayer {
     }
 }
 
-async fn run(
+struct ConnectionLogin {
     credentials: Credentials,
+    session: Option<Session>,
+}
+
+async fn run(
+    login: ConnectionLogin,
     account: &str,
     cancelled: &AtomicBool,
     stopped: &mut oneshot::Receiver<()>,
@@ -1560,16 +1609,19 @@ async fn run(
         queue_snapshot,
     } = channels;
     loaded.store(false, Ordering::Release);
-    // Songs already streamed replay from disk, as in Spotify's own client.
-    let cache = crate::audio_cache::cache().ok();
-    // Default session config uses the desktop client ID that issued the token.
-    let session = Session::new(
-        SessionConfig {
-            client_id: crate::auth::AUDIO_CLIENT_ID.into(),
-            ..SessionConfig::default()
-        },
-        cache,
-    );
+    let (session, credentials) = match login.session {
+        Some(session) => (session, None),
+        None => (
+            Session::new(
+                SessionConfig {
+                    client_id: crate::auth::AUDIO_CLIENT_ID.into(),
+                    ..SessionConfig::default()
+                },
+                crate::audio_cache::cache().ok(),
+            ),
+            Some(login.credentials),
+        ),
+    };
     let mixer = match SoftMixer::open(MixerConfig::default()) {
         Ok(mixer) => Arc::new(mixer),
         Err(_) => return Outcome::Failed(Failure::other("Cannot initialize audio mixer")),
@@ -1613,7 +1665,7 @@ async fn run(
     };
     let connection = tokio::select! {
         _ = &mut *stopped => { session.shutdown(); return Outcome::Stopped; }
-        result = tokio::time::timeout(Duration::from_secs(40), Spirc::new(config, session.clone(), credentials, player, mixer.clone())) => result,
+        result = tokio::time::timeout(Duration::from_secs(40), Spirc::new_with_session(config, session.clone(), credentials, player, mixer.clone())) => result,
     };
     let (spirc, task) = match connection {
         Ok(Ok(connection)) => connection,
@@ -2232,6 +2284,140 @@ mod tests {
                     catalogue.playlists.len()
                 );
             });
+    }
+
+    #[test]
+    #[ignore = "Measures saved native sign-in to playback readiness; does not play audio"]
+    fn live_login_to_playback_readiness() {
+        use std::time::Instant;
+        let client = crate::auth::http_client().unwrap();
+        let mut after_login = Vec::new();
+        for sample in 0..3 {
+            let started = Instant::now();
+            let login = crate::native_login::authenticate(&client, true, &AtomicBool::new(false))
+                .unwrap()
+                .expect("Saved native login required");
+            let authenticated_device = login.connection.0.device_id().to_owned();
+            let signed_in = Instant::now();
+            let controls = NativeControls::default();
+            let (events, receive) = mpsc::channel();
+            let player =
+                NativePlayer::start_authenticated(login, 1, events, Default::default(), controls);
+            let deadline = Instant::now() + Duration::from_secs(45);
+            loop {
+                assert!(Instant::now() < deadline, "Native readiness timed out");
+                match receive.recv_timeout(Duration::from_millis(20)) {
+                    Ok(NativeMessage {
+                        event: NativeEvent::Ready(device),
+                        ..
+                    }) => {
+                        assert_eq!(
+                            device, authenticated_device,
+                            "Playback must reuse the verified sign-in session"
+                        );
+                        break;
+                    }
+                    Ok(NativeMessage {
+                        event: NativeEvent::Error(_) | NativeEvent::Authorizing,
+                        ..
+                    }) => panic!("Saved login did not become ready"),
+                    _ => {}
+                }
+            }
+            let delay = signed_in.elapsed().as_millis();
+            println!(
+                "sample {}: login={} ms, after-login readiness={} ms, total={} ms",
+                sample + 1,
+                signed_in.duration_since(started).as_millis(),
+                delay,
+                started.elapsed().as_millis()
+            );
+            after_login.push(delay);
+            drop(player);
+        }
+        after_login.sort_unstable();
+        println!("median after-login readiness={} ms", after_login[1]);
+        assert!(
+            after_login[1] < 500,
+            "Post-login playback setup must reuse authenticated session"
+        );
+    }
+
+    #[test]
+    #[ignore = "Measures sign-in to first decoded audio using the saved song; playback is muted"]
+    fn live_login_to_first_audio() {
+        use std::time::Instant;
+        let began = Instant::now();
+        let login = crate::native_login::authenticate(
+            &crate::auth::http_client().unwrap(),
+            true,
+            &AtomicBool::new(false),
+        )
+        .unwrap()
+        .expect("Saved native login required");
+        let saved = crate::resume::load(&login.profile.id).expect("Saved song required");
+        let signed_in = Instant::now();
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start_authenticated(
+            login,
+            1,
+            events,
+            Default::default(),
+            controls.clone(),
+        );
+        let buffer = controls
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .audio_buffer
+            .clone();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            assert!(Instant::now() < deadline, "Native readiness timed out");
+            match receive.recv_timeout(Duration::from_millis(10)) {
+                Ok(NativeMessage {
+                    event: NativeEvent::Ready(_),
+                    ..
+                }) => break,
+                Ok(NativeMessage {
+                    event: NativeEvent::Error(_) | NativeEvent::Authorizing,
+                    ..
+                }) => panic!("Saved login failed"),
+                _ => {}
+            }
+        }
+        assert!(controls.send(PlayerAction::Volume(0)).is_ok());
+        let requested = Instant::now();
+        assert!(
+            controls
+                .send(PlayerAction::Play(Some(saved.track.uri)))
+                .is_ok()
+        );
+        let first_output = loop {
+            if let Some(started) = buffer.output_started() {
+                break started;
+            }
+            assert!(Instant::now() < deadline, "First audio timed out");
+            if let Ok(NativeMessage {
+                event: NativeEvent::Error(_) | NativeEvent::ControlError(_),
+                ..
+            }) = receive.recv_timeout(Duration::from_millis(10))
+            {
+                panic!("First song failed");
+            }
+        };
+        assert!(controls.send(PlayerAction::Pause).is_ok());
+        println!(
+            "muted first audio: login={} ms, after-login={} ms, selection={} ms, total={} ms",
+            signed_in.duration_since(began).as_millis(),
+            first_output.duration_since(signed_in).as_millis(),
+            first_output.duration_since(requested).as_millis(),
+            first_output.duration_since(began).as_millis()
+        );
+        drop(player);
     }
 
     #[test]

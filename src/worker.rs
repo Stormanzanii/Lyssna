@@ -33,10 +33,8 @@ pub enum Command {
     },
     NativeLoginResult {
         cancelled: Arc<AtomicBool>,
-        result: std::result::Result<
-            Option<(Profile, librespot_core::authentication::Credentials)>,
-            auth::LoginIssue,
-        >,
+        result:
+            std::result::Result<Option<Box<crate::native_login::Authenticated>>, auth::LoginIssue>,
     },
     Logout,
     Refresh,
@@ -372,6 +370,7 @@ impl Worker {
                                 let result = crate::native_login::authenticate(
                                     &client, restoring, &cancelled,
                                 )
+                                .map(|login| login.map(Box::new))
                                 .map_err(|error| auth::LoginIssue::from_error(&error, restoring));
                                 let _ =
                                     reply.send(Command::NativeLoginResult { cancelled, result });
@@ -678,7 +677,8 @@ impl Backend {
         Ok(())
     }
 
-    fn establish_native(&mut self, profile: Profile) -> Result<()> {
+    fn establish_native(&mut self, login: crate::native_login::Authenticated) -> Result<()> {
+        let profile = login.profile.clone();
         if let Some(previous) = self.spotify.take() {
             previous.cancel_background();
         }
@@ -687,7 +687,7 @@ impl Backend {
             .map(|settings| settings.client_id)
             .unwrap_or_default();
         self.profile = profile;
-        self.start_audio()?;
+        self.start_audio_with_login(Some(login))?;
         self.spotify = Some(Spotify::native(
             self.client.clone(),
             self.native_controls.clone(),
@@ -758,16 +758,32 @@ impl Backend {
     }
 
     fn start_audio(&mut self) -> Result<()> {
+        self.start_audio_with_login(None)
+    }
+
+    fn start_audio_with_login(
+        &mut self,
+        login: Option<crate::native_login::Authenticated>,
+    ) -> Result<()> {
         self.native.take();
         self.native_generation = self.native_generation.wrapping_add(1);
         self.emit(Event::NativeStarting(self.native_generation));
-        self.native = Some(NativePlayer::start(
-            self.profile.id.clone(),
-            self.native_generation,
-            self.native_events.clone(),
-            self.context.clone(),
-            self.native_controls.clone(),
-        ));
+        self.native = Some(match login {
+            Some(login) => NativePlayer::start_authenticated(
+                login,
+                self.native_generation,
+                self.native_events.clone(),
+                self.context.clone(),
+                self.native_controls.clone(),
+            ),
+            None => NativePlayer::start(
+                self.profile.id.clone(),
+                self.native_generation,
+                self.native_events.clone(),
+                self.context.clone(),
+                self.native_controls.clone(),
+            ),
+        });
         if self.spotify.as_ref().is_some_and(Spotify::is_native) {
             if let Some(previous) = self.spotify.take() {
                 previous.cancel_background();
@@ -869,9 +885,9 @@ impl Backend {
                     return Ok(());
                 }
                 match result {
-                    Ok(Some((profile, credentials))) => {
-                        crate::native::save_login(&profile, &credentials, &cancelled)?;
-                        self.establish_native(profile)?;
+                    Ok(Some(login)) => {
+                        crate::native::save_login(&login.profile, &login.credentials, &cancelled)?;
+                        self.establish_native(*login)?;
                     }
                     Ok(None) => self.emit(Event::SignedOut),
                     Err(issue) => self.emit(Event::LoginFailed(issue)),
@@ -1687,13 +1703,13 @@ mod session_tests {
         backend
             .handle(Command::NativeLoginResult {
                 cancelled: Arc::new(AtomicBool::new(true)),
-                result: Ok(Some((
+                result: Ok(Some(Box::new(crate::native_login::Authenticated::test(
                     Profile {
                         id: "cancelled-test-account".into(),
                         ..Default::default()
                     },
                     librespot_core::authentication::Credentials::with_access_token("test"),
-                ))),
+                )))),
             })
             .unwrap();
         assert!(backend.spotify.is_none());

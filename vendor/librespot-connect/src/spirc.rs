@@ -425,6 +425,30 @@ impl Spirc {
         player: Arc<Player>,
         mixer: Arc<dyn Mixer>,
     ) -> Result<(Spirc, impl Future<Output = ()>), Error> {
+        Self::new_with_session(config, session, Some(credentials), player, mixer).await
+    }
+
+    /// Reuse an authenticated session when `credentials` is `None`.
+    /// The caller must keep the session's Tokio runtime alive until playback ends.
+    pub async fn new_with_session(
+        config: ConnectConfig,
+        session: Session,
+        credentials: Option<Credentials>,
+        player: Arc<Player>,
+        mixer: Arc<dyn Mixer>,
+    ) -> Result<(Spirc, impl Future<Output = ()>), Error> {
+        if credentials.is_none() {
+            if session.is_invalid() {
+                return Err(Error::unavailable(
+                    "Spotify session closed before playback startup",
+                ));
+            }
+            if session.username().is_empty() || session.auth_data().is_empty() {
+                return Err(Error::unauthenticated(
+                    "An authenticated Spotify session is required",
+                ));
+            }
+        }
         fn extract_connection_id(msg: Message) -> Result<String, Error> {
             let connection_id = msg
                 .headers
@@ -481,7 +505,9 @@ impl Spirc {
         let _ = session.spclient().client_token().await?;
 
         // Connect *after* all message listeners are registered
-        session.connect(credentials, true).await?;
+        if let Some(credentials) = credentials {
+            session.connect(credentials, true).await?;
+        }
 
         // pre-acquire access_token (we need to be authenticated to retrieve a token)
         let _ = session.login5().auth_token().await?;

@@ -13,10 +13,39 @@ use anyhow::{Context, Result, ensure};
 use librespot_core::{Session, authentication::Credentials, config::SessionConfig};
 use librespot_protocol::authentication::AuthenticationType;
 
-struct Connected(Session);
+pub(crate) struct Connected(pub Session);
 impl Drop for Connected {
     fn drop(&mut self) {
         self.0.shutdown();
+    }
+}
+
+/// A verified account and its live connection. Never serialized or sent to the UI.
+pub struct Authenticated {
+    pub(crate) profile: Profile,
+    pub(crate) credentials: Credentials,
+    pub(crate) connection: Connected,
+    pub(crate) runtime: tokio::runtime::Runtime,
+}
+
+impl Authenticated {
+    #[cfg(test)]
+    pub(crate) fn test(profile: Profile, credentials: Credentials) -> Self {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let connection = {
+            let _entered = runtime.enter();
+            Connected(Session::new(SessionConfig::default(), None))
+        };
+        Self {
+            profile,
+            credentials,
+            connection,
+            runtime,
+        }
     }
 }
 
@@ -33,7 +62,7 @@ pub fn authenticate(
     client: &reqwest::blocking::Client,
     restoring: bool,
     cancelled: &AtomicBool,
-) -> Result<Option<(Profile, Credentials)>> {
+) -> Result<Option<Authenticated>> {
     ensure!(!cancelled.load(Ordering::Acquire), "Sign-in cancelled");
     let previous = if restoring { previous_profile()? } else { None };
     let credentials = if restoring {
@@ -51,8 +80,8 @@ pub fn authenticate(
         .worker_threads(2)
         .enable_all()
         .build()?;
-    runtime.block_on(async {
-        let connected = Connected(Session::new(SessionConfig { client_id: auth::AUDIO_CLIENT_ID.into(), ..Default::default() }, None));
+    let result = runtime.block_on(async {
+        let connected = Connected(Session::new(SessionConfig { client_id: auth::AUDIO_CLIENT_ID.into(), ..Default::default() }, crate::audio_cache::cache().ok()));
         let session = &connected.0;
         let operation = async {
             tokio::time::timeout(Duration::from_secs(40), session.connect(credentials, false)).await
@@ -69,12 +98,22 @@ pub fn authenticate(
             };
             let reusable = Credentials { username: Some(account), auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS, auth_data: session.auth_data() };
             ensure!(!cancelled.load(Ordering::Acquire), "Sign-in cancelled");
-            Ok(Some((profile, reusable)))
+            Ok((profile, reusable))
         };
-        tokio::select! {
+        let result = tokio::select! {
             result = operation => result,
             () = async { while !cancelled.load(Ordering::Acquire) { tokio::time::sleep(Duration::from_millis(50)).await; } } => anyhow::bail!("Sign-in cancelled"),
-        }
+        };
+        let (profile, credentials) = result?;
+        Ok((profile, credentials, connected))
+    });
+    result.map(|(profile, credentials, connection)| {
+        Some(Authenticated {
+            profile,
+            credentials,
+            connection,
+            runtime,
+        })
     })
 }
 
@@ -149,32 +188,33 @@ mod tests {
         );
     }
     #[test]
+    fn discarding_a_login_closes_its_session() {
+        let login = Authenticated::test(
+            Profile {
+                id: "cancelled".into(),
+                ..Default::default()
+            },
+            Credentials::with_access_token("test"),
+        );
+        let session = login.connection.0.clone();
+        assert!(!session.is_invalid());
+        drop(login);
+        assert!(
+            session.is_invalid(),
+            "Rejected login must retire its live session"
+        );
+    }
+
+    #[test]
     #[ignore = "Read-only native sign-in, library, likes, search and Home using saved credentials; no playback or writes"]
     fn live_native_login_and_browsing_without_developer_app() {
-        let result = authenticate(&auth::http_client().unwrap(), true, &AtomicBool::new(false))
+        let login = authenticate(&auth::http_client().unwrap(), true, &AtomicBool::new(false))
             .unwrap()
             .expect("Saved native login required");
-        let (profile, credentials) = result;
-        assert!(!profile.id.is_empty());
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let connected = Connected(Session::new(
-                SessionConfig {
-                    client_id: auth::AUDIO_CLIENT_ID.into(),
-                    ..Default::default()
-                },
-                None,
-            ));
-            let session = &connected.0;
-            tokio::time::timeout(Duration::from_secs(40), session.connect(credentials, false))
-                .await
-                .unwrap()
-                .unwrap();
-            assert_eq!(session.username(), profile.id);
+        assert!(!login.profile.id.is_empty());
+        login.runtime.block_on(async {
+            let session = &login.connection.0;
+            assert_eq!(session.username(), login.profile.id);
             let library = crate::native_browse::library_with_folders(session)
                 .await
                 .expect("Native library failed");

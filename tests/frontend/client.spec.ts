@@ -3954,3 +3954,32 @@ test("Spotify folders group the sidebar and open in place", async ({
   await expect(sidebar.locator(".spotify-folder")).toHaveCount(0);
   await expect(sidebar.getByText("List 2")).toBeVisible();
 });
+
+test("Create folder adds a Spotify folder that shows while empty", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Create folder", { exact: true }).click();
+  await page.getByPlaceholder("Folder name").fill("Workouts");
+  await page
+    .locator(".dialog")
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "create_folder")
+        .at(-1)?.args,
+    ),
+  ).toEqual({ name: "Workouts" });
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "library_folders",
+      folders: [{ id: "workouts", name: "Workouts", parents: [] }],
+    }),
+  );
+  const folder = page.locator(".library-list .spotify-folder");
+  await expect(folder.locator(":scope > summary")).toContainText(
+    "Folder · 0 playlists",
+  );
+});

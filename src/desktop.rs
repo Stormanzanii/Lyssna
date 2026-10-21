@@ -590,6 +590,9 @@ impl Desktop {
                             snapshot.playlists = playlists;
                             emit(json!({"type":"library","playlists":snapshot.playlists}));
                         }
+                        Event::LibraryFolders(folders) => {
+                            emit(json!({"type":"library_folders","folders":folders}));
+                        }
                         Event::Playback(mut playback, _observed) => {
                             if snapshot.native_ready
                                 && playback.device.name == native::device_name()
@@ -2058,6 +2061,17 @@ fn saved_status(uris: Vec<String>, state: State<'_, Desktop>) -> std::result::Re
         .map_err(error)
 }
 #[tauri::command]
+fn create_folder(name: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::CreateFolder(name))
+        .map_err(error)
+}
+#[tauri::command]
 fn edit_playlist(
     playlist: Playlist,
     name: String,
@@ -2448,6 +2462,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             remove_playlist,
             remove_from_playlist,
             edit_playlist,
+            create_folder,
             move_playlist_song,
             saved_status,
             open_link,

@@ -66,6 +66,10 @@ export interface FolderRef {
   id: string;
   name: string;
 }
+/** A Spotify folder in the library, with its parent folder IDs. */
+export interface LibraryFolder extends FolderRef {
+  parents: string[];
+}
 export interface Playlist {
   id: string;
   name: string;
@@ -279,6 +283,7 @@ export type AppEvent =
   | { type: "provider_configured"; kind?: "spicy" | "legacy" }
   | { type: "native"; ready: boolean; status: string }
   | { type: "library"; playlists: Playlist[] }
+  | { type: "library_folders"; folders: LibraryFolder[] }
   | {
       type: "search_results";
       account: string;

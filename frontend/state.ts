@@ -5,6 +5,7 @@ import type {
   Snapshot,
   Track,
   Playlist,
+  LibraryFolder,
   Artist,
   Album,
   TrackFacts,
@@ -94,6 +95,8 @@ export interface AppState extends Snapshot {
   dj_pending?: boolean;
   /** The playing context is a DJ session, so DJ controls apply. */
   dj_context?: boolean;
+  /** Spotify folders, so empty ones still show in the sidebar. */
+  library_folders?: LibraryFolder[];
   /** A creator profile sheet is open over the app, which dims behind it. */
   creator_profile_open?: boolean;
 }
@@ -333,6 +336,8 @@ export function reducer(state: AppState, action: Action): AppState {
             ? undefined
             : state.toast,
       };
+    case "library_folders":
+      return { ...state, library_folders: action.folders };
     case "library":
       return { ...state, playlists: action.playlists };
     case "search_playlists":

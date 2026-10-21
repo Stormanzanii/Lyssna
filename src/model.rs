@@ -123,6 +123,15 @@ pub struct FolderRef {
     pub name: String,
 }
 
+/// A Spotify library folder with the folders around it, outermost first.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct LibraryFolder {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub parents: Vec<String>,
+}
+
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Playlist {
     pub id: String,

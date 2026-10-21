@@ -53,6 +53,8 @@ pub enum Command {
         index: usize,
         uri: String,
     },
+    /// Create an empty Spotify folder at the top of the library.
+    CreateFolder(String),
     /// Rename a playlist you own and set its description.
     EditPlaylist {
         playlist: Playlist,
@@ -159,6 +161,8 @@ pub enum Event {
     LoginFailed(auth::LoginIssue),
     NativeStarting(u64),
     Library(Vec<Playlist>),
+    /// Spotify folders in the library, empty ones included.
+    LibraryFolders(Vec<crate::model::LibraryFolder>),
     Tracks {
         key: String,
         offset: usize,
@@ -629,8 +633,9 @@ impl Backend {
             self.native_controls
                 .connection_event(Some(&self.profile.id)),
             Some(crate::native::NativeEvent::Ready(_))
-        ) && let Ok(playlists) = self.native_controls.library()
+        ) && let Ok((playlists, folders)) = self.native_controls.library()
         {
+            self.emit(Event::LibraryFolders(folders));
             let playlists = fill_library_details(
                 playlists,
                 crate::library_cache::load(&self.profile.id).as_deref(),
@@ -934,6 +939,15 @@ impl Backend {
                 }
                 removed?;
                 self.emit(Event::Notice(format!("Removed from {}", playlist.name)));
+            }
+            Command::CreateFolder(name) => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then create the folder."
+                );
+                self.native_controls.create_folder(&name)?;
+                self.refresh_library()?;
+                self.emit(Event::Notice(format!("Created {}", name.trim())));
             }
             Command::EditPlaylist {
                 playlist,

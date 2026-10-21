@@ -82,7 +82,18 @@ const ROOTLIST_PAGE: usize = 120;
 /// Every saved playlist in Spotify library order, read from the account's
 /// rootlist like the desktop client. Folder markers are skipped.
 pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
+    Ok(library_with_folders(session).await?.0)
+}
+
+/// The library plus every Spotify folder in it, empty ones included.
+pub async fn library_with_folders(
+    session: &Session,
+) -> Result<(
+    Vec<crate::model::Playlist>,
+    Vec<crate::model::LibraryFolder>,
+)> {
     use protobuf::Message;
+    let mut folders = Vec::new();
     let mut playlists = Vec::new();
     let mut ids = HashSet::new();
     // Folders open across page boundaries.
@@ -102,12 +113,12 @@ pub async fn library(session: &Session) -> Result<Vec<crate::model::Playlist>> {
         let page =
             librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(&bytes)
                 .context("Invalid Spotify library page")?;
-        let count = rootlist_page(&page, &mut ids, &mut open, &mut playlists)?;
+        let count = rootlist_page(&page, &mut ids, &mut open, &mut folders, &mut playlists)?;
         from += count;
         let total = usize::try_from(page.length()).unwrap_or_default();
         if count == 0 || (from >= total && count < ROOTLIST_PAGE) {
             name_owners(session, &mut playlists).await;
-            return Ok(playlists);
+            return Ok((playlists, folders));
         }
     }
     anyhow::bail!("Spotify library has too many pages")
@@ -852,6 +863,7 @@ fn rootlist_page(
     page: &librespot_protocol::playlist4_external::SelectedListContent,
     ids: &mut HashSet<String>,
     open: &mut Vec<crate::model::FolderRef>,
+    folders: &mut Vec<crate::model::LibraryFolder>,
     playlists: &mut Vec<crate::model::Playlist>,
 ) -> Result<usize> {
     let contents = page.contents.get_or_default();
@@ -862,6 +874,13 @@ fn rootlist_page(
     for (item, meta) in contents.items.iter().zip(&contents.meta_items) {
         match folder_marker(item.uri()) {
             Some(Marker::Start(folder)) if open.len() < 32 => {
+                if folders.len() < 10_000 {
+                    folders.push(crate::model::LibraryFolder {
+                        id: folder.id.clone(),
+                        name: folder.name.clone(),
+                        parents: open.iter().map(|item| item.id.clone()).collect(),
+                    });
+                }
                 open.push(folder);
                 continue;
             }
@@ -1140,6 +1159,7 @@ mod rootlist_tests {
             ]),
             &mut ids,
             &mut open,
+            &mut Vec::new(),
             &mut playlists,
         )
         .unwrap();
@@ -1162,6 +1182,7 @@ mod rootlist_tests {
                 &broken,
                 &mut HashSet::new(),
                 &mut Vec::new(),
+                &mut Vec::new(),
                 &mut Vec::new()
             )
             .is_err()
@@ -1169,7 +1190,8 @@ mod rootlist_tests {
     }
     #[test]
     fn nested_folders_span_pages_and_decode_names() {
-        let (mut ids, mut open, mut playlists) = (HashSet::new(), Vec::new(), Vec::new());
+        let (mut ids, mut open, mut folders, mut playlists) =
+            (HashSet::new(), Vec::new(), Vec::new(), Vec::new());
         for rows in [
             &[
                 ("spotify:start-group:outer:Road+%26+Rain", "", ""),
@@ -1183,7 +1205,14 @@ mod rootlist_tests {
                 ("spotify:playlist:0123456789abcdefghij03", "Top", "me"),
             ][..],
         ] {
-            rootlist_page(&page(rows), &mut ids, &mut open, &mut playlists).unwrap();
+            rootlist_page(
+                &page(rows),
+                &mut ids,
+                &mut open,
+                &mut folders,
+                &mut playlists,
+            )
+            .unwrap();
         }
         let paths: Vec<Vec<&str>> = playlists
             .iter()
@@ -1200,6 +1229,14 @@ mod rootlist_tests {
         );
         assert_eq!(playlists[1].folders[1].id, "inner");
         assert!(open.is_empty());
+        let listed: Vec<_> = folders
+            .iter()
+            .map(|folder| (folder.name.as_str(), folder.parents.clone()))
+            .collect();
+        assert_eq!(
+            listed,
+            [("Road & Rain", vec![]), ("Night", vec!["outer".to_owned()])]
+        );
     }
 }
 

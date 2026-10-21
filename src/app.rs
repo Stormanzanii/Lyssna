@@ -498,6 +498,7 @@ impl SpotiFlex {
                     }
                 }
                 Event::Library(playlists) => self.playlists = playlists,
+                Event::LibraryFolders(_) => {}
                 Event::Tracks {
                     key,
                     offset,

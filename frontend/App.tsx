@@ -1546,6 +1546,7 @@ function App() {
                   visibleLibrary,
                   state.playlists,
                   accountOrder(state).pinned,
+                  state.library_folders,
                 )
             ).map(libraryEntry)}
             {state.settings.folders.map((folder, index) => (
@@ -3020,7 +3021,7 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <h2>Create a folder</h2>
-            <p>Organize playlists in SpotiFlex.</p>
+            <p>Adds a folder to Your Library on Spotify.</p>
             <input
               className="field"
               placeholder="Folder name"
@@ -3036,23 +3037,7 @@ function App() {
                 className="pill primary"
                 disabled={!folderName.trim()}
                 onClick={() => {
-                  updateSettings({
-                    folders: [
-                      ...state.settings.folders,
-                      {
-                        name: folderName.trim(),
-                        playlist_ids: selected.size
-                          ? state.playlists
-                              .filter(
-                                (playlist) =>
-                                  playlist.id === state.route.slice(9),
-                              )
-                              .map((playlist) => playlist.id)
-                          : [],
-                        show_in_picker: true,
-                      },
-                    ],
-                  });
+                  void call("create_folder", { name: folderName.trim() });
                   setFolderName("");
                   setFolderDialog(false);
                 }}

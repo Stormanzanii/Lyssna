@@ -282,8 +282,16 @@ impl NativeControls {
             .build()?
             .block_on(crate::native_browse::playlist_info(&session, id))
     }
-    pub fn library(&self) -> Result<Vec<crate::model::Playlist>> {
-        self.run(crate::native_browse::library)
+    pub fn library(
+        &self,
+    ) -> Result<(
+        Vec<crate::model::Playlist>,
+        Vec<crate::model::LibraryFolder>,
+    )> {
+        self.run(crate::native_browse::library_with_folders)
+    }
+    pub fn create_folder(&self, name: &str) -> Result<String> {
+        self.run(async |session| crate::native_browse::create_folder(session, name).await)
     }
     pub fn saved_items(&self, uris: &[String]) -> Result<Vec<bool>> {
         self.run(async |session| crate::collection::contains(session, uris).await)

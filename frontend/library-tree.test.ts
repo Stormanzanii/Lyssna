@@ -42,3 +42,19 @@ it("moves a folder up with its most recent playlist and keeps pins on top", () =
   const pinnedFirst = [library[1], library[3], library[0], library[2]];
   expect(outline(libraryTree(pinnedFirst, library, ["b"]))[0]).toBe("b");
 });
+
+it("shows empty folders under the pins and inside their parents", () => {
+  const folders = [
+    { ...road, parents: [] },
+    { ...night, parents: ["road"] },
+    { id: "new", name: "New", parents: [] },
+    { id: "deep", name: "Deep", parents: ["road", "night"] },
+  ];
+  expect(
+    outline(libraryTree([library[3], library[0]], library, ["d"], folders)),
+  ).toEqual([
+    "d",
+    { New: [], count: 0 },
+    { Road: ["a", { Night: ["b", { Deep: [], count: 0 }], count: 1 }, "c"], count: 3 },
+  ]);
+});

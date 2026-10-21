@@ -5039,3 +5039,54 @@ test("clicking an artist in a song row opens it without selecting the song", asy
     ),
   ).toMatch(/^artist:/);
 });
+
+test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.getByTitle("Load TTML", { exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Load TTML" });
+  await expect(dialog).toContainText("For: Timing test");
+  await expect(dialog.locator(".load-ttml-mode strong")).toHaveText([
+    "Persistent Load",
+    "Temporary Load",
+    "Session Load",
+  ]);
+  const last = (command: string) =>
+    page.evaluate(
+      (command) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === command)
+          .at(-1)?.args,
+      command,
+    );
+  const chooser = page.waitForEvent("filechooser");
+  await dialog.getByRole("button", { name: /Session Load/ }).click();
+  await (await chooser).setFiles({
+    name: "song.ttml",
+    mimeType: "application/ttml+xml",
+    buffer: Buffer.from("<tt><body><div><p begin=\"1s\" end=\"2s\">Hi</p></div></body></tt>"),
+  });
+  await expect.poll(() => last("import_lyrics")).toMatchObject({
+    filename: "song.ttml",
+    mode: "session",
+  });
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByTitle("Load TTML", { exact: true }).click();
+  await dialog.getByRole("button", { name: "TTML Database" }).click();
+  const database = page.getByRole("dialog", { name: "TTML Database" });
+  await expect(database).toContainText("No saved lyrics yet");
+  await database.getByRole("button", { name: "Back to Load TTML" }).click();
+  await dialog.getByRole("button", { name: "Reset TTML" }).click();
+  await expect.poll(() => last("reset_lyrics")).not.toBeUndefined();
+  await expect(dialog).toHaveCount(0);
+  await page.evaluate(() =>
+    document.querySelector(".application")!.classList.add("liquid-glass"),
+  );
+  await page.getByTitle("Load TTML", { exact: true }).click();
+  await page.screenshot({ path: "target/diagnostics/load-ttml-glass.png" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});

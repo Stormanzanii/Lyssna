@@ -460,6 +460,130 @@ pub fn import_file(path: &Path, track: &Track) -> Result<Lyrics> {
     )
 }
 
+/// How an imported lyric file is kept, following Spicy Lyrics' Load TTML
+/// modes (iPixelGalaxy/spicy-lyrics, UploadTTMLModal, AGPL-3.0).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImportMode {
+    /// Saved on disk; used whenever the song plays.
+    #[default]
+    Persistent,
+    /// Kept in memory until the app restarts.
+    Session,
+    /// Shown now only; the next lyrics load replaces it.
+    Temporary,
+}
+
+static SESSION: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Lyrics>>> =
+    std::sync::LazyLock::new(Default::default);
+
+pub fn import_with_mode(
+    filename: &str,
+    text: &str,
+    track: &Track,
+    mode: ImportMode,
+) -> Result<Lyrics> {
+    match mode {
+        ImportMode::Persistent => import_text(filename, text, track),
+        ImportMode::Session => {
+            let (lyrics, _) = parse_import(filename, text, track)?;
+            if let Ok(mut session) = SESSION.lock() {
+                if session.len() >= 256 {
+                    session.clear();
+                }
+                session.insert(track_key(track), lyrics.clone());
+            }
+            Ok(lyrics)
+        }
+        ImportMode::Temporary => Ok(parse_import(filename, text, track)?.0),
+    }
+}
+
+fn parse_import(filename: &str, text: &str, track: &Track) -> Result<(Lyrics, &'static str)> {
+    ensure!(text.len() <= 2_000_000, "Lyric file exceeds 2 MB");
+    let extension = Path::new(filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    Ok(match extension.as_str() {
+        "lrc" => (parse_lrc(text, track.duration_ms)?, "lrc"),
+        "ttml" | "xml" => (parse_ttml(text, track.duration_ms)?, "ttml"),
+        _ => bail!("Choose an .lrc, .ttml, or .xml lyric file"),
+    })
+}
+
+/// A saved import, for the TTML database list.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct SavedLyrics {
+    pub key: String,
+    #[serde(default)]
+    pub uri: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub artists: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub saved_at: u64,
+}
+
+pub fn saved_imports() -> Result<Vec<SavedLyrics>> {
+    Ok(saved_in(&data_dir()?.join("lyrics").join("local")))
+}
+
+fn saved_in(directory: &Path) -> Vec<SavedLyrics> {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let mut saved: Vec<SavedLyrics> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let kind = path.extension()?.to_str()?.to_owned();
+            if !matches!(kind.as_str(), "ttml" | "lrc" | "json") {
+                return None;
+            }
+            let key = path.file_stem()?.to_str()?.to_owned();
+            if key.contains('.') {
+                return None;
+            }
+            let mut item = fs::read(directory.join(format!("{key}.meta.json")))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<SavedLyrics>(&bytes).ok())
+                .unwrap_or_default();
+            item.key = key;
+            item.kind = kind;
+            if item.saved_at == 0 {
+                item.saved_at = entry
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |age| age.as_secs());
+            }
+            Some(item)
+        })
+        .take(10_000)
+        .collect();
+    saved.sort_by_key(|item| std::cmp::Reverse(item.saved_at));
+    saved
+}
+
+/// Delete one saved import by its key.
+pub fn delete_saved(key: &str) -> Result<()> {
+    ensure!(
+        key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "Invalid lyrics entry"
+    );
+    let directory = data_dir()?.join("lyrics").join("local");
+    for extension in ["ttml", "lrc", "json", "meta.json"] {
+        let _ = fs::remove_file(directory.join(format!("{key}.{extension}")));
+    }
+    Ok(())
+}
+
 pub fn import_text(filename: &str, text: &str, track: &Track) -> Result<Lyrics> {
     ensure!(text.len() <= 2_000_000, "Lyric file exceeds 2 MB");
     let path = Path::new(filename);
@@ -482,6 +606,25 @@ pub fn import_text(filename: &str, text: &str, track: &Track) -> Result<Lyrics> 
         directory.join(format!("{}.{kind}", track_key(track))),
         text.as_bytes(),
     )?;
+    let meta = SavedLyrics {
+        key: track_key(track),
+        uri: track.uri.clone(),
+        name: track.name.clone(),
+        artists: track
+            .artists
+            .iter()
+            .map(|artist| artist.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        kind: kind.into(),
+        saved_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |age| age.as_secs()),
+    };
+    let _ = fs::write(
+        directory.join(format!("{}.meta.json", track_key(track))),
+        serde_json::to_vec(&meta)?,
+    );
     Ok(lyrics)
 }
 
@@ -513,7 +656,10 @@ pub fn forget_local(track: &Track) -> Result<()> {
 
 fn forget_local_in(directory: &Path, track: &Track) {
     let key = track_key(track);
-    for extension in ["ttml", "lrc", "json"] {
+    if let Ok(mut session) = SESSION.lock() {
+        session.remove(&key);
+    }
+    for extension in ["ttml", "lrc", "json", "meta.json"] {
         let _ = fs::remove_file(directory.join(format!("{key}.{extension}")));
     }
 }
@@ -521,6 +667,13 @@ fn forget_local_in(directory: &Path, track: &Track) {
 pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
     let root = data_dir()?.join("lyrics");
     let key = track_key(track);
+    if let Some(lyrics) = SESSION
+        .lock()
+        .ok()
+        .and_then(|session| session.get(&key).cloned())
+    {
+        return Ok(lyrics);
+    }
     if let Some(lyrics) = load_local_in(&root.join("local"), track) {
         return Ok(lyrics);
     }
@@ -684,6 +837,62 @@ mod tests {
         assert!(count > 0);
     }
 
+    #[test]
+    fn session_loads_last_until_reset_and_temporary_loads_are_not_kept() {
+        let directory =
+            std::env::temp_dir().join(format!("spotiflex-session-lyrics-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let track = Track {
+            uri: "spotify:track:session".into(),
+            duration_ms: 10_000,
+            ..Track::default()
+        };
+        let session = |track: &Track| SESSION.lock().unwrap().get(&track_key(track)).cloned();
+        import_with_mode(
+            "song.lrc",
+            "[00:01.00]Temporary",
+            &track,
+            ImportMode::Temporary,
+        )
+        .unwrap();
+        assert!(session(&track).is_none());
+        let lyrics =
+            import_with_mode("song.lrc", "[00:01.00]Session", &track, ImportMode::Session).unwrap();
+        assert_eq!(lyrics.lines[0].text, "Session");
+        assert_eq!(session(&track).unwrap().lines[0].text, "Session");
+        forget_local_in(&directory, &track);
+        assert!(session(&track).is_none());
+        assert!(import_with_mode("song.txt", "x", &track, ImportMode::Session).is_err());
+        let _ = fs::remove_dir_all(directory);
+    }
+    #[test]
+    fn saved_imports_list_newest_first_with_song_details() {
+        let directory =
+            std::env::temp_dir().join(format!("spotiflex-saved-lyrics-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let (old, new) = ("a".repeat(64), "b".repeat(64));
+        fs::write(directory.join(format!("{old}.lrc")), "[00:01.00]Old").unwrap();
+        fs::write(directory.join(format!("{new}.ttml")), "<tt/>").unwrap();
+        for (key, name, saved_at) in [(&old, "Old song", 1), (&new, "New song", 2)] {
+            let meta = SavedLyrics {
+                key: key.clone(),
+                name: name.into(),
+                saved_at,
+                ..SavedLyrics::default()
+            };
+            fs::write(
+                directory.join(format!("{key}.meta.json")),
+                serde_json::to_vec(&meta).unwrap(),
+            )
+            .unwrap();
+        }
+        let saved = saved_in(&directory);
+        let names: Vec<_> = saved.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(names, ["New song", "Old song"]);
+        assert_eq!(saved[0].kind, "ttml");
+        assert!(delete_saved("not-a-key").is_err());
+        let _ = fs::remove_dir_all(directory);
+    }
     #[test]
     fn local_lyrics_are_remembered_per_track_and_reparsed() {
         let directory =

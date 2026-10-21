@@ -2016,6 +2016,7 @@ fn retry_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
 fn import_lyrics(
     filename: String,
     contents: String,
+    mode: Option<crate::lyrics::ImportMode>,
     state: State<'_, Desktop>,
 ) -> std::result::Result<(), String> {
     if contents.len() > 2_000_000 {
@@ -2034,8 +2035,47 @@ fn import_lyrics(
             track,
             filename,
             contents,
+            mode: mode.unwrap_or_default(),
         })
         .map_err(error)
+}
+/// Drop any imported lyrics for the playing song and load the provider's.
+#[tauri::command]
+fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    let track = lock(&state.0.snapshot)
+        .map_err(error)?
+        .playback
+        .item
+        .clone()
+        .ok_or("Play a track first")?;
+    state
+        .0
+        .lyrics
+        .send(LyricCommand::Forget(track.clone()))
+        .map_err(error)?;
+    state
+        .0
+        .commands
+        .send(Command::FetchLyrics(track))
+        .map_err(error)
+}
+#[tauri::command]
+fn saved_lyrics() -> std::result::Result<Vec<crate::lyrics::SavedLyrics>, String> {
+    crate::lyrics::saved_imports().map_err(error)
+}
+#[tauri::command]
+fn delete_saved_lyrics(key: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    crate::lyrics::delete_saved(&key).map_err(error)?;
+    // Reload the playing song's lyrics if its import was the one removed.
+    if let Some(track) = lock(&state.0.snapshot)
+        .map_err(error)?
+        .playback
+        .item
+        .clone()
+    {
+        let _ = state.0.commands.send(Command::FetchLyrics(track));
+    }
+    Ok(())
 }
 #[tauri::command]
 fn add_tracks(
@@ -2360,6 +2400,7 @@ fn open_link(url: String) -> std::result::Result<(), String> {
                     | "developer.spotify.com"
                     | "developers.spicylyrics.org"
                     | "spicylyrics.org"
+                    | "lyrprep.spicylyrics.org"
             )
         )
         || !parsed.username().is_empty()
@@ -2498,6 +2539,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             configure_spicy_lyrics,
             retry_lyrics,
             import_lyrics,
+            reset_lyrics,
+            saved_lyrics,
+            delete_saved_lyrics,
             add_tracks,
             create_playlist,
             remove_playlist,

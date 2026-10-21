@@ -205,6 +205,7 @@ pub enum LyricCommand {
         track: Track,
         filename: String,
         contents: String,
+        mode: lyrics::ImportMode,
     },
     Fetch(Track, String),
     Import(Track, PathBuf),
@@ -417,8 +418,9 @@ impl Worker {
                         track,
                         filename,
                         contents,
+                        mode,
                     } => {
-                        let result = lyrics::import_text(&filename, &contents, &track);
+                        let result = lyrics::import_with_mode(&filename, &contents, &track, mode);
                         (track, result)
                     }
                     LyricCommand::Fetch(track, token) => {

@@ -108,6 +108,12 @@
 .liquid-glass .page-hero {
   background: none;
 }
+/* Load TTML takes the frosted glass of other popovers. */
+.liquid-glass .dialog.load-ttml {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
 /* The artist sticky bar is a frosted strip over the glass sheet. */
 .liquid-glass .artist-sticky {
   background: var(--glass-fill-strong);

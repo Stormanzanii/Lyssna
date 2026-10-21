@@ -139,6 +139,7 @@ import { RecentsPage } from "./recents-page";
 import { collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
+import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
 import { libraryTree, type LibraryEntry } from "./library-tree";
 import {
   loadRecentSearches,
@@ -274,6 +275,7 @@ function App() {
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [ttmlOpen, setTtmlOpen] = useState(false);
   const [aboutPhoto, setAboutPhoto] = useState(0);
   // The artist header has scrolled away; show the compact sticky bar.
   const [heroGone, setHeroGone] = useState(false);
@@ -713,6 +715,7 @@ function App() {
         setFolderDialog(false);
         setRemoveDialog(null);
         setEditDialog(null);
+        setTtmlOpen(false);
         setFolderMenu(null);
         setRenameFolder(null);
         setAboutOpen(false);
@@ -916,17 +919,36 @@ function App() {
     },
     [play],
   );
-  const importFile = async (file: File) => {
+  const importFile = async (file: File, mode: LoadMode = "persistent") => {
     if (file.size > 2_000_000) {
       notify("Lyric file exceeds 2 MB", true);
       return;
     }
-    await call("import_lyrics", {
+    const sent = await rpc("import_lyrics", {
       filename: file.name,
       contents: await file.text(),
-    });
-    notify("Lyric file imported for this song.");
+      mode,
+    }).then(
+      () => true,
+      (error) => {
+        notify(String(error), true);
+        return false;
+      },
+    );
+    if (!sent) return;
+    setTtmlOpen(false);
+    notify(
+      mode === "persistent"
+        ? "Lyrics saved for this song."
+        : mode === "session"
+          ? "Lyrics applied until SpotiFlex restarts."
+          : "Lyrics applied until they reload.",
+    );
   };
+  const listSavedLyrics = useCallback(
+    () => rpc<SavedLyrics[]>("saved_lyrics").catch(() => []),
+    [],
+  );
   const back = () => {
     if (center !== "browse") {
       setCenter("browse");
@@ -1666,7 +1688,7 @@ function App() {
               onPlayer={play}
               onAlbum={openAlbum}
               onArtist={openArtist}
-              onImport={() => fileInput.current?.click()}
+              onImport={() => setTtmlOpen(true)}
               onRetry={() => void call("retry_lyrics")}
             >
               <div
@@ -1707,8 +1729,8 @@ function App() {
                 <span className="toolbar-divider" aria-hidden="true" />
                 <button
                   className="icon-button"
-                  title="Import lyrics"
-                  onClick={() => fileInput.current?.click()}
+                  title="Load TTML"
+                  onClick={() => setTtmlOpen(true)}
                 >
                   <Upload size={18} />
                 </button>
@@ -3378,6 +3400,28 @@ function App() {
             </div>
           </form>
         </div>
+      )}
+      {ttmlOpen && (
+        <LoadTtml
+          song={state.playback.item?.name ?? "No song playing"}
+          onLoad={(file, mode) => importFile(file, mode)}
+          onReset={() => {
+            void call("reset_lyrics").then(() =>
+              notify("Imported lyrics cleared for this song."),
+            );
+            setTtmlOpen(false);
+          }}
+          onGuide={() =>
+            void call("open_link", {
+              url: "https://lyrprep.spicylyrics.org/guide",
+            })
+          }
+          listSaved={listSavedLyrics}
+          deleteSaved={async (key) => {
+            await call("delete_saved_lyrics", { key });
+          }}
+          onClose={() => setTtmlOpen(false)}
+        />
       )}
       {editDialog && (
         <div className="modal-backdrop" onClick={() => setEditDialog(null)}>

@@ -8,6 +8,8 @@ Space Gravity (`frontend/space-gravity.ts`, `frontend/space-gravity-lyrics.tsx`)
 
 Playlist and interface behavior is informed by the feature descriptions of [iPixelGalaxy/spotify-plus](https://github.com/iPixelGalaxy/spotify-plus). Its repository does not declare a license in the metadata reviewed during setup. SpotiFlex does not copy or bundle its source or assets.
 
+The Load TTML window (`frontend/load-ttml.tsx`) and its Persistent, Temporary and Session load modes, Reset TTML and saved-lyrics list (`src/lyrics.rs`) reimplement behaviour and layout read from the local pixels-spicy-lyrics fork (`UploadTTMLModal.tsx`, `LyricsManager`, AGPL-3.0). No upstream source or assets are copied.
+
 `src/ui/motion.rs` and `frontend/lyric-motion.ts` contain ports of the analytic spring from [Fraktality/spr](https://github.com/Fraktality/spr) (MIT, Copyright (c) Fraktality), the same spring Spicy Lyrics uses. Colour emoji are rasterized at runtime from the operating system's emoji font; no emoji images are bundled. The app icon is original to SpotiFlex.
 
 Playback uses [librespot](https://github.com/librespot-org/librespot), published under MIT. UI uses [egui/eframe](https://github.com/emilk/egui), published under MIT or Apache-2.0; colour emoji use [ttf-parser](https://github.com/harfbuzz/ttf-parser) and [tiny-skia](https://github.com/linebender/tiny-skia), MIT or Apache-2.0 and BSD-3-Clause respectively. Other Rust dependencies retain their own licenses; the exact dependency graph is recorded in `Cargo.lock`.

@@ -413,6 +413,7 @@ fn related_sections(artist: &Value) -> Vec<crate::home::HomeSection> {
         title,
         subtitle: String::new(),
         items,
+        header_images: Vec::new(),
     })
     .collect()
 }

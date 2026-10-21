@@ -20,6 +20,10 @@ pub struct HomeSection {
     pub title: String,
     pub subtitle: String,
     pub items: Vec<HomeItem>,
+    /// The section's own picture, such as the artist photo beside
+    /// "New release from S3RL".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header_images: Vec<Artwork>,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct HomeItem {
@@ -182,6 +186,7 @@ pub fn parse(account: &str, value: &Value) -> Result<HomePage> {
                 title,
                 subtitle: text(&section["data"]["subtitle"]),
                 items,
+                header_images: images(&section["data"]["headerEntity"]["data"]),
             })
         }
     }
@@ -198,6 +203,33 @@ pub async fn fetch(session: &librespot_core::Session, timezone: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn new_release_sections_keep_the_artist_photo() {
+        let value = json!({"data":{"home":{"sectionContainer":{"sections":{"items":[{
+            "uri": "spotify:section:release",
+            "data": {
+                "title": {"transformedLabel": "New release from S3RL"},
+                "headerEntity": {"data": {"visuals": {"avatarImage": {"sources": [
+                    {"url": "https://i.scdn.co/image/ab6761610000e5eba3a56734d6bb8dbdcecaa38a", "width": 640}
+                ]}}}}
+            },
+            "sectionItems": {"items": [{"content": {"data": {
+                "__typename": "Album",
+                "uri": "spotify:album:0123456789abcdefghijkl",
+                "name": "I Live For the Bass Drum",
+                "coverArt": {"sources": [{"url": "https://i.scdn.co/image/cover", "width": 640}]}
+            }}}]}
+        }]}}}}});
+        let page = parse("account", &value).unwrap();
+        assert_eq!(
+            page.sections[0].header_images[0].url,
+            "https://i.scdn.co/image/ab6761610000e5eba3a56734d6bb8dbdcecaa38a"
+        );
+        assert_eq!(
+            page.sections[0].items[0].images[0].url,
+            "https://i.scdn.co/image/cover"
+        );
+    }
     #[test]
     fn parses_account_mix_and_recent_entity_without_unrelated_media() {
         let playlist = json!({"uri":"spotify:playlist:1234567890123456789012","name":"Daily Mix 1","format":"daily-mix","description":"Personal artists","images":{"items":[{"sources":[{"url":"https://artwork.example.test/mix"}]}]}});

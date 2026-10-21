@@ -252,6 +252,8 @@ export type HomeSection = {
   title: string;
   subtitle: string;
   items: HomeItem[];
+  /** The section's own picture, such as the artist of a new release. */
+  header_images?: Artwork[];
 };
 export type HomePage = {
   account: string;

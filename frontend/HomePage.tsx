@@ -159,7 +159,9 @@ function FeaturedShelf({
       data-context-name={item.name}
     >
       <div className="home-featured-heading">
-        <Cover images={item.images} />
+        <Cover
+          images={section.header_images?.length ? section.header_images : item.images}
+        />
         <div>
           {heading.label && <p>{heading.label}</p>}
           <h2>{heading.title}</h2>

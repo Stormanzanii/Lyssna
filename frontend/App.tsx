@@ -311,6 +311,8 @@ function App() {
     searchInput = useRef<HTMLInputElement>(null),
     mainScroll = useRef<HTMLDivElement>(null),
     trackTable = useRef<HTMLDivElement>(null),
+    // Liked Songs started from the sidebar plays once its songs arrive.
+    likedPlay = useRef(false),
     pageSentinel = useRef<HTMLDivElement>(null),
     pendingPage = useRef<string>("");
   stateRef.current = state;
@@ -1229,6 +1231,40 @@ function App() {
     observer.observe(hero);
     return () => observer.disconnect();
   }, [state.route, center]);
+  // Play straight from the sidebar cover, like Spotify's Your Library.
+  const coverPlay = (name: string, start: () => void) => (
+    <button
+      className="library-cover-play"
+      aria-label={`Play ${name}`}
+      title={`Play ${name}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        start();
+      }}
+    >
+      <Play size={20} fill="currentColor" />
+    </button>
+  );
+  const playLiked = () => {
+    if (stateRef.current.route === "liked" && stateRef.current.tracks[0])
+      playTrack(stateRef.current.tracks[0], 0);
+    else {
+      likedPlay.current = true;
+      navigate("liked");
+    }
+  };
+  useEffect(() => {
+    if (!likedPlay.current) return;
+    // Leaving Liked Songs before its songs load cancels the start.
+    if (state.route !== "liked") {
+      likedPlay.current = false;
+      return;
+    }
+    const first = state.tracks.find((track) => !track.is_local);
+    if (!first) return;
+    likedPlay.current = false;
+    playTrack(first, state.tracks.indexOf(first));
+  }, [state.route, state.tracks, playTrack]);
   const playlistRow = (playlist: Playlist) => (
     <div
       className="library-row"
@@ -1275,6 +1311,13 @@ function App() {
       >
         <Pin size={14} />
       </button>
+      {playlist.id !== DJ_ID &&
+        coverPlay(playlist.name, () =>
+          play({
+            command: "play_home",
+            context: `spotify:playlist:${playlist.id}`,
+          }),
+        )}
     </div>
   );
   // Spotify folders open in place; their playlists use the same rows.
@@ -1674,21 +1717,24 @@ function App() {
             />
           </label>
           <div className="library-list">
-            <button
-              className={`library-item ${state.route === "liked" ? "current" : ""}`}
-              data-context-route="liked"
-              data-context-name="Liked Songs"
-              onClick={() => navigate("liked")}
-              {...prefetchOn("liked")}
-            >
-              <div className="liked-cover">
-                <Heart size={22} fill="currentColor" />
-              </div>
-              <div>
-                <strong>Liked Songs</strong>
-                <small>Playlist · Pinned</small>
-              </div>
-            </button>
+            <div className="library-liked">
+              <button
+                className={`library-item ${state.route === "liked" ? "current" : ""}`}
+                data-context-route="liked"
+                data-context-name="Liked Songs"
+                onClick={() => navigate("liked")}
+                {...prefetchOn("liked")}
+              >
+                <div className="liked-cover">
+                  <Heart size={22} fill="currentColor" />
+                </div>
+                <div>
+                  <strong>Liked Songs</strong>
+                  <small>Playlist · Pinned</small>
+                </div>
+              </button>
+              {coverPlay("Liked Songs", playLiked)}
+            </div>
             {(libraryQuery || libraryFilter !== "all"
               ? visibleLibrary.map(
                   (playlist): LibraryEntry => ({ kind: "playlist", playlist }),

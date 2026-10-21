@@ -365,6 +365,37 @@ small {
 .library-row:focus-within .library-pin {
   opacity: 1;
 }
+/* Play button over the cover, shown on hover like Spotify's library. */
+.library-cover-play {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  color: #fff;
+  background: #0009;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.library-liked {
+  position: relative;
+}
+.library-row:hover .library-cover-play,
+.library-liked:hover .library-cover-play,
+.library-cover-play:focus-visible {
+  opacity: 1;
+}
+.library-cover-play:hover svg {
+  scale: 1.08;
+}
+.compact-library .library-cover-play {
+  /* The cover is centred between the left padding and the pin space. */
+  left: calc(50% - 38px);
+}
 .pinned-mark {
   color: #1ed760;
   vertical-align: middle;

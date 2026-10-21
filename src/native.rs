@@ -1428,13 +1428,15 @@ async fn run(
         queue_snapshot,
     } = channels;
     loaded.store(false, Ordering::Release);
+    // Songs already streamed replay from disk, as in Spotify's own client.
+    let cache = crate::audio_cache::cache().ok();
     // Default session config uses the desktop client ID that issued the token.
     let session = Session::new(
         SessionConfig {
             client_id: crate::auth::AUDIO_CLIENT_ID.into(),
             ..SessionConfig::default()
         },
-        None,
+        cache,
     );
     let mixer = match SoftMixer::open(MixerConfig::default()) {
         Ok(mixer) => Arc::new(mixer),

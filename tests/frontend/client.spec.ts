@@ -418,6 +418,13 @@ async function startClient(page: Page, initialRoute = "liked") {
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "audio_cache_size")
+            return host.__clientTest.cacheBytes ?? 0;
+          if (command === "clear_audio_cache") {
+            const freed = host.__clientTest.cacheBytes ?? 0;
+            host.__clientTest.cacheBytes = 0;
+            return freed;
+          }
           if (command === "test_audio_output") return true;
           if (command === "cancel_sign_in") {
             emit({ type: "login_finished" });
@@ -1014,7 +1021,7 @@ test("sidebar preserves pins and changes recents only after manual playback", as
     .locator(".library-item")
     .click();
   expect((await names())[0]).toBe("DJ");
-  await page.getByTitle("Play Playlist 2", { exact: true }).click();
+  await page.getByRole("main").getByTitle("Play Playlist 2", { exact: true }).click();
   await expect(page.locator(".library-row strong").first()).toHaveText(
     "Playlist 2",
   );
@@ -1045,13 +1052,10 @@ test("sidebar preserves pins and changes recents only after manual playback", as
     }),
   ).toBeVisible();
   await expect(
-    page.locator(".library-list > .library-item").first(),
+    page.locator(".library-list > .library-liked > .library-item"),
   ).toContainText("Liked Songs");
   await expect(
-    page
-      .locator(".library-list > .library-item")
-      .first()
-      .locator(".pinned-mark"),
+    page.locator(".library-list > .library-liked .pinned-mark"),
   ).toHaveCount(0);
 });
 test("artist and song right clicks offer relevant actions", async ({
@@ -5355,4 +5359,72 @@ test("long playlists render only the rows near the viewport", async ({
   await expect(
     page.locator(".track-row", { hasText: "Long song 800" }).locator(".track-number"),
   ).toContainText("800");
+});
+
+test("Settings shows the song cache size and clears it", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => ((window as any).__clientTest.cacheBytes = 734_003_200));
+  await openSettings(page);
+  await expect(page.getByText("Cache: 700 MB")).toBeVisible();
+  await page.getByRole("button", { name: "Clear cache" }).click();
+  await expect(page.getByText("Cache: 0 MB")).toBeVisible();
+  await expect(page.getByText("Cleared 700 MB of cached songs.")).toBeVisible();
+});
+
+test("Your Library covers show a play button for playlists and Liked Songs", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "library",
+      playlists: [
+        {
+          id: "4123456789abcdefghijkl",
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    }),
+  );
+  const lastPlayer = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "player")
+          .at(-1)?.args.request,
+    );
+  const route = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "browse")
+          .at(-1)?.args.key,
+    );
+  const before = await route();
+  const row = page.locator('.library-row[data-playlist-id="4123456789abcdefghijkl"]');
+  const playRoadTrip = row.getByRole("button", { name: "Play Road trip" });
+  await expect(playRoadTrip).toHaveCSS("opacity", "0");
+  await row.hover();
+  await expect(playRoadTrip).toHaveCSS("opacity", "1");
+  await playRoadTrip.click();
+  // Starts the playlist without leaving the current page.
+  await expect.poll(lastPlayer).toMatchObject({
+    command: "play_home",
+    context: "spotify:playlist:4123456789abcdefghijkl",
+  });
+  expect(await route()).toBe(before);
+  // DJ starts from its own row; it has no cover play button.
+  await expect(page.getByRole("button", { name: "Play DJ" })).toHaveCount(0);
+  // From another page, Liked Songs opens and starts its first song.
+  await page.locator(".home-button").click();
+  await expect.poll(route).toBe("home");
+  await page.locator(".library-liked").hover();
+  await page.locator(".library-cover-play[aria-label='Play Liked Songs']").click();
+  await expect.poll(route).toBe("liked");
+  await expect.poll(lastPlayer).toMatchObject({ command: "play_uris" });
 });

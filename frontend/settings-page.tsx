@@ -45,6 +45,17 @@ export function SettingsPage({
   const [audioOutputs, setAudioOutputs] = useState<string[] | null>(null);
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [testingOutput, setTestingOutput] = useState(false);
+  const [cacheBytes, setCacheBytes] = useState<number | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void onCall<number>("audio_cache_size").then((bytes) => {
+      if (active && typeof bytes === "number") setCacheBytes(bytes);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall]);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const searchField = useRef<HTMLInputElement>(null);
@@ -233,6 +244,33 @@ export function SettingsPage({
                 onClick={() => void onCall("retry_audio")}
               >
                 Reconnect native audio
+              </button>
+            </SettingRow>
+          </section>
+
+          <section className="settings-section">
+            <h2>Storage</h2>
+            <SettingRow
+              label={`Cache: ${cacheBytes === null ? "…" : `${Math.round(cacheBytes / 1_048_576).toLocaleString()} MB`}`}
+              help="Songs you have played, kept on this computer so they start faster and use less data."
+              keywords="cache storage disk offline data clear"
+            >
+              <button
+                className="pill outline"
+                disabled={clearingCache || !cacheBytes}
+                onClick={() => {
+                  setClearingCache(true);
+                  void onCall<number>("clear_audio_cache")
+                    .then((freed) => {
+                      setCacheBytes(0);
+                      onNotice(
+                        `Cleared ${Math.round((freed ?? 0) / 1_048_576).toLocaleString()} MB of cached songs.`,
+                      );
+                    })
+                    .finally(() => setClearingCache(false));
+                }}
+              >
+                Clear cache
               </button>
             </SettingRow>
           </section>

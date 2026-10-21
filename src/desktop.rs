@@ -2523,6 +2523,21 @@ fn memory_target(window: &tauri::WebviewWindow, low: bool) {
 }
 #[cfg(not(windows))]
 fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
+/// Disk space used by cached songs, in bytes.
+#[tauri::command]
+async fn audio_cache_size() -> u64 {
+    tauri::async_runtime::spawn_blocking(crate::audio_cache::size)
+        .await
+        .unwrap_or_default()
+}
+/// Delete cached songs; returns the bytes freed.
+#[tauri::command]
+async fn clear_audio_cache() -> std::result::Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(crate::audio_cache::clear)
+        .await
+        .map_err(|_| "Cache cleanup was interrupted".to_owned())?
+        .map_err(error)
+}
 /// Drop WebView2 caches once after browsing, while the window stays usable.
 #[tauri::command]
 fn trim_memory(window: tauri::WebviewWindow) {
@@ -2625,6 +2640,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             prefetch_canvas,
             prefetch_page,
             trim_memory,
+            audio_cache_size,
+            clear_audio_cache,
             prefetch_metadata,
             sign_out,
             browse,

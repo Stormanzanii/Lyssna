@@ -181,6 +181,8 @@ pub struct Playback {
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct PlaylistDetails {
     pub owner: String,
+    #[serde(default)]
+    pub owner_profile: Option<Profile>,
     pub total_tracks: Option<usize>,
     pub format: String,
 }

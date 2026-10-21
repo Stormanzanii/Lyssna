@@ -117,7 +117,7 @@ pub fn authenticate(
     })
 }
 
-fn profile_from_response(account: &str, bytes: &[u8]) -> Result<Profile> {
+pub(crate) fn profile_from_response(account: &str, bytes: &[u8]) -> Result<Profile> {
     ensure!(
         bytes.len() <= 1_000_000,
         "Spotify profile response too large"

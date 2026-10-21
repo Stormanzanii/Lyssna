@@ -5479,6 +5479,89 @@ for (const route of ["liked", "playlist:0123456789abcdefghijkl"]) {
   });
 }
 
+test("public playlist outside the library shows its creator name and avatar", async ({
+  page,
+}) => {
+  await startClient(page, "playlist:0123456789abcdefghijkl");
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const browse = host.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1).args;
+    host.emit({
+      type: "browse_info",
+      generation: browse.generation,
+      info: {
+        key: browse.key,
+        title: "Public playlist",
+        subtitle: "A public collection",
+        images: [],
+        albums: [],
+        playlist: {
+          owner: "public-owner-id",
+          total_tracks: 150,
+          format: "",
+          owner_profile: {
+            id: "public-owner-id",
+            display_name: "Maya Chen",
+            images: [
+              { url: "https://artwork.example.test/public-owner-avatar" },
+            ],
+          },
+        },
+      },
+    });
+  });
+  await expect(page.locator(".hero-meta")).toContainText("Maya Chen");
+  await expect(page.locator(".hero-meta")).not.toContainText("public-owner-id");
+  await expect(page.locator(".hero-owner")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".hero-owner")
+        .evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+});
+
+test("playlist creator profile cannot replace a different owner", async ({
+  page,
+}) => {
+  await startClient(page, "playlist:0123456789abcdefghijkl");
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const browse = host.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1).args;
+    host.emit({
+      type: "browse_info",
+      generation: browse.generation,
+      info: {
+        key: browse.key,
+        title: "Public playlist",
+        subtitle: "",
+        images: [],
+        albums: [],
+        playlist: {
+          owner: "public-owner-id",
+          total_tracks: 150,
+          format: "",
+          owner_profile: {
+            id: "different-owner",
+            display_name: "Unrelated person",
+            images: [{ url: "https://artwork.example.test/unrelated-avatar" }],
+          },
+        },
+      },
+    });
+  });
+  await expect(page.locator(".hero-meta")).toContainText("public-owner-id");
+  await expect(page.locator(".hero-meta")).not.toContainText(
+    "Unrelated person",
+  );
+  await expect(page.locator(".hero-owner")).toHaveCount(0);
+});
+
 test("long playlists render only the rows near the viewport", async ({
   page,
 }) => {

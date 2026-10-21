@@ -38,7 +38,13 @@ pub async fn playlist_info(session: &Session, id: &str) -> Result<crate::model::
         !playlist.attributes.name.is_empty(),
         "Playlist name unavailable"
     );
-    Ok(playlist_header(id, &playlist))
+    let mut info = playlist_header(id, &playlist);
+    if let Some(details) = &mut info.playlist
+        && details.owner != session.username()
+    {
+        details.owner_profile = owner_profile(session, &details.owner).await;
+    }
+    Ok(info)
 }
 fn playlist_header(id: &str, playlist: &Playlist) -> crate::model::BrowseInfo {
     use crate::model::{Artwork, BrowseInfo, PlaylistDetails};
@@ -75,6 +81,7 @@ fn playlist_header(id: &str, playlist: &Playlist) -> crate::model::BrowseInfo {
         images,
         playlist: Some(PlaylistDetails {
             owner,
+            owner_profile: None,
             total_tracks: usize::try_from(playlist.length).ok(),
             format: playlist.attributes.format.clone(),
         }),
@@ -869,6 +876,39 @@ fn add_changes(uris: &[String]) -> Value {
 }
 
 static OWNER_NAMES: OnceLock<std::sync::Mutex<HashMap<String, String>>> = OnceLock::new();
+type OwnerProfiles = HashMap<Key, (Instant, crate::model::Profile)>;
+static OWNER_PROFILES: OnceLock<std::sync::Mutex<OwnerProfiles>> = OnceLock::new();
+
+/// Public creator metadata, cached per viewer. Never hold the lock during I/O.
+async fn owner_profile(session: &Session, owner: &str) -> Option<crate::model::Profile> {
+    if owner.is_empty() || owner.len() > 512 {
+        return None;
+    }
+    let key = (session.username(), owner.to_owned());
+    let profiles = OWNER_PROFILES.get_or_init(Default::default);
+    if let Some((created, profile)) = profiles.lock().ok()?.get(&key)
+        && created.elapsed() < Duration::from_secs(600)
+    {
+        return Some(profile.clone());
+    }
+    let encoded: String = url::form_urlencoded::byte_serialize(owner.as_bytes()).collect();
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(4),
+        session
+            .spclient()
+            .get_user_profile(&encoded, Some(0), Some(0)),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    let profile = crate::native_login::profile_from_response(owner, &bytes).ok()?;
+    let mut profiles = profiles.lock().ok()?;
+    if profiles.len() >= 512 {
+        profiles.clear();
+    }
+    profiles.insert(key, (Instant::now(), profile.clone()));
+    Some(profile)
+}
 
 /// The rootlist names owners by user ID; look up each owner's display name
 /// once per run. Failed lookups leave the name empty.
@@ -888,17 +928,7 @@ async fn name_owners(session: &Session, playlists: &mut [crate::model::Playlist]
     for owner in missing.into_iter().take(64) {
         let session = session.clone();
         requests.spawn(async move {
-            let encoded: String = url::form_urlencoded::byte_serialize(owner.as_bytes()).collect();
-            let bytes = tokio::time::timeout(
-                Duration::from_secs(6),
-                session
-                    .spclient()
-                    .get_user_profile(&encoded, Some(0), Some(0)),
-            )
-            .await
-            .ok()?
-            .ok()?;
-            let name = owner_name(&bytes)?;
+            let name = owner_profile(&session, &owner).await?.display_name?;
             Some((owner, name))
         });
     }
@@ -920,16 +950,11 @@ async fn name_owners(session: &Session, playlists: &mut [crate::model::Playlist]
     }
 }
 
+#[cfg(test)]
 fn owner_name(bytes: &[u8]) -> Option<String> {
-    if bytes.len() > 1_000_000 {
-        return None;
-    }
-    let value: Value = serde_json::from_slice(bytes).ok()?;
-    value["name"]
-        .as_str()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
+    crate::native_login::profile_from_response("friend", bytes)
+        .ok()?
+        .display_name
 }
 
 /// Adds one rootlist page and returns how many rows it held.
@@ -1573,6 +1598,79 @@ mod playlist_header_tests {
 #[cfg(test)]
 mod owner_name_tests {
     use super::*;
+    #[test]
+    fn owner_profile_identity_and_artwork_are_validated() {
+        let profile = crate::native_login::profile_from_response("friend", br#"{"uri":"spotify:user:friend","name":" Friend ","image_url":"https://artwork.example.test/avatar"}"#).unwrap();
+        assert_eq!(profile.display_name.as_deref(), Some("Friend"));
+        assert_eq!(profile.images.len(), 1);
+        assert!(
+            crate::native_login::profile_from_response(
+                "friend",
+                br#"{"uri":"spotify:user:someone-else","name":"Other"}"#
+            )
+            .is_err()
+        );
+        let profile = crate::native_login::profile_from_response(
+            "friend",
+            br#"{"name":"Friend","image_url":"http://artwork.example.test/avatar"}"#,
+        )
+        .unwrap();
+        assert!(profile.images.is_empty());
+    }
+
+    #[test]
+    #[ignore = "Reads public playlist creator profiles using saved native sign-in; no playback or playlist writes"]
+    fn live_public_playlist_owner_profile() {
+        let login = crate::native_login::authenticate(
+            &crate::auth::http_client().unwrap(),
+            true,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap()
+        .expect("Saved native login required");
+        login.runtime.block_on(async {
+            let session = &login.connection.0;
+            let query = std::env::var("SPOTIFLEX_TEST_PLAYLIST_QUERY")
+                .unwrap_or_else(|_| "road trip".into());
+            let playlists = crate::search::playlists(session, &query).await.unwrap();
+            let playlist = playlists
+                .iter()
+                .find(|playlist| {
+                    !playlist.owner.id.is_empty()
+                        && playlist.owner.id != "spotify"
+                        && playlist.owner.id != session.username()
+                })
+                .expect("Search needs a public playlist by another user");
+            let details = playlist_info(session, &playlist.id)
+                .await
+                .unwrap()
+                .playlist
+                .unwrap();
+            let profile = details
+                .owner_profile
+                .expect("Public creator profile was not resolved");
+            assert_eq!(profile.id, details.owner);
+            assert!(
+                profile
+                    .display_name
+                    .as_ref()
+                    .is_some_and(|name| !name.is_empty())
+            );
+            let started = Instant::now();
+            let cached = owner_profile(session, &details.owner).await.unwrap();
+            assert_eq!(cached.display_name, profile.display_name);
+            assert!(
+                started.elapsed() < Duration::from_millis(100),
+                "Repeated creator lookup must use cache"
+            );
+            println!(
+                "Public creator display name resolved; avatar available={}; cached lookup={} ms",
+                !profile.images.is_empty(),
+                started.elapsed().as_millis()
+            );
+        });
+    }
+
     #[test]
     fn profile_view_display_name_is_trimmed_and_required() {
         assert_eq!(

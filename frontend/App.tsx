@@ -1187,18 +1187,26 @@ function App() {
   };
   // Native playlist info gives the owner's user ID; show their display name.
   const ownerId = playlistInfo?.owner || playlist?.owner.id;
+  const creatorProfile = playlistInfo?.owner_profile;
+  const creator = creatorProfile?.id && creatorProfile.id === ownerId
+    ? creatorProfile
+    : undefined;
   const ownerName =
     likedRoute || (ownerId && ownerId === state.profile?.id)
       ? profileName
       : ownerId === "spotify"
         ? "Spotify"
-        : (playlist?.owner.id === ownerId && playlist?.owner.display_name) ||
+        : creator?.display_name ||
+          (playlist?.owner.id === ownerId && playlist?.owner.display_name) ||
           state.playlists.find(
             (item) => item.owner.id === ownerId && item.owner.display_name,
           )?.owner.display_name ||
           ownerId ||
           "Your collection";
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
+  const ownerImage = useLoadedImage(imageOf(
+    likedRoute || ownerId === state.profile?.id ? state.profile?.images : creator?.images,
+  ));
   const collection = likedRoute || state.route.startsWith("playlist:");
   const collectionPlays =
     collection &&
@@ -2100,12 +2108,10 @@ function App() {
                             </strong>
                           ) : (
                             <>
-                              {(likedRoute ||
-                                ownerId === state.profile?.id) &&
-                                profileImage && (
+                              {ownerImage && (
                                   <img
                                     className="hero-owner"
-                                    src={profileImage}
+                                    src={ownerImage}
                                     alt=""
                                   />
                                 )}

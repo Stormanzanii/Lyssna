@@ -85,3 +85,30 @@ it("forgets a removed playlist everywhere in the sidebar order", () => {
   expect(order.recent).toEqual([playlists[0].id]);
   expect(order.items.map((item) => item.id)).toEqual([playlists[0].id]);
 });
+
+it("never adds a played playlist that is not saved to Your Library", () => {
+  const unsaved = {
+    id: "9".repeat(22),
+    name: "Someone else's mix",
+    images: [],
+    owner: { id: "31pcawp2njnx2z4fvij52gexample" },
+    collaborative: false,
+  };
+  const order = recordManualPlay(
+    recordManualPlay(emptyOrder(), playlists[1]),
+    unsaved,
+  );
+  const state = {
+    ...emptyState,
+    profile: { id: "user" },
+    playlists,
+    settings: { ...emptyState.settings, library_order: { user: order } },
+  };
+  const ids = libraryItems(state).map((item) => item.id);
+  expect(ids).not.toContain(unsaved.id);
+  expect(ids[0]).toBe(playlists[1].id);
+  // Saving it later lets the remembered play order it again.
+  expect(
+    libraryItems({ ...state, playlists: [...playlists, unsaved] })[0].id,
+  ).toBe(unsaved.id);
+});

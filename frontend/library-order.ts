@@ -31,9 +31,12 @@ export function libraryItems(state: AppState): Playlist[] {
         item,
       ]),
     );
+  // Playing a playlist reorders it only when it is already saved: Your
+  // Library never gains playlists the user did not add.
+  const saved = new Set(state.playlists.map((item) => item.id));
   const ids = [
       ...order.pinned,
-      ...order.recent,
+      ...order.recent.filter((id) => id === DJ_ID || saved.has(id)),
       DJ_ID,
       ...state.playlists.map((item) => item.id),
     ],

@@ -1350,7 +1350,10 @@ function App() {
             )}
             {playlist.id === DJ_ID
               ? "Click to start listening"
-              : `Playlist · ${playlist.owner.display_name || playlist.owner.id}`}
+              : playlist.owner.display_name
+                ? `Playlist · ${playlist.owner.display_name}`
+                : // An unresolved owner is only a raw user ID.
+                  "Playlist"}
           </small>
         </div>
       </button>

@@ -864,6 +864,24 @@ function SongLyricsPage({
     track = state.playback.item;
   const backdrop = useRef<HTMLCanvasElement>(null);
   const [page, measuredNarrow] = useNarrowLyrics();
+  // The toolbar shows while the pointer moves over the lyrics and fades a
+  // second after it stops. Kept as a data attribute so frequent re-renders
+  // of this page do not reset it.
+  const toolsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const wakeTools = () => {
+    const element = page.current;
+    if (!element) return;
+    element.dataset.tools = "awake";
+    clearTimeout(toolsTimer.current);
+    toolsTimer.current = setTimeout(() => {
+      delete element.dataset.tools;
+    }, 1000);
+  };
+  const sleepTools = () => {
+    clearTimeout(toolsTimer.current);
+    if (page.current) delete page.current.dataset.tools;
+  };
+  useEffect(() => () => clearTimeout(toolsTimer.current), []);
   // The toolbar's compact toggle forces the stacked layout.
   const narrow = measuredNarrow || !!state.settings.lyrics_compact;
   const [canvasPlaying, setCanvasPlaying] = useState(false);
@@ -894,6 +912,8 @@ function SongLyricsPage({
     <section
       ref={page}
       className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""}`}
+      onMouseMove={wakeTools}
+      onMouseLeave={sleepTools}
     >
       {children}
       {(!canvas || !canvasPlaying) && (

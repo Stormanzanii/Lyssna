@@ -2494,7 +2494,8 @@ small {
   grid-template-columns: 1fr;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
-  padding: 18px 8% 0;
+  /* Room for the toolbar's own row above the song header. */
+  padding: 64px 8% 0;
 }
 .lyrics-page.narrow .lyrics-album {
   display: grid;
@@ -2516,10 +2517,6 @@ small {
   margin: 0;
   align-self: end;
 }
-.lyrics-page.narrow .lyrics-album {
-  /* Keep the header text clear of the lyrics toolbar. */
-  padding-right: 370px;
-}
 .lyrics-page.narrow .lyrics-title:not(.scrolling) .marquee-content,
 .lyrics-page.narrow .lyrics-artists:not(.scrolling) .marquee-content {
   margin-inline: 0;
@@ -2540,7 +2537,14 @@ small {
 }
 .lyrics-page.narrow > .lyrics-toolbar {
   top: 8px;
-  right: 8px;
+  left: max(8px, calc(8% - 4px));
+  right: auto;
+  max-width: calc(100% - 16px);
+  flex-wrap: wrap;
+}
+.lyrics-page.narrow.artwork-right > .lyrics-toolbar {
+  left: auto;
+  right: max(8px, calc(8% - 4px));
 }
 .lyrics-page.narrow .lyrics-message {
   padding-top: 30px;
@@ -2922,6 +2926,81 @@ small {
 }
 .lyrics-toolbar .icon-button {
   color: #f1f1f1b0;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    transform 0.15s;
+}
+/* Hidden until the pointer moves over the lyrics; stays while used. */
+.lyrics-toolbar {
+  opacity: 0;
+  transition:
+    opacity 0.3s,
+    background 0.2s;
+}
+.lyrics-page[data-tools="awake"] > .lyrics-toolbar,
+.lyrics-toolbar:hover,
+.lyrics-toolbar:focus-within {
+  opacity: 1;
+}
+/* Hovering darkens the frosted bar without making it opaque. */
+.lyrics-toolbar:hover {
+  background: #00000059;
+}
+.lyrics-toolbar .icon-button:hover {
+  color: #fff;
+  background: #ffffff1f;
+  transform: scale(1.1);
+}
+.lyrics-toolbar .icon-button:active {
+  transform: scale(0.92);
+}
+/* Layout changes morph between positions (see layout-transition.ts). */
+.center-panel {
+  view-transition-name: center-panel;
+}
+.now-playing {
+  view-transition-name: now-playing;
+}
+.center-panel .lyrics-page > .lyrics-album {
+  view-transition-name: lyrics-artwork;
+}
+.center-panel .lyrics-page .lyrics-canvas-cover {
+  view-transition-name: lyrics-canvas;
+}
+.center-panel .lyrics-page .lyrics-body {
+  view-transition-name: lyrics-text;
+}
+::view-transition-group(*) {
+  animation-duration: 0.32s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Resizing panels clip instead of stretching their text. */
+::view-transition-old(center-panel),
+::view-transition-new(center-panel),
+::view-transition-old(lyrics-text),
+::view-transition-new(lyrics-text) {
+  height: 100%;
+  object-fit: cover;
+  object-position: left top;
+}
+::view-transition-new(now-playing):only-child {
+  animation: now-playing-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(now-playing):only-child {
+  animation: now-playing-out 0.24s ease-in forwards;
+}
+@keyframes now-playing-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+@keyframes now-playing-out {
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
 }
 .lyric-preview {
   height: 420px;

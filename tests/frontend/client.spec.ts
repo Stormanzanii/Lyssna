@@ -5474,10 +5474,28 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
   await expect
     .poll(layout)
     .toEqual({ albumRight: false, oneRow: true, toolbarRight: false, overArtwork: true });
+  // The flip animates: the browser's transition starts and is not skipped.
+  await page.evaluate(() => {
+    const original = (document as any).startViewTransition.bind(document);
+    (window as any).__transitions = [];
+    (document as any).startViewTransition = (callback: () => void) => {
+      const transition = original(callback);
+      (window as any).__transitions.push(
+        transition.ready.then(
+          () => "ran",
+          (error: Error) => error.name,
+        ),
+      );
+      return transition;
+    };
+  });
   await page
     .getByRole("toolbar", { name: "Lyrics" })
     .getByTitle("Artwork on the right", { exact: true })
     .click();
+  expect(
+    await page.evaluate(() => Promise.all((window as any).__transitions)),
+  ).toEqual(["ran"]);
   await expect
     .poll(layout)
     .toEqual({ albumRight: true, oneRow: true, toolbarRight: true, overArtwork: true });
@@ -5599,4 +5617,91 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   await database.getByLabel("Search saved lyrics").fill("other");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Other tune");
+});
+
+test("compact lyrics put the toolbar on its own row above the song", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Compact lyrics", { exact: true })
+    .click();
+  const layout = () =>
+    page.evaluate(() => {
+      const box = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const toolbar = box(".lyrics-toolbar");
+      const album = box(".lyrics-album");
+      const page = box(".lyrics-page");
+      return {
+        // Never overlapping the song header, so long titles are not cut.
+        above: toolbar.bottom <= album.top + 1,
+        // The header uses the page's width, not what the toolbar leaves.
+        wideHeader: album.width > page.width * 0.7,
+      };
+    });
+  await expect.poll(layout).toEqual({ above: true, wideHeader: true });
+});
+
+test("lyrics toolbar fades in on pointer movement and out a second later", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const toolbar = page.getByRole("toolbar", { name: "Lyrics" });
+  const lyrics = page.locator(".lyrics-page");
+  const opacity = () =>
+    toolbar.evaluate((element) => Number(getComputedStyle(element).opacity));
+  const box = (await lyrics.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2 + 20, box.y + box.height / 2);
+  await expect.poll(opacity).toBe(1);
+  // Still pointer: it fades after a second.
+  await expect.poll(opacity, { timeout: 4000 }).toBe(0);
+  // Resting on the toolbar keeps it, darkened but still see-through.
+  await toolbar.hover();
+  await expect.poll(opacity).toBe(1);
+  await page.waitForTimeout(1300);
+  expect(await opacity()).toBe(1);
+  const background = await toolbar.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  const alpha = Number(background.match(/[\d.]+(?=\)$)/)?.[0] ?? 1);
+  expect(alpha).toBeGreaterThan(0.2);
+  expect(alpha).toBeLessThan(0.6);
+  // Leaving the lyrics hides it at once.
+  await page.mouse.move(5, 5);
+  await expect.poll(opacity).toBe(0);
+});
+
+test("closing and opening Now playing animates the panel", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.evaluate(() => {
+    const original = (document as any).startViewTransition.bind(document);
+    (window as any).__transitions = [];
+    (document as any).startViewTransition = (callback: () => void) => {
+      const transition = original(callback);
+      (window as any).__transitions.push(
+        transition.ready.then(
+          () => "ran",
+          (error: Error) => error.name,
+        ),
+      );
+      return transition;
+    };
+  });
+  const toggle = page.locator(".player-bar").getByTitle("Now playing", { exact: true });
+  await expect(page.locator("aside.now-playing")).toHaveCount(1);
+  await toggle.click();
+  await expect(page.locator("aside.now-playing")).toHaveCount(0);
+  await toggle.click();
+  await expect(page.locator("aside.now-playing")).toHaveCount(1);
+  expect(
+    await page.evaluate(() => Promise.all((window as any).__transitions)),
+  ).toEqual(["ran", "ran"]);
 });

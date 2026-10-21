@@ -65,6 +65,7 @@ import {
 import { rpc, subscribe } from "./bridge";
 import { startIdleTrim } from "./memory-trim";
 import { useRowWindow } from "./track-window";
+import { animateLayout } from "./layout-transition";
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
@@ -1851,7 +1852,17 @@ function App() {
                       className={`icon-button ${on ? "active" : ""}`}
                       title={label}
                       aria-pressed={on}
-                      onClick={() => updateSettings({ [key]: !on })}
+                      onClick={() =>
+                        // Layout toggles glide to their new place.
+                        key === "lyrics_artwork_right" ||
+                        key === "lyrics_hide_artwork" ||
+                        key === "lyrics_compact"
+                          ? animateLayout(
+                              () => updateSettings({ [key]: !on }),
+                              state.settings.reduce_motion,
+                            )
+                          : updateSettings({ [key]: !on })
+                      }
                     >
                       <Icon size={18} />
                     </button>
@@ -2988,13 +2999,15 @@ function App() {
           setDeviceMenu(!deviceMenu);
           if (!deviceMenu) void call("refresh");
         }}
-        onSidebar={() => {
-          if (sidebar && panel === "queue") setPanel("now");
-          else {
-            setSidebar(!sidebar);
-            setPanel("now");
-          }
-        }}
+        onSidebar={() =>
+          animateLayout(() => {
+            if (sidebar && panel === "queue") setPanel("now");
+            else {
+              setSidebar(!sidebar);
+              setPanel("now");
+            }
+          }, state.settings.reduce_motion)
+        }
         onFullscreen={() => void fullscreen()}
         lyricsActive={center === "lyrics"}
         queueActive={sidebar && panel === "queue"}

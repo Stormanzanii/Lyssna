@@ -2495,8 +2495,8 @@ small {
   grid-template-columns: 1fr;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
-  /* Room for the toolbar's own row above the song header. */
-  padding: 64px 8% 0;
+  /* Room on the right for the toolbar's column. */
+  padding: 18px max(8%, 64px) 0 8%;
 }
 .lyrics-page.narrow .lyrics-album {
   display: grid;
@@ -2536,16 +2536,21 @@ small {
 .lyrics-page.narrow .lyrics-body {
   height: 100%;
 }
+/* Compact lyrics: the toolbar runs top to bottom along the right edge,
+   clear of the song header and the lyrics. */
 .lyrics-page.narrow > .lyrics-toolbar {
-  top: 8px;
-  left: max(8px, calc(8% - 4px));
-  right: auto;
-  max-width: calc(100% - 16px);
-  flex-wrap: wrap;
-}
-.lyrics-page.narrow.artwork-right > .lyrics-toolbar {
+  top: 12px;
+  right: 12px;
   left: auto;
-  right: max(8px, calc(8% - 4px));
+  flex-direction: column;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.lyrics-page.narrow > .lyrics-toolbar .toolbar-divider {
+  width: 18px;
+  height: 1px;
+  margin: 2px 0;
 }
 .lyrics-page.narrow .lyrics-message {
   padding-top: 30px;
@@ -4477,7 +4482,6 @@ input[type="range"]:hover {
 }
 .lyrics-page.narrow.no-artwork {
   grid-template-rows: minmax(0, 1fr);
-  padding-top: 64px;
 }
 .lyrics-page.artwork-right:not(.narrow):not(.no-artwork) {
   grid-template-columns: minmax(220px, 1.15fr) minmax(180px, 0.85fr);

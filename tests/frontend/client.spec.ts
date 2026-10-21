@@ -5628,7 +5628,7 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   await expect(rows.first()).toContainText("Other tune");
 });
 
-test("compact lyrics put the toolbar on its own row above the song", async ({
+test("compact lyrics run the toolbar down the right edge", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -5645,14 +5645,29 @@ test("compact lyrics put the toolbar on its own row above the song", async ({
       const toolbar = box(".lyrics-toolbar");
       const album = box(".lyrics-album");
       const page = box(".lyrics-page");
+      const lines = document.querySelector(".lyrics-body")!.getBoundingClientRect();
       return {
-        // Never overlapping the song header, so long titles are not cut.
-        above: toolbar.bottom <= album.top + 1,
-        // The header uses the page's width, not what the toolbar leaves.
+        // A column at the right edge, top to bottom.
+        vertical: toolbar.height > toolbar.width * 3,
+        atRight: page.right - toolbar.right < 20,
+        // Clear of the song header and the lyrics.
+        clearOfHeader: toolbar.left >= album.right - 1,
+        clearOfLyrics: toolbar.left >= lines.right - 1,
+        // The header still gets most of the width.
         wideHeader: album.width > page.width * 0.7,
       };
     });
-  await expect.poll(layout).toEqual({ above: true, wideHeader: true });
+  await expect.poll(layout).toEqual({
+    vertical: true,
+    atRight: true,
+    clearOfHeader: true,
+    clearOfLyrics: true,
+    wideHeader: true,
+  });
+  await page.waitForTimeout(500);
+  await page.mouse.move(800, 500);
+  await page.mouse.move(820, 520);
+  await page.screenshot({ path: "target/diagnostics/compact-lyrics.png" });
 });
 
 test("lyrics toolbar fades in on pointer movement and out a second later", async ({

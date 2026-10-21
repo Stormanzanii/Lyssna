@@ -108,6 +108,18 @@
   margin-bottom: 10px;
   text-shadow: 0 2px 24px #0004;
 }
+.artist-fallback {
+  container-type: inline-size;
+  min-height: clamp(280px, 24vw, 320px);
+  padding-top: 64px;
+}
+.artist-fallback .hero-cover {
+  width: clamp(112px, 18cqi, 232px);
+  border-radius: 50%;
+}
+.artist-fallback h1 {
+  font-size: clamp(36px, 9cqi, 112px);
+}
 .artist-verified {
   display: flex;
   align-items: center;
@@ -118,12 +130,13 @@
   color: #fff;
 }
 .artist-verified svg {
-  color: #4cb3ff;
-  fill: #4cb3ff;
+  flex-shrink: 0;
+  color: #b8dfc3;
+  fill: #b8dfc3;
 }
 .artist-verified svg path:last-child {
   fill: none;
-  stroke: #fff;
+  stroke: #203829;
 }
 .artist-monthly {
   margin: 0;

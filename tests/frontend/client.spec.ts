@@ -1,6 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { emptyState } from "../../frontend/state";
-import type { Track } from "../../frontend/types";
+import type { BrowseInfo, Track } from "../../frontend/types";
 
 const track: Track = {
   id: "0123456789abcdefghijkl",
@@ -62,6 +62,121 @@ test("artist links show the artist immediately while metadata is pending", async
     "Test artist",
   );
   await expect(page.locator(".skeleton-rows")).toHaveCount(0);
+});
+
+test("artist portraits replace missing banners and metadata stays below either header", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.route("https://artwork.example.test/artist/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640"><rect width="640" height="640" fill="#805982"/></svg>',
+    }),
+  );
+  await page.locator(".player-bar .artist-link").first().click();
+  const avatar = "https://artwork.example.test/artist/avatar.svg";
+  const banner = "https://artwork.example.test/artist/banner.svg";
+  const emitInfo = (info: BrowseInfo) =>
+    page.evaluate((info) => {
+      const host = (window as any).__clientTest;
+      const generation = host.commands
+        .filter(
+          (entry: any) =>
+            entry.command === "browse" && entry.args.key === info.key,
+        )
+        .at(-1).args.generation;
+      host.emit({ type: "browse_info", generation, info });
+    }, info);
+  const info: BrowseInfo = {
+    key: `artist:${track.artists[0].id}`,
+    title: "Test artist",
+    subtitle: "Artist",
+    images: [{ url: avatar }],
+    artist: {
+      ...track.artists[0],
+      images: [{ url: avatar }],
+      verified: true,
+      monthly_listeners: 1_400_000,
+    },
+    albums: [],
+  };
+  await emitInfo(info);
+  const hero = page.locator(".artist-hero");
+  await expect(hero).toHaveClass(/artist-fallback/);
+  await expect(hero.locator(".hero-cover img")).toHaveAttribute("src", avatar);
+  await expect(hero.locator(".artist-verified")).toHaveText(
+    "Verified by Spotify",
+  );
+  await expect(hero.locator(".artist-monthly")).toHaveText(
+    "1.4M monthly listeners",
+  );
+  const titleBox = (await hero.locator("h1").boundingBox())!;
+  const verifiedBox = (await hero.locator(".artist-verified").boundingBox())!;
+  expect(verifiedBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+  expect(
+    await hero
+      .locator(".hero-cover")
+      .evaluate((node) => getComputedStyle(node).borderRadius),
+  ).toBe("50%");
+  await expect
+    .poll(() =>
+      hero.evaluate((node) =>
+        getComputedStyle(node.parentElement!).getPropertyValue("--hero").trim(),
+      ),
+    )
+    .not.toBe("rgb(83 83 83)");
+  await hero.screenshot({ path: "target/diagnostics/artist-fallback.png" });
+
+  const overview = {
+    header_image: banner,
+    verified: true,
+    monthly_listeners: 72_800_000,
+    biography: "",
+    popular: [],
+    source_url: "",
+    fetched_at: 0,
+  };
+  await emitInfo({ ...info, overview });
+  await expect(hero).not.toHaveClass(/artist-fallback/);
+  await expect(hero.locator(".hero-cover")).toHaveCount(0);
+  await expect(hero).toHaveCSS("background-image", /banner\.svg/);
+  await expect(hero.locator(".artist-verified")).toHaveText(
+    "Verified by Spotify",
+  );
+  await expect(hero.locator(".artist-monthly")).toHaveText(
+    "72.8M monthly listeners",
+  );
+  const bannerTitleBox = (await hero.locator("h1").boundingBox())!;
+  const bannerVerifiedBox = (await hero
+    .locator(".artist-verified")
+    .boundingBox())!;
+  expect(bannerVerifiedBox.y).toBeGreaterThanOrEqual(
+    bannerTitleBox.y + bannerTitleBox.height,
+  );
+  await hero.screenshot({ path: "target/diagnostics/artist-banner.png" });
+
+  await emitInfo({
+    ...info,
+    overview: {
+      ...overview,
+      header_image: undefined,
+      verified: false,
+      monthly_listeners: 0,
+    },
+  });
+  await expect(hero).toHaveClass(/artist-fallback/);
+  await expect(hero.locator(".hero-cover")).toBeVisible();
+  await expect(hero.locator(".artist-verified")).toHaveCount(0);
+  await expect(hero.locator(".artist-monthly")).toHaveText(
+    "0 monthly listeners",
+  );
+  await page.setViewportSize({ width: 1024, height: 900 });
+  expect(
+    await hero.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
 });
 
 test("Connect retains registered speakers and transfers back to this computer", async ({

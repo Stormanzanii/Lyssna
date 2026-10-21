@@ -1004,6 +1004,12 @@ function App() {
     entity?.overview?.header_image,
     state.route,
   );
+  const artistPage = state.route.startsWith("artist:");
+  const artistFallback =
+    artistPage && (!entity?.overview?.header_image || !artistBanner);
+  const artistVerified = entity?.overview?.verified ?? entity?.artist?.verified;
+  const monthlyListeners =
+    entity?.overview?.monthly_listeners ?? entity?.artist?.monthly_listeners;
   const heroImages = entity?.images.length ? entity.images : playlist?.images;
   const artworkColor = useArtworkColor(
     state.route === "liked" ? undefined : imageOf(heroImages),
@@ -1776,26 +1782,33 @@ function App() {
                 />
               ) : (
                 <div
-                  className={`entity-header ${entity?.artist ? "artist-header" : ""}`}
+                  className={`entity-header ${artistPage ? "artist-header" : ""}`}
                   style={{ "--hero": heroColor } as CSSProperties}
                 >
                   <section
-                    className={`page-hero ${state.route.startsWith("artist:") ? "artist-hero" : ""}`}
+                    className={`page-hero ${artistPage ? `artist-hero ${artistFallback ? "artist-fallback" : ""}` : ""}`}
                     style={
-                      state.route.startsWith("artist:") && artistBanner
+                      artistPage && !artistFallback && artistBanner
                         ? {
                             backgroundImage: `linear-gradient(0deg,#000c,#0000 65%),url("${artistBanner}")`,
                           }
                         : undefined
                     }
                   >
-                    {state.route === "liked" ? (
+                    {artistFallback ? (
+                      <Cover
+                        images={heroImages}
+                        className="hero-cover"
+                        contextRoute={state.route}
+                        contextName={title}
+                      />
+                    ) : state.route === "liked" ? (
                       <div className="liked-cover hero-cover">
                         <Heart size={84} fill="currentColor" />
                       </div>
                     ) : (
                       (!!entity?.images.length || !!playlist?.images.length) &&
-                      !entity?.artist && (
+                      !artistPage && (
                         <Cover
                           images={heroImages}
                           className="hero-cover"
@@ -1805,21 +1818,15 @@ function App() {
                       )
                     )}
                     <div className="hero-copy">
-                      {entity?.overview?.verified ? (
-                        <p className="artist-verified">
-                          <BadgeCheck size={22} /> Verified Artist
-                        </p>
-                      ) : (
+                      {!artistPage && (
                         <span className="eyebrow">
-                          {state.route.startsWith("artist:")
-                            ? "Artist"
-                            : state.route.startsWith("album:")
-                              ? entity?.album?.album_type || "Album"
-                              : state.route.startsWith("search:")
-                                ? "Search"
-                                : state.route === "queue"
-                                  ? "Up next"
-                                  : "Playlist"}
+                          {state.route.startsWith("album:")
+                            ? entity?.album?.album_type || "Album"
+                            : state.route.startsWith("search:")
+                              ? "Search"
+                              : state.route === "queue"
+                                ? "Up next"
+                                : "Playlist"}
                         </span>
                       )}
                       <h1 className={title.length > 28 ? "long-title" : ""}>
@@ -1837,9 +1844,17 @@ function App() {
                           {title}
                         </span>
                       </h1>
-                      {entity?.overview?.monthly_listeners != null && (
+                      {artistPage && artistVerified && (
+                        <p className="artist-verified">
+                          <BadgeCheck size={22} /> Verified by Spotify
+                        </p>
+                      )}
+                      {artistPage && monthlyListeners != null && (
                         <p className="artist-monthly">
-                          {entity.overview.monthly_listeners.toLocaleString()}{" "}
+                          {monthlyListeners.toLocaleString(undefined, {
+                            notation: "compact",
+                            maximumFractionDigits: 1,
+                          })}{" "}
                           monthly listeners
                         </p>
                       )}
@@ -1853,7 +1868,7 @@ function App() {
                             />
                           </p>
                         )}
-                      {!entity?.artist && (
+                      {!artistPage && (
                         <p
                           className={`hero-meta ${entity?.album ? "" : "playlist-meta"}`}
                         >

@@ -560,6 +560,25 @@ describe("library edits on the open page", () => {
         .tracks,
     ).toHaveLength(2);
   });
+  it("moves a dragged row and ignores other pages", () => {
+    const third: Track = { ...track, id: "third", uri: "spotify:track:third" };
+    const open = {
+      ...emptyState,
+      route: "playlist:p",
+      tracks: [track, other, third],
+    };
+    const next = reducer(open, {
+      type: "track_moved",
+      key: "playlist:p",
+      from: 0,
+      to: 2,
+    });
+    expect(next.tracks).toEqual([other, third, track]);
+    expect(
+      reducer(open, { type: "track_moved", key: "playlist:q", from: 0, to: 2 })
+        .tracks,
+    ).toEqual(open.tracks);
+  });
   it("removes only the chosen row of the open playlist", () => {
     const open = {
       ...emptyState,

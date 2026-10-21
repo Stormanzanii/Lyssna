@@ -3863,3 +3863,52 @@ test("owners edit playlist name and description", async ({
     playlist: { id },
   });
 });
+
+test("songs drag into place in an editable playlist", async ({
+  page,
+}) => {
+  await startClient(page);
+  const id = "4123456789abcdefghijkl";
+  await page.evaluate(
+    (id) =>
+      (window as any).__clientTest.emit({
+        type: "library",
+        playlists: [
+          {
+            id,
+            name: "Road trip",
+            images: [],
+            owner: { id: "test-user" },
+            collaborative: false,
+          },
+        ],
+      }),
+    id,
+  );
+  await page.locator(".library-item", { hasText: "Road trip" }).first().click();
+  const rows = page.locator(".track-row");
+  await expect(rows).toHaveCount(150);
+  const last = (command: string) =>
+    page.evaluate(
+      (command) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === command)
+          .at(-1)?.args,
+      command,
+    );
+
+  // Drop on the lower half of the third row: the first song lands third.
+  const third = await rows.nth(2).boundingBox();
+  await rows
+    .nth(0)
+    .dragTo(rows.nth(2), {
+      targetPosition: { x: 40, y: third!.height - 4 },
+    });
+  await expect.poll(() => last("move_playlist_song")).toMatchObject({
+    from: 0,
+    to: 2,
+    uri: "spotify:track:item0",
+  });
+  await expect(rows.nth(0)).toContainText("Song 2");
+  await expect(rows.nth(2)).toContainText("Song 1");
+});

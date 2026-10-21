@@ -221,6 +221,9 @@ function App() {
     name: string;
     description: string;
   } | null>(null);
+  // Row being dragged and where it would land, for playlist reordering.
+  const dragRow = useRef<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
   const [removeDialog, setRemoveDialog] = useState<{
     id: string;
     name: string;
@@ -802,6 +805,24 @@ function App() {
           : "",
     });
   }, []);
+  const moveInPlaylist = useCallback(
+    (from: number, to: number) => {
+      const current = stateRef.current,
+        playlist = current.playlists.find(
+          (item) => `playlist:${item.id}` === current.route,
+        ),
+        track = current.tracks[from];
+      if (!playlist || !track || from === to) return;
+      dispatch({ type: "track_moved", key: current.route, from, to });
+      void call("move_playlist_song", {
+        playlist,
+        from,
+        uri: track.uri,
+        to,
+      });
+    },
+    [call],
+  );
   const removeFromPlaylist = useCallback(
     (track: Track) => {
       const current = stateRef.current,
@@ -1042,6 +1063,14 @@ function App() {
       `playlist:${item.id}` === state.route &&
       item.owner.id === state.profile?.id,
   );
+  // Rows drag into place only in the playlist's own order, unfiltered.
+  const reorderable =
+    !filtering &&
+    state.playlists.some(
+      (item) =>
+        `playlist:${item.id}` === state.route &&
+        (item.owner.id === state.profile?.id || item.collaborative),
+    );
   const displayTracks = entity?.artist
     ? (entity.overview?.popular.map((item) => item.track) ?? [])
     : collection
@@ -1949,8 +1978,41 @@ function App() {
                             track.uri === state.playback.item?.uri;
                           return (
                             <div
-                              className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""}`}
+                              className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
                               key={`${track.uri}-${index}`}
+                              draggable={reorderable}
+                              onDragStart={(event) => {
+                                // Unfiltered playlist order: row = position.
+                                dragRow.current = index;
+                                event.dataTransfer.effectAllowed = "move";
+                              }}
+                              onDragOver={(event) => {
+                                if (dragRow.current === null) return;
+                                event.preventDefault();
+                                const box =
+                                  event.currentTarget.getBoundingClientRect();
+                                setDropAt(
+                                  event.clientY > box.top + box.height / 2
+                                    ? index + 1
+                                    : index,
+                                );
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                const from = dragRow.current;
+                                dragRow.current = null;
+                                setDropAt(null);
+                                if (from === null || dropAt === null) return;
+                                // Dropping before `dropAt` in the old order.
+                                moveInPlaylist(
+                                  from,
+                                  dropAt > from ? dropAt - 1 : dropAt,
+                                );
+                              }}
+                              onDragEnd={() => {
+                                dragRow.current = null;
+                                setDropAt(null);
+                              }}
                               onClick={(event) =>
                                 select(
                                   track,

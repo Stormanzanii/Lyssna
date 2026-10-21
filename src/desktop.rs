@@ -2078,6 +2078,28 @@ fn edit_playlist(
         .map_err(error)
 }
 #[tauri::command]
+fn move_playlist_song(
+    playlist: Playlist,
+    from: usize,
+    uri: String,
+    to: usize,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
+    if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
+        return Err("Sign in first".into());
+    }
+    state
+        .0
+        .commands
+        .send(Command::MovePlaylistSong {
+            playlist,
+            from,
+            uri,
+            to,
+        })
+        .map_err(error)
+}
+#[tauri::command]
 fn remove_from_playlist(
     playlist: Playlist,
     index: usize,
@@ -2426,6 +2448,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             remove_playlist,
             remove_from_playlist,
             edit_playlist,
+            move_playlist_song,
             saved_status,
             open_link,
             open_creator_profile,

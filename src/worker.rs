@@ -59,6 +59,13 @@ pub enum Command {
         name: String,
         description: String,
     },
+    /// Move the song at `from` in an editable playlist to position `to`.
+    MovePlaylistSong {
+        playlist: Playlist,
+        from: usize,
+        uri: String,
+        to: usize,
+    },
     /// Delete an owned playlist or unfollow another, as Spotify does.
     RemovePlaylist {
         id: String,
@@ -946,6 +953,29 @@ impl Backend {
                 self.refresh_library()?;
                 self.emit(Event::PageChanged(format!("playlist:{}", playlist.id)));
                 self.emit(Event::Notice(format!("Saved {}", name.trim())));
+            }
+            Command::MovePlaylistSong {
+                playlist,
+                from,
+                uri,
+                to,
+            } => {
+                anyhow::ensure!(
+                    playlist.editable_by(&self.profile.id),
+                    "This playlist cannot be edited by your account"
+                );
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then move the song."
+                );
+                let moved = self
+                    .native_controls
+                    .move_playlist_song(&playlist.id, from, &uri, to);
+                if moved.is_err() {
+                    // The window already moved the row; reload to restore it.
+                    self.emit(Event::PageChanged(format!("playlist:{}", playlist.id)));
+                }
+                moved?;
             }
             Command::CreatePlaylist { name, tracks } => {
                 anyhow::ensure!(

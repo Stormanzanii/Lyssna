@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Resume with **Section 3: Playlist tools**. Each implementation batch gets relevant checks, an updated feature record, a Git commit and a push. Implementation and live listening remain separate claims.
+Resume with **Section 4: Lyrics** or the Spotify folder work noted below. Each implementation batch gets relevant checks, an updated feature record, a Git commit and a push. Implementation and live listening remain separate claims.
 
 ## 1. Playback speed: implemented and measured
 
@@ -14,14 +14,12 @@ Startup metadata and audio-key reuse, early preparation, upcoming-track preloadi
 - Native queue additions and Spotify Connect discovery avoid the Web API. Live checks discovered this computer and four registered speakers, added the selected song to its queue and resolved queued metadata. Regression checks assert zero Web API requests for local queue writes and device refreshes. Start playback on this computer once before adding to its queue; paused loaded playback remains supported.
 - Spotify Connect keeps registered Alexa speakers visible even when flagged offline or omitted by later updates. Native handoff and explicit return avoid the Web API. The user confirmed music on Gameroom and its return to headphones. Only one Windows audio endpoint was available for a physical listening check; switching between two Windows endpoints remains unverified.
 
-The existing Spotify Web API cooldown still applies to operations using that API, including remote transport controls and playlist writes. Device discovery and transfers use native Connect. Registered speakers can still be unreachable; their presence does not guarantee activation.
+The existing Spotify Web API cooldown still applies to operations using that API, including remote transport controls. Device discovery, transfers, the library list, saved items, play history and playlist writes use native services, with Web API fallbacks where noted. Registered speakers can still be unreachable; their presence does not guarantee activation.
 
-## 3. Playlist tools: next
+## 3. Playlist tools: mostly implemented
 
-- Create playlists.
-- Edit names, descriptions and visibility.
-- Reorder and remove tracks.
-- Handle concurrent playlist changes and duplicates within Spotify's API limits.
+- Done (native, each change confirmed by a re-read, live-tested on a temporary playlist on 2026-10-21): create playlists, add with duplicate skipping, edit names and descriptions, drag to reorder, remove songs, delete or remove playlists from the library.
+- Remaining: public/private visibility (the internal change format is not yet known), cover images, and server-concurrent duplicate protection.
 
 ## 4. Lyrics
 
@@ -57,4 +55,4 @@ The existing Spotify Web API cooldown still applies to operations using that API
 
 ## Needs a supported implementation path
 
-Spotify folder import and offline playback remain research items. Spotify's public API does not provide folder metadata. Neither feature is promised without a supported approach.
+Offline playback remains a research item. Spotify's public API does not provide folder metadata, but the native library list SpotiFlex now reads includes folder markers, so showing Spotify folders has an implementation path; it is not built yet.

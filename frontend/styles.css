@@ -2751,6 +2751,16 @@ input[type="range"]:hover {
   inset: 0;
   z-index: 40;
 }
+/* Playlist reordering: a line marks where the dragged song lands. */
+.track-row[draggable="true"] {
+  cursor: grab;
+}
+.track-row.drop-before {
+  box-shadow: 0 -2px 0 #1ed760;
+}
+.track-row.drop-after {
+  box-shadow: 0 2px 0 #1ed760;
+}
 .editable-title {
   cursor: pointer;
 }

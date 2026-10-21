@@ -424,6 +424,60 @@ pub async fn edit_details(
     Ok(())
 }
 
+/// Each row's song and its playlist item ID (base64, as the JSON API expects).
+async fn playlist_rows(session: &Session, id: &str) -> Result<Vec<(String, String)>> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    Ok(read_playlist(session, id)
+        .await?
+        .contents
+        .items
+        .iter()
+        .map(|item| (item.id.to_uri(), STANDARD.encode(&item.attributes.item_id)))
+        .collect())
+}
+
+/// Move the song at `from` so it ends up at position `to`.
+pub async fn move_song(
+    session: &Session,
+    id: &str,
+    from: usize,
+    uri: &str,
+    to: usize,
+) -> Result<()> {
+    valid_playlist_id(id)?;
+    let before = playlist_rows(session, id).await?;
+    ensure!(
+        before
+            .get(from)
+            .is_some_and(|(item, row)| item == uri && !row.is_empty())
+            && to < before.len(),
+        "The playlist changed. Refresh it and try again."
+    );
+    if from == to {
+        return Ok(());
+    }
+    let mut expected = before.clone();
+    let moved = expected.remove(from);
+    // Place it before the row that will follow it, or last.
+    let key = |(uri, row): &(String, String)| json!({"uri": uri, "attributes": {"itemId": row}});
+    let mut mov = json!({"items": [key(&moved)]});
+    match expected.get(to) {
+        Some(next) => mov["addBeforeItem"] = key(next),
+        None => mov["addLast"] = json!(true),
+    }
+    expected.insert(to, moved);
+    playlist_json(
+        session,
+        &format!("/playlist/v2/playlist/{id}/changes"),
+        &playlist_changes(json!({"kind": 4, "mov": mov})),
+    )
+    .await
+    .context("Spotify could not move the song")?;
+    let after = playlist_rows(session, id).await?;
+    ensure!(after == expected, "Spotify did not confirm the new order");
+    Ok(())
+}
+
 fn remove_changes(uri: &str, row: &str) -> Value {
     json!({
         "deltas": [{
@@ -963,6 +1017,8 @@ mod live_playlist_tests {
                 let again = add_to_playlist(session, &id, &picks).await?;
                 edit_details(session, &id, "SpotiFlex edit test", "Temporary test").await?;
                 edit_details(session, &id, "SpotiFlex edit test", "").await?;
+                move_song(session, &id, 0, &picks[0].uri, picks.len() - 1).await?;
+                move_song(session, &id, picks.len() - 1, &picks[0].uri, 0).await?;
                 remove_from_playlist(session, &id, 0, &picks[0].uri).await?;
                 Ok::<_, anyhow::Error>((picks.len(), first, again))
             }
@@ -984,7 +1040,7 @@ mod live_playlist_tests {
                     assert_eq!(first, picked);
                     assert_eq!(again, 0);
                     eprintln!(
-                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, edited details, removed one song, removed playlist"
+                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, edited details, moved a song both ways, removed one song, removed playlist"
                     );
                 }
                 (Added::NotWritten(error), _) | (_, Added::NotWritten(error)) => {

@@ -186,6 +186,8 @@ export type Action =
   | { type: "dj_requested" }
   /** A song left the open playlist; drop that row before Spotify confirms. */
   | { type: "track_removed"; key: string; index: number }
+  /** A song was dragged within the open playlist. */
+  | { type: "track_moved"; key: string; from: number; to: number }
   | { type: "dj_pending_expired" };
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -548,6 +550,26 @@ export function reducer(state: AppState, action: Action): AppState {
         saved,
         tracks,
         pages: rememberPage(state.pages, "liked", {
+          tracks,
+          more: state.more,
+        }),
+      };
+    }
+    case "track_moved": {
+      const { from, to } = action;
+      if (
+        action.key !== state.route ||
+        !state.tracks[from] ||
+        to < 0 ||
+        to >= state.tracks.length
+      )
+        return state;
+      const tracks = [...state.tracks];
+      tracks.splice(to, 0, ...tracks.splice(from, 1));
+      return {
+        ...state,
+        tracks,
+        pages: rememberPage(state.pages, state.route, {
           tracks,
           more: state.more,
         }),

@@ -311,6 +311,9 @@ impl NativeControls {
             crate::native_browse::edit_details(session, id, name, description).await
         })
     }
+    pub fn move_playlist_song(&self, id: &str, from: usize, uri: &str, to: usize) -> Result<()> {
+        self.run(async |session| crate::native_browse::move_song(session, id, from, uri, to).await)
+    }
     pub fn remove_from_playlist(&self, id: &str, index: usize, uri: &str) -> Result<()> {
         self.run(async |session| {
             crate::native_browse::remove_from_playlist(session, id, index, uri).await

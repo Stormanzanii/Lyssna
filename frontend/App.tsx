@@ -1466,7 +1466,7 @@ function App() {
     mainScroll,
     trackTable,
     listedTracks.length,
-    state.route,
+    `${center}:${state.route}`,
   );
   return (
     <div

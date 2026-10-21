@@ -5431,6 +5431,54 @@ test("song row covers load a small Spotify size without sizes=auto", async ({
   await expect(page.locator("img[sizes]")).toHaveCount(0);
 });
 
+for (const route of ["liked", "playlist:0123456789abcdefghijkl"]) {
+  test(`long collection ${route.split(":")[0]} stays visible after leaving lyrics`, async ({
+    page,
+  }) => {
+    await startClient(page, route);
+    await expect(page.locator(".track-row")).toHaveCount(150);
+    await page.evaluate(
+      ({ track }) => {
+        const host = (window as any).__clientTest;
+        const browse = host.commands
+          .filter((entry: any) => entry.command === "browse")
+          .at(-1).args;
+        host.emit({
+          type: "tracks",
+          key: browse.key,
+          generation: browse.generation,
+          offset: 0,
+          more: false,
+          tracks: Array.from({ length: 804 }, (_, index) => ({
+            ...track,
+            uri: `spotify:track:long${index}`,
+            name: `Long song ${index + 1}`,
+          })),
+        });
+      },
+      { track },
+    );
+    const scroller = page.locator(".browse-scroll");
+    await scroller.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(
+      page.getByText("Long song 804", { exact: true }),
+    ).toBeVisible();
+    await page.getByTitle("Lyrics", { exact: true }).click();
+    await expect(page.locator(".lyrics-page")).toBeVisible();
+    await page.getByTitle("Lyrics", { exact: true }).click();
+    await expect(page.getByText("Long song 1", { exact: true })).toBeVisible();
+    expect(await page.locator(".track-row").count()).toBeLessThan(120);
+    await page.locator(".browse-scroll").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(
+      page.getByText("Long song 804", { exact: true }),
+    ).toBeVisible();
+  });
+}
+
 test("long playlists render only the rows near the viewport", async ({
   page,
 }) => {

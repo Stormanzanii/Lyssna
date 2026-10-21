@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Lists longer than this render only the rows near the viewport. */
 export const WINDOW_MIN_ROWS = 200;
@@ -16,13 +16,27 @@ export function rowRange(
   rowHeight: number,
   count: number,
 ): [number, number] {
+  if (count <= 0) return [0, 0];
+  if (
+    ![scrollTop, viewport, listTop, rowHeight].every(Number.isFinite) ||
+    viewport <= 0 ||
+    rowHeight <= 0
+  )
+    return [0, Math.min(count, 64)];
   const first = Math.floor((scrollTop - listTop) / rowHeight) - OVERSCAN;
   const last =
     Math.ceil((scrollTop + viewport - listTop) / rowHeight) + OVERSCAN;
   // Past the end, keep the last rows rendered rather than none.
-  const lastStart = Math.floor(Math.max(0, count - 2 * OVERSCAN) / BLOCK) * BLOCK;
-  const start = Math.min(lastStart, Math.max(0, Math.floor(first / BLOCK) * BLOCK));
-  const end = Math.min(count, Math.max(start, Math.ceil(last / BLOCK) * BLOCK));
+  const lastStart =
+    Math.floor(Math.max(0, count - 2 * OVERSCAN) / BLOCK) * BLOCK;
+  const start = Math.min(
+    lastStart,
+    Math.max(0, Math.floor(first / BLOCK) * BLOCK),
+  );
+  const end = Math.min(
+    count,
+    Math.max(start + BLOCK, Math.ceil(last / BLOCK) * BLOCK),
+  );
   return [start, end];
 }
 
@@ -35,18 +49,19 @@ export function useRowWindow(
   scroller: RefObject<HTMLDivElement | null>,
   table: RefObject<HTMLDivElement | null>,
   count: number,
-  page: string,
+  view: string,
 ) {
   const windowed = count > WINDOW_MIN_ROWS;
   const rowHeight = useRef(56);
   const [range, setRange] = useState<[number, number]>([0, 64]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scroll = scroller.current;
     const list = table.current;
     if (!windowed || !scroll || !list) return;
     let frame = 0;
     const update = () => {
       frame = 0;
+      if (!scroll.isConnected || !list.isConnected) return;
       rowHeight.current =
         list.querySelector<HTMLElement>(".track-row")?.offsetHeight ||
         rowHeight.current;
@@ -56,7 +71,8 @@ export function useRowWindow(
         scroll.getBoundingClientRect().top +
         scroll.scrollTop +
         (head
-          ? head.offsetHeight + parseFloat(getComputedStyle(head).marginBottom)
+          ? head.offsetHeight +
+            (parseFloat(getComputedStyle(head).marginBottom) || 0)
           : 0);
       const next = rowRange(
         scroll.scrollTop,
@@ -81,7 +97,7 @@ export function useRowWindow(
       scroll.removeEventListener("scroll", schedule);
       sizes.disconnect();
     };
-  }, [scroller, table, windowed, count, page]);
+  }, [scroller, table, windowed, count, view]);
   const [start, end] = windowed ? range : [0, count];
   return {
     start,

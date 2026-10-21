@@ -15,3 +15,8 @@ it("stays inside the list", () => {
   const [start, end] = rowRange(1e6, 900, 400, 56, 800);
   expect(start).toBeLessThanOrEqual(end);
 });
+
+it("keeps a safe row window when removed DOM elements have no layout", () => {
+  expect(rowRange(0, 900, Number.NaN, 56, 804)).toEqual([0, 64]);
+  expect(rowRange(0, 900, 400, 0, 804)).toEqual([0, 64]);
+});

@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
   BookOpen,
+  ChevronLeft,
   Database,
+  Download,
+  Music2,
+  Play,
   RotateCcw,
+  Search,
   Trash2,
   Upload,
   X,
@@ -18,6 +22,7 @@ export interface SavedLyrics {
   artists: string;
   kind: string;
   saved_at: number;
+  image?: string;
 }
 
 const MODES: { mode: LoadMode; title: string; detail: string }[] = [
@@ -50,6 +55,8 @@ export function LoadTtml({
   onGuide,
   listSaved,
   deleteSaved,
+  onPlay,
+  onDownload,
   onClose,
 }: {
   song: string;
@@ -58,11 +65,22 @@ export function LoadTtml({
   onGuide: () => void;
   listSaved: () => Promise<SavedLyrics[]>;
   deleteSaved: (key: string) => Promise<void>;
+  onPlay: (uri: string) => void;
+  onDownload: (item: SavedLyrics) => void;
   onClose: () => void;
 }) {
   const [view, setView] = useState<"load" | "database">("load");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<SavedLyrics[] | null>(null);
+  const [filter, setFilter] = useState("");
+  const shown = useMemo(() => {
+    const words = filter.trim().toLocaleLowerCase();
+    return (saved ?? []).filter(
+      (item) =>
+        !words ||
+        `${item.name} ${item.artists}`.toLocaleLowerCase().includes(words),
+    );
+  }, [saved, filter]);
   const input = useRef<HTMLInputElement>(null);
   const pending = useRef<LoadMode>("persistent");
   useEffect(() => {
@@ -90,15 +108,6 @@ export function LoadTtml({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="load-ttml-head">
-          {view === "database" && (
-            <button
-              className="icon-button"
-              aria-label="Back to Load TTML"
-              onClick={() => setView("load")}
-            >
-              <ArrowLeft size={20} />
-            </button>
-          )}
           <h2>{view === "load" ? "Load TTML" : "TTML Database"}</h2>
           <button className="icon-button" aria-label="Close" onClick={onClose}>
             <X size={20} />
@@ -157,45 +166,92 @@ export function LoadTtml({
           </div>
         ) : (
           <div className="load-ttml-body">
+            <div className="load-ttml-tools">
+              <button
+                className="load-ttml-back"
+                aria-label="Back to Load TTML"
+                onClick={() => setView("load")}
+              >
+                <ChevronLeft size={18} />
+                Back
+              </button>
+              <label className="load-ttml-search">
+                <Search size={18} />
+                <input
+                  type="search"
+                  placeholder="Search saved lyrics…"
+                  aria-label="Search saved lyrics"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                />
+              </label>
+              <button className="load-ttml-reset" onClick={onReset}>
+                <RotateCcw size={16} />
+                Reset TTML
+              </button>
+            </div>
             {saved === null ? (
               <p className="load-ttml-empty">Loading saved lyrics…</p>
             ) : saved.length === 0 ? (
               <p className="load-ttml-empty">
                 No saved lyrics yet. Persistent loads appear here.
               </p>
+            ) : shown.length === 0 ? (
+              <p className="load-ttml-empty">No saved lyrics match.</p>
             ) : (
               <ul className="load-ttml-saved">
-                {saved.map((item) => (
-                  <li key={item.key}>
-                    <span>
-                      <strong>{item.name || "Unknown song"}</strong>
-                      <small>
-                        {[
-                          item.artists,
-                          item.kind.toUpperCase(),
-                          item.saved_at
-                            ? new Date(item.saved_at * 1000).toLocaleDateString()
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </small>
-                    </span>
-                    <button
-                      className="icon-button"
-                      aria-label={`Delete saved lyrics for ${item.name || "this song"}`}
-                      onClick={() =>
-                        void deleteSaved(item.key).then(() =>
-                          setSaved((items) =>
-                            (items ?? []).filter((entry) => entry.key !== item.key),
-                          ),
-                        )
-                      }
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                  </li>
-                ))}
+                {shown.map((item) => {
+                  const name = item.name || "Unknown song";
+                  return (
+                    <li key={item.key}>
+                      {item.image ? (
+                        <img src={item.image} alt="" loading="lazy" />
+                      ) : (
+                        <span className="load-ttml-art" aria-hidden="true">
+                          <Music2 size={22} />
+                        </span>
+                      )}
+                      <span className="load-ttml-song">
+                        <strong title={name}>{name}</strong>
+                        {item.artists && (
+                          <small title={item.artists}>{item.artists}</small>
+                        )}
+                      </span>
+                      <span className="load-ttml-row-actions">
+                        <button
+                          aria-label={`Play ${name}`}
+                          title="Play"
+                          disabled={!item.uri.startsWith("spotify:track:")}
+                          onClick={() => onPlay(item.uri)}
+                        >
+                          <Play size={16} fill="currentColor" />
+                        </button>
+                        <button
+                          aria-label={`Download lyrics for ${name}`}
+                          title={`Download ${item.kind.toUpperCase()}`}
+                          onClick={() => onDownload(item)}
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button
+                          aria-label={`Delete saved lyrics for ${name}`}
+                          title="Delete"
+                          onClick={() =>
+                            void deleteSaved(item.key).then(() =>
+                              setSaved((items) =>
+                                (items ?? []).filter(
+                                  (entry) => entry.key !== item.key,
+                                ),
+                              ),
+                            )
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

@@ -205,9 +205,9 @@ pub fn tracks(account: &str, key: &str, offset: usize) -> Option<Vec<Track>> {
     }
     Some(tracks)
 }
-/// Every song seen in cached pages, by the SHA-256 of its URI, as
-/// (name, artists). Used to name lyric imports saved before names were kept.
-pub fn known_tracks() -> std::collections::HashMap<String, (String, String)> {
+/// Every song seen in cached pages, by the SHA-256 of its URI. Used to name
+/// lyric imports saved before names and artwork were kept.
+pub fn known_tracks() -> std::collections::HashMap<String, Track> {
     let mut known = std::collections::HashMap::new();
     let Some(root) = crate::config::data_dir()
         .ok()
@@ -239,13 +239,7 @@ pub fn known_tracks() -> std::collections::HashMap<String, (String, String)> {
                 .iter()
                 .map(|byte| format!("{byte:02x}"))
                 .collect::<String>();
-            let artists = track
-                .artists
-                .iter()
-                .map(|artist| artist.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            known.entry(key).or_insert((track.name, artists));
+            known.entry(key).or_insert(track);
         }
     }
     known

@@ -2117,8 +2117,34 @@ async fn artist_liked_count(
         .map_err(error)
 }
 #[tauri::command]
-fn saved_lyrics() -> std::result::Result<Vec<crate::lyrics::SavedLyrics>, String> {
-    crate::lyrics::saved_imports().map_err(error)
+async fn saved_lyrics(
+    state: State<'_, Desktop>,
+) -> std::result::Result<Vec<crate::lyrics::SavedLyrics>, String> {
+    let controls = state.0.controls.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut saved = crate::lyrics::saved_imports()?;
+        // Older imports lack album art; look their songs up once and keep it.
+        let missing: Vec<String> = saved
+            .iter()
+            .filter(|item| item.image.is_empty() && item.uri.starts_with("spotify:track:"))
+            .map(|item| item.uri.clone())
+            .take(50)
+            .collect();
+        if !missing.is_empty()
+            && let Ok(tracks) = controls.resolve(&missing)
+        {
+            crate::lyrics::complete_saved(&mut saved, &tracks);
+        }
+        Ok::<_, anyhow::Error>(saved)
+    })
+    .await
+    .map_err(|_| "Saved lyrics are unavailable".to_owned())?
+    .map_err(error)
+}
+/// A saved lyric file and its download name.
+#[tauri::command]
+fn saved_lyrics_file(key: String) -> std::result::Result<(String, String), String> {
+    crate::lyrics::saved_file(&key).map_err(error)
 }
 #[tauri::command]
 fn delete_saved_lyrics(key: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
@@ -2658,6 +2684,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             import_lyrics,
             reset_lyrics,
             saved_lyrics,
+            saved_lyrics_file,
             artist_liked_count,
             delete_saved_lyrics,
             add_tracks,

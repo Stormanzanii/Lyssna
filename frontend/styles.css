@@ -1476,11 +1476,74 @@ small {
   font-size: 15px;
   color: #b3b3b3;
 }
+/* TTML Database, after Spicy Lyrics' list: Back, search and Reset above
+   rows of cover, song and Play / Download / Delete. */
+.load-ttml-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.load-ttml-back,
+.load-ttml-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.load-ttml-back {
+  color: #fff;
+  background: #ffffff0f;
+  box-shadow: inset 0 0 0 1px #ffffff1f;
+}
+.load-ttml-back:hover {
+  background: #ffffff1a;
+}
+.load-ttml-reset {
+  color: #f46a6a;
+  background: #f4434312;
+  box-shadow: inset 0 0 0 1px #f4434366;
+}
+.load-ttml-reset:hover {
+  background: #f4434324;
+}
+.load-ttml-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #b3b3b3;
+  background: #ffffff0a;
+  box-shadow: inset 0 0 0 1px #ffffff1f;
+}
+.load-ttml-search:focus-within {
+  box-shadow: inset 0 0 0 1px #ffffff55;
+}
+.load-ttml-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+}
 .load-ttml-saved {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 55vh;
+  gap: 4px;
+  max-height: 60vh;
   overflow-y: auto;
   margin: 0;
   padding: 0;
@@ -1489,12 +1552,29 @@ small {
 .load-ttml-saved li {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 16px;
+  padding: 10px 12px;
   border-radius: 10px;
-  background: #ffffff0a;
+  transition: background 0.15s;
 }
-.load-ttml-saved li > span {
+.load-ttml-saved li:hover {
+  background: #ffffff0d;
+}
+.load-ttml-saved img,
+.load-ttml-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: #ffffff14;
+}
+.load-ttml-art {
+  display: grid;
+  place-items: center;
+  color: #b3b3b3;
+}
+.load-ttml-song {
   flex: 1;
   min-width: 0;
 }
@@ -1505,9 +1585,39 @@ small {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.load-ttml-saved strong {
+  font-size: 18px;
+  font-weight: 500;
+}
 .load-ttml-saved small {
-  margin-top: 3px;
+  margin-top: 4px;
+  font-size: 16px;
   color: #b3b3b3;
+}
+.load-ttml-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.load-ttml-row-actions button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  color: #fff;
+  background: #ffffff0f;
+  box-shadow: inset 0 0 0 1px #ffffff1f;
+  transition: background 0.15s, transform 0.12s;
+}
+.load-ttml-row-actions button:hover:not(:disabled) {
+  background: #ffffff24;
+}
+.load-ttml-row-actions button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.load-ttml-row-actions button:disabled {
+  opacity: 0.4;
 }
 @media (max-width: 900px) {
   .load-ttml-modes {
@@ -4233,8 +4343,6 @@ input[type="range"]:hover {
 .lyrics-page:not(.narrow):not(.no-artwork):not(.canvas-lyrics) > .lyrics-toolbar {
   left: 16px;
   right: auto;
-  max-width: calc(42.5% - 32px);
-  flex-wrap: wrap;
 }
 .lyrics-page.artwork-right:not(.narrow):not(.no-artwork):not(.canvas-lyrics)
   > .lyrics-toolbar {

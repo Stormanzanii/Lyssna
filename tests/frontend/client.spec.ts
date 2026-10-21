@@ -418,6 +418,10 @@ async function startClient(page: Page, initialRoute = "liked") {
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "saved_lyrics")
+            return host.__clientTest.savedLyrics ?? [];
+          if (command === "saved_lyrics_file")
+            return ["Artist - Saved song.ttml", "<tt/>"];
           if (command === "audio_cache_size")
             return host.__clientTest.cacheBytes ?? 0;
           if (command === "clear_audio_cache") {
@@ -5198,13 +5202,22 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   await dialog.getByRole("button", { name: "TTML Database" }).click();
   const database = page.getByRole("dialog", { name: "TTML Database" });
   await expect(database).toContainText("No saved lyrics yet");
-  const title = (await database.locator(".load-ttml-head h2").boundingBox())!;
-  const backButton = (await database
-    .getByRole("button", { name: "Back to Load TTML" })
-    .boundingBox())!;
+  // The title lines up with the close button, and Back, search and Reset
+  // share one row, as in Spicy Lyrics.
+  const middle = async (locator: any) => {
+    const box = (await locator.boundingBox())!;
+    return box.y + box.height / 2;
+  };
+  const title = await middle(database.locator(".load-ttml-head h2"));
   expect(
-    Math.abs(title.y + title.height / 2 - (backButton.y + backButton.height / 2)),
+    Math.abs(title - (await middle(database.getByRole("button", { name: "Close" })))),
   ).toBeLessThan(2);
+  const back = await middle(database.getByRole("button", { name: "Back to Load TTML" }));
+  for (const control of [
+    database.getByLabel("Search saved lyrics"),
+    database.getByRole("button", { name: "Reset TTML" }),
+  ])
+    expect(Math.abs((await middle(control)) - back)).toBeLessThan(2);
   await database.getByRole("button", { name: "Back to Load TTML" }).click();
   await dialog.getByRole("button", { name: "Reset TTML" }).click();
   await expect.poll(() => last("reset_lyrics")).not.toBeUndefined();
@@ -5432,7 +5445,7 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
 test("lyrics toolbar sits over the cover art and follows it when flipped", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".lyrics-album")).toBeVisible();
@@ -5445,6 +5458,8 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
       const toolbar = box(".lyrics-toolbar");
       return {
         albumRight: album.left > page.left + page.width / 2,
+        // One row of buttons, never wrapped.
+        oneRow: toolbar.height < 60,
         toolbarRight: toolbar.left > page.left + page.width / 2,
         // Stays over the artwork column, not the lyrics.
         overArtwork:
@@ -5458,14 +5473,14 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
     });
   await expect
     .poll(layout)
-    .toEqual({ albumRight: false, toolbarRight: false, overArtwork: true });
+    .toEqual({ albumRight: false, oneRow: true, toolbarRight: false, overArtwork: true });
   await page
     .getByRole("toolbar", { name: "Lyrics" })
     .getByTitle("Artwork on the right", { exact: true })
     .click();
   await expect
     .poll(layout)
-    .toEqual({ albumRight: true, toolbarRight: true, overArtwork: true });
+    .toEqual({ albumRight: true, oneRow: true, toolbarRight: true, overArtwork: true });
 });
 
 test("Home artist cards open with their name and photo at once and prefetch on hover", async ({
@@ -5522,4 +5537,66 @@ test("Home artist cards open with their name and photo at once and prefetch on h
     "src",
     /card-artist\.svg/,
   );
+});
+
+test("TTML Database lists covers and plays, downloads and filters saved lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    (window as any).__clientTest.savedLyrics = [
+      {
+        key: "a".repeat(64),
+        uri: "spotify:track:0123456789abcdefghijk1",
+        name: "Saved song",
+        artists: "Artist",
+        kind: "ttml",
+        saved_at: 2,
+        image: "https://artwork.example.test/saved.svg",
+      },
+      {
+        key: "b".repeat(64),
+        uri: "spotify:track:0123456789abcdefghijk2",
+        name: "Other tune",
+        artists: "Someone",
+        kind: "lrc",
+        saved_at: 1,
+      },
+    ];
+  });
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.getByTitle("Load TTML", { exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Load TTML" })
+    .getByRole("button", { name: "TTML Database" })
+    .click();
+  const database = page.getByRole("dialog", { name: "TTML Database" });
+  const rows = database.locator(".load-ttml-saved li");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().locator("img")).toHaveAttribute("src", /saved\.svg/);
+  // A song without known art keeps a placeholder of the same size.
+  await expect(rows.nth(1).locator(".load-ttml-art")).toBeVisible();
+  await database.getByRole("button", { name: "Play Saved song" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({ command: "play", uri: "spotify:track:0123456789abcdefghijk1" });
+  const download = page.waitForEvent("download");
+  await database
+    .getByRole("button", { name: "Download lyrics for Saved song" })
+    .click();
+  expect((await download).suggestedFilename()).toBe("Artist - Saved song.ttml");
+  await page.evaluate(() =>
+    document.querySelector(".application")!.classList.add("liquid-glass"),
+  );
+  await page.screenshot({ path: "target/diagnostics/ttml-database.png" });
+  await database.getByLabel("Search saved lyrics").fill("other");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Other tune");
 });

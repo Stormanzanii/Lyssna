@@ -377,6 +377,15 @@ impl NativeControls {
             .build()?
             .block_on(crate::native_browse::resolve_tracks(&session, &uris))
     }
+    /// Song details for up to 50 song URIs.
+    pub fn resolve(&self, uris: &[String]) -> Result<Vec<crate::model::Track>> {
+        anyhow::ensure!(uris.len() <= 50, "Too many songs");
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::native_browse::resolve_tracks(&session, uris))
+    }
     pub fn devices(&self) -> Result<Vec<crate::model::Device>> {
         let connection = self
             .0

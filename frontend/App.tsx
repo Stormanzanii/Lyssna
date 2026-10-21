@@ -3579,6 +3579,23 @@ function App() {
           deleteSaved={async (key) => {
             await call("delete_saved_lyrics", { key });
           }}
+          onPlay={(uri) => play({ command: "play", uri })}
+          onDownload={(item) =>
+            void rpc<[string, string]>("saved_lyrics_file", { key: item.key }).then(
+              ([filename, contents]) => {
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(
+                  new Blob([contents], {
+                    type: item.kind === "ttml" ? "application/ttml+xml" : "text/plain",
+                  }),
+                );
+                link.download = filename;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+              },
+              (error) => notify(String(error), true),
+            )
+          }
           onClose={() => setTtmlOpen(false)}
         />
       )}

@@ -527,36 +527,145 @@ pub struct SavedLyrics {
     pub kind: String,
     #[serde(default)]
     pub saved_at: u64,
+    /// A small cover of the song's album.
+    #[serde(default)]
+    pub image: String,
 }
 
 pub fn saved_imports() -> Result<Vec<SavedLyrics>> {
     let directory = data_dir()?.join("lyrics").join("local");
     let mut saved = saved_in(&directory);
-    // Imports from before song names were kept are named only by a hash of
-    // the song's URI; match them against songs from cached pages, and keep
-    // the name beside the file so the lookup happens once.
-    if saved.iter().any(|item| item.name.is_empty()) {
+    // Imports from before song details were kept are named only by a hash
+    // of the song's URI; match them against songs from cached pages, and
+    // keep the details beside the file so the lookup happens once.
+    if saved
+        .iter()
+        .any(|item| item.name.is_empty() || item.image.is_empty())
+    {
         let known = crate::library_cache::known_tracks();
-        name_unknown(&directory, &mut saved, |key| known.get(key).cloned());
+        complete_unknown(&directory, &mut saved, |key| known.get(key).cloned());
     }
     Ok(saved)
 }
 
-fn name_unknown(
+/// Fill in details for saved imports from looked-up songs and keep them.
+pub fn complete_saved(saved: &mut [SavedLyrics], tracks: &[Track]) {
+    let Ok(directory) = data_dir().map(|dir| dir.join("lyrics").join("local")) else {
+        return;
+    };
+    complete_unknown(&directory, saved, |key| {
+        tracks.iter().find(|track| track_key(track) == key).cloned()
+    });
+}
+
+fn complete_unknown(
     directory: &Path,
     saved: &mut [SavedLyrics],
-    lookup: impl Fn(&str) -> Option<(String, String)>,
+    lookup: impl Fn(&str) -> Option<Track>,
 ) {
-    for item in saved.iter_mut().filter(|item| item.name.is_empty()) {
-        let Some((name, artists)) = lookup(&item.key) else {
+    for item in saved
+        .iter_mut()
+        .filter(|item| item.name.is_empty() || item.image.is_empty())
+    {
+        let Some(track) = lookup(&item.key) else {
             continue;
         };
-        item.name = name;
-        item.artists = artists;
-        if let Ok(bytes) = serde_json::to_vec(item) {
+        let details = song_details(&track);
+        let before = (item.name.clone(), item.image.clone());
+        if item.name.is_empty() {
+            item.name = details.name;
+            item.artists = details.artists;
+        }
+        if item.uri.is_empty() {
+            item.uri = details.uri;
+        }
+        if item.image.is_empty() {
+            item.image = details.image;
+        }
+        if (item.name.clone(), item.image.clone()) != before
+            && let Ok(bytes) = serde_json::to_vec(item)
+        {
             let _ = fs::write(directory.join(format!("{}.meta.json", item.key)), bytes);
         }
     }
+}
+
+/// Name, artists, URI and a small album cover for a saved import.
+fn song_details(track: &Track) -> SavedLyrics {
+    let covers = || {
+        track
+            .album
+            .images
+            .iter()
+            .filter(|image| image.url.starts_with("https://"))
+    };
+    // The smallest cover at least 64 px wide fills the 56 px list artwork.
+    let image = covers()
+        .filter(|image| image.width.is_some_and(|width| width >= 64))
+        .min_by_key(|image| image.width)
+        .or_else(|| covers().next())
+        .map(|image| image.url.clone())
+        .unwrap_or_default();
+    SavedLyrics {
+        key: track_key(track),
+        uri: track.uri.clone(),
+        name: track.name.clone(),
+        artists: track
+            .artists
+            .iter()
+            .map(|artist| artist.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        image,
+        ..SavedLyrics::default()
+    }
+}
+
+/// A saved import's file, named after its song, for downloading.
+pub fn saved_file(key: &str) -> Result<(String, String)> {
+    ensure!(
+        key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "Invalid lyrics entry"
+    );
+    let directory = data_dir()?.join("lyrics").join("local");
+    let (path, kind) = ["ttml", "lrc", "json"]
+        .into_iter()
+        .map(|kind| (directory.join(format!("{key}.{kind}")), kind))
+        .find(|(path, _)| path.is_file())
+        .context("Saved lyrics not found")?;
+    ensure!(
+        fs::metadata(&path)?.len() <= 2_000_000,
+        "Lyric file exceeds 2 MB"
+    );
+    let contents = fs::read_to_string(&path)?;
+    let meta = saved_in(&directory)
+        .into_iter()
+        .find(|item| item.key == key)
+        .unwrap_or_default();
+    Ok((download_name(&meta, kind), contents))
+}
+
+/// "Artists - Song.ttml", kept valid as a Windows file name.
+fn download_name(meta: &SavedLyrics, kind: &str) -> String {
+    let title = if meta.name.is_empty() {
+        meta.key.chars().take(12).collect()
+    } else if meta.artists.is_empty() {
+        meta.name.clone()
+    } else {
+        format!("{} - {}", meta.artists, meta.name)
+    };
+    let safe: String = title
+        .chars()
+        .map(|c| {
+            if r#"<>:"/\|?*"#.contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .take(120)
+        .collect();
+    format!("{}.{kind}", safe.trim().trim_end_matches('.'))
 }
 
 fn saved_in(directory: &Path) -> Vec<SavedLyrics> {
@@ -633,19 +742,11 @@ pub fn import_text(filename: &str, text: &str, track: &Track) -> Result<Lyrics> 
         text.as_bytes(),
     )?;
     let meta = SavedLyrics {
-        key: track_key(track),
-        uri: track.uri.clone(),
-        name: track.name.clone(),
-        artists: track
-            .artists
-            .iter()
-            .map(|artist| artist.name.as_str())
-            .collect::<Vec<_>>()
-            .join(", "),
         kind: kind.into(),
         saved_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |age| age.as_secs()),
+        ..song_details(track)
     };
     let _ = fs::write(
         directory.join(format!("{}.meta.json", track_key(track))),
@@ -919,9 +1020,38 @@ mod tests {
         let unnamed = "c".repeat(64);
         fs::write(directory.join(format!("{unnamed}.ttml")), "<tt/>").unwrap();
         let mut saved = saved_in(&directory);
-        name_unknown(&directory, &mut saved, |key| {
-            (key == unnamed).then(|| ("Found song".to_owned(), "Artist".to_owned()))
+        complete_unknown(&directory, &mut saved, |key| {
+            (key == unnamed).then(|| Track {
+                name: "Found song".into(),
+                artists: vec![crate::model::Artist {
+                    name: "Artist".into(),
+                    ..Default::default()
+                }],
+                album: crate::model::Album {
+                    images: vec![
+                        crate::model::Artwork {
+                            url: "https://i.scdn.co/image/large".into(),
+                            width: Some(640),
+                        },
+                        crate::model::Artwork {
+                            url: "https://i.scdn.co/image/small".into(),
+                            width: Some(64),
+                        },
+                    ],
+                    ..Default::default()
+                },
+                ..Track::default()
+            })
         });
+        let found = saved.iter().find(|item| item.name == "Found song").unwrap();
+        assert_eq!(found.artists, "Artist");
+        assert_eq!(found.image, "https://i.scdn.co/image/small");
+        assert_eq!(download_name(found, "ttml"), "Artist - Found song.ttml");
+        let tricky = SavedLyrics {
+            name: "What? / Why: \"Now\"".into(),
+            ..SavedLyrics::default()
+        };
+        assert_eq!(download_name(&tricky, "lrc"), "What_ _ Why_ _Now_.lrc");
         assert!(saved.iter().any(|item| item.name == "Found song"));
         assert!(
             saved_in(&directory)

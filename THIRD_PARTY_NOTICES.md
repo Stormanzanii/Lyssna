@@ -160,6 +160,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+## Metropolis
+
+The interface typeface is [Metropolis](https://github.com/chrismsimpson/Metropolis) by Chris Simpson, bundled from the `@fontsource/metropolis` package. It is released into the public domain under the [Unlicense](https://unlicense.org/).
+
 ## Inter
 
 The default lyrics typeface is [Inter](https://github.com/rsms/inter), bundled from the `@fontsource-variable/inter` package. Its license follows.

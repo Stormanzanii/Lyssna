@@ -1,5 +1,5 @@
 :root {
-  font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  font-family: Metropolis, "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
   color: #f7f7f7;
   background: #000000;
   font-synthesis: none;
@@ -73,7 +73,7 @@
   height: 1.55em;
   margin-right: 0.55em;
   border-radius: 2px;
-  vertical-align: 0.14em;
+  vertical-align: 0.22em;
   background: #c5c5c5;
   color: #151515;
   font-weight: 700;

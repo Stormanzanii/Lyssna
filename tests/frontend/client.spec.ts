@@ -269,6 +269,66 @@ test("audio output selection saves headphones and can return to system default",
     .toBe(1);
 });
 
+test("first-run Spotify sign-in needs no developer Client ID", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Spotify Premium required");
+  await expect(dialog.locator("#client-id")).toHaveCount(0);
+  const signIn = dialog.getByRole("button", {
+    name: "Sign in with Spotify",
+    exact: true,
+  });
+  await expect(signIn).toBeEnabled();
+  await signIn.click();
+  const request = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "sign_in")
+      .at(-1),
+  );
+  expect(request.args.clientId).toBe("");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /close|skip/i })).toHaveCount(
+    0,
+  );
+});
+
+test("developer connection remains optional and validates its Client ID", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", {
+      name: "Developer connection (optional)",
+      exact: true,
+    })
+    .click();
+  const signIn = dialog.getByRole("button", {
+    name: "Sign in with Spotify",
+    exact: true,
+  });
+  await dialog.locator("#client-id").fill("invalid");
+  await expect(signIn).toBeDisabled();
+  await dialog.locator("#client-id").fill("a".repeat(32));
+  await signIn.click();
+  const request = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "sign_in")
+      .at(-1),
+  );
+  expect(request.args.clientId).toBe("a".repeat(32));
+});
+
 test("failed saved sign-in stays locked, supports retry and cancellable fresh sign-in", async ({
   page,
 }) => {

@@ -1,0 +1,374 @@
+//! Remote Connect commands and state using the account's native subscription.
+use anyhow::{Context, Result, ensure};
+use reqwest::Method;
+use serde_json::{Value, json};
+use std::io::Write;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
+
+type TracksByAccount = HashMap<(String, String), Track>;
+static REMOTE_TRACKS: LazyLock<Mutex<TracksByAccount>> = LazyLock::new(Default::default);
+
+use crate::{
+    api::PlayerAction,
+    model::{Device, Playback, Track},
+    native::NativeControls,
+};
+
+impl NativeControls {
+    pub(crate) fn remote_playback(&self) -> Result<Playback> {
+        let session = self.session()?;
+        let Some(cluster) = self.connect_cluster()? else {
+            return Ok(Playback::default());
+        };
+        if cluster.active_device_id.is_empty() || cluster.active_device_id == session.device_id() {
+            return Ok(Playback::default());
+        }
+        let device = self
+            .devices()?
+            .into_iter()
+            .find(|device| device.id.as_deref() == Some(&cluster.active_device_id))
+            .unwrap_or(Device {
+                id: Some(cluster.active_device_id.clone()),
+                ..Default::default()
+            });
+        let Some(state) = cluster.player_state.as_ref() else {
+            return Ok(Playback {
+                device,
+                ..Default::default()
+            });
+        };
+        let track = state
+            .track
+            .as_ref()
+            .filter(|track| track.uri.starts_with("spotify:track:"))
+            .and_then(|track| {
+                let key = (session.username(), track.uri.clone());
+                if let Some(cached) = REMOTE_TRACKS
+                    .lock()
+                    .ok()
+                    .and_then(|cache| cache.get(&key).cloned())
+                {
+                    return Some(cached);
+                }
+                let resolved = self.track(&track.uri).ok()?;
+                if let Ok(mut cache) = REMOTE_TRACKS.lock() {
+                    if cache.len() >= 128 {
+                        cache.clear();
+                    }
+                    cache.insert(key, resolved.clone());
+                }
+                Some(resolved)
+            });
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+            .min(i64::MAX as u128) as i64;
+        Ok(playback_from_state(state, device, track, now))
+    }
+
+    pub(crate) fn remote_queue(&self) -> Result<Vec<Track>> {
+        if self.has_track() {
+            return self.queue();
+        }
+        let Some(cluster) = self.connect_cluster()? else {
+            return Ok(Vec::new());
+        };
+        let uris = cluster
+            .player_state
+            .as_ref()
+            .map(|state| {
+                state
+                    .next_tracks
+                    .iter()
+                    .filter(|track| track.uri.starts_with("spotify:track:"))
+                    .take(50)
+                    .map(|track| track.uri.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if uris.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.resolve(&uris)
+    }
+
+    pub(crate) fn remote_action(&self, action: PlayerAction, device: Option<&str>) -> Result<()> {
+        if let PlayerAction::Transfer(id) = &action {
+            return self.transfer(id);
+        }
+        let session = self.session()?;
+        let devices = self.devices()?;
+        let target = device
+            .map(str::to_owned)
+            .or_else(|| {
+                devices
+                    .iter()
+                    .find(|device| device.is_active)
+                    .and_then(|device| device.id.clone())
+            })
+            .context("Select a Spotify playback device")?;
+        ensure!(
+            target.len() <= 256
+                && !target.is_empty()
+                && target
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
+            "Invalid Spotify playback device"
+        );
+        ensure!(
+            devices
+                .iter()
+                .any(|device| device.id.as_deref() == Some(&target)),
+            "Spotify playback device is no longer available"
+        );
+        if target == session.device_id() {
+            return self
+                .send(action)
+                .map_err(|_| anyhow::anyhow!("Native playback disconnected"));
+        }
+        self.run(async |session| {
+            let request = async {
+                if let PlayerAction::Volume(volume) = action {
+                    let endpoint = format!(
+                        "/connect-state/v1/connect/volume/from/{}/to/{target}",
+                        session.device_id()
+                    );
+                    let message = librespot_protocol::connect::SetVolumeCommand {
+                        volume: i32::from(volume.min(100)) * 65535 / 100,
+                        connection_type: "wlan".into(),
+                        ..Default::default()
+                    };
+                    session
+                        .spclient()
+                        .request_with_protobuf(&Method::PUT, &endpoint, None, &message)
+                        .await
+                } else {
+                    let endpoint = format!(
+                        "/connect-state/v1/player/command/from/{}/to/{target}",
+                        session.device_id()
+                    );
+                    let command = command_body(&action)?;
+                    let mut nonce = [0u8; 16];
+                    getrandom::fill(&mut nonce)
+                        .map_err(|_| anyhow::anyhow!("Cannot prepare Spotify playback command"))?;
+                    let intent_id: String =
+                        nonce.iter().map(|byte| format!("{byte:02x}")).collect();
+                    let body = encode_command(&command, &intent_id)?;
+                    let mut headers = reqwest::header::HeaderMap::new();
+                    headers.insert(
+                        reqwest::header::CONTENT_TYPE,
+                        reqwest::header::HeaderValue::from_static("application/json"),
+                    );
+                    headers.insert(
+                        reqwest::header::CONTENT_ENCODING,
+                        reqwest::header::HeaderValue::from_static("gzip"),
+                    );
+                    session
+                        .spclient()
+                        .request(&Method::POST, &endpoint, Some(headers), Some(&body))
+                        .await
+                }
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Spotify playback command failed ({}). Refresh devices and retry.",
+                        error.kind
+                    )
+                })?;
+                Ok(())
+            };
+            tokio::time::timeout(Duration::from_secs(15), request)
+                .await
+                .map_err(|_| anyhow::anyhow!("Spotify playback command timed out"))?
+        })
+    }
+}
+
+fn encode_command(command: &Value, intent_id: &str) -> Result<Vec<u8>> {
+    let bytes = serde_json::to_vec(
+        &json!({"command":command,"connection_type":"wlan","intent_id":intent_id}),
+    )?;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(&bytes)?;
+    Ok(encoder.finish()?)
+}
+
+fn command_body(action: &PlayerAction) -> Result<Value> {
+    let mut value = match action {
+        PlayerAction::Pause => json!({"endpoint":"pause"}),
+        PlayerAction::Play(None) => json!({"endpoint":"resume"}),
+        PlayerAction::Next => json!({"endpoint":"skip_next"}),
+        PlayerAction::Previous => json!({"endpoint":"skip_prev"}),
+        PlayerAction::Seek(position) => {
+            json!({"endpoint":"seek_to","value":position,"position":position})
+        }
+        PlayerAction::Shuffle(value) => json!({"endpoint":"set_shuffling_context","value":value}),
+        PlayerAction::Repeat(value) => {
+            ensure!(
+                ["off", "context", "track"].contains(&value.as_str()),
+                "Invalid repeat state"
+            );
+            json!({"endpoint":"set_options","repeating_context":value=="context","repeating_track":value=="track"})
+        }
+        PlayerAction::Enqueue(uri) => {
+            valid_track(uri)?;
+            json!({"endpoint":"add_to_queue","track":{"uri":uri,"provider":"queue","metadata":{"is_queued":"true"}}})
+        }
+        PlayerAction::Play(Some(uri)) => {
+            valid_track(uri)?;
+            play_command(
+                json!({"uri":uri,"pages":[{"tracks":[{"uri":uri}]}]}),
+                json!({"skip_to":{"track_uri":uri}}),
+            )
+        }
+        PlayerAction::PlayContext { context, offset } => {
+            ensure!(
+                context.starts_with("spotify:")
+                    && context.len() <= 512
+                    && !context.chars().any(char::is_control),
+                "Invalid Spotify context"
+            );
+            play_command(
+                json!({"uri":context}),
+                json!({"skip_to":{"track_uri":offset}}),
+            )
+        }
+        PlayerAction::PlayUris { uris, offset } => {
+            ensure!(
+                !uris.is_empty() && uris.len() <= 5000 && *offset < uris.len(),
+                "Invalid Spotify track selection"
+            );
+            for uri in uris {
+                valid_track(uri)?;
+            }
+            play_command(
+                json!({"uri":"","pages":[{"tracks":uris.iter().map(|uri|json!({"uri":uri})).collect::<Vec<_>>()}]}),
+                json!({"skip_to":{"track_index":offset}}),
+            )
+        }
+        _ => anyhow::bail!("This playback action requires this computer's native player"),
+    };
+    value["logging_params"] = json!({});
+    Ok(value)
+}
+
+fn valid_track(uri: &str) -> Result<()> {
+    ensure!(uri.strip_prefix("spotify:track:").is_some_and(|id|id.len()==22 && id.bytes().all(|byte|byte.is_ascii_alphanumeric())), "Invalid Spotify track");
+    Ok(())
+}
+
+fn play_command(context: Value, options: Value) -> Value {
+    json!({"endpoint":"play","context":context,"options":options,"play_origin":{"feature_identifier":"spotiflex"}})
+}
+
+fn playback_from_state(
+    state: &librespot_protocol::player::PlayerState,
+    device: Device,
+    track: Option<Track>,
+    now: i64,
+) -> Playback {
+    let playing = state.is_playing && !state.is_paused && !state.is_buffering;
+    let elapsed = if playing && state.timestamp > 0 {
+        now.saturating_sub(state.timestamp).max(0)
+    } else {
+        0
+    };
+    let position = state
+        .position_as_of_timestamp
+        .saturating_add(elapsed)
+        .max(0) as u64;
+    let duration = track
+        .as_ref()
+        .map(|track| track.duration_ms)
+        .unwrap_or(state.duration.max(0) as u64);
+    let options = state.options.as_ref();
+    Playback {
+        item: track,
+        device,
+        is_playing: playing,
+        progress_ms: Some(if duration > 0 {
+            position.min(duration)
+        } else {
+            position
+        }),
+        shuffle_state: options.is_some_and(|value| value.shuffling_context),
+        repeat_state: if options.is_some_and(|value| value.repeating_track) {
+            "track"
+        } else if options.is_some_and(|value| value.repeating_context) {
+            "context"
+        } else {
+            "off"
+        }
+        .into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn commands_match_librespot_dealer_protocol() {
+        let uri = "spotify:track:0123456789abcdefghijkl";
+        for action in [
+            PlayerAction::Pause,
+            PlayerAction::Play(None),
+            PlayerAction::Next,
+            PlayerAction::Previous,
+            PlayerAction::Seek(1234),
+            PlayerAction::Shuffle(true),
+            PlayerAction::Repeat("track".into()),
+            PlayerAction::Enqueue(uri.into()),
+            PlayerAction::Play(Some(uri.into())),
+            PlayerAction::PlayContext {
+                context: "spotify:album:0123456789abcdefghijkl".into(),
+                offset: None,
+            },
+            PlayerAction::PlayUris {
+                uris: vec![uri.into()],
+                offset: 0,
+            },
+        ] {
+            let value = command_body(&action).unwrap();
+            let bytes = encode_command(&value, "test-command").unwrap();
+            let decoded: Value =
+                serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+            assert_eq!(decoded["command"], value);
+            assert_eq!(decoded["intent_id"], "test-command");
+            let parsed: librespot_core::dealer::protocol::Command =
+                serde_json::from_value(value).unwrap();
+            assert!(!matches!(
+                parsed,
+                librespot_core::dealer::protocol::Command::Unknown(_)
+            ));
+        }
+        assert!(command_body(&PlayerAction::Enqueue("https://example.test/".into())).is_err());
+    }
+    #[test]
+    fn remote_clock_holds_when_paused_and_clamps_to_duration() {
+        let mut state = librespot_protocol::player::PlayerState {
+            timestamp: 1000,
+            position_as_of_timestamp: 100,
+            duration: 2000,
+            is_playing: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            playback_from_state(&state, Device::default(), None, 2000).progress_ms,
+            Some(1100)
+        );
+        state.is_paused = true;
+        assert_eq!(
+            playback_from_state(&state, Device::default(), None, 5000).progress_ms,
+            Some(100)
+        );
+        state.is_paused = false;
+        assert_eq!(
+            playback_from_state(&state, Device::default(), None, 5000).progress_ms,
+            Some(2000)
+        );
+    }
+}

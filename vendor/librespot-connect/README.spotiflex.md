@@ -13,3 +13,5 @@ Playback-state uploads run concurrently with local transport commands. One uploa
 The next queued track preloads when the current decoder becomes ready. A stale track-change event cannot start this prefetch. Narration metadata still reaches the player before its preload command.
 
 Queue snapshots also emit after the current selection resolves, before its player load. Local queue views therefore receive the updated upcoming tracks instead of the empty snapshot from initial context creation.
+
+SpotiFlex also exposes the account-local Connect cluster snapshot already received by device discovery. This supplies remote playback state without public Web API polling. No new subscription, credentials or network listener is added. Remote command payloads are independently constructed against librespot's MIT-licensed dealer protocol definitions; no other project source is copied.

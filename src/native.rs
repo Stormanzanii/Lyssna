@@ -25,6 +25,23 @@ use tokio::sync::oneshot;
 const CREDENTIAL_SERVICE: &str = "SpotiFlex/SpotifyAudio";
 static CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
+#[cfg(test)]
+mod scoped_tests {
+    use super::*;
+
+    #[test]
+    fn scoped_background_connection_cannot_follow_an_account_switch() {
+        let (controls, _) = NativeControls::test_active("alice");
+        let scoped = controls.scoped("alice").unwrap();
+        let (replacement, _) = NativeControls::test_active("bob");
+        *controls.0.lock().unwrap() = replacement.0.lock().unwrap().take();
+        assert!(scoped.connection_event(Some("bob")).is_none());
+        assert!(scoped.scoped("alice").is_ok());
+        assert!(scoped.scoped("bob").is_err());
+        assert!(controls.scoped("alice").is_err());
+    }
+}
+
 #[derive(Clone)]
 pub enum NativeEvent {
     Narration(bool),
@@ -52,6 +69,7 @@ pub enum NativeEvent {
     ControlError(String),
 }
 
+#[derive(Clone)]
 struct ControlConnection {
     devices: Arc<Mutex<librespot_connect::ConnectedDevices>>,
     audio_buffer: crate::audio::AudioBuffer,
@@ -95,6 +113,32 @@ struct PlaybackServices<'a> {
 pub struct NativeControls(Arc<Mutex<Option<ControlConnection>>>);
 
 impl NativeControls {
+    /// Capture this account's connection so background work cannot switch accounts.
+    pub(crate) fn scoped(&self, account: &str) -> Result<Self> {
+        let connection = self
+            .0
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native session unavailable"))?;
+        let connection = connection
+            .as_ref()
+            .filter(|value| value.account == account)
+            .context("Spotify account changed")?
+            .clone();
+        Ok(Self(Arc::new(Mutex::new(Some(connection)))))
+    }
+
+    pub(crate) fn provider_token(&self) -> Result<String> {
+        self.run(async |session| {
+            let token = session
+                .token_provider()
+                .get_token("streaming")
+                .await
+                .map_err(|_| {
+                    anyhow::anyhow!("Could not authorize the configured lyrics provider")
+                })?;
+            Ok(token.access_token)
+        })
+    }
     pub fn set_audio_output(&self, account: &str, name: Option<String>) {
         if let Ok(connection) = self.0.lock()
             && let Some(connection) = connection
@@ -256,7 +300,7 @@ impl NativeControls {
             })
         })
     }
-    fn session(&self) -> Result<Session> {
+    pub(crate) fn session(&self) -> Result<Session> {
         let session = {
             let connection = self
                 .0
@@ -344,7 +388,7 @@ impl NativeControls {
     pub fn remove_playlist(&self, id: &str) -> Result<()> {
         self.run(async |session| crate::native_browse::remove_from_library(session, id).await)
     }
-    fn run<T>(&self, task: impl AsyncFnOnce(&Session) -> Result<T>) -> Result<T> {
+    pub(crate) fn run<T>(&self, task: impl AsyncFnOnce(&Session) -> Result<T>) -> Result<T> {
         let session = self.session()?;
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -409,6 +453,19 @@ impl NativeControls {
                 volume_percent: device.volume_percent,
             })
             .collect())
+    }
+    pub(crate) fn connect_cluster(&self) -> Result<Option<librespot_protocol::connect::Cluster>> {
+        let connection = self
+            .0
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native devices unavailable"))?;
+        let connection = connection.as_ref().context("Native session unavailable")?;
+        let cluster = connection
+            .devices
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Native devices unavailable"))?
+            .cluster();
+        Ok(cluster)
     }
     pub fn transfer(&self, requested: &str) -> Result<()> {
         let session = self.session()?;
@@ -1085,7 +1142,7 @@ pub fn device_name() -> String {
 
 // librespot's reusable credentials, kept in the OS credential store per
 // account. They never enter logs or files.
-fn load_credentials(account: &str) -> Result<Option<Credentials>> {
+pub(crate) fn load_credentials(account: &str) -> Result<Option<Credentials>> {
     let _guard = CREDENTIAL_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("Audio credential store unavailable"))?;
@@ -1136,12 +1193,33 @@ fn save_credentials(
         .context("Cannot save audio login to the operating system credential store")
 }
 
+fn forget_audio_credentials(account: &str) -> Result<()> {
+    let _guard = CREDENTIAL_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Audio credential store unavailable"))?;
+    match keyring::Entry::new(CREDENTIAL_SERVICE, account)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => anyhow::bail!("Cannot remove rejected audio login"),
+    }
+}
+
 pub fn forget_credentials(account: &str) -> Result<()> {
     let _guard = CREDENTIAL_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("Audio credential store unavailable"))?;
     if account.is_empty() {
         return Ok(());
+    }
+    let active = keyring::Entry::new("SpotiFlex/Account", "active")?;
+    if active
+        .get_password()
+        .ok()
+        .and_then(|value| serde_json::from_str::<crate::model::Profile>(&value).ok())
+        .is_some_and(|profile| profile.id == account)
+    {
+        active
+            .delete_credential()
+            .context("Cannot remove saved Spotify account")?;
     }
     match keyring::Entry::new(CREDENTIAL_SERVICE, account)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -1151,9 +1229,54 @@ pub fn forget_credentials(account: &str) -> Result<()> {
     }
 }
 
+pub(crate) fn saved_profile() -> Result<Option<crate::model::Profile>> {
+    let _guard = CREDENTIAL_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Spotify credential store unavailable"))?;
+    match keyring::Entry::new("SpotiFlex/Account", "active")?.get_password() {
+        Ok(value) => Ok(Some(
+            serde_json::from_str(&value)
+                .context("Saved Spotify account is invalid; sign in again")?,
+        )),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => anyhow::bail!("Cannot read saved Spotify account from the credential store"),
+    }
+}
+
+pub(crate) fn save_login(
+    profile: &crate::model::Profile,
+    credentials: &Credentials,
+    cancelled: &AtomicBool,
+) -> Result<()> {
+    let _guard = CREDENTIAL_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Spotify credential store unavailable"))?;
+    anyhow::ensure!(!cancelled.load(Ordering::Acquire), "Sign-in cancelled");
+    anyhow::ensure!(
+        valid_credentials(credentials, &profile.id),
+        "Spotify account does not match saved credentials"
+    );
+    keyring::Entry::new(CREDENTIAL_SERVICE, &profile.id)?
+        .set_password(&serde_json::to_string(credentials)?)
+        .context("Cannot save Spotify login")?;
+    keyring::Entry::new("SpotiFlex/Account", "active")?
+        .set_password(&serde_json::to_string(profile)?)
+        .context("Cannot save Spotify account")?;
+    Ok(())
+}
+
 enum Outcome {
     Stopped,
     Failed(Failure),
+}
+
+pub(crate) fn sign_in_error(error: librespot_core::Error) -> anyhow::Error {
+    let failure = Failure::from_connection(error);
+    if failure.rejected_credentials {
+        crate::auth::SignInRequired::NativeRejected.into()
+    } else {
+        anyhow::anyhow!(failure.reason)
+    }
 }
 
 struct Failure {
@@ -1377,7 +1500,7 @@ impl NativePlayer {
                             &emit,
                         ))
                     },
-                    || forget_credentials(&account),
+                    || forget_audio_credentials(&account),
                 );
                 thread_ready.store(false, Ordering::Release);
                 loaded.store(false, Ordering::Release);

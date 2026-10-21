@@ -4133,6 +4133,7 @@ function Setup({
   onOpenDashboard: () => void;
 }) {
   const [id, setId] = useState(state.settings.client_id);
+  const [developerMode, setDeveloperMode] = useState(false);
   useEffect(() => {
     setId(state.settings.client_id);
   }, [state.settings.client_id]);
@@ -4173,34 +4174,46 @@ function Setup({
               )}
           </div>
         )}
-        <div className="setup-steps">
-          <button className="text-link" onClick={onOpenDashboard}>
-            1. Create an app in Spotify Developer Dashboard{" "}
-            <ExternalLink size={14} />
-          </button>
-          <label>
-            2. Add this redirect URI<code>http://127.0.0.1:43821/callback</code>
-          </label>
-          <label htmlFor="client-id">3. Enter your Client ID</label>
-          <input
-            className="field"
-            id="client-id"
-            value={id}
-            onChange={(event) => setId(event.target.value.trim())}
-            placeholder="32-character Spotify Client ID"
-            autoComplete="off"
-            spellCheck={false}
-            disabled={state.login_pending}
-          />
-        </div>
+        <button
+          className="text-link"
+          disabled={state.login_pending}
+          onClick={() => setDeveloperMode(!developerMode)}
+        >
+          {developerMode
+            ? "Use Spotify account sign-in"
+            : "Developer connection (optional)"}
+        </button>
+        {developerMode && (
+          <div className="setup-steps">
+            <button className="text-link" onClick={onOpenDashboard}>
+              1. Create an app in Spotify Developer Dashboard{" "}
+              <ExternalLink size={14} />
+            </button>
+            <label>
+              2. Add this redirect URI
+              <code>http://127.0.0.1:43821/callback</code>
+            </label>
+            <label htmlFor="client-id">3. Enter your Client ID</label>
+            <input
+              className="field"
+              id="client-id"
+              value={id}
+              onChange={(event) => setId(event.target.value.trim())}
+              placeholder="32-character Spotify Client ID"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={state.login_pending}
+            />
+          </div>
+        )}
         <button
           className="pill primary setup-sign-in"
           disabled={
             state.login_pending ||
             !state.booted ||
-            !/^[a-fA-F0-9]{32}$/.test(id)
+            (developerMode && !/^[a-fA-F0-9]{32}$/.test(id))
           }
-          onClick={() => onSignIn(id)}
+          onClick={() => onSignIn(developerMode ? id : "")}
         >
           {state.login_pending || !state.booted ? (
             <>
@@ -4216,8 +4229,10 @@ function Setup({
         {state.login_pending && (
           <>
             <p className="setup-help">
-              Complete sign-in in your browser. First-time audio playback may
-              ask for a second authorization.
+              Complete sign-in in your browser.
+              {developerMode
+                ? " Audio playback may request another authorization."
+                : " Return here when Spotify finishes signing you in."}
             </p>
             <button className="text-link muted" onClick={onCancel}>
               Cancel sign-in

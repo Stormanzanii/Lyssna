@@ -10,11 +10,12 @@ use crate::notify::Notifier;
 use anyhow::{Context, Result};
 
 use crate::{
-    api::{PlayerAction, Spotify},
+    api::PlayerAction,
     auth::{self, Tokens},
     lyrics::{self, Lyrics},
     model::{BrowseInfo, Device, Playback, PlayingDetails, Playlist, Profile, Track},
     native::{NativeControls, NativeMessage, NativePlayer},
+    spotify::Spotify,
 };
 
 pub enum Command {
@@ -25,6 +26,17 @@ pub enum Command {
         client_id: String,
         cancelled: Arc<AtomicBool>,
         result: std::result::Result<Box<Tokens>, String>,
+    },
+    NativeLogin {
+        restoring: bool,
+        cancelled: Arc<AtomicBool>,
+    },
+    NativeLoginResult {
+        cancelled: Arc<AtomicBool>,
+        result: std::result::Result<
+            Option<(Profile, librespot_core::authentication::Credentials)>,
+            auth::LoginIssue,
+        >,
     },
     Logout,
     Refresh,
@@ -349,6 +361,23 @@ impl Worker {
                 match receive_commands.recv_timeout(Duration::from_millis(250)) {
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Ok(command) => {
+                        if let Command::NativeLogin {
+                            restoring,
+                            cancelled,
+                        } = command
+                        {
+                            let client = backend.client.clone();
+                            let reply = login_results.clone();
+                            thread::spawn(move || {
+                                let result = crate::native_login::authenticate(
+                                    &client, restoring, &cancelled,
+                                )
+                                .map_err(|error| auth::LoginIssue::from_error(&error, restoring));
+                                let _ =
+                                    reply.send(Command::NativeLoginResult { cancelled, result });
+                            });
+                            continue;
+                        }
                         if let Command::Login(client_id, cancelled) = command {
                             let client = backend.client.clone();
                             let reply = login_results.clone();
@@ -364,14 +393,19 @@ impl Worker {
                             });
                             continue;
                         }
-                        if let Command::LoginResult { ref cancelled, .. } = command
+                        if let Command::LoginResult { ref cancelled, .. }
+                        | Command::NativeLoginResult { ref cancelled, .. } = command
                             && cancelled.load(std::sync::atomic::Ordering::Relaxed)
                         {
                             continue;
                         }
                         let restoring = matches!(command, Command::Restore(..));
-                        let login =
-                            matches!(command, Command::LoginResult { .. } | Command::Restore(..));
+                        let login = matches!(
+                            command,
+                            Command::LoginResult { .. }
+                                | Command::NativeLoginResult { .. }
+                                | Command::Restore(..)
+                        );
                         match backend.handle(command) {
                             Err(error) if login => {
                                 backend.emit(Event::LoginFailed(auth::LoginIssue::from_error(
@@ -404,7 +438,15 @@ impl Worker {
                         backend.emit(Event::Error(error.to_string()));
                     }
                     next_poll = Instant::now()
-                        + Duration::from_secs(if backend.native.is_some() { 60 } else { 12 });
+                        + Duration::from_secs(
+                            if backend.spotify.as_ref().is_some_and(Spotify::is_native) {
+                                2
+                            } else if backend.native.is_some() {
+                                60
+                            } else {
+                                12
+                            },
+                        );
                 }
             }
         });
@@ -606,8 +648,7 @@ impl Backend {
         let cached = tokens.profile.clone();
         let mut spotify = Spotify::new(self.client.clone(), client_id.clone(), tokens);
         self.profile = profile_for_session(spotify.profile(), cached, restoring)?;
-        spotify.tokens.profile = Some(self.profile.clone());
-        spotify.tokens.save(&client_id)?;
+        spotify.save_profile(self.profile.clone())?;
         self.client_id = client_id;
         if let Some(previous) = self.spotify.as_ref() {
             previous.cancel_background();
@@ -637,6 +678,35 @@ impl Backend {
         Ok(())
     }
 
+    fn establish_native(&mut self, profile: Profile) -> Result<()> {
+        if let Some(previous) = self.spotify.take() {
+            previous.cancel_background();
+        }
+        // Retain only the optional app identifier so sign-out can remove its old token.
+        self.client_id = crate::config::Settings::load()
+            .map(|settings| settings.client_id)
+            .unwrap_or_default();
+        self.profile = profile;
+        self.start_audio()?;
+        self.spotify = Some(Spotify::native(
+            self.client.clone(),
+            self.native_controls.clone(),
+            self.profile.clone(),
+        )?);
+        self.emit(Event::Session(self.profile.clone()));
+        if let Some(playlists) = crate::library_cache::load(&self.profile.id) {
+            self.emit(Event::Library(playlists));
+        }
+        self.library_refresh.next = Some(Instant::now() + Duration::from_secs(2));
+        Ok(())
+    }
+
+    fn scoped_native(&self) -> NativeControls {
+        self.native_controls
+            .scoped(&self.profile.id)
+            .unwrap_or_default()
+    }
+
     fn api(&mut self) -> Result<&mut Spotify> {
         self.spotify.as_mut().context("Sign in to Spotify first")
     }
@@ -655,9 +725,20 @@ impl Backend {
                 crate::library_cache::load(&self.profile.id).as_deref(),
                 &self.profile,
             );
+            let restore_history = self.library_refresh.next.is_some()
+                && self.spotify.as_ref().is_some_and(Spotify::is_native);
             self.library_refresh.next = None;
             crate::library_cache::save(&self.profile.id, &playlists);
             self.emit(Event::Library(playlists));
+            if restore_history
+                && !self.native_controls.has_track()
+                && let Ok(Some(value)) = self.api()?.last_played()
+            {
+                self.emit(Event::LastPlayed {
+                    account: self.profile.id.clone(),
+                    value: Box::new(value),
+                });
+            }
             return Ok(());
         }
         let api = self.spotify.as_mut().context("Sign in to Spotify first")?;
@@ -687,6 +768,16 @@ impl Backend {
             self.context.clone(),
             self.native_controls.clone(),
         ));
+        if self.spotify.as_ref().is_some_and(Spotify::is_native) {
+            if let Some(previous) = self.spotify.take() {
+                previous.cancel_background();
+            }
+            self.spotify = Some(Spotify::native(
+                self.client.clone(),
+                self.native_controls.clone(),
+                self.profile.clone(),
+            )?);
+        }
         self.emit(Event::Notice("Connecting native audio…".into()));
         Ok(())
     }
@@ -764,11 +855,27 @@ impl Backend {
             Command::PrefetchPage(key) => {
                 let request = PrefetchRequest {
                     spotify: self.api()?.background(),
-                    native: self.native_controls.clone(),
+                    native: self.scoped_native(),
                     account: self.profile.id.clone(),
                     key,
                 };
                 let _ = self.prefetch.try_send(request);
+            }
+            Command::NativeLogin { .. } => {
+                unreachable!("Native login runs outside the command worker")
+            }
+            Command::NativeLoginResult { cancelled, result } => {
+                if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                    return Ok(());
+                }
+                match result {
+                    Ok(Some((profile, credentials))) => {
+                        crate::native::save_login(&profile, &credentials, &cancelled)?;
+                        self.establish_native(profile)?;
+                    }
+                    Ok(None) => self.emit(Event::SignedOut),
+                    Err(issue) => self.emit(Event::LoginFailed(issue)),
+                }
             }
             Command::Restore(client_id) => {
                 self.client_id = client_id.clone();
@@ -837,11 +944,9 @@ impl Backend {
                 {
                     let spotify = self.api()?;
                     // Refresh on the background worker before sharing a read-only snapshot.
-                    let _ = spotify
-                        .tokens
-                        .refresh_if_needed(&spotify.client, &spotify.client_id);
+                    let _ = spotify.refresh_credentials();
                     let mut spotify = spotify.background();
-                    let native = self.native_controls.clone();
+                    let native = self.scoped_native();
                     let events = self.events.clone();
                     let context = self.context.clone();
                     let account = self.profile.id.clone();
@@ -883,7 +988,7 @@ impl Backend {
                         {
                             let _ = self.facts.try_send(FactsRequest {
                                 spotify: spotify.background(),
-                                native: self.native_controls.clone(),
+                                native: self.scoped_native(),
                                 tracks: tracks.clone(),
                             });
                         }
@@ -1087,8 +1192,7 @@ impl Backend {
             Command::FetchLyrics(track) => {
                 let api = self.api()?;
                 let token = if crate::provider::requires_spotify_token() {
-                    api.tokens.refresh_if_needed(&api.client, &api.client_id)?;
-                    api.tokens.access_token.clone()
+                    api.provider_token()?
                 } else {
                     String::new()
                 };
@@ -1117,7 +1221,7 @@ impl Backend {
                 if let Some(id) = key.strip_prefix("artist:") {
                     let mut api = self.api()?.background();
                     let id = id.to_owned();
-                    let native = self.native_controls.clone();
+                    let native = self.scoped_native();
                     let client = self.client.clone();
                     let events = self.events.clone();
                     let context = self.context.clone();
@@ -1162,7 +1266,7 @@ impl Backend {
                     });
                 } else if let Some(id) = key.strip_prefix("playlist:") {
                     let id = id.to_owned();
-                    let native = self.native_controls.clone();
+                    let native = self.scoped_native();
                     let events = self.events.clone();
                     let context = self.context.clone();
                     thread::spawn(move || {
@@ -1173,7 +1277,7 @@ impl Backend {
                 } else if let Some(id) = key.strip_prefix("album:") {
                     let mut api = self.api()?.background();
                     let id = id.to_owned();
-                    let native = self.native_controls.clone();
+                    let native = self.scoped_native();
                     let client = self.client.clone();
                     let events = self.events.clone();
                     let context = self.context.clone();
@@ -1282,7 +1386,7 @@ impl Backend {
                 self.emit(Event::BrowseInfo { generation, info });
             }
             Command::PrefetchCanvas(uris) => {
-                let native = self.native_controls.clone();
+                let native = self.scoped_native();
                 let events = self.events.clone();
                 thread::spawn(move || {
                     for uri in uris.into_iter().take(8) {
@@ -1295,7 +1399,7 @@ impl Backend {
             Command::PlayingDetails(track) => {
                 self.publish_saved(vec![track.uri.clone()]);
                 let canvas_track = track.uri.clone();
-                let native = self.native_controls.clone();
+                let native = self.scoped_native();
                 let events = self.events.clone();
                 let context = self.context.clone();
                 thread::spawn(move || {
@@ -1348,7 +1452,7 @@ impl Backend {
                         .take(3)
                         .map(|track| track.uri.clone())
                         .collect();
-                    let native = self.native_controls.clone();
+                    let native = self.scoped_native();
                     let events = self.events.clone();
                     thread::spawn(move || {
                         for uri in upcoming {
@@ -1424,7 +1528,7 @@ impl Backend {
         if uris.is_empty() || !self.native_ready() {
             return;
         }
-        let native = self.native_controls.clone();
+        let native = self.scoped_native();
         let events = self.events.clone();
         let context = self.context.clone();
         thread::spawn(move || {
@@ -1439,7 +1543,7 @@ impl Backend {
     }
 
     fn fetch_tracks(&mut self, key: &str, offset: usize) -> Result<Vec<Track>> {
-        let native = self.native_controls.clone();
+        let native = self.scoped_native();
         fetch_tracks(self.api()?, &native, key, offset)
     }
 }
@@ -1474,11 +1578,7 @@ fn fetch_tracks(
     key: &str,
     offset: usize,
 ) -> Result<Vec<Track>> {
-    let account = api
-        .tokens
-        .profile
-        .as_ref()
-        .map(|profile| profile.id.clone());
+    let account = api.account().map(str::to_owned);
     let result = fetch_live_tracks(api, native, key, offset);
     match result {
         Ok(tracks) => {
@@ -1558,6 +1658,74 @@ fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+    fn empty_backend() -> (Backend, mpsc::Receiver<Event>) {
+        let (events, receive) = mpsc::channel();
+        (
+            Backend {
+                library_refresh: Default::default(),
+                facts: mpsc::sync_channel(1).0,
+                prefetch: mpsc::sync_channel(1).0,
+                native_controls: Default::default(),
+                spotify: None,
+                native: None,
+                native_generation: 0,
+                client_id: String::new(),
+                profile: Default::default(),
+                client: reqwest::blocking::Client::new(),
+                events,
+                native_events: mpsc::channel().0,
+                lyrics: mpsc::channel().0,
+                context: Default::default(),
+            },
+            receive,
+        )
+    }
+
+    #[test]
+    fn cancelled_native_login_cannot_unlock_or_persist_credentials() {
+        let (mut backend, events) = empty_backend();
+        backend
+            .handle(Command::NativeLoginResult {
+                cancelled: Arc::new(AtomicBool::new(true)),
+                result: Ok(Some((
+                    Profile {
+                        id: "cancelled-test-account".into(),
+                        ..Default::default()
+                    },
+                    librespot_core::authentication::Credentials::with_access_token("test"),
+                ))),
+            })
+            .unwrap();
+        assert!(backend.spotify.is_none());
+        assert!(backend.native.is_none());
+        assert!(backend.profile.id.is_empty());
+        assert!(events.try_recv().is_err());
+    }
+
+    #[test]
+    fn missing_or_rejected_native_login_keeps_client_locked() {
+        let (mut backend, events) = empty_backend();
+        backend
+            .handle(Command::NativeLoginResult {
+                cancelled: Arc::new(AtomicBool::new(false)),
+                result: Ok(None),
+            })
+            .unwrap();
+        assert!(matches!(events.try_recv(), Ok(Event::SignedOut)));
+        backend
+            .handle(Command::NativeLoginResult {
+                cancelled: Arc::new(AtomicBool::new(false)),
+                result: Err(auth::LoginIssue {
+                    message: "Spotify unavailable".into(),
+                    retry_saved: true,
+                }),
+            })
+            .unwrap();
+        assert!(matches!(events.try_recv(), Ok(Event::LoginFailed(_))));
+        assert!(backend.spotify.is_none());
+        assert!(backend.native.is_none());
+    }
+
     #[test]
     fn local_song_details_do_not_spend_web_api_quota() {
         let client = auth::http_client().unwrap();

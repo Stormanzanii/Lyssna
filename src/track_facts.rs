@@ -1,5 +1,5 @@
 //! Optional catalogue statistics, enriched independently of playback and browsing.
-use crate::{api::Spotify, model::Track, native::NativeControls};
+use crate::{model::Track, native::NativeControls, spotify::Spotify};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};

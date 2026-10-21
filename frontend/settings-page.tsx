@@ -127,9 +127,7 @@ export function SettingsPage({
                 <button
                   className="pill"
                   disabled={state.login_pending}
-                  onClick={() =>
-                    void onCall("sign_in", { clientId: settings.client_id })
-                  }
+                  onClick={() => void onCall("sign_in", { clientId: "" })}
                 >
                   Sign in again
                 </button>
@@ -158,9 +156,7 @@ export function SettingsPage({
               >
                 <button
                   className="pill outline"
-                  onClick={() =>
-                    void onCall("sign_in", { clientId: settings.client_id })
-                  }
+                  onClick={() => void onCall("sign_in", { clientId: "" })}
                 >
                   Update permissions
                   <ExternalLink size={14} />

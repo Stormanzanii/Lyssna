@@ -1,10 +1,13 @@
 # Architecture
 
-`main.rs` starts the Tauri desktop app or performs protected provider provisioning from standard input. `desktop.rs` exposes narrow commands and sanitized snapshots to the React interface in `frontend`. The optional `legacy-ui` feature keeps the previous egui interface in `app.rs`. Both interfaces require authenticated setup and use the same Rust audio, catalogue, lyric, and update services.
+`main.rs` starts the Tauri desktop app or performs protected provider provisioning from standard input. `desktop.rs` exposes narrow commands and sanitized snapshots to the React interface in `frontend`. The optional `legacy-ui` feature keeps the previous egui interface in `app.rs`. Both interfaces require authenticated sign-in and use the same Rust audio, catalogue, lyric, and update services. Native sign-in is the default; developer Web API setup is optional.
 
 | Module | Responsibility |
 | --- | --- |
 | `auth.rs` | PKCE generation, loopback listener, callback validation, token exchange, refresh, OS credential storage |
+| `native_login.rs` | Browser native PKCE login, authenticated profile, credential migration and verified restore |
+| `spotify.rs` | Account-scoped native/developer adapters; native mode has no public Web API fallback |
+| `native_remote.rs` | Native Connect remote commands, cluster playback state and queue |
 | `api.rs` | Authenticated Spotify calls, origin validation, 401 refresh, rate-limit cooldown, pagination, playlist writes |
 | `model.rs` | Spotify data and ordered duplicate-free playlist additions |
 | `native.rs` | Separate Tokio runtime, librespot session, Connect registration, Rodio player, timestamped player events, shutdown |
@@ -26,11 +29,15 @@ Artist banners and album play counts use read-only Spotify desktop catalogue que
 
 Creator profile dialogs frame only `https://spicylyrics.org`. Remote frames receive no Tauri capabilities. The service currently limits embedding to Spotify's origin, so the dialog explains the restriction and provides an external-browser link.
 
-Audio authorization is separate from the developer app's Web API authorization. Both use PKCE with state-checked loopback callbacks. The audio flow matches librespot's public client and uses `http://127.0.0.1:8898/login`; no developer-dashboard change is needed for that redirect. After connecting, the session account must match the Web API profile. Reusable audio credentials are saved per account under `SpotiFlex/SpotifyAudio` in the OS credential store. Network failures preserve them; explicit rejection permits one browser reauthorization. Sign-out cancels pending audio authorization and removes both logins. Credential writes and deletion are serialized to prevent a retiring player from restoring a signed-out login.
+Native login runs outside the command worker. It uses librespot's public audio client with PKCE and `http://127.0.0.1:8898/login`, authenticates a native session, and obtains the canonical account identity before returning a result. Cached profile data alone never unlocks the client. The command worker accepts only uncancelled results before storing reusable credentials under `SpotiFlex/SpotifyAudio` and the selected account under `SpotiFlex/Account` in Windows Credential Manager. Writes and sign-out deletion share the credential lock. Cancelled results cannot persist a login. Existing Web API profiles supply only the expected identity when migrating already-saved audio credentials; no developer token refresh is required.
 
-Player commands resolve the Web API device ID from Spotify's device list. A native session ID can differ from the listed device ID, so the local player is also matched by its computer-specific name. An explicitly requested native device that is not listed yet cannot silently transfer playback to an unrelated active device.
+The `spotify.rs` adapter preserves shared browsing and playlist code. Native mode contains no Web API credentials or Web API fallback. Its background handles capture the original account connection and share revocation with the foreground handle, so switching accounts cannot redirect an old job. Retiring a player closes its connection before another account can use the client. Optional developer mode retains its own token refresh, cooldown and public Web API handling.
 
-The provider receives only the current Spotify access token, only after consent, through an HTTPS header. Spotify tokens are never included in query URLs. Refresh tokens remain in the credential store. Provider URLs, response bodies, and request headers are excluded from user-facing network errors. No log sink is configured for third-party libraries.
+The vendor Connect patch retains the current cluster alongside device discovery. Native mode polls that local snapshot for remote playback state; resolved remote track metadata has an account-keyed 128-entry cache. Remote command destinations must be in the current native session's device list. Playback commands use the Connect player command endpoint; volume uses its dedicated protobuf endpoint. Native transfers retain their existing validation. Protocol tests check outgoing command payloads against librespot's dealer command types. They do not establish live remote command acceptance.
+
+The optional developer connection still authorizes Web API and audio separately. Its session account must match the native audio account. Sign-out cancels pending login and removes the active native login and the developer token for that connection. Network failures preserve saved credentials; explicit credential rejection offers a fresh sign-in. Native audio reauthorization preserves the selected account marker.
+
+The legacy provider receives a short-lived Spotify access token only after consent, through an HTTPS header. Native mode obtains that token from the native session; optional developer mode can use its Web API token. The publishable-key lyrics provider does not receive Spotify tokens. Legacy-provider acceptance of native tokens still needs live verification. Spotify tokens are never included in query URLs. Refresh tokens remain in the credential store. Provider URLs, response bodies, and request headers are excluded from user-facing network errors. No log sink is configured for third-party libraries.
 
 Application settings, lyric imports, and cache live under the platform's SpotiFlex configuration directory. On Windows, secrets use Windows Credential Manager. The existing Spotify installation is read-only and is not used as a token source or playback dependency.
 

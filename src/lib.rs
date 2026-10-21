@@ -25,12 +25,15 @@ pub mod media;
 pub mod model;
 pub mod native;
 pub mod native_browse;
+mod native_login;
+mod native_remote;
 pub mod notify;
 mod playback_intent;
 pub mod provider;
 mod reconnect;
 pub mod resume;
 pub mod search;
+pub mod spotify;
 pub mod track_facts;
 #[cfg(feature = "legacy-ui")]
 pub mod ui;

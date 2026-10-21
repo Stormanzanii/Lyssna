@@ -138,6 +138,7 @@ fn load_native_catalogue(
     key: String,
     generation: Option<u64>,
 ) {
+    let controls = inner.controls.scoped(&account).unwrap_or_default();
     thread::spawn(move || {
         let Some((kind, id)) = key
             .split_once(':')
@@ -159,19 +160,15 @@ fn load_native_catalogue(
         {
             cached
         } else {
-            inner
-                .controls
-                .catalogue(kind, id, 0)
-                .ok()
-                .and_then(|entity| {
-                    let mut info = crate::catalogue::base_info(&entity, kind, id).ok()?;
-                    if kind == "artist" {
-                        info.overview = crate::artist::from_entity(&entity, id).ok();
-                    } else {
-                        info.album_details = Some(crate::album::parse(&entity));
-                    }
-                    Some(crate::library_cache::save_info(&account, info))
-                })
+            controls.catalogue(kind, id, 0).ok().and_then(|entity| {
+                let mut info = crate::catalogue::base_info(&entity, kind, id).ok()?;
+                if kind == "artist" {
+                    info.overview = crate::artist::from_entity(&entity, id).ok();
+                } else {
+                    info.album_details = Some(crate::album::parse(&entity));
+                }
+                Some(crate::library_cache::save_info(&account, info))
+            })
         };
         let Some(info) = info else {
             if let Some(generation) = generation
@@ -254,7 +251,6 @@ impl Desktop {
         });
         let worker = Worker::start(notifier.clone());
         let updates = updater::Updater::start(notifier);
-        let restore = config::valid_client_id(&settings.client_id);
         let route = settings.last_view.clone();
         let inner = Arc::new(Inner {
             home_generation: std::sync::atomic::AtomicU64::new(0),
@@ -282,7 +278,7 @@ impl Desktop {
                 provider_configured: crate::provider::configured(),
                 provider_builtin: crate::provider::builtin_configured(),
                 provider_kind: crate::provider::kind(),
-                login_pending: restore,
+                login_pending: true,
                 login_issue: None,
                 can_follow: false,
                 lyrics: None,
@@ -320,9 +316,10 @@ impl Desktop {
             available: Mutex::new(None),
             ready_update: Mutex::new(None),
         });
-        if restore {
-            inner.commands.send(Command::Restore(settings.client_id))?;
-        }
+        inner.commands.send(Command::NativeLogin {
+            restoring: true,
+            cancelled: lock(&inner.login_cancelled)?.clone(),
+        })?;
         let pump = inner.clone();
         thread::spawn(move || {
             let emit = |value: Value| {
@@ -474,15 +471,17 @@ impl Desktop {
                             snapshot.profile = Some(profile.clone());
                             snapshot.login_issue = None;
                             snapshot.login_pending = false;
-                            snapshot.can_follow = auth::Tokens::load(&snapshot.settings.client_id)
-                                .ok()
-                                .flatten()
-                                .is_some_and(|tokens| {
-                                    tokens
-                                        .scopes
-                                        .split_whitespace()
-                                        .any(|scope| scope == "user-follow-modify")
-                                });
+                            snapshot.can_follow =
+                                pump.controls.connected_or_connecting(&profile.id)
+                                    || auth::Tokens::load(&snapshot.settings.client_id)
+                                        .ok()
+                                        .flatten()
+                                        .is_some_and(|tokens| {
+                                            tokens
+                                                .scopes
+                                                .split_whitespace()
+                                                .any(|scope| scope == "user-follow-modify")
+                                        });
                             emit(
                                 json!({"type":"session","profile":profile,"can_follow":snapshot.can_follow}),
                             );
@@ -1295,21 +1294,28 @@ fn prefetch_metadata(
 fn sign_in(client_id: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
         ensure!(
-            config::valid_client_id(&client_id),
+            client_id.is_empty() || config::valid_client_id(&client_id),
             "Client ID must contain 32 hexadecimal characters"
         );
         let mut snapshot = lock(&state.0.snapshot)?;
-        snapshot.settings.client_id = client_id.clone();
+        if !client_id.is_empty() {
+            snapshot.settings.client_id = client_id.clone();
+        }
         snapshot.settings.save()?;
         snapshot.login_pending = true;
         snapshot.login_issue = None;
         let mut old = lock(&state.0.login_cancelled)?;
         old.store(true, Ordering::Relaxed);
         *old = Arc::new(AtomicBool::new(false));
-        state
-            .0
-            .commands
-            .send(Command::Login(client_id, old.clone()))?;
+        let command = if client_id.is_empty() {
+            Command::NativeLogin {
+                restoring: false,
+                cancelled: old.clone(),
+            }
+        } else {
+            Command::Login(client_id, old.clone())
+        };
+        state.0.commands.send(command)?;
         Ok(())
     };
     result().map_err(error)
@@ -1357,14 +1363,14 @@ fn retry_sign_in(state: State<'_, Desktop>) -> std::result::Result<(), String> {
             snapshot.profile.is_none() && !snapshot.login_pending,
             "Sign-in already active"
         );
-        ensure!(
-            config::valid_client_id(&snapshot.settings.client_id),
-            "Enter your Spotify Client ID first"
-        );
-        state
-            .0
-            .commands
-            .send(Command::Restore(snapshot.settings.client_id.clone()))?;
+
+        let mut cancelled = lock(&state.0.login_cancelled)?;
+        cancelled.store(true, Ordering::Release);
+        *cancelled = Arc::new(AtomicBool::new(false));
+        state.0.commands.send(Command::NativeLogin {
+            restoring: true,
+            cancelled: cancelled.clone(),
+        })?;
         snapshot.login_pending = true;
         snapshot.login_issue = None;
         Ok(())
@@ -1432,7 +1438,7 @@ async fn home(
         "spotiflex",
         json!({"type":"home_loading","account":account}),
     );
-    let controls = inner.controls.clone();
+    let controls = inner.controls.scoped(&account).map_err(error)?;
     let result = tauri::async_runtime::spawn_blocking(move || {
         let page = controls.home(&timezone)?;
         crate::library_cache::save_home(&page);
@@ -2110,7 +2116,15 @@ async fn artist_liked_count(
     id: String,
     state: State<'_, Desktop>,
 ) -> std::result::Result<usize, String> {
-    let controls = state.0.controls.clone();
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
     tauri::async_runtime::spawn_blocking(move || controls.liked_by_artist(&id))
         .await
         .map_err(|_| "Library worker unavailable".to_owned())?
@@ -2120,7 +2134,15 @@ async fn artist_liked_count(
 async fn saved_lyrics(
     state: State<'_, Desktop>,
 ) -> std::result::Result<Vec<crate::lyrics::SavedLyrics>, String> {
-    let controls = state.0.controls.clone();
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut saved = crate::lyrics::saved_imports()?;
         // Older imports lack album art; look their songs up once and keep it.
@@ -2444,7 +2466,15 @@ async fn resolve_album(
     state: State<'_, Desktop>,
     uri: String,
 ) -> std::result::Result<crate::model::Album, String> {
-    let controls = state.0.controls.clone();
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
     if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
         return Err("Sign in first".into());
     }

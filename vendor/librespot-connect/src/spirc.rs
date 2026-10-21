@@ -225,9 +225,16 @@ mod display_name_tests {
 
 /// Account-local device discovery supplied by the existing Connect subscription.
 #[derive(Clone, Default)]
-pub struct ConnectedDevices(Arc<Mutex<Vec<ConnectedDevice>>>);
+pub struct ConnectedDevices(
+    Arc<Mutex<Vec<ConnectedDevice>>>,
+    Arc<Mutex<Option<Cluster>>>,
+);
 
 impl ConnectedDevices {
+    /// Latest account-local Connect state, supplied by the existing subscription.
+    pub fn cluster(&self) -> Option<Cluster> {
+        self.1.lock().ok().and_then(|cluster| cluster.clone())
+    }
     /// Return the latest complete device list without making a network request.
     pub fn snapshot(&self) -> Vec<ConnectedDevice> {
         self.0
@@ -237,6 +244,9 @@ impl ConnectedDevices {
     }
 
     fn update(&self, cluster: &Cluster) {
+        if let Ok(mut current) = self.1.lock() {
+            *current = Some(cluster.clone());
+        }
         let mut devices: Vec<_> = cluster
             .device
             .iter()
@@ -313,6 +323,7 @@ mod connected_device_tests {
             },
         );
         devices.update(&cluster);
+        assert_eq!(devices.cluster().unwrap().active_device_id, "headphones");
         let snapshot = devices.snapshot();
         assert_eq!(snapshot.len(), 2);
         assert_eq!(snapshot[0].id, "headphones");

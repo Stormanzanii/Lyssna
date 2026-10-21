@@ -31,8 +31,9 @@ impl LoginIssue {
 }
 
 #[derive(Debug)]
-enum SignInRequired {
+pub(crate) enum SignInRequired {
     Rejected,
+    NativeRejected,
     Damaged,
 }
 impl std::fmt::Display for SignInRequired {
@@ -41,6 +42,7 @@ impl std::fmt::Display for SignInRequired {
             Self::Rejected => {
                 "Spotify rejected the saved sign-in. Check your Client ID, then sign in again."
             }
+            Self::NativeRejected => "Spotify rejected the saved sign-in. Sign in again.",
             Self::Damaged => "Saved Spotify sign-in is damaged. Sign in again to replace it.",
         })
     }

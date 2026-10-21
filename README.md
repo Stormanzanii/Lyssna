@@ -28,16 +28,15 @@ Voice recognition loads a verified 190 MB English model when microphone input is
 
 Spotify Premium is required. First launch presents a mandatory setup modal. It has no skip or close button, and ignores Escape and outside clicks. The client unlocks after Spotify sign-in succeeds. Normal application exit remains available.
 
-1. Open [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and create an app with Web API enabled.
-2. Register this exact Redirect URI: `http://127.0.0.1:43821/callback`.
-3. Paste the app's Client ID into SpotiFlex, then choose **Sign in with Spotify**.
-4. Complete the browser authorization. SpotiFlex loads every page of your playlists, including private and collaborative playlists accessible to your account.
+1. Choose **Sign in with Spotify**. Your browser opens Spotify's authorization page.
+2. Sign in with your Premium account and approve the connection.
+3. Return to SpotiFlex. The client unlocks only after Spotify authenticates the account.
 
-The developer app owner needs Premium. Additional users must meet Spotify's development-mode access rules. See [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+No developer app or Client ID is required for the default connection. Browser authorization uses PKCE with a state-checked loopback callback. Reusable native credentials and the selected account stay in Windows Credential Manager. Later launches authenticate the saved session before unlocking; network failures keep the saved login and allow retry. Existing installations can migrate their saved native audio login without opening another browser window. Sign-out removes the selected account and its saved native credentials.
 
-The app uses [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow). No client secret is needed. Access and refresh tokens stay in the operating system credential store. The optional `SPOTIFY_CLIENT_ID` environment variable can supply the Client ID; `.env.example` contains the template.
+**Developer connection (optional)** retains the previous Web API login. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register `http://127.0.0.1:43821/callback`, then enter its Client ID in that optional setup section. Spotify's development-mode allowlist and quotas still apply to that connection. No client secret is needed. `SPOTIFY_CLIENT_ID` supplies this optional field only.
 
-Native audio has a separate, one-time browser sign-in using librespot's public audio client. Use the same Spotify account as the developer-app sign-in. SpotiFlex stores the resulting reusable audio credentials in Windows Credential Manager; later launches use them silently. Network timeouts preserve the saved login. An explicit credential rejection triggers one fresh authorization attempt. **Settings > Reconnect native audio** retries the connection.
+Native mode uses the existing librespot session for browsing, library changes, audio and Connect controls. It does not silently retry through the public Web API. Spotify's internal services are undocumented and can change; this implementation is not an approved Spotify SDK integration. A new account outside the developer app's allowlist still needs end-to-end sign-in verification. Remote controls have protocol and state tests; live verification on other devices remains outstanding. **Settings > Reconnect native audio** retries audio connection without changing the sign-in method.
 
 ## Lyrics
 
@@ -70,7 +69,7 @@ The previous egui interface remains available with `cargo run --locked --no-defa
 
 `Cargo.lock` pins `vergen` to 9.0.6 because librespot 0.8's build script is incompatible with the `vergen-lib` dependency split in vergen 9.1.0. Keep the lockfile when updating dependencies.
 
-Current validation: 48 Rust tests, Clippy, formatting, and build pass. Live Web API session restore, browser audio authorization, silent reuse of saved audio credentials, and Web API visibility of the native device have been verified. Audible playback and private-provider responses still need manual verification. The update service has 3 tests. See [architecture](docs/ARCHITECTURE.md) and [attribution](NOTICE.md).
+Native migration validation: 172 Rust tests, 132 frontend unit tests, 105 browser tests and 16 Connect tests pass, together with formatting and Clippy. A read-only live check verified saved native login, library, likes, search, Home and album browsing without developer Web API access. Fresh browser login on an account outside the developer allowlist and remote-device command acceptance remain unverified. Audible playback quality on other computers still needs manual verification. See [feature status](docs/FEATURES.md) and [attribution](NOTICE.md).
 
 ## App updates
 

@@ -106,6 +106,7 @@ pub struct SpotiFlex {
     pending_import: Option<String>,
     folder_name: String,
     login_pending: bool,
+    developer_login: bool,
     login_restoring: bool,
     login_issue: Option<crate::auth::LoginIssue>,
     login_cancelled: Arc<AtomicBool>,
@@ -135,11 +136,13 @@ impl SpotiFlex {
             crate::notify::Notifier::new(move || context.request_repaint())
         };
         let worker = Worker::start(notifier.clone());
-        let login_pending = config::valid_client_id(&settings.client_id);
+        let login_cancelled = Arc::new(AtomicBool::new(false));
+        let login_pending = true;
         if login_pending {
-            let _ = worker
-                .commands
-                .send(Command::Restore(settings.client_id.clone()));
+            let _ = worker.commands.send(Command::NativeLogin {
+                restoring: true,
+                cancelled: login_cancelled.clone(),
+            });
         }
         let search = settings
             .last_view
@@ -193,9 +196,10 @@ impl SpotiFlex {
             pending_import: None,
             folder_name: String::new(),
             login_pending,
+            developer_login: false,
             login_restoring: login_pending,
             login_issue: None,
-            login_cancelled: Arc::new(AtomicBool::new(false)),
+            login_cancelled,
             loading: false,
             more: false,
             notice,
@@ -3398,7 +3402,7 @@ impl SpotiFlex {
                             ui.set_width(width - 32.0);
                             ui.label(RichText::new("Spotify Premium required").font(theme::bold(20.0)).color(ACCENT));
                             ui.label(
-                                RichText::new("Playback runs through Spotify Connect, which only works with Premium accounts. Development apps also need a Premium owner; other accounts must be allowed in the dashboard.")
+                                RichText::new("Sign in with your Spotify account in the browser. Native playback requires Spotify Premium.")
                                     .size(13.0)
                                     .color(TEXT),
                             );
@@ -3408,6 +3412,8 @@ impl SpotiFlex {
                         ui.label(RichText::new(&self.notice).color(if self.error { ERROR } else { SUBDUED }));
                     }
                     ui.add_space(18.0);
+                    ui.checkbox(&mut self.developer_login, "Use a developer connection (optional)");
+                    if self.developer_login {
                     step(ui, 1, "Create a Spotify developer app with Web API enabled.", |ui| {
                         ui.hyperlink_to("Open Developer Dashboard ↗", config::DASHBOARD_URL);
                     });
@@ -3439,6 +3445,7 @@ impl SpotiFlex {
                             self.dirty = true;
                         }
                     });
+                    }
                     ui.add_space(14.0);
                     if self.login_pending {
                         ui.horizontal(|ui| {
@@ -3458,20 +3465,22 @@ impl SpotiFlex {
                                 self.login_restoring = true;
                                 self.login_pending = true;
                                 self.login_issue = None;
-                                self.send(Command::Restore(self.settings.client_id.clone()));
+                                self.login_cancelled.store(true, Ordering::Release);
+                                self.login_cancelled = Arc::new(AtomicBool::new(false));
+                                self.send(Command::NativeLogin { restoring: true, cancelled: self.login_cancelled.clone() });
                             }
                         }
-                        let valid = config::valid_client_id(&self.settings.client_id);
+                        let valid = !self.developer_login || config::valid_client_id(&self.settings.client_id);
                         let button = primary("Sign in with Spotify").min_size(vec2(width, 48.0));
                         if ui.add_enabled(valid, button).clicked() {
                             self.save_settings();
                             self.login_pending = true;
                             self.login_issue = None;
                             self.login_cancelled = Arc::new(AtomicBool::new(false));
-                            self.send(Command::Login(
+                            self.send(if self.developer_login { Command::Login(
                                 self.settings.client_id.clone(),
                                 self.login_cancelled.clone(),
-                            ));
+                            ) } else { Command::NativeLogin { restoring: false, cancelled: self.login_cancelled.clone() } });
                         }
                         if !valid && !self.settings.client_id.is_empty() {
                             ui.label(RichText::new("Client IDs are 32 letters and numbers.").small().color(SUBDUED));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ambienceFps,
+  ambienceSize,
   onWindowActivity,
   setWindowActivity,
   windowActivity,
@@ -24,5 +25,11 @@ describe("window activity", () => {
     expect(ambienceFps({ minimized: true, focused: false })).toBe(0);
     expect(ambienceFps({ minimized: false, focused: false })).toBe(12);
     expect(ambienceFps({ minimized: false, focused: true })).toBe(30);
+  });
+
+  it("draws a smaller ambience canvas in the background", () => {
+    expect(ambienceSize({ minimized: false, focused: true })).toBe(768);
+    expect(ambienceSize({ minimized: false, focused: false })).toBe(320);
+    expect(ambienceSize({ minimized: true, focused: false })).toBe(320);
   });
 });

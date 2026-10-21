@@ -3,6 +3,7 @@ import Kawarp from "@kawarp/core";
 import type { Track } from "./types";
 import {
   ambienceFps,
+  ambienceSize,
   onWindowActivity,
   windowActivity,
 } from "./window-activity";
@@ -97,14 +98,19 @@ export const Ambience = memo(function Ambience({
     };
     const resize = () => {
       const box = canvas.getBoundingClientRect(),
+        longest = ambienceSize(windowActivity()),
         scale = Math.min(
           1,
-          768 / Math.max(1, box.width),
-          768 / Math.max(1, box.height),
-        );
-      canvas.width = Math.max(1, Math.round(box.width * scale));
-      canvas.height = Math.max(1, Math.round(box.height * scale));
-      engine.resize();
+          longest / Math.max(1, box.width),
+          longest / Math.max(1, box.height),
+        ),
+        width = Math.max(1, Math.round(box.width * scale)),
+        height = Math.max(1, Math.round(box.height * scale));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        engine.resize();
+      }
       restart();
     };
     const sizes = new ResizeObserver(resize);
@@ -116,7 +122,8 @@ export const Ambience = memo(function Ambience({
     });
     observer.observe(canvas);
     document.addEventListener("visibilitychange", restart);
-    const stopActivity = onWindowActivity(restart);
+    // Background windows redraw a smaller canvas at a lower frame rate.
+    const stopActivity = onWindowActivity(resize);
     reduced.addEventListener("change", restart);
     return () => {
       disposed = true;

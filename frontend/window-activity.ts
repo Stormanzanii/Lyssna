@@ -27,6 +27,14 @@ export function onWindowActivity(listener: () => void) {
 export const ambienceFps = (activity: WindowActivity) =>
   activity.minimized ? 0 : activity.focused ? 30 : 12;
 
+/**
+ * Longest side of the ambience canvas, in pixels. The canvas is blurred and
+ * stretched to fill, so a smaller one looks the same in the background
+ * while using less GPU time and memory.
+ */
+export const ambienceSize = (activity: WindowActivity) =>
+  activity.focused && !activity.minimized ? 768 : 320;
+
 /** Latest window position in CSS pixels, as reported by Rust when moved. */
 let position: { x: number; y: number } | undefined;
 export const windowPosition = () => position;

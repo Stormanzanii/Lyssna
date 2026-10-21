@@ -154,8 +154,9 @@ mod windows_impl {
         icons: [HICON; 4],
         app_icon: HICON,
         state: MediaState,
-        created_message: u32,
     }
+    /// Windows' "TaskbarButtonCreated" message ID, read without borrowing state.
+    static CREATED_MESSAGE: OnceLock<u32> = OnceLock::new();
     thread_local! {
         static TASKBAR: RefCell<Option<Taskbar>> = const { RefCell::new(None) };
         static CONTROLS: RefCell<Option<MediaControls>> = const { RefCell::new(None) };
@@ -300,17 +301,22 @@ mod windows_impl {
                 return LRESULT(0);
             }
         }
-        TASKBAR.with_borrow_mut(|taskbar| {
-            // Explorer restarts recreate the taskbar button without our
-            // buttons, so add them again.
-            if let Some(taskbar) = taskbar
-                && message == taskbar.created_message
-            {
-                taskbar.list = None;
-                taskbar.added = false;
-                taskbar.sync();
-            }
-        });
+        // Explorer restarts recreate the taskbar button without our buttons,
+        // so add them again. Windows can call this procedure from inside
+        // `sync` (the taskbar calls send window messages), so only borrow the
+        // state for this one message and skip if it is already borrowed: a
+        // panic here cannot unwind and would abort the app.
+        if CREATED_MESSAGE.get() == Some(&message) {
+            TASKBAR.with(|cell| {
+                if let Ok(mut taskbar) = cell.try_borrow_mut()
+                    && let Some(taskbar) = taskbar.as_mut()
+                {
+                    taskbar.list = None;
+                    taskbar.added = false;
+                    taskbar.sync();
+                }
+            });
+        }
         unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
     }
 
@@ -343,6 +349,8 @@ mod windows_impl {
                 );
                 let _ = SetWindowSubclass(hwnd, Some(subclass), 1, 0);
             }
+            let _ =
+                CREATED_MESSAGE.set(unsafe { RegisterWindowMessageW(w!("TaskbarButtonCreated")) });
             TASKBAR.with_borrow_mut(|taskbar| {
                 let mut created = Taskbar {
                     hwnd,
@@ -351,7 +359,6 @@ mod windows_impl {
                     icons: [Glyph::Previous, Glyph::Play, Glyph::Pause, Glyph::Next].map(icon),
                     app_icon,
                     state: MediaState::default(),
-                    created_message: unsafe { RegisterWindowMessageW(w!("TaskbarButtonCreated")) },
                 };
                 created.sync();
                 *taskbar = Some(created);

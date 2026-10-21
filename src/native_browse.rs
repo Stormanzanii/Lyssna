@@ -677,26 +677,30 @@ pub async fn move_to_folder(session: &Session, playlist: &str, folder: Option<&s
     Ok(())
 }
 
-/// Delete a Spotify folder but keep its playlists, which move up a level.
-pub async fn delete_folder(session: &Session, id: &str) -> Result<()> {
+/// Remove only the folder's two markers, preserving every contained row.
+fn delete_folder_change(rows: &[(String, String)], id: &str) -> Result<Value> {
     valid_folder_id(id)?;
     let prefix = format!("spotify:start-group:{id}:");
     let end = format!("spotify:end-group:{id}");
-    let rows = library_rows(session).await?;
-    let markers: Vec<Value> = rows
+    let markers: Vec<_> = rows
         .iter()
         .filter(|(uri, _)| uri.starts_with(&prefix) || *uri == end)
-        .map(row_key)
         .collect();
     ensure!(
-        markers.len() == 2,
+        markers.len() == 2 && markers[0].0.starts_with(&prefix) && markers[1].0 == end,
         "This folder is no longer in Your Library"
     );
-    rootlist_change(
-        session,
-        json!({"kind": 3, "rem": {"items": markers, "itemsAsKey": true}}),
-    )
-    .await?;
+    let keys: Vec<_> = markers.into_iter().map(row_key).collect();
+    Ok(json!({"kind": 3, "rem": {"items": keys, "itemsAsKey": true}}))
+}
+
+/// Delete a Spotify folder but keep its playlists and subfolders, which move up a level.
+pub async fn delete_folder(session: &Session, id: &str) -> Result<()> {
+    valid_folder_id(id)?;
+    let rows = library_rows(session).await?;
+    rootlist_change(session, delete_folder_change(&rows, id)?).await?;
+    let prefix = format!("spotify:start-group:{id}:");
+    let end = format!("spotify:end-group:{id}");
     ensure!(
         !library_rows(session)
             .await?
@@ -1142,6 +1146,129 @@ mod rootlist_tests {
         page.contents = Some(contents).into();
         page
     }
+    #[test]
+    fn folder_deletion_keeps_playlists_and_promotes_nested_folders() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let source = [
+            ("spotify:start-group:outer:Outer", "", ""),
+            ("spotify:start-group:target:Target", "", ""),
+            ("spotify:playlist:0123456789abcdefghij01", "Mine", "me"),
+            ("spotify:start-group:child:Child", "", ""),
+            (
+                "spotify:user:friend:playlist:0123456789abcdefghij02",
+                "Shared",
+                "friend",
+            ),
+            ("spotify:end-group:child", "", ""),
+            ("spotify:start-group:empty:Empty", "", ""),
+            ("spotify:end-group:empty", "", ""),
+            ("spotify:end-group:target", "", ""),
+            ("spotify:start-group:target2:Other", "", ""),
+            ("spotify:playlist:0123456789abcdefghij03", "Other", "me"),
+            ("spotify:end-group:target2", "", ""),
+            ("spotify:end-group:outer", "", ""),
+        ];
+        let rows: Vec<_> = source
+            .iter()
+            .map(|(uri, _, _)| (uri.to_string(), STANDARD.encode(uri.as_bytes())))
+            .collect();
+        for (id, expected) in [
+            (
+                "target",
+                vec![
+                    vec!["outer"],
+                    vec!["outer", "child"],
+                    vec!["outer", "target2"],
+                ],
+            ),
+            (
+                "outer",
+                vec![vec!["target"], vec!["target", "child"], vec!["target2"]],
+            ),
+        ] {
+            let change = delete_folder_change(&rows, id).unwrap();
+            assert_eq!(change["rem"]["itemsAsKey"], true);
+            let removed = change["rem"]["items"].as_array().unwrap();
+            assert_eq!(removed.len(), 2);
+            for key in removed {
+                let row = rows
+                    .iter()
+                    .find(|row| row.0 == key["uri"].as_str().unwrap())
+                    .unwrap();
+                assert_eq!(key["attributes"]["itemId"].as_str(), Some(row.1.as_str()));
+            }
+            let remaining: Vec<_> = source
+                .iter()
+                .copied()
+                .filter(|(uri, _, _)| !removed.iter().any(|key| key["uri"] == *uri))
+                .collect();
+            let (mut ids, mut open, mut folders, mut playlists) =
+                (HashSet::new(), Vec::new(), Vec::new(), Vec::new());
+            rootlist_page(
+                &page(&remaining),
+                &mut ids,
+                &mut open,
+                &mut folders,
+                &mut playlists,
+            )
+            .unwrap();
+            assert!(open.is_empty());
+            assert!(!folders.iter().any(|folder| folder.id == id));
+            for child in ["child", "empty"] {
+                let folder = folders.iter().find(|folder| folder.id == child).unwrap();
+                assert_eq!(folder.parents, expected[0]);
+            }
+            let paths: Vec<Vec<_>> = playlists
+                .iter()
+                .map(|playlist| {
+                    playlist
+                        .folders
+                        .iter()
+                        .map(|folder| folder.id.as_str())
+                        .collect()
+                })
+                .collect();
+            assert_eq!(paths, expected);
+            assert_eq!(
+                playlists
+                    .iter()
+                    .map(|playlist| playlist.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["Mine", "Shared", "Other"]
+            );
+            assert_eq!(playlists[1].owner.id, "friend");
+            assert!(playlists[1].collaborative);
+        }
+    }
+
+    #[test]
+    fn folder_deletion_rejects_missing_duplicate_reversed_and_invalid_markers() {
+        let start = "spotify:start-group:target:Target";
+        let end = "spotify:end-group:target";
+        for uris in [
+            vec![],
+            vec![start],
+            vec![end],
+            vec![start, start],
+            vec![end, start],
+            vec![start, end, end],
+        ] {
+            let rows: Vec<_> = uris
+                .into_iter()
+                .map(|uri| (uri.to_owned(), String::new()))
+                .collect();
+            assert!(delete_folder_change(&rows, "target").is_err());
+        }
+        let rows = vec![
+            (start.to_owned(), String::new()),
+            (end.to_owned(), String::new()),
+        ];
+        assert!(delete_folder_change(&rows, "target").is_ok());
+        for id in ["", "../target", "target:Other"] {
+            assert!(delete_folder_change(&rows, id).is_err());
+        }
+    }
+
     #[test]
     fn library_keeps_private_and_collaborative_playlists_with_their_folders() {
         let (mut ids, mut open, mut playlists) = (HashSet::new(), Vec::new(), Vec::new());

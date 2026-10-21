@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Resume with **Section 4: Lyrics** or the Spotify folder work noted below. Each implementation batch gets relevant checks, an updated feature record, a Git commit and a push. Implementation and live listening remain separate claims.
+Resume with **Section 4: Lyrics**. Each implementation batch gets relevant checks, an updated feature record, a Git commit and a push. Implementation and live listening remain separate claims.
 
 ## 1. Playback speed: implemented and measured
 
@@ -19,7 +19,7 @@ The existing Spotify Web API cooldown still applies to operations using that API
 ## 3. Playlist tools: mostly implemented
 
 - Done (native, each change confirmed by a re-read, live-tested on a temporary playlist on 2026-10-21): create playlists, add with duplicate skipping, edit names and descriptions, drag to reorder, remove songs, delete or remove playlists from the library.
-- Spotify folders: shown as nested sidebar groups, including empty folders; create and rename from the sidebar; move saved playlists into folders or back to the library root from their menus. Browser checks cover moves, cancellation, library updates and sign-out. Native folder deletion exists but still needs a desktop action.
+- Spotify folders: shown as nested sidebar groups, including empty folders; create and rename from the sidebar; move saved playlists into folders or back to the library root from their menus. Delete folders from their sidebar menu after confirmation, keeping playlists and subfolders one level up. Unit checks cover preserved contents and invalid folder markers; browser checks cover moves, confirmation, cancellation, backend errors, library updates and sign-out. This batch did not rerun live Spotify writes.
 - Remaining: public/private visibility (the internal change format is not yet known), cover images, and server-concurrent duplicate protection.
 
 ## 4. Lyrics

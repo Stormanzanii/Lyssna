@@ -298,6 +298,9 @@ impl NativeControls {
     pub fn rename_folder(&self, id: &str, name: &str) -> Result<()> {
         self.run(async |session| crate::native_browse::rename_folder(session, id, name).await)
     }
+    pub fn delete_folder(&self, id: &str) -> Result<()> {
+        self.run(async |session| crate::native_browse::delete_folder(session, id).await)
+    }
     pub fn create_folder(&self, name: &str) -> Result<String> {
         self.run(async |session| crate::native_browse::create_folder(session, name).await)
     }

@@ -65,6 +65,8 @@ pub enum Command {
         id: String,
         name: String,
     },
+    /// Delete a Spotify folder while keeping its playlists and subfolders.
+    DeleteFolder(String),
     /// Rename a playlist you own and set its description.
     EditPlaylist {
         playlist: Playlist,
@@ -984,6 +986,17 @@ impl Backend {
                 self.native_controls.rename_folder(&id, &name)?;
                 self.refresh_library()?;
                 self.emit(Event::Notice(format!("Renamed to {}", name.trim())));
+            }
+            Command::DeleteFolder(id) => {
+                anyhow::ensure!(
+                    self.native_ready(),
+                    "Wait for native audio to connect, then delete the folder."
+                );
+                self.native_controls.delete_folder(&id)?;
+                self.refresh_library()?;
+                self.emit(Event::Notice(
+                    "Folder deleted. Playlists kept in Your Library.".into(),
+                ));
             }
             Command::EditPlaylist {
                 playlist,

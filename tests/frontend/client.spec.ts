@@ -4159,3 +4159,185 @@ test("folder picker follows library updates and closes on sign-out", async ({
     ),
   ).toEqual([]);
 });
+
+async function startFolderDeletionClient(page: Page) {
+  await startClient(page);
+  const folders = [
+    { id: "road", name: "Road", parents: [] as string[] },
+    { id: "night", name: "Night", parents: ["road"] },
+  ];
+  const playlists = [
+    {
+      id: "5123456789abcdefghijkl",
+      name: "Road trip",
+      images: [],
+      owner: { id: "test-user" },
+      collaborative: false,
+      folders: [{ id: "road", name: "Road" }],
+    },
+    {
+      id: "6123456789abcdefghijkl",
+      name: "Shared nights",
+      images: [],
+      owner: { id: "friend" },
+      collaborative: true,
+      folders: [
+        { id: "road", name: "Road" },
+        { id: "night", name: "Night" },
+      ],
+    },
+  ];
+  await page.evaluate(
+    ({ playlists, folders }) => {
+      const emit = (window as any).__clientTest.emit;
+      emit({ type: "library", playlists });
+      emit({ type: "library_folders", folders });
+    },
+    { playlists, folders },
+  );
+  return { playlists, folders };
+}
+
+async function openFolderDeletion(page: Page) {
+  await page
+    .locator(".library-list .spotify-folder > summary")
+    .filter({ hasText: "Road" })
+    .click({ button: "right" });
+  await page
+    .getByRole("menuitem", { name: "Delete folder", exact: true })
+    .click();
+  return page.getByRole("alertdialog", { name: "Delete folder?" });
+}
+
+test("folder deletion confirms, cancels and preserves playlists through refresh", async ({
+  page,
+}) => {
+  const { playlists } = await startFolderDeletionClient(page);
+  const dialog = await openFolderDeletion(page);
+  await expect(dialog).toContainText('Delete "Road" from your Spotify library?');
+  await expect(dialog).toContainText(
+    "Playlists and subfolders inside will move up one level",
+  );
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    dialog.getByRole("button", { name: "Delete folder" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  await openFolderDeletion(page);
+  await page.locator(".modal-backdrop").click({ position: { x: 2, y: 2 } });
+  await expect(dialog).toHaveCount(0);
+  await openFolderDeletion(page);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  const commands = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands.filter(
+        (entry: any) => entry.command === "delete_folder",
+      ),
+    );
+  expect(await commands()).toEqual([]);
+
+  await openFolderDeletion(page);
+  await dialog.getByRole("button", { name: "Delete folder" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await commands()).toEqual([
+    { command: "delete_folder", args: { id: "road" } },
+  ]);
+  // Keep the current tree until the backend has confirmed and refreshed it.
+  const summaries = page.locator(".library-list .spotify-folder > summary");
+  await expect(summaries.filter({ hasText: "Road" })).toContainText(
+    "2 playlists",
+  );
+  await page.evaluate((playlists) => {
+    const emit = (window as any).__clientTest.emit;
+    emit({
+      type: "library",
+      playlists: playlists.map((playlist) => ({
+        ...playlist,
+        folders: playlist.folders.slice(1),
+      })),
+    });
+    emit({
+      type: "library_folders",
+      folders: [{ id: "night", name: "Night", parents: [] }],
+    });
+  }, playlists);
+  await expect(summaries.filter({ hasText: "Road" })).toHaveCount(0);
+  await expect(
+    page.locator(".library-row", { hasText: "Road trip" }),
+  ).toBeVisible();
+  await summaries.filter({ hasText: "Night" }).click();
+  await expect(
+    page.locator(".library-row", { hasText: "Shared nights" }),
+  ).toBeVisible();
+});
+
+test("failed folder deletion reports the backend error and keeps the library", async ({
+  page,
+}) => {
+  await startFolderDeletionClient(page);
+  const dialog = await openFolderDeletion(page);
+  await dialog.getByRole("button", { name: "Delete folder" }).click();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "notice",
+      error: true,
+      message: "Spotify did not confirm the folder removal",
+    }),
+  );
+  await expect(page.locator(".toast.error")).toContainText(
+    "Spotify did not confirm the folder removal",
+  );
+  await expect(
+    page
+      .locator(".library-list .spotify-folder > summary")
+      .filter({ hasText: "Road" }),
+  ).toContainText("2 playlists");
+  await expect(
+    page.locator(".library-row", { hasText: "Road trip" }),
+  ).toHaveCount(1);
+  await expect(
+    page.locator(".library-row", { hasText: "Shared nights" }),
+  ).toHaveCount(1);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.filter((entry: any) =>
+        ["remove_playlist", "remove_from_playlist"].includes(entry.command),
+      ),
+    ),
+  ).toEqual([]);
+});
+
+test("folder deletion closes on sign-out and cannot carry into another account", async ({
+  page,
+}) => {
+  const library = await startFolderDeletionClient(page);
+  const dialog = await openFolderDeletion(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toContainText(
+    "Spotify Premium required",
+  );
+  await page.evaluate(({ playlists, folders }) => {
+    const emit = (window as any).__clientTest.emit;
+    emit({ type: "session", profile: { id: "another-user" } });
+    emit({ type: "library", playlists });
+    emit({ type: "library_folders", folders });
+  }, library);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.filter(
+        (entry: any) => entry.command === "delete_folder",
+      ),
+    ),
+  ).toEqual([]);
+});

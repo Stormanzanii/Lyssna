@@ -237,6 +237,7 @@ function App() {
     folder: FolderRef;
     name: string;
   } | null>(null);
+  const [deleteFolder, setDeleteFolder] = useState<FolderRef | null>(null);
   const [editDialog, setEditDialog] = useState<{
     playlist: Playlist;
     name: string;
@@ -257,6 +258,7 @@ function App() {
     setFolderMenu(null);
     setRenameFolder(null);
     setFolderPicker(null);
+    setDeleteFolder(null);
   }, [state.profile?.id]);
   const [songMenu, setSongMenu] = useState<{
     track: Track;
@@ -706,6 +708,7 @@ function App() {
         setFolderMenu(null);
         setRenameFolder(null);
         setFolderPicker(null);
+        setDeleteFolder(null);
       }
     };
     // A focused button activates on Space keyup; cancel that so Space never
@@ -2978,8 +2981,67 @@ function App() {
             >
               Rename
             </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setDeleteFolder(folderMenu.folder);
+                setFolderMenu(null);
+              }}
+            >
+              Delete folder
+            </button>
           </div>
         </>
+      )}
+      {state.profile && deleteFolder && (
+        <div className="modal-backdrop" onClick={() => setDeleteFolder(null)}>
+          <section
+            className="dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-folder-title"
+            aria-describedby="delete-folder-description"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== "Tab") return;
+              const buttons = event.currentTarget.querySelectorAll("button");
+              const first = buttons[0],
+                last = buttons[buttons.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+              }
+            }}
+          >
+            <h2 id="delete-folder-title">Delete folder?</h2>
+            <p id="delete-folder-description">
+              Delete &quot;{deleteFolder.name}&quot; from your Spotify library?
+              Playlists and subfolders inside will move up one level and remain
+              in Your Library.
+            </p>
+            <div className="inline-actions">
+              <button
+                className="pill"
+                autoFocus
+                onClick={() => setDeleteFolder(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="pill primary"
+                onClick={() => {
+                  void call("delete_folder", { id: deleteFolder.id });
+                  setDeleteFolder(null);
+                }}
+              >
+                Delete folder
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       {state.profile && folderPicker && folderPlaylist && (
         <>

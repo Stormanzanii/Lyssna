@@ -5600,6 +5600,12 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   const database = page.getByRole("dialog", { name: "TTML Database" });
   const rows = database.locator(".load-ttml-saved li");
   await expect(rows).toHaveCount(2);
+  // The list fades out at the bottom instead of cutting rows off.
+  expect(
+    await database
+      .locator(".load-ttml-saved")
+      .evaluate((list) => getComputedStyle(list).maskImage),
+  ).toContain("linear-gradient");
   await expect(rows.first().locator("img")).toHaveAttribute("src", /saved\.svg/);
   // A song without known art keeps a placeholder of the same size.
   await expect(rows.nth(1).locator(".load-ttml-art")).toBeVisible();

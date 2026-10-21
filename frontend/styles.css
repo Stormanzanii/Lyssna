@@ -1548,9 +1548,12 @@ small {
   flex-direction: column;
   gap: 2px;
   max-height: 64vh;
+  /* The list fades out at the bottom instead of cutting rows off; the
+     padding lets the last row scroll clear of the fade. */
+  mask-image: linear-gradient(#000 calc(100% - 56px), transparent);
   overflow-y: auto;
   margin: 0;
-  padding: 0;
+  padding: 0 0 40px;
   list-style: none;
 }
 .load-ttml-saved li {

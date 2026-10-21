@@ -4,6 +4,7 @@ import { List } from "lucide-react";
 const SORTS = [
   ["order", "Playlist order"],
   ["recent", "Recently added"],
+  ["added_oldest", "Oldest added"],
   ["newest", "Newest releases"],
   ["oldest", "Oldest releases"],
   ["popular", "Most played"],

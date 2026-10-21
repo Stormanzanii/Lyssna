@@ -136,7 +136,7 @@ import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { RecentsPage } from "./recents-page";
-import { collectionTracks, genresFor } from "./collection";
+import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
@@ -2115,7 +2115,7 @@ function App() {
                   {showTrackList && (
                     <>
                       <div
-                        className={`track-table ${collectionPlays ? "collection-table" : ""} ${entity?.album ? "album-table" : ""}`}
+                        className={`track-table ${collectionPlays ? "collection-table" : ""} ${collection ? "dated-table" : ""} ${entity?.album ? "album-table" : ""}`}
                       >
                         <div className="track-table-head">
                           <span>#</span>
@@ -2127,6 +2127,7 @@ function App() {
                                 ? "Plays"
                                 : "Album"}
                           </span>
+                          {collection && <span>Date added</span>}
                           {collectionPlays && <span>Plays</span>}
                           <span>
                             <Clock3 size={16} />
@@ -2311,6 +2312,18 @@ function App() {
                                       ].streams?.toLocaleString()
                                     : track.album.name || entity?.album?.name}
                                 </button>
+                              )}
+                              {collection && (
+                                <span
+                                  className="track-added"
+                                  title={
+                                    track.added_at
+                                      ? new Date(track.added_at).toLocaleString()
+                                      : undefined
+                                  }
+                                >
+                                  {addedLabel(track.added_at)}
+                                </span>
                               )}
                               {collectionPlays && (
                                 <span

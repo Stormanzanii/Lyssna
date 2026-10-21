@@ -213,6 +213,22 @@
 .collection-table .track-table-head {
   grid-template-columns: 32px minmax(180px, 6fr) minmax(120px, 4fr) 110px 96px;
 }
+/* Playlists and Liked Songs add Spotify's Date added column. */
+.dated-table .track-row,
+.dated-table .track-table-head {
+  grid-template-columns: 32px minmax(180px, 6fr) minmax(120px, 4fr) 140px 96px;
+}
+.dated-table.collection-table .track-row,
+.dated-table.collection-table .track-table-head {
+  grid-template-columns: 32px minmax(180px, 6fr) minmax(120px, 4fr) 140px 110px 96px;
+}
+.track-added {
+  font-size: 14px;
+  color: var(--text-subdued, #b3b3b3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .album-table .track-row,
 .album-table .track-table-head {
   grid-template-columns: 32px minmax(180px, 6fr) minmax(110px, 2fr) 96px;

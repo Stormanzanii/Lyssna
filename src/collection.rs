@@ -426,6 +426,20 @@ mod tests {
                 .await
                 .expect("Native library failed");
             assert!(!library.is_empty(), "Expected saved playlists");
+            let liked = crate::native_browse::read(session, "liked", 0)
+                .await
+                .expect("Native Liked Songs failed");
+            assert!(
+                liked.iter().all(|track| track.added_at.starts_with("20")),
+                "Expected added dates on Liked Songs"
+            );
+            let listed = crate::native_browse::read(session, &library[0].id, 0)
+                .await
+                .expect("Native playlist failed");
+            assert!(
+                listed.iter().any(|track| track.added_at.starts_with("20")),
+                "Expected added dates on a playlist"
+            );
             let recent = crate::native_browse::recent(session)
                 .await
                 .expect("Native play history failed");

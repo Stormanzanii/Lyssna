@@ -5090,3 +5090,42 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 });
+
+test("playlists show Date added and sort by oldest added", async ({ page }) => {
+  await startClient(page);
+  await expect(page.locator(".dated-table .track-table-head")).toContainText(
+    "Date added",
+  );
+  await page.evaluate(
+    ({ track, generation }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "tracks",
+        key: "liked",
+        generation,
+        offset: 0,
+        more: false,
+        tracks: [
+          { ...track, uri: "spotify:track:new", name: "Newer", added_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+          { ...track, uri: "spotify:track:old", name: "Older", added_at: "2024-03-13T00:54:46Z" },
+        ],
+      });
+    },
+    {
+      track,
+      generation: await page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1).args.generation,
+      ),
+    },
+  );
+  const rows = page.locator(".track-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator(".track-added")).toHaveText("3 days ago");
+  await expect(rows.nth(1).locator(".track-added")).toContainText("2024");
+  await page.getByTitle("Sort and filter").click();
+  await page.getByRole("button", { name: "Oldest added" }).click();
+  await expect(rows.nth(0)).toContainText("Older");
+});

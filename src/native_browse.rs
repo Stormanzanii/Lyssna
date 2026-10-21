@@ -10,6 +10,8 @@ use std::{
 };
 struct Listing {
     uris: Vec<String>,
+    /// When each song was added, in Unix milliseconds; 0 when unknown.
+    added: Vec<i64>,
     pages: VecDeque<Value>,
     visited: HashSet<String>,
     created: Instant,
@@ -18,7 +20,7 @@ type Key = (String, String);
 static LISTINGS: OnceLock<tokio::sync::Mutex<HashMap<Key, Listing>>> = OnceLock::new();
 static TRACKS: OnceLock<std::sync::Mutex<HashMap<Key, Track>>> = OnceLock::new();
 fn listing_pages(context: librespot_protocol::context::Context) -> VecDeque<Value> {
-    context.pages.into_iter().map(|page|json!({"tracks":page.tracks.into_iter().filter_map(|track|track.uri).map(|uri|json!({"uri":uri})).collect::<Vec<_>>(),"page_url":page.page_url,"next_page_url":page.next_page_url})).collect()
+    context.pages.into_iter().map(|page|json!({"tracks":page.tracks.into_iter().filter(|track|track.uri.is_some()).map(|track|json!({"uri":track.uri,"added_at":track.metadata.get("added_at")})).collect::<Vec<_>>(),"page_url":page.page_url,"next_page_url":page.next_page_url})).collect()
 }
 pub async fn playlist_info(session: &Session, id: &str) -> Result<crate::model::BrowseInfo> {
     ensure!(
@@ -972,6 +974,7 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
             }
             let mut listing = Listing {
                 uris: Vec::new(),
+                added: Vec::new(),
                 pages: VecDeque::new(),
                 visited: HashSet::new(),
                 created: Instant::now(),
@@ -986,6 +989,12 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
                     "Spotify returned an incomplete playlist"
                 );
                 listing.uris = playlist.tracks().map(|uri| uri.to_uri()).collect();
+                listing.added = playlist
+                    .contents
+                    .items
+                    .iter()
+                    .map(|item| item.attributes.timestamp.as_timestamp_ms())
+                    .collect();
             } else {
                 let uri = if key == "liked" {
                     format!("spotify:user:{identity}:collection")
@@ -1035,12 +1044,21 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
                 continue;
             }
             if let Some(rows) = rows {
-                listing.uris.extend(
-                    rows.iter()
-                        .filter_map(|row| row["uri"].as_str())
+                for row in rows {
+                    let Some(uri) = row["uri"]
+                        .as_str()
                         .filter(|uri| SpotifyUri::from_uri(uri).is_ok())
-                        .map(str::to_owned),
-                );
+                    else {
+                        continue;
+                    };
+                    listing.uris.push(uri.to_owned());
+                    listing.added.push(
+                        row["added_at"]
+                            .as_str()
+                            .and_then(|ms| ms.parse().ok())
+                            .unwrap_or_default(),
+                    );
+                }
             }
             let next = page["next_page_url"].as_str();
             if let Some(next) = next.filter(|url| !url.is_empty())
@@ -1053,15 +1071,32 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
                 listing.pages.push_back(json!({"page_url":next}));
             }
         }
-        listing
-            .uris
-            .iter()
-            .skip(offset)
-            .take(50)
-            .cloned()
-            .collect::<Vec<_>>()
+        let uris: Vec<_> = listing.uris.iter().skip(offset).take(50).cloned().collect();
+        let added: Vec<_> = (offset..offset + uris.len())
+            .map(|index| listing.added.get(index).copied().unwrap_or_default())
+            .collect();
+        (uris, added)
     };
-    resolve_tracks(session, &uris).await
+    let (uris, added) = uris;
+    let mut tracks = resolve_tracks(session, &uris).await?;
+    for (track, added) in tracks.iter_mut().zip(added) {
+        track.added_at = added_date(added);
+    }
+    Ok(tracks)
+}
+
+/// Unix milliseconds as an RFC 3339 date; empty when unknown.
+fn added_date(ms: i64) -> String {
+    if ms <= 0 {
+        return String::new();
+    }
+    time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000)
+        .ok()
+        .and_then(|date| {
+            date.format(&time::format_description::well_known::Rfc3339)
+                .ok()
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result<Vec<Track>> {

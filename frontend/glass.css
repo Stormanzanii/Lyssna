@@ -108,6 +108,16 @@
 .liquid-glass .page-hero {
   background: none;
 }
+/* The artist sticky bar is a frosted strip over the glass sheet. */
+.liquid-glass .artist-sticky {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-radius: 18px 18px 0 0;
+}
+.liquid-glass .artist-about-card {
+  background-color: #ffffff12;
+}
 /* The shorthand above also resets size and position; artist banners set
    their image inline and still need to cover the header. */
 .liquid-glass .artist-hero {

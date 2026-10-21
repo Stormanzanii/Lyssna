@@ -57,7 +57,7 @@ fn text(value: &Value) -> String {
         .unwrap_or_default()
         .to_owned()
 }
-fn images(data: &Value) -> Vec<Artwork> {
+pub(crate) fn images(data: &Value) -> Vec<Artwork> {
     let paths = [
         "/coverArt/sources",
         "/images/items/0/sources",

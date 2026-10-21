@@ -1071,18 +1071,136 @@ small {
   background: #fff;
   color: #131313;
 }
+/* Artist page, Spotify style: About card that opens the full biography. */
 .artist-about {
-  padding: 28px;
+  padding: 32px 24px 8px;
 }
-.artist-about > p {
-  max-width: 850px;
-  margin: 22px 0;
+.artist-about h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.artist-about-card {
+  position: relative;
+  display: block;
+  width: min(100%, 1080px);
+  height: clamp(300px, 38vw, 620px);
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  text-align: left;
+  color: #fff;
+  background-color: #282828;
+  background-size: cover;
+  background-position: center 25%;
+  transition: transform 0.2s;
+}
+.artist-about-card:hover {
+  transform: scale(1.01);
+}
+.artist-rank {
+  position: absolute;
+  top: clamp(20px, 4%, 48px);
+  right: clamp(20px, 4%, 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #1a6ff0;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.artist-rank strong {
+  font-size: 28px;
+}
+.artist-about-copy {
+  position: absolute;
+  left: clamp(20px, 4%, 48px);
+  right: clamp(20px, 25%, 280px);
+  bottom: clamp(20px, 6%, 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.artist-about-copy > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.artist-about-dialog {
+  position: relative;
+  width: min(100%, 860px);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 0;
+}
+.artist-about-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  background: #000a;
+}
+.artist-about-photo {
+  height: clamp(220px, 40vh, 420px);
+  background-size: cover;
+  background-position: center 25%;
+}
+.artist-about-body {
+  padding: 28px 32px 32px;
+}
+.artist-about-body > p {
+  margin: 24px 0;
   font-size: 15px;
+  line-height: 1.7;
+  color: #d4d4d4;
   white-space: pre-line;
 }
-.artist-about > .text-link {
+.artist-about-body > .text-link {
   font-size: 12px;
-  margin-top: 16px;
+}
+.artist-shelf {
+  container-type: inline-size;
+  padding: 0 24px;
+}
+/* Compact bar that replaces the header once it scrolls away. */
+.artist-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  height: 64px;
+  margin-bottom: -64px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--hero, #535353) 55%, #121212);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.artist-sticky.shown {
+  opacity: 1;
+  pointer-events: auto;
+}
+.artist-sticky .primary-play {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.artist-sticky strong {
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .artist-stats {
   display: flex;

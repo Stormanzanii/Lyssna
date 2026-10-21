@@ -174,6 +174,13 @@ export interface BrowseInfo {
     popular: { track: Track; streams?: number }[];
     source_url: string;
     fetched_at: number;
+    avatar_image?: string;
+    /** Spotify's worldwide listener rank, when ranked. */
+    world_rank?: number;
+    /** A large artist photo for the About card. */
+    gallery_image?: string;
+    /** Featuring, Discovered on, Artist Playlists, Fans also like, Appears On. */
+    sections?: HomeSection[];
   };
   key: string;
   title: string;

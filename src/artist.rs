@@ -24,6 +24,15 @@ pub struct ArtistOverview {
     pub details_loaded: bool,
     pub biography: String,
     pub popular: Vec<PopularTrack>,
+    /// Spotify's worldwide listener rank, when ranked.
+    #[serde(default)]
+    pub world_rank: Option<u64>,
+    /// A large artist photo for the About card.
+    #[serde(default)]
+    pub gallery_image: Option<String>,
+    /// Featuring, Discovered on, Artist Playlists, Fans also like, Appears On.
+    #[serde(default)]
+    pub sections: Vec<crate::home::HomeSection>,
     pub source_url: String,
     pub fetched_at: u64,
 }
@@ -270,11 +279,126 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
                 .unwrap_or_default(),
         ),
         popular,
+        world_rank: artist["stats"]["worldRank"]
+            .as_u64()
+            .filter(|rank| *rank > 0),
+        gallery_image: artist["visuals"]["gallery"]["items"][0]["sources"]
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .max_by_key(|image| image["width"].as_u64().unwrap_or_default())
+            })
+            .and_then(|image| image["url"].as_str())
+            .filter(|url| url.starts_with("https://"))
+            .map(str::to_owned),
+        sections: related_sections(artist),
         source_url: format!("https://open.spotify.com/artist/{id}"),
         fetched_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
+    })
+}
+
+/// Spotify's related shelves on an artist page, in its order.
+fn related_sections(artist: &Value) -> Vec<crate::home::HomeSection> {
+    let name = artist["profile"]["name"].as_str().unwrap_or("this artist");
+    let list = |path: &str| {
+        artist
+            .pointer(path)
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .take(20)
+    };
+    let playlists = |path: &str| -> Vec<crate::home::HomeItem> {
+        list(path)
+            .filter_map(|item| {
+                let data = &item["data"];
+                (data["__typename"].as_str() == Some("Playlist"))
+                    .then(|| shelf_item(data, "playlist"))
+                    .flatten()
+            })
+            .collect()
+    };
+    let related = list("/relatedContent/relatedArtists/items")
+        .filter_map(|item| shelf_item(item, "artist"))
+        .collect();
+    let appears = list("/relatedContent/appearsOn/items")
+        .filter_map(|item| shelf_item(&item["releases"]["items"][0], "album"))
+        .collect();
+    [
+        (
+            format!("Featuring {name}"),
+            playlists("/relatedContent/featuringV2/items"),
+        ),
+        (
+            "Discovered on".into(),
+            playlists("/relatedContent/discoveredOnV2/items"),
+        ),
+        (
+            "Artist Playlists".into(),
+            playlists("/profile/playlistsV2/items"),
+        ),
+        ("Fans also like".into(), related),
+        ("Appears On".into(), appears),
+    ]
+    .into_iter()
+    .filter(|(_, items)| !items.is_empty())
+    .map(|(title, items)| crate::home::HomeSection {
+        uri: format!("artist-section:{title}"),
+        title,
+        subtitle: String::new(),
+        items,
+    })
+    .collect()
+}
+
+fn shelf_item(data: &Value, kind: &str) -> Option<crate::home::HomeItem> {
+    let uri = data["uri"].as_str()?;
+    let route = crate::home::route(uri)?;
+    let name = data["name"]
+        .as_str()
+        .or_else(|| data["profile"]["name"].as_str())
+        .filter(|name| !name.is_empty())?;
+    let subtitle = match kind {
+        "artist" => "Artist".to_owned(),
+        "album" => {
+            let kind = data["type"].as_str().unwrap_or("ALBUM").to_lowercase();
+            let kind = match kind.as_str() {
+                "single" => "Single",
+                "compilation" => "Compilation",
+                "ep" => "EP",
+                _ => "Album",
+            };
+            match data["date"]["year"].as_u64() {
+                Some(year) => format!("{year} • {kind}"),
+                None => kind.to_owned(),
+            }
+        }
+        _ => {
+            let description = plain_text(data["description"].as_str().unwrap_or_default());
+            if description.is_empty() {
+                data["ownerV2"]["data"]["name"]
+                    .as_str()
+                    .map(|owner| format!("By {owner}"))
+                    .unwrap_or_default()
+            } else {
+                description
+            }
+        }
+    };
+    Some(crate::home::HomeItem {
+        uri: uri.to_owned(),
+        route,
+        name: name.to_owned(),
+        subtitle,
+        images: crate::home::images(data),
+        kind: kind.to_owned(),
+        playable: kind != "artist",
+        format: String::new(),
     })
 }
 
@@ -345,5 +469,82 @@ mod tests {
                 .contains("accessToken")
         );
         assert!(parse_page(&html, "abcdefghijkl0123456789").is_err());
+    }
+}
+
+#[cfg(test)]
+mod section_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn related_shelves_follow_spotify_order_and_skip_errors() {
+        let playlist = |id: &str, name: &str, description: &str| {
+            json!({"data": {"__typename": "Playlist", "uri": format!("spotify:playlist:{id}"),
+                "name": name, "description": description,
+                "ownerV2": {"data": {"name": "Spotify"}},
+                "images": {"items": [{"sources": [{"url": "https://i.scdn.co/image/p"}]}]}}})
+        };
+        let artist = json!({
+            "profile": {"name": "Test Artist", "playlistsV2": {"items": [playlist("0123456789abcdefghij03", "Best Of", "")]}},
+            "relatedContent": {
+                "featuringV2": {"items": [playlist("0123456789abcdefghij01", "This Is Test Artist", "The <b>essential</b> tracks")]},
+                "discoveredOnV2": {"items": [{"data": {"__typename": "GenericError"}}, playlist("0123456789abcdefghij02", "Hits", "")]},
+                "relatedArtists": {"items": [{"uri": "spotify:artist:0123456789abcdefghij04", "profile": {"name": "Other Artist"},
+                    "visuals": {"avatarImage": {"sources": [{"url": "https://i.scdn.co/image/a"}]}}}]},
+                "appearsOn": {"items": [{"releases": {"items": [{"uri": "spotify:album:0123456789abcdefghij05",
+                    "name": "Loud", "type": "ALBUM", "date": {"year": 2010},
+                    "coverArt": {"sources": [{"url": "https://i.scdn.co/image/c"}]}}]}}]}
+            }
+        });
+        let sections = related_sections(&artist);
+        let titles: Vec<_> = sections
+            .iter()
+            .map(|section| section.title.as_str())
+            .collect();
+        assert_eq!(
+            titles,
+            [
+                "Featuring Test Artist",
+                "Discovered on",
+                "Artist Playlists",
+                "Fans also like",
+                "Appears On"
+            ]
+        );
+        assert_eq!(sections[0].items[0].subtitle, "The essential tracks");
+        assert_eq!(sections[1].items.len(), 1);
+        assert_eq!(sections[2].items[0].subtitle, "By Spotify");
+        assert_eq!(sections[3].items[0].kind, "artist");
+        assert!(!sections[3].items[0].playable);
+        assert_eq!(sections[4].items[0].subtitle, "2010 • Album");
+        assert_eq!(sections[4].items[0].route, "album:0123456789abcdefghij05");
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    #[test]
+    #[ignore = "Reads one public artist page through the saved native sign-in"]
+    fn live_artist_page_has_related_shelves() {
+        crate::native::with_live_session(async |session: &librespot_core::Session| {
+            // Eminem: a large catalogue with every related shelf.
+            let id = "7dGJo4pcD2V6oG8kP0tJRR";
+            let entity = crate::catalogue::entity(session, "artist", id)
+                .await
+                .expect("Artist query failed");
+            let overview = super::from_entity(&entity, id).expect("Artist page parse failed");
+            let shelves: Vec<_> = overview
+                .sections
+                .iter()
+                .map(|section| format!("{} ({})", section.title, section.items.len()))
+                .collect();
+            assert!(overview.world_rank.is_some(), "Expected a world rank");
+            assert!(overview.gallery_image.is_some(), "Expected a gallery photo");
+            assert!(shelves.len() >= 4, "Expected related shelves: {shelves:?}");
+            eprintln!(
+                "Artist page: rank #{:?}, shelves {shelves:?}",
+                overview.world_rank
+            );
+        });
     }
 }

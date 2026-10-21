@@ -4875,3 +4875,110 @@ test("folder deletion closes on sign-out and cannot carry into another account",
     ),
   ).toEqual([]);
 });
+
+test("artist pages show Spotify's shelves, About card and sticky bar", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.locator(".player-bar .artist-link").first().click();
+  const key = `artist:${track.artists[0].id}`;
+  const shelfItem = (index: number, kind: string) => ({
+    uri: `spotify:${kind}:${String(index).padStart(22, "0")}`,
+    route: `${kind}:${String(index).padStart(22, "0")}`,
+    name: `${kind} ${index}`,
+    subtitle: kind === "artist" ? "Artist" : "2010 • Album",
+    images: track.album.images,
+    kind,
+    playable: kind !== "artist",
+    format: "",
+  });
+  const section = (title: string, kind: string) => ({
+    uri: `artist-section:${title}`,
+    title,
+    subtitle: "",
+    items: [1, 2, 3].map((index) => shelfItem(index, kind)),
+  });
+  await page.evaluate(
+    ({ key, track, sections }) => {
+      const host = (window as any).__clientTest;
+      const generation = host.commands
+        .filter(
+          (entry: any) => entry.command === "browse" && entry.args.key === key,
+        )
+        .at(-1).args.generation;
+      host.emit({
+        type: "browse_info",
+        generation,
+        info: {
+          key,
+          title: "Test artist",
+          subtitle: "Artist",
+          images: track.album.images,
+          artist: { ...track.artists[0], images: track.album.images },
+          albums: [],
+          overview: {
+            header_image: track.album.images[0].url,
+            verified: true,
+            monthly_listeners: 72_847_177,
+            followers: 112_804_519,
+            world_rank: 21,
+            gallery_image: track.album.images[0].url,
+            biography: "A long biography. ".repeat(80),
+            popular: [{ track, streams: 3_271_340_476 }],
+            sections,
+            source_url: "",
+            fetched_at: 0,
+            details_loaded: true,
+          },
+        },
+      });
+    },
+    {
+      key,
+      track,
+      sections: [
+        section("Featuring Test artist", "playlist"),
+        section("Fans also like", "artist"),
+        section("Appears On", "album"),
+      ],
+    },
+  );
+  const sticky = page.locator(".artist-sticky");
+  await expect(sticky).not.toHaveClass(/shown/);
+  // Spotify's order: Featuring, then About, then the other shelves.
+  const headings = page.locator(
+    ".artist-shelf .home-shelf-heading h2, .artist-about > h2",
+  );
+  await expect(headings).toHaveText([
+    "Featuring Test artist",
+    "About",
+    "Fans also like",
+    "Appears On",
+  ]);
+  // Popular rows carry badges, not artist names, like Spotify.
+  await expect(
+    page.locator(".artist-top .track-row .track-artists .artist-link"),
+  ).toHaveCount(0);
+  const card = page.locator(".artist-about-card");
+  await expect(card.locator(".artist-rank")).toHaveText("#21in the world");
+  await expect(card).toContainText("72,847,177 monthly listeners");
+  await card.click();
+  const dialog = page.getByRole("dialog", { name: "About Test artist" });
+  await expect(dialog).toContainText("112,804,519");
+  await expect(dialog).toContainText("#21");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  // The sticky bar appears once the header scrolls away, in both themes.
+  await page.locator(".browse-scroll").evaluate((node) => node.scrollTo(0, 900));
+  await expect(sticky).toHaveClass(/shown/);
+  await expect(sticky).toContainText("Test artist");
+  await page.evaluate(() =>
+    document.querySelector(".application")!.classList.add("liquid-glass"),
+  );
+  await expect(sticky).toHaveCSS("opacity", "1");
+  await page.screenshot({ path: "target/diagnostics/artist-sticky-glass.png" });
+  await page.locator(".browse-scroll").evaluate((node) => node.scrollTo(0, 0));
+  await expect(sticky).not.toHaveClass(/shown/);
+});

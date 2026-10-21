@@ -62,7 +62,7 @@ import {
   Folder,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
-import { HomePage } from "./HomePage";
+import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
 import { Logo } from "./brand";
@@ -272,6 +272,10 @@ function App() {
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  // The artist header has scrolled away; show the compact sticky bar.
+  const [heroGone, setHeroGone] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
   const [songSearch, setSongSearch] = useState(false);
   const [songQuery, setSongQuery] = useState(""),
     [songGenre, setSongGenre] = useState(""),
@@ -709,6 +713,7 @@ function App() {
         setEditDialog(null);
         setFolderMenu(null);
         setRenameFolder(null);
+        setAboutOpen(false);
         setFolderPicker(null);
         setDeleteFolder(null);
       }
@@ -1137,6 +1142,20 @@ function App() {
           ? playlist.collaborative
           : true,
     );
+  // Show the artist's sticky bar once the header has scrolled under it.
+  useEffect(() => {
+    setHeroGone(false);
+    setAboutOpen(false);
+    const hero = heroRef.current,
+      root = mainScroll.current;
+    if (!state.route.startsWith("artist:") || !hero || !root) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroGone(!entry.isIntersecting),
+      { root, rootMargin: "-72px 0px 0px 0px" },
+    );
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, [state.route, center]);
   const playlistRow = (playlist: Playlist) => (
     <div
       className="library-row"
@@ -1781,11 +1800,35 @@ function App() {
                   }}
                 />
               ) : (
+                <>
+                {artistPage && (
+                  <div
+                    className={`artist-sticky ${heroGone ? "shown" : ""}`}
+                    style={{ "--hero": heroColor } as CSSProperties}
+                    aria-hidden={!heroGone}
+                  >
+                    <button
+                      className="primary-play"
+                      tabIndex={heroGone ? 0 : -1}
+                      aria-label={`Play ${title}`}
+                      onClick={() =>
+                        play({
+                          command: "play_home",
+                          context: `spotify:${state.route}`,
+                        })
+                      }
+                    >
+                      <Play size={22} fill="currentColor" />
+                    </button>
+                    <strong>{title}</strong>
+                  </div>
+                )}
                 <div
                   className={`entity-header ${artistPage ? "artist-header" : ""}`}
                   style={{ "--hero": heroColor } as CSSProperties}
                 >
                   <section
+                    ref={heroRef}
                     className={`page-hero ${artistPage ? `artist-hero ${artistFallback ? "artist-fallback" : ""}` : ""}`}
                     style={
                       artistPage && !artistFallback && artistBanner
@@ -2009,6 +2052,7 @@ function App() {
                     </div>
                   )}
                 </div>
+                </>
               )}
               {selected.size > 0 && (
                 <div className="selection-bar">
@@ -2193,10 +2237,12 @@ function App() {
                                   </button>
                                   <div className="track-artists">
                                     <ExplicitBadge track={track} />
-                                    <ArtistLinks
-                                      artists={track.artists}
-                                      onArtist={openArtist}
-                                    />
+                                    {!entity?.artist && (
+                                      <ArtistLinks
+                                        artists={track.artists}
+                                        onArtist={openArtist}
+                                      />
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -2390,6 +2436,11 @@ function App() {
                       ["all", "Popular releases"],
                       ["album", "Albums"],
                       ["single", "Singles and EPs"],
+                      ...((entity?.artist ? entity.albums : []).some(
+                        (album) => album.album_type === "compilation",
+                      )
+                        ? [["compilation", "Compilations"]]
+                        : []),
                     ].map(([value, label]) => (
                       <button
                         key={value}
@@ -2429,45 +2480,124 @@ function App() {
                   </div>
                 </>
               )}
-              {entity?.overview && (
-                <section className="artist-about">
-                  <h2>About {entity.artist?.name}</h2>
-                  <div className="artist-stats">
-                    {entity.overview.monthly_listeners != null && (
-                      <span>
-                        <strong>
-                          {entity.overview.monthly_listeners.toLocaleString()}
-                        </strong>
-                        Monthly listeners
-                      </span>
-                    )}
-                    {entity.overview.followers != null && (
-                      <span>
-                        <strong>
-                          {entity.overview.followers.toLocaleString()}
-                        </strong>
-                        Followers
-                      </span>
-                    )}
+              {entity?.overview && entity.artist && (() => {
+                const overview = entity.overview;
+                const sections = overview.sections ?? [];
+                const shelf = (section: (typeof sections)[number]) => (
+                  <div className="artist-shelf" key={section.uri}>
+                    <Shelf
+                      section={section}
+                      navigate={navigate}
+                      play={homePlay}
+                      ready={state.native_ready}
+                    />
                   </div>
-                  {entity.overview.biography && (
-                    <p>{entity.overview.biography}</p>
-                  )}
-                  <button
-                    className="text-link muted"
-                    onClick={() =>
-                      void call("open_link", {
-                        url: entity.overview!.source_url,
-                      })
-                    }
-                  >
-                    Source: Spotify · Updated{" "}
-                    {new Date(
-                      entity.overview.fetched_at * 1000,
-                    ).toLocaleString()}
-                  </button>
-                </section>
-              )}
+                );
+                const photo =
+                  overview.gallery_image ||
+                  overview.header_image ||
+                  overview.avatar_image;
+                return (
+                  <>
+                    {sections
+                      .filter((section) => section.title.startsWith("Featuring "))
+                      .map(shelf)}
+                    <section className="artist-about">
+                      <h2>About</h2>
+                      <button
+                        className="artist-about-card"
+                        style={
+                          photo
+                            ? { backgroundImage: `linear-gradient(transparent 35%, #000b), url("${photo}")` }
+                            : undefined
+                        }
+                        aria-label={`About ${entity.artist.name}`}
+                        onClick={() => setAboutOpen(true)}
+                      >
+                        {overview.world_rank != null && (
+                          <span className="artist-rank">
+                            <strong>#{overview.world_rank}</strong>
+                            in the world
+                          </span>
+                        )}
+                        <span className="artist-about-copy">
+                          {overview.monthly_listeners != null && (
+                            <strong>
+                              {overview.monthly_listeners.toLocaleString()} monthly
+                              listeners
+                            </strong>
+                          )}
+                          {overview.biography && <span>{overview.biography}</span>}
+                        </span>
+                      </button>
+                    </section>
+                    {sections
+                      .filter((section) => !section.title.startsWith("Featuring "))
+                      .map(shelf)}
+                    {aboutOpen && (
+                      <div
+                        className="modal-backdrop"
+                        onClick={() => setAboutOpen(false)}
+                      >
+                        <section
+                          className="dialog artist-about-dialog"
+                          role="dialog"
+                          aria-label={`About ${entity.artist.name}`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <button
+                            className="icon-button artist-about-close"
+                            aria-label="Close"
+                            onClick={() => setAboutOpen(false)}
+                          >
+                            <X size={20} />
+                          </button>
+                          {photo && (
+                            <div
+                              className="artist-about-photo"
+                              style={{ backgroundImage: `url("${photo}")` }}
+                            />
+                          )}
+                          <div className="artist-about-body">
+                            <div className="artist-stats">
+                              {overview.followers != null && (
+                                <span>
+                                  <strong>{overview.followers.toLocaleString()}</strong>
+                                  Followers
+                                </span>
+                              )}
+                              {overview.monthly_listeners != null && (
+                                <span>
+                                  <strong>
+                                    {overview.monthly_listeners.toLocaleString()}
+                                  </strong>
+                                  Monthly listeners
+                                </span>
+                              )}
+                              {overview.world_rank != null && (
+                                <span>
+                                  <strong>#{overview.world_rank}</strong>
+                                  In the world
+                                </span>
+                              )}
+                            </div>
+                            {overview.biography && <p>{overview.biography}</p>}
+                            <button
+                              className="text-link muted"
+                              onClick={() =>
+                                void call("open_link", { url: overview.source_url })
+                              }
+                            >
+                              Source: Spotify · Updated{" "}
+                              {new Date(overview.fetched_at * 1000).toLocaleString()}
+                            </button>
+                          </div>
+                        </section>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               {state.route.startsWith("artist:") && !entity?.overview && (
                 <div className="artist-loading" role="status">
                   <LoaderCircle className="spin" size={18} />

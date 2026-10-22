@@ -4094,6 +4094,45 @@ test("the avatar menu opens settings, profile and grouped recents", async ({
   await expect(page.locator(".recents-tracks li")).toHaveCount(2);
 });
 
+test("Liquid Glass refraction is an opt-in with a GPU note", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  const refraction = page.getByRole("switch", { name: "Refraction" });
+  await expect(refraction).toHaveCount(0);
+  await page.getByRole("switch", { name: "Liquid Glass" }).check();
+  await expect(refraction).not.toBeChecked();
+  await expect(
+    page.locator(".setting-row", { hasText: "Refraction" }),
+  ).toContainText("more GPU");
+  await expect(page.locator("#glass-refraction")).toHaveCount(0);
+  await refraction.check();
+  await expect(page.locator(".application")).toHaveClass(/glass-refraction/);
+  await expect(page.locator("#glass-refraction")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.liquid_glass_refraction,
+      ),
+    )
+    .toBe(true);
+  expect(
+    await page
+      .locator(".search-box")
+      .evaluate((node) => getComputedStyle(node).backdropFilter),
+  ).toContain("glass-refraction");
+  // Turning Liquid Glass off hides the option and the effect.
+  await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
+  await expect(refraction).toHaveCount(0);
+  await expect(page.locator(".application")).not.toHaveClass(
+    /glass-refraction/,
+  );
+});
+
 test("Liquid Glass is off by default and toggles from Settings", async ({
   page,
 }) => {
@@ -4115,7 +4154,8 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
     .toBe(true);
   await page.getByTitle("Search settings", { exact: true }).click();
   await page.getByLabel("Search settings").fill("glass");
-  await expect(page.locator(".setting-row")).toHaveCount(1);
+  // Liquid Glass and, while it is on, its Refraction option.
+  await expect(page.locator(".setting-row")).toHaveCount(2);
   await page.getByLabel("Search settings").fill("zzzz");
   await expect(page.locator(".settings-empty")).toBeVisible();
 });

@@ -157,6 +157,7 @@ import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
 import { LyricsSettings } from "./lyrics-settings";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
+import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
@@ -1888,7 +1889,7 @@ function App() {
   );
   return (
     <div
-      className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
+      className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""} ${state.settings.liquid_glass && state.settings.liquid_glass_refraction ? "glass-refraction" : ""}`}
       style={
         {
           fontFamily: fontFamily(state.settings.ui_font),
@@ -1959,6 +1960,8 @@ function App() {
         if (file) void importFile(file);
       }}
     >
+      {state.settings.liquid_glass &&
+        state.settings.liquid_glass_refraction && <GlassRefractionFilter />}
       {state.settings.liquid_glass && (
         <GlassBackdrop
           track={state.playback.item}

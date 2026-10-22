@@ -105,6 +105,7 @@ export interface Settings {
   romanized: boolean;
   reduce_motion: boolean;
   liquid_glass?: boolean;
+  liquid_glass_refraction?: boolean;
   canvas_lyrics?: boolean;
   space_gravity?: boolean;
   experimental_word_sync?: boolean;

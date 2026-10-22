@@ -296,3 +296,24 @@
 .liquid-glass.immersive .center-panel::after {
   display: none;
 }
+
+/* Refraction (opt-in): small glass controls bend what's behind them at
+   their rims. Big panels keep the cheap frosted look; re-rendering a
+   window-sized backdrop every frame costs too much GPU. */
+.glass-refraction-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.glass-refraction .lyrics-toolbar,
+.glass-refraction .lyrics-glass-seek,
+.glass-refraction .search-box,
+.glass-refraction .popover,
+.glass-refraction .profile-menu,
+.glass-refraction .app-menu,
+.glass-refraction .sort-menu {
+  -webkit-backdrop-filter: url(#glass-refraction) blur(10px) saturate(1.6);
+  backdrop-filter: url(#glass-refraction) blur(10px) saturate(1.6);
+}

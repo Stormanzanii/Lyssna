@@ -854,8 +854,10 @@ export function DJPresentation({ playing }: { playing: boolean }) {
     </div>
   );
 }
-/** Lyric views narrower than this stack a small header above the lyrics. */
-const NARROW_LYRICS_PX = 760;
+/** Lyric views narrower than this stack a small header above the lyrics.
+ * Low enough that a 1440px laptop with Now playing open keeps the
+ * side-by-side layout (about 730px). */
+const NARROW_LYRICS_PX = 640;
 function useNarrowLyrics() {
   const page = useRef<HTMLElement>(null);
   const [narrow, setNarrow] = useState(false);

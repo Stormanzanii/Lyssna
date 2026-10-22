@@ -2979,6 +2979,16 @@ test("Now playing retains the lyrics ambience with Liquid Glass enabled", async 
   ).toHaveCount(1);
 });
 
+test("a 1440px laptop with Now playing open keeps side-by-side lyrics", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+  await expect(page.locator(".lyrics-page")).not.toHaveClass(/narrow/);
+});
+
 test("narrow Canvas lyrics stack the title above the lyrics", async ({
   page,
 }) => {

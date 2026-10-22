@@ -4891,3 +4891,9 @@ input[type="range"]:hover {
 .lyric-end-credits {
   font-family: var(--lyric-font, inherit);
 }
+
+/* Side-by-side lyrics in a tight panel: cap large lyric sizes to the
+   panel width so lines keep a few words each. */
+.lyrics-page:not(.narrow) .lyrics-body .lyric-line {
+  font-size: min(var(--lyric-size), 4.6cqw);
+}

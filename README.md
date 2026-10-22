@@ -30,12 +30,15 @@ Voice recognition loads a verified 190 MB English model when microphone input is
 
 ### macOS
 
-macOS 12 or later is supported on Apple Silicon and Intel. Install Xcode Command Line Tools, Rust 1.98 or later, Node.js 24, and CMake (`brew install cmake`). Build on a Mac:
+macOS 12 or later is supported on Apple Silicon and Intel. Install Xcode Command Line Tools, Rustup, Node.js 24 or later, and CMake (`brew install cmake`). Build on a Mac:
 
 ```sh
-npm ci
-npm run desktop:build -- -- --locked
+./build.sh
 ```
+
+By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, and builds/installs the app. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or detached commit is restored afterward, including on failure. Nothing is pushed.
+
+Use `./build.sh local` to build the current checkout without pulling, including uncommitted changes. `./build.sh <branch>` fetches that branch from `origin`; `./build.sh <commit>` builds a locally available commit.
 
 macOS app credentials use AES-256-GCM encrypted local files under `~/Library/Application Support/SpotiFlex/credentials/`. The directory is restricted to your OS account (`0700`), and the encryption key and credential files are private (`0600`). Each write uses a new cryptographic nonce and atomic replacement. Account and service identities are authenticated with the ciphertext. The app does not read or migrate existing Keychain credentials; sign in with Spotify once after switching to this storage. Keep `device.key` with the encrypted files when backing up this directory.
 

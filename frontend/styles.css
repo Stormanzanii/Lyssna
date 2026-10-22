@@ -3348,24 +3348,10 @@ small {
   margin-left: 2px;
   flex-shrink: 0;
 }
+/* One line each, like Spotify: long titles and artist lists scroll
+   instead of wrapping and making the bar taller. */
 .player-song .marquee {
-  white-space: normal;
-  overflow: visible;
-}
-.player-song .marquee-content {
-  width: auto;
   max-width: 100%;
-  animation: none !important;
-  transform: none !important;
-  white-space: normal;
-}
-.player-song .song-title,
-.player-song .artist-link {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.player-song .marquee:after {
-  display: none;
 }
 .player-placeholder {
   font-size: 12px;

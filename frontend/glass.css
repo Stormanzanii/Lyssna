@@ -362,19 +362,9 @@
   background: #ffffff0a;
 }
 
-/* Now playing refracts only while it slides in or out: the moving layer
-   bends the page behind it, then the settled panel is plain glass again,
-   so the effect costs nothing while it rests. */
-:root.glass-refraction::view-transition-old(now-playing),
-:root.glass-refraction::view-transition-new(now-playing) {
-  border-radius: 18px;
-  -webkit-backdrop-filter: url(#glass-refraction) saturate(1.8);
-  backdrop-filter: url(#glass-refraction) saturate(1.8);
-}
-
 /* Lyrics settings bend the lyrics behind them at the rim; the cost only
    applies while the window is open. */
-:root.glass-refraction .lyrics-settings {
+.glass-refraction .lyrics-settings {
   -webkit-backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
   backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
 }

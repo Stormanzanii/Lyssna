@@ -260,13 +260,6 @@ function App() {
   const [libraryFilter, setLibraryFilter] = useState("all");
   // The Spotify folders opened in Your Library, outermost first.
   const [folderPath, setFolderPath] = useState<string[]>([]);
-  // View transition layers hang off the root, so refraction for the
-  // sliding Now playing panel is keyed on <html>.
-  const refraction =
-    !!state.settings.liquid_glass && !!state.settings.liquid_glass_refraction;
-  useEffect(() => {
-    document.documentElement.classList.toggle("glass-refraction", refraction);
-  }, [refraction]);
   // Now playing stays open or closed across restarts.
   const sidebar = state.settings.now_playing_open !== false;
   const setSidebar = (open: boolean) =>

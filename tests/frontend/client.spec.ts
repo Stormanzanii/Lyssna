@@ -4133,6 +4133,20 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
       .locator(".library-panel")
       .evaluate((node) => getComputedStyle(node).backdropFilter),
   ).not.toContain("glass-refraction");
+  // Lyrics settings refract too.
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page
+    .locator(".lyrics-toolbar")
+    .getByTitle("Lyrics settings", { exact: true })
+    .click();
+  expect(
+    await page
+      .locator(".lyrics-settings")
+      .evaluate((node) => getComputedStyle(node).backdropFilter),
+  ).toContain("glass-refraction");
+  await page.keyboard.press("Escape");
+  await openSettings(page);
   // Turning Liquid Glass off hides the option and the effect.
   await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
   await expect(refraction).toHaveCount(0);

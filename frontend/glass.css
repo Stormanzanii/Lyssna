@@ -371,3 +371,10 @@
   -webkit-backdrop-filter: url(#glass-refraction) saturate(1.8);
   backdrop-filter: url(#glass-refraction) saturate(1.8);
 }
+
+/* Lyrics settings bend the lyrics behind them at the rim; the cost only
+   applies while the window is open. */
+:root.glass-refraction .lyrics-settings {
+  -webkit-backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
+  backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
+}

@@ -2720,6 +2720,22 @@ test("fullscreen moves lyrics right and Escape restores normal layout", async ({
     .first()
     .click();
   await expect(page.locator(".application")).toHaveClass(/immersive/);
+  // Full screen shows only the lyrics page, with its own controls.
+  await expect(page.locator(".topbar")).toBeHidden();
+  await expect(page.locator("footer.player-bar")).toBeHidden();
+  const controls = page.locator(".lyrics-fullscreen-controls");
+  await expect(controls).toBeVisible();
+  await controls.getByTitle("Next song", { exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request.command,
+      ),
+    )
+    .toBe("next");
   await expect
     .poll(() =>
       flow.evaluate((element) => {
@@ -2730,6 +2746,8 @@ test("fullscreen moves lyrics right and Escape restores normal layout", async ({
     .toBeGreaterThan(0.5);
   await page.keyboard.press("Escape");
   await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  await expect(page.locator(".topbar")).toBeVisible();
+  await expect(controls).toBeHidden();
   await expect
     .poll(async () => Math.abs((await flow.boundingBox())!.x - before))
     .toBeLessThan(2);

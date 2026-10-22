@@ -1,6 +1,7 @@
 import {
   memo,
   Fragment,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,6 +27,10 @@ import {
   ArrowUp,
   ArrowDown,
   X,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
 import type {
@@ -38,7 +43,7 @@ import type {
   Line,
 } from "./types";
 import type { AppState } from "./state";
-import { activeLines } from "./state";
+import { activeLines, formatTime } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
 import { useCreatorProfile } from "./creator-profile";
@@ -986,8 +991,28 @@ function SongLyricsPage({
   onRetry: () => void;
   children?: ReactNode;
 } & Links) {
-  const current = usePosition(state) + state.settings.lyric_offset_ms,
+  const songTime = usePosition(state),
+    current = songTime + state.settings.lyric_offset_ms,
     track = state.playback.item;
+  // Full screen seek: preview while dragging, seek once on release.
+  const [seeking, setSeeking] = useState<number | null>(null);
+  const commitSeek = () => {
+    if (seeking === null) return;
+    onPlayer({ command: "seek", positionMs: seeking });
+    setSeeking(null);
+  };
+  // This page renders every frame; stable click handlers stop React from
+  // rewriting them each time.
+  const playing = state.playback.is_playing;
+  const previousSong = useCallback(
+    () => onPlayer({ command: "previous" }),
+    [onPlayer],
+  );
+  const nextSong = useCallback(() => onPlayer({ command: "next" }), [onPlayer]);
+  const togglePlay = useCallback(
+    () => onPlayer({ command: playing ? "pause" : "play" }),
+    [onPlayer, playing],
+  );
   const backdrop = useRef<HTMLCanvasElement>(null);
   const [page, measuredNarrow] = useNarrowLyrics();
   // The toolbar shows while the pointer moves over the lyrics and fades a
@@ -1118,6 +1143,61 @@ function SongLyricsPage({
               >
                 <ArtistLinks artists={track.artists} onArtist={onArtist} />
               </Marquee>
+            </div>
+            {/* Full screen hides the player bar, so the page carries its own
+                controls, like Spicy Lyrics' full screen view. */}
+            <div className="lyrics-fullscreen-controls">
+              <div className="lyrics-fullscreen-seek">
+                <time>{formatTime(seeking ?? songTime)}</time>
+                <input
+                  type="range"
+                  aria-label="Seek position"
+                  min="0"
+                  max={track.duration_ms || 1}
+                  value={Math.min(seeking ?? songTime, track.duration_ms || 1)}
+                  style={
+                    {
+                      "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
+                    } as CSSProperties
+                  }
+                  onChange={(event) => setSeeking(Number(event.target.value))}
+                  onPointerDown={(event) =>
+                    event.currentTarget.setPointerCapture(event.pointerId)
+                  }
+                  onPointerUp={commitSeek}
+                  onKeyUp={commitSeek}
+                  onPointerCancel={() => setSeeking(null)}
+                  onBlur={commitSeek}
+                />
+                <time>{formatTime(track.duration_ms)}</time>
+              </div>
+              <div className="lyrics-fullscreen-buttons">
+                <button
+                  className="icon-button"
+                  title="Previous song"
+                  onClick={previousSong}
+                >
+                  <SkipBack size={22} fill="currentColor" />
+                </button>
+                <button
+                  className="play-toggle"
+                  aria-label={state.playback.is_playing ? "Pause" : "Play"}
+                  onClick={togglePlay}
+                >
+                  {state.playback.is_playing ? (
+                    <Pause size={20} fill="currentColor" />
+                  ) : (
+                    <Play size={20} fill="currentColor" />
+                  )}
+                </button>
+                <button
+                  className="icon-button"
+                  title="Next song"
+                  onClick={nextSong}
+                >
+                  <SkipForward size={22} fill="currentColor" />
+                </button>
+              </div>
             </div>
           </div>
           <div className="lyrics-body">

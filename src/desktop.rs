@@ -2183,6 +2183,23 @@ fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         .send(Command::FetchLyrics(track))
         .map_err(error)
 }
+/// Songs in Liked Songs, for its header count and total length.
+#[tauri::command]
+async fn liked_songs_count(state: State<'_, Desktop>) -> std::result::Result<usize, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || controls.liked_count())
+        .await
+        .map_err(|_| "Library worker unavailable".to_owned())?
+        .map_err(error)
+}
 /// Songs the user liked by an artist, for the artist page's "You Liked".
 #[tauri::command]
 async fn artist_liked_count(
@@ -2901,6 +2918,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             saved_lyrics,
             saved_lyrics_file,
             artist_liked_count,
+            liked_songs_count,
             delete_saved_lyrics,
             add_tracks,
             create_playlist,

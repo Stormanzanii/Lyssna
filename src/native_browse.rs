@@ -102,12 +102,20 @@ pub async fn liked_by_artist(session: &Session, artist: &str) -> Result<usize> {
         "spotify:user:{}:collection:artist:{artist}",
         session.username()
     );
-    let context = tokio::time::timeout(
-        Duration::from_secs(10),
-        session.spclient().get_context(&uri),
-    )
-    .await
-    .context("Spotify library request timed out")??;
+    count_rows(session, &uri).await
+}
+
+/// How many songs are in Liked Songs. Spotify reports no total, so count rows.
+pub async fn liked_count(session: &Session) -> Result<usize> {
+    let uri = format!("spotify:user:{}:collection", session.username());
+    count_rows(session, &uri).await
+}
+
+async fn count_rows(session: &Session, uri: &str) -> Result<usize> {
+    let context =
+        tokio::time::timeout(Duration::from_secs(10), session.spclient().get_context(uri))
+            .await
+            .context("Spotify library request timed out")??;
     let mut pages = listing_pages(context);
     let mut visited = HashSet::new();
     let mut count = 0;

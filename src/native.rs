@@ -399,6 +399,9 @@ impl NativeControls {
     pub fn liked_by_artist(&self, artist: &str) -> Result<usize> {
         self.run(async |session| crate::native_browse::liked_by_artist(session, artist).await)
     }
+    pub fn liked_count(&self) -> Result<usize> {
+        self.run(crate::native_browse::liked_count)
+    }
     pub fn library(
         &self,
     ) -> Result<(

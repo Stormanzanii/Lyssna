@@ -591,6 +591,8 @@ async function startClient(
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "liked_songs_count")
+            return host.__clientTest.likedTotal ?? 0;
           if (command === "saved_lyrics")
             return host.__clientTest.savedLyrics ?? [];
           if (command === "saved_lyrics_file")
@@ -1724,6 +1726,34 @@ test("Home refreshes fresh-looking cached shelves on return and on song changes"
   expect(await homeCalls()).toBe(before + 2);
   await page.getByTitle("Home", { exact: true }).click();
   await expect.poll(homeCalls).toBe(before + 3);
+});
+
+test("big lists show an estimated total length", async ({ page }) => {
+  await startClient(page, "home");
+  await page
+    .getByRole("button", { name: "Open Daily Mix 1", exact: true })
+    .click();
+  await expect(page.locator(".track-row")).toHaveCount(50);
+  await page.evaluate(() => {
+    const request = (window as any).__clientTest.commands
+      .filter((request: any) => request.command === "browse")
+      .at(-1);
+    (window as any).__clientTest.emit({
+      type: "browse_info",
+      generation: request.args.generation,
+      info: {
+        key: request.args.key,
+        title: "Daily Mix 1",
+        subtitle: "",
+        images: [],
+        albums: [],
+        playlist: { owner: "spotify", format: "", total_tracks: 5000 },
+      },
+    });
+  });
+  await expect(page.locator(".playlist-meta")).toContainText(
+    /5000 songs, about \d+ hr/,
+  );
 });
 
 test("Daily Mix navigation retains title, artwork and description", async ({

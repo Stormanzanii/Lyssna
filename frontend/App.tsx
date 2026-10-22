@@ -205,8 +205,13 @@ const keepOnScreen = (menu: HTMLElement | null, x: number, y: number) => {
   menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
 };
 /** Spotify-style total length: "1 hr 42 min" or "38 min 12 sec". */
-const longDuration = (ms: number) => {
+const longDuration = (ms: number, estimate = false) => {
   const minutes = Math.floor(ms / 60_000);
+  // Like Spotify, a total estimated from part of a big list reads "about".
+  if (estimate)
+    return minutes >= 60
+      ? `about ${Math.round(minutes / 60)} hr`
+      : `about ${minutes} min`;
   return minutes >= 60
     ? `${Math.floor(minutes / 60)} hr ${minutes % 60} min`
     : `${minutes} min ${Math.floor(ms / 1000) % 60} sec`;
@@ -1433,6 +1438,18 @@ function App() {
     : "";
   const likedRoute = state.route === "liked" || !!likedArtist;
   const artistId = artistPage ? state.route.slice(7) : "";
+  const [likedTotal, setLikedTotal] = useState<number>();
+  useEffect(() => {
+    if (state.route !== "liked" || !state.profile) return;
+    let live = true;
+    rpc<number>("liked_songs_count").then(
+      (count) => live && setLikedTotal(count),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [state.route, state.profile]);
   const [artistLiked, setArtistLiked] = useState<{
     id: string;
     count: number;
@@ -1472,19 +1489,26 @@ function App() {
     : (artworkColor ?? "rgb(83 83 83)");
   const playlistInfo = entity?.playlist;
   const personalizedMix = playlistInfo?.format.startsWith("daily-mix");
-  const playlistDuration =
-    playlistInfo?.total_tracks === state.tracks.length &&
-    state.tracks.length > 0 &&
-    state.tracks.every((track) => track.duration_ms > 0)
-      ? state.tracks.reduce((sum, track) => sum + track.duration_ms, 0)
-      : undefined;
-  const heroSongCount =
-    entity?.album?.total_tracks ??
+  const listTotal =
     playlistInfo?.total_tracks ??
+    (state.route === "liked" ? likedTotal : undefined) ??
     (state.tracks.length > 0 && !state.more ? state.tracks.length : undefined);
+  // Big lists load in pages: until every row is here, estimate the total
+  // from the average length of the loaded songs.
+  const timed = state.tracks.filter((track) => track.duration_ms > 0);
+  const listEstimated = !!listTotal && timed.length < listTotal;
+  const playlistDuration =
+    listTotal && timed.length > 0 && (playlistInfo || state.route === "liked")
+      ? (timed.reduce((sum, track) => sum + track.duration_ms, 0) /
+          timed.length) *
+        listTotal
+      : undefined;
+  const heroSongCount = entity?.album?.total_tracks ?? listTotal;
   const heroDuration = entity?.album_details?.complete_duration
     ? entity.album_details.duration_ms
     : playlistDuration;
+  const heroEstimated =
+    !entity?.album_details?.complete_duration && listEstimated;
   const title =
     entity?.title ||
     playlist?.name ||
@@ -2535,7 +2559,7 @@ function App() {
                               <span>
                                 {heroSongCount} songs
                                 {heroDuration != null &&
-                                  `, ${longDuration(heroDuration)}`}
+                                  `, ${longDuration(heroDuration, heroEstimated)}`}
                               </span>
                             )}
                           </p>

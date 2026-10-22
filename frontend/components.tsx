@@ -177,6 +177,7 @@ export function Marquee({
     update();
     const observer = new ResizeObserver(update);
     if (box.current) observer.observe(box.current);
+    if (content.current) observer.observe(content.current);
     return () => observer.disconnect();
   }, [text]);
   return (

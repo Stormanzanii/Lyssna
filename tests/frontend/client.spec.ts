@@ -7465,3 +7465,88 @@ test("Title, Album and Date added headers sort like Spotify", async ({
   await added.click();
   await expect.poll(saved).toBe("recent");
 });
+
+test("custom header fonts retain italic overhang and artist descenders", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.evaluate(
+    ({ base, track, settings }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "settings",
+        settings: { ...settings, lyric_font: "hemi head" },
+      });
+      host.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            name: "ALL THE TIME",
+            artists: [
+              {
+                id: "0123456789abcdefghijkl",
+                name: "John Summit, The Chainsmokers, Ilsey",
+              },
+            ],
+            album: { ...track.album, release_date: "2026-01-01" },
+          },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { base: emptyState.playback, track, settings: emptyState.settings },
+  );
+  await showLyrics(page);
+  await emitCanvas(page);
+  await page.evaluate(() => document.fonts.ready);
+  const overflow = () =>
+    page
+      .locator(
+        ".lyrics-page .lyrics-title .song-title, .lyrics-page .lyrics-artists .artist-link",
+      )
+      .evaluateAll((elements) => {
+        const canvas = document.createElement("canvas").getContext("2d")!;
+        return Math.max(
+          ...elements.flatMap((element) => {
+            const style = getComputedStyle(element);
+            canvas.font =
+              style.fontStyle +
+              " " +
+              style.fontWeight +
+              " " +
+              style.fontSize +
+              " " +
+              style.fontFamily;
+          canvas.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
+            const metrics = canvas.measureText(element.textContent ?? "");
+            const marker = document.createElement("span");
+            marker.style.cssText =
+              "display:inline-block;width:0;height:0;vertical-align:baseline";
+            element.prepend(marker);
+            const origin = marker.getBoundingClientRect();
+            marker.remove();
+          const marquee = element.closest(".marquee")!;
+          const clip = marquee.getBoundingClientRect();
+          return [
+              clip.top - (origin.top - metrics.actualBoundingBoxAscent),
+              origin.top + metrics.actualBoundingBoxDescent - clip.bottom,
+            ...marquee.classList.contains("scrolling") ? [] : [
+              clip.left - (origin.left - metrics.actualBoundingBoxLeft),
+              origin.left + metrics.actualBoundingBoxRight - clip.right,
+            ],
+            ];
+          }),
+        );
+      });
+  await expect.poll(overflow).toBeLessThanOrEqual(1);
+  await page
+    .locator(".lyrics-album")
+    .screenshot({
+      path: "target/diagnostics/lyrics-header-font.png",
+      animations: "disabled",
+    });
+});

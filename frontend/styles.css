@@ -2470,6 +2470,12 @@ small {
 .lyrics-artists .marquee:not(.scrolling) .marquee-content {
   margin-inline: auto;
 }
+/* Italic glyphs can extend beyond their advance width. Keep that ink
+   inside the marquee clip at both ends, including after scrolling. */
+.lyrics-title .marquee-content,
+.lyrics-artists .marquee-content {
+  padding-inline: 0.4em;
+}
 .lyrics-title .song-title {
   font-size: clamp(22px, 2.9cqw, 38px);
   line-height: 1.35;

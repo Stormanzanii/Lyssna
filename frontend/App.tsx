@@ -22,6 +22,7 @@ import {
   FolderPlus,
   Heart,
   Home,
+  ImagePlus,
   Library,
   LoaderCircle,
   Maximize2,
@@ -145,6 +146,7 @@ import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
+import { coverJpeg } from "./playlist-cover";
 import { LyricsSettings } from "./lyrics-settings";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
@@ -279,6 +281,8 @@ function App() {
     playlist: Playlist;
     name: string;
     description: string;
+    /** New cover as a JPEG data URL, once the user picks one. */
+    cover?: string;
   } | null>(null);
   // Row being dragged and where it would land, for playlist reordering.
   const dragRow = useRef<number | null>(null);
@@ -3741,11 +3745,42 @@ function App() {
                 playlist: editDialog.playlist,
                 name: editDialog.name,
                 description: editDialog.description,
+                cover: editDialog.cover?.split(",", 2)[1] ?? null,
               });
               setEditDialog(null);
             }}
           >
             <h2 id="edit-playlist-title">Edit details</h2>
+            <div className="edit-playlist-body">
+              <label className="edit-playlist-cover" title="Choose photo">
+                {editDialog.cover ? (
+                  <img src={editDialog.cover} alt="" />
+                ) : (
+                  <Cover images={editDialog.playlist.images} />
+                )}
+                <span className="edit-playlist-cover-hint">
+                  <ImagePlus size={28} />
+                  Choose photo
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Choose playlist cover"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    coverJpeg(file).then(
+                      (cover) =>
+                        setEditDialog((current) =>
+                          current ? { ...current, cover } : current,
+                        ),
+                      (error) => notify(String(error.message ?? error), true),
+                    );
+                  }}
+                />
+              </label>
+              <div className="edit-playlist-fields">
             <label>
               <span>Name</span>
               <input
@@ -3774,6 +3809,13 @@ function App() {
                 }
               />
             </label>
+              </div>
+            </div>
+            {editDialog.cover && (
+              <p className="edit-playlist-legal">
+                By saving, you confirm you have the right to use this image.
+              </p>
+            )}
             <div className="inline-actions">
               <button
                 type="button"

@@ -4575,13 +4575,30 @@ test("owners edit playlist name and description", async ({
   await expect(dialog.getByLabel("Name")).toHaveValue("Road trip");
   await dialog.getByLabel("Name").fill("Night drive");
   await dialog.getByLabel("Description").fill("Late roads");
+  // A picked image is cropped to a square JPEG and previewed before saving.
+  await dialog.getByLabel("Choose playlist cover").setInputFiles({
+    name: "cover.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  });
+  await expect(dialog.locator(".edit-playlist-cover img")).toHaveAttribute(
+    "src",
+    /^data:image\/jpeg;base64,/,
+  );
+  await expect(dialog).toContainText("you have the right to use this image");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
-  expect(await last("edit_playlist")).toMatchObject({
+  const saved = await last("edit_playlist");
+  expect(saved).toMatchObject({
     name: "Night drive",
     description: "Late roads",
     playlist: { id },
   });
+  // JPEG data starts with FF D8 FF, "/9j/" in base64.
+  expect(saved.cover).toMatch(/^\/9j\//);
 });
 
 test("songs drag into place in an editable playlist", async ({

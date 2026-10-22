@@ -2296,11 +2296,22 @@ fn edit_playlist(
     playlist: Playlist,
     name: String,
     description: String,
+    cover: Option<String>,
     state: State<'_, Desktop>,
 ) -> std::result::Result<(), String> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
     if lock(&state.0.snapshot).map_err(error)?.profile.is_none() {
         return Err("Sign in first".into());
     }
+    // The window sends the cropped JPEG as base64; 4 MB of image at most.
+    let cover = cover
+        .map(|data| {
+            (data.len() <= 6 * 1024 * 1024)
+                .then(|| STANDARD.decode(data).ok())
+                .flatten()
+                .ok_or("Choose a smaller image")
+        })
+        .transpose()?;
     state
         .0
         .commands
@@ -2308,6 +2319,7 @@ fn edit_playlist(
             playlist,
             name,
             description,
+            cover,
         })
         .map_err(error)
 }

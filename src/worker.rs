@@ -77,11 +77,13 @@ pub enum Command {
     },
     /// Delete a Spotify folder while keeping its playlists and subfolders.
     DeleteFolder(String),
-    /// Rename a playlist you own and set its description.
+    /// Rename a playlist you own, set its description and optionally
+    /// replace its cover with a JPEG.
     EditPlaylist {
         playlist: Playlist,
         name: String,
         description: String,
+        cover: Option<Vec<u8>>,
     },
     /// Move the song at `from` in an editable playlist to position `to`.
     MovePlaylistSong {
@@ -1143,6 +1145,7 @@ impl Backend {
                 playlist,
                 name,
                 description,
+                cover,
             } => {
                 anyhow::ensure!(
                     playlist.owner.id == self.profile.id,
@@ -1152,6 +1155,10 @@ impl Backend {
                     self.native_ready(),
                     "Wait for native audio to connect, then edit the playlist."
                 );
+                if let Some(cover) = cover {
+                    self.native_controls
+                        .set_playlist_cover(&playlist.id, &cover)?;
+                }
                 self.native_controls
                     .edit_playlist(&playlist.id, &name, &description)?;
                 self.refresh_library()?;

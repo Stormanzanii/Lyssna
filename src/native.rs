@@ -447,6 +447,9 @@ impl NativeControls {
             crate::native_browse::edit_details(session, id, name, description).await
         })
     }
+    pub fn set_playlist_cover(&self, id: &str, jpeg: &[u8]) -> Result<String> {
+        self.run(async |session| crate::native_browse::set_cover(session, id, jpeg).await)
+    }
     pub fn move_playlist_song(&self, id: &str, from: usize, uri: &str, to: usize) -> Result<()> {
         self.run(async |session| crate::native_browse::move_song(session, id, from, uri, to).await)
     }

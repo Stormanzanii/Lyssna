@@ -543,6 +543,73 @@ pub async fn edit_details(
     Ok(())
 }
 
+/// Largest cover accepted; the app sends a 640 px JPEG well under this.
+const MAX_COVER_BYTES: usize = 4 * 1024 * 1024;
+
+/// Replace a playlist's cover with a JPEG, as the desktop client does:
+/// upload the image, register it on the playlist, set it as the picture,
+/// then re-read the playlist to confirm. Returns the new image URL.
+pub async fn set_cover(session: &Session, id: &str, jpeg: &[u8]) -> Result<String> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    valid_playlist_id(id)?;
+    ensure!(
+        jpeg.len() > 3 && jpeg.len() <= MAX_COVER_BYTES && jpeg.starts_with(&[0xFF, 0xD8, 0xFF]),
+        "Choose a JPEG image under 4 MB"
+    );
+    let token = session.login5().auth_token().await?;
+    let client_token = session.spclient().client_token().await?;
+    let upload: Value = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(30))
+        .build()?
+        .post("https://image-upload.spotify.com/v4/playlist")
+        .bearer_auth(&token.access_token)
+        .header("client-token", client_token)
+        .header(reqwest::header::CONTENT_TYPE, "image/jpeg")
+        .body(jpeg.to_vec())
+        .send()
+        .await?
+        .error_for_status()
+        .context("Spotify did not accept the image")?
+        .json()
+        .await?;
+    let upload_token = upload["uploadToken"]
+        .as_str()
+        .filter(|token| !token.is_empty() && token.len() <= 4096)
+        .context("Spotify did not accept the image")?;
+    let registered = playlist_json(
+        session,
+        &format!("/playlist/v2/playlist/{id}/register-image"),
+        &json!({ "uploadToken": upload_token }),
+    )
+    .await
+    .context("Spotify could not attach the image")?;
+    let picture = registered["picture"]
+        .as_str()
+        .and_then(|value| STANDARD.decode(value).ok())
+        .filter(|bytes| !bytes.is_empty() && bytes.len() <= 64)
+        .context("Spotify could not attach the image")?;
+    playlist_json(
+        session,
+        &format!("/playlist/v2/playlist/{id}/changes"),
+        &playlist_changes(json!({"kind": 6, "updateListAttributes": {
+            "newAttributes": {"values": {"picture": STANDARD.encode(&picture)}, "noValue": []}
+        }})),
+    )
+    .await
+    .context("Spotify could not change the cover")?;
+    let after = read_playlist(session, id).await?;
+    ensure!(
+        after.attributes.picture == picture,
+        "Spotify did not confirm the new cover"
+    );
+    Ok(format!("https://i.scdn.co/image/{}", hex(&picture)))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 /// Each row's song and its playlist item ID (base64, as the JSON API expects).
 async fn playlist_rows(session: &Session, id: &str) -> Result<Vec<(String, String)>> {
     use base64::{Engine, engine::general_purpose::STANDARD};
@@ -1743,6 +1810,16 @@ mod live_playlist_tests {
                 let again = add_to_playlist(session, &id, &picks).await?;
                 edit_details(session, &id, "SpotiFlex edit test", "Temporary test").await?;
                 edit_details(session, &id, "SpotiFlex edit test", "").await?;
+                let mut jpeg = Vec::new();
+                image::RgbImage::from_pixel(300, 300, image::Rgb([30, 140, 90])).write_to(
+                    &mut std::io::Cursor::new(&mut jpeg),
+                    image::ImageFormat::Jpeg,
+                )?;
+                let cover = set_cover(session, &id, &jpeg).await?;
+                ensure!(
+                    cover.starts_with("https://i.scdn.co/image/"),
+                    "Unexpected cover URL"
+                );
                 move_song(session, &id, 0, &picks[0].uri, picks.len() - 1).await?;
                 move_song(session, &id, picks.len() - 1, &picks[0].uri, 0).await?;
                 remove_from_playlist(session, &id, 0, &picks[0].uri).await?;
@@ -1766,7 +1843,7 @@ mod live_playlist_tests {
                     assert_eq!(first, picked);
                     assert_eq!(again, 0);
                     eprintln!(
-                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, edited details, moved a song both ways, removed one song, removed playlist"
+                        "Native playlist: created, added {first} songs, skipped {picked} duplicates, edited details, set a cover, moved a song both ways, removed one song, removed playlist"
                     );
                 }
                 (Added::NotWritten(error), _) | (_, Added::NotWritten(error)) => {

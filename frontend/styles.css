@@ -3813,6 +3813,24 @@ input[type="range"]:hover {
   justify-content: flex-end;
   margin-top: 24px;
 }
+.update-dialog {
+  margin: auto;
+  max-width: calc(100vw - 32px);
+  color: var(--text, #fff);
+}
+.update-dialog::backdrop {
+  background: #050505c4;
+  backdrop-filter: blur(12px);
+}
+.update-dialog h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.update-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
 /* First-run sign-in, laid out like Spotify's own login page: a plain
    column on the app background, centred in the window, not the area under
    the title bar. */

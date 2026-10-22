@@ -142,6 +142,7 @@ import {
 } from "./library-order";
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
 import { SettingsPage } from "./settings-page";
+import { UpdatePrompt } from "./update-prompt";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
@@ -814,6 +815,7 @@ function App() {
   ]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       // Only typing keeps Space and Escape; a focused button or slider still
       // leaves Space for play and pause.
       const target = event.target as HTMLElement | null,
@@ -864,6 +866,7 @@ function App() {
       const target = event.target as HTMLElement | null;
       if (
         event.code === "Space" &&
+        !target?.closest("dialog[open]") &&
         !target?.closest('textarea,select,[contenteditable="true"]') &&
         !(
           target instanceof HTMLInputElement &&
@@ -879,7 +882,12 @@ function App() {
       const button = (event.target as HTMLElement | null)?.closest<HTMLElement>(
         'button,[role="button"],[role="menuitem"],[role="tab"],[role="option"],summary',
       );
-      if (event.detail > 0 && button && document.activeElement === button)
+      if (
+        event.detail > 0 &&
+        button &&
+        !button.closest("dialog[open]") &&
+        document.activeElement === button
+      )
         button.blur();
     };
     document.addEventListener("click", click);
@@ -4104,6 +4112,7 @@ function App() {
           }
         />
       )}
+      <UpdatePrompt state={state} enabled={sessionScreen(state) !== "restoring"} />
       {state.toast && (
         <div
           className={`toast ${state.toast.error ? "error" : ""}`}

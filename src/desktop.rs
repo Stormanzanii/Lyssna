@@ -75,6 +75,7 @@ pub struct Snapshot {
     more: bool,
     update_status: String,
     update_version: Option<String>,
+    update_notes: String,
     notice: String,
     observed_at: u64,
 }
@@ -322,6 +323,7 @@ impl Desktop {
                 more: false,
                 update_status: "Checking for updates…".into(),
                 update_version: None,
+                update_notes: String::new(),
                 notice,
                 observed_at: now_ms(),
             }),
@@ -1113,9 +1115,14 @@ impl Desktop {
                         return;
                     };
                     match event {
-                        updater::Event::Current => snapshot.update_status = "Up to date".into(),
+                        updater::Event::Current => {
+                            snapshot.update_status = "Up to date".into();
+                            snapshot.update_version = None;
+                            snapshot.update_notes.clear();
+                        }
                         updater::Event::Available(update) => {
                             snapshot.update_version = Some(update.manifest.version.clone());
+                            snapshot.update_notes = update.manifest.notes.clone();
                             snapshot.update_status = "Update available".into();
                             if snapshot.settings.auto_download_updates {
                                 let _ = pump
@@ -1145,7 +1152,7 @@ impl Desktop {
                         updater::Event::Error(message) => snapshot.update_status = message,
                     }
                     emit(
-                        json!({"type":"update","status":snapshot.update_status,"version":snapshot.update_version}),
+                        json!({"type":"update","status":snapshot.update_status,"version":snapshot.update_version,"notes":snapshot.update_notes}),
                     );
                 }
             }

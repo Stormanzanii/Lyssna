@@ -255,6 +255,7 @@ export interface Snapshot {
   more: boolean;
   update_status: string;
   update_version?: string;
+  update_notes?: string;
   notice: string;
   observed_at: number;
 }
@@ -384,4 +385,4 @@ export type AppEvent =
   | { type: "notice"; message: string; error: boolean }
   | { type: "saved"; uri: string; saved: boolean }
   | { type: "saved_many"; items: Record<string, boolean> }
-  | { type: "update"; status: string; version?: string };
+  | { type: "update"; status: string; version?: string; notes?: string };

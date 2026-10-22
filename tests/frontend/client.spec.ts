@@ -1,6 +1,11 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { emptyState } from "../../frontend/state";
 import type { BrowseInfo, Track } from "../../frontend/types";
+
+const appVersion: string = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
 
 const track: Track = {
   id: "0123456789abcdefghijkl",
@@ -4054,7 +4059,7 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
     "aria-selected",
     "true",
   );
-  await expect(dialog).toContainText(`v${"0.1.0"}`);
+  await expect(dialog).toContainText(`v${appVersion}`);
   await expect(
     dialog.getByRole("button", { name: /Website|Discord|Ko-fi/ }),
   ).toHaveCount(0);
@@ -6127,6 +6132,107 @@ test("Settings shows the song cache size and clears it", async ({
   await page.getByRole("button", { name: "Clear cache" }).click();
   await expect(page.getByText("Cache: 0 MB")).toBeVisible();
   await expect(page.getByText("Cleared 700 MB of cached songs.")).toBeVisible();
+});
+
+test("updates can be downloaded manually before installing and restarting", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  await page
+    .getByRole("switch", {
+      name: "Download updates automatically",
+      exact: true,
+    })
+    .uncheck();
+  const action = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "app_update")
+          .at(-1)?.args.action,
+    );
+  await page
+    .getByRole("button", { name: "Check for updates", exact: true })
+    .click();
+  await expect.poll(action).toBe("check");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "update",
+      status: "Update available",
+      version: "0.2.0",
+    }),
+  );
+  await page
+    .getByRole("dialog", { name: "SpotiFlex 0.2.0 is available" })
+    .getByRole("button", { name: "Download update", exact: true })
+    .click();
+  await expect.poll(action).toBe("download");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "update",
+      status: "Ready to install",
+      version: "0.2.0",
+    }),
+  );
+  await page
+    .getByRole("dialog", { name: "SpotiFlex 0.2.0 is available" })
+    .getByRole("button", { name: "Install and restart", exact: true })
+    .click();
+  await expect.poll(action).toBe("install");
+});
+
+test("startup updates prompt automatically, keep notes inert and respect Not now", async ({
+  page,
+}) => {
+  await startClient(page);
+  const notes =
+    'New features. <img src="https://example.test/tracker" onerror="alert(1)">';
+  const offer = (version: string) =>
+    page.evaluate(
+      ({ version, notes }) =>
+        (window as any).__clientTest.emit({
+          type: "update",
+          status: "Ready to install",
+          version,
+          notes,
+        }),
+      { version, notes },
+    );
+  await offer("0.2.0");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(`You're using version ${appVersion}`);
+  await expect(
+    dialog.getByRole("region", { name: "Release notes" }),
+  ).toContainText(notes);
+  await expect(dialog.locator("img")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "app_update",
+        ).length,
+    ),
+  ).toBe(0);
+  for (let count = 0; count < 4; count++) {
+    await page.keyboard.press("Tab");
+    expect(
+      await dialog.evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
+    ).toBe(true);
+  }
+  // Space activates modal controls rather than the global playback shortcut.
+  await dialog.getByRole("button", { name: "Not now" }).focus();
+  await page.keyboard.press("Space");
+  await expect(dialog).toBeHidden();
+  await offer("0.2.0");
+  await expect(dialog).toBeHidden();
+  await offer("0.3.0");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 });
 
 test("Your Library covers show a play button for playlists and Liked Songs", async ({

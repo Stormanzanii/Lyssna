@@ -2,7 +2,7 @@
 
 Release objects live in the dedicated `spotiflex-releases` bucket in the Cloudflare account that owns ClypDat. The `spotiflex-updates` Worker serves `https://updates.clypdat.xyz`. The bucket itself remains private. The Worker exposes only release executables, corresponding source archives, and stable channel manifests. Publishing requires a separate credential.
 
-The desktop checks on startup and every 30 minutes. It downloads new releases automatically by default; this preference is under **Settings > App updates**. **Install update and restart** applies the verified executable. Restart requires that explicit button. Checks and downloads run outside the UI thread.
+The desktop checks on startup and every 30 minutes. An update dialog opens automatically with the available version and signed release notes. It downloads new releases automatically by default; this preference is under **Settings > About SpotiFlex**. With automatic downloads off, the dialog offers **Download update**. Once verification finishes, **Install and restart** applies the executable. **Not now** dismisses the prompt for that version until the next launch; Settings remains available. Checks and downloads run outside the UI thread. Installation always requires an explicit button press.
 
 Every channel manifest is an envelope containing a base64 JSON payload and an Ed25519 signature. The public key is compiled into the app from `config/update-public-key.base64`. The signed payload fixes the version, Windows x86_64 target, relative artifact path, byte count, SHA-256 digest, and release notes. Redirects are disabled. Downloads have signed size limits; verification runs again immediately before replacement. Older versions and other platforms are rejected.
 
@@ -39,6 +39,8 @@ npm run dry-run
 
 Wrangler generates binding types from `wrangler.jsonc`. The Worker streams executable bodies from R2. Logs and traces are enabled. The publish token is a Worker secret; the signing private key is never deployed to Cloudflare.
 
-The deployed service responds at `/health`. The stable manifest returns 404 until a real signed version is published. An absent channel means no update is available. No initial application release has been published yet.
+The deployed service responds at `/health`. The stable manifest returns 404 until a real signed version is published. An absent channel means no update is available.
+
+For the first update test, the local application uses version 0.0.1 and the shared release uses 0.1.0. Launch 0.0.1, wait for its automatic update prompt, then select **Install and restart** after the download is verified. Confirm version 0.1.0 in Settings after restart. Signature and download verification alone do not establish that replacement and restart succeeded; the final installation step remains a user check until exercised.
 
 The fork's periodic version checks and explicit update prompt informed this flow. Its browser reload mechanism is replaced by verified native executable replacement.

@@ -681,6 +681,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         update_status: action.status,
         update_version: action.version,
+        update_notes: action.notes ?? "",
       };
   }
 }

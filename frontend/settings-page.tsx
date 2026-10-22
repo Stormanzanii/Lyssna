@@ -350,12 +350,15 @@ export function SettingsPage({
                       }}
                     />
                     <span>
-                      {[...folder.parents.map(
-                        (parent) =>
-                          state.library_folders?.find(
-                            (item) => item.id === parent,
-                          )?.name ?? "",
-                      ), folder.name]
+                      {[
+                        ...folder.parents.map(
+                          (parent) =>
+                            state.library_folders?.find(
+                              (item) => item.id === parent,
+                            )?.name ?? "",
+                        ),
+                        folder.name,
+                      ]
                         .filter(Boolean)
                         .join(" / ")}
                     </span>
@@ -583,23 +586,32 @@ export function SettingsPage({
             <h2>About SpotiFlex</h2>
             <SettingRow
               label={`Version ${__APP_VERSION__}`}
-              help={state.update_status}
+              help={
+                state.update_version
+                  ? `${state.update_status} · v${state.update_version}`
+                  : state.update_status
+              }
               keywords="updates version check install"
             >
               <button
                 className="pill outline"
+                disabled={state.update_status.startsWith("Downloading update")}
                 onClick={() =>
                   void onCall("app_update", {
                     action:
                       state.update_status === "Ready to install"
                         ? "install"
-                        : "check",
+                        : state.update_status === "Update available"
+                          ? "download"
+                          : "check",
                   })
                 }
               >
                 {state.update_status === "Ready to install"
                   ? "Install update and restart"
-                  : "Check for updates"}
+                  : state.update_status === "Update available"
+                    ? "Download update"
+                    : "Check for updates"}
               </button>
             </SettingRow>
             <SettingRow
@@ -624,9 +636,7 @@ export function SettingsPage({
               label="Built with thanks to"
               keywords="about credits licence license spicy lyrics spotify plus pixel spikerko librespot"
             >
-              <Credits
-                onOpen={(url) => void onCall("open_link", { url })}
-              />
+              <Credits onOpen={(url) => void onCall("open_link", { url })} />
             </SettingRow>
           </section>
 

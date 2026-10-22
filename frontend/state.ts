@@ -140,7 +140,7 @@ export const emptyState: AppState = {
     lyrics_flip_duet: false,
     lyrics_wide_duet: true,
     lyrics_simple: false,
-    lyrics_line_hover: true,
+    lyrics_line_hover: false,
     lyrics_early_scroll: false,
     lyrics_hide_year: false,
     lyrics_hide_npv: false,
@@ -588,9 +588,10 @@ export function reducer(state: AppState, action: Action): AppState {
           is_playing: action.playing ?? state.playback.is_playing,
         },
         observed_at: action.observed_at,
+        // Any play or pause report for this song settles the load, so a
+        // start that failed into a pause no longer spins forever.
         pending:
-          action.playing === true ||
-          (action.playing !== false && state.playback.is_playing)
+          action.playing !== undefined || state.playback.is_playing
             ? undefined
             : state.pending,
         clock_revision: state.clock_revision + (action.seeked ? 1 : 0),

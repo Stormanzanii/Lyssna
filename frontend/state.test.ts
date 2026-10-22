@@ -362,6 +362,19 @@ describe("asynchronous playback and browsing", () => {
     expect(paused.playback.is_playing).toBe(false);
     expect(position(paused.playback, 100, 1000)).toBe(1200);
   });
+  it("stops the loading spinner when a requested song ends up paused", () => {
+    const loading = reducer(emptyState, { type: "play_requested", track });
+    expect(loading.pending).toBeDefined();
+    const paused = reducer(loading, {
+      type: "native_position",
+      uri: track.uri,
+      position_ms: 0,
+      playing: false,
+      observed_at: 100,
+    });
+    expect(paused.pending).toBeUndefined();
+    expect(paused.playback.is_playing).toBe(false);
+  });
   it("ignores lyrics for a previous track", () => {
     const current = {
       ...emptyState,

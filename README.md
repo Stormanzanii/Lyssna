@@ -37,6 +37,8 @@ npm ci
 npm run desktop:build -- -- --locked
 ```
 
+Local macOS builds create and reuse a self-signed code-signing identity in a dedicated user keychain. This keeps the app's signing requirement stable across rebuilds, so **Always Allow** for Spotify credentials can persist. Existing credentials approved for an earlier ad-hoc build may each need one final approval when switching identities. Signing metadata stays in `~/Library/Application Support/SpotiFlex/build-signing/`; the private key stays in `~/Library/Keychains/SpotiFlex-local-build.keychain-db`. Keep both to preserve trust across builds. An explicit `APPLE_SIGNING_IDENTITY` or `APPLE_CERTIFICATE` takes precedence. `SPOTIFLEX_ADHOC_SIGNING=1` opts out for disposable builds.
+
 The app is `target/release/bundle/macos/SpotiFlex.app`; the disk image is under `target/release/bundle/dmg/`. Install locally:
 
 ```sh
@@ -46,7 +48,7 @@ open /Applications/SpotiFlex.app
 
 macOS builds use system WebKit, native window controls integrated into the navigation toolbar, standard application menus in the macOS menu bar, and Command shortcuts. Credentials are saved in macOS Keychain. Media keys and Now Playing controls are supported. Ask DJ voice recognition runs locally; macOS requests microphone permission the first time you use it.
 
-The **Build macOS app** GitHub Actions workflow builds separate Apple Silicon and Intel `.app.zip` and `.dmg` artifacts on pushes, pull requests, or manual dispatch. These builds are not notarized for public distribution. If Gatekeeper blocks a downloaded build, use **System Settings > Privacy & Security > Open Anyway**. Automatic updates currently serve Windows executables only, so macOS builds must be updated manually.
+The **Build macOS app** GitHub Actions workflow builds separate Apple Silicon and Intel `.app.zip` and `.dmg` artifacts on pushes, pull requests, or manual dispatch. CI builds use ad-hoc signatures and are not notarized for public distribution. Installing different CI builds may require Keychain approval again; public updates should use a consistent Developer ID signing identity. If Gatekeeper blocks a downloaded build, use **System Settings > Privacy & Security > Open Anyway**. Automatic updates currently serve Windows executables only, so macOS builds must be updated manually.
 
 ## First sign-in
 

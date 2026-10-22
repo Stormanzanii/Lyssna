@@ -279,3 +279,10 @@
     transition: background-color 0.15s;
   }
 }
+/* A further page of the selected category. */
+.search-load-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px auto 32px;
+}

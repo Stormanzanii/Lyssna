@@ -13,7 +13,112 @@ pub struct SearchResults {
     pub artists: Vec<Artist>,
     pub albums: Vec<Album>,
     pub playlists: Vec<Playlist>,
+    /// Spotify user profiles; native search only.
+    #[serde(default)]
+    pub users: Vec<crate::model::Profile>,
     pub top_results: Vec<String>,
+}
+
+/// One further page of a single search category.
+#[derive(Clone, Default, Serialize)]
+pub struct SearchPage {
+    pub results: SearchResults,
+    /// Spotify has results past this page.
+    pub more: bool,
+}
+
+/// Results per page, matching the first native search page.
+const PAGE: usize = 20;
+
+/// The next page of one category, through the desktop client's own
+/// per-category search queries.
+pub async fn page(session: &Session, query: &str, kind: &str, offset: usize) -> Result<SearchPage> {
+    ensure!(
+        !query.trim().is_empty() && query.len() <= 600 && !query.chars().any(char::is_control),
+        "Invalid search query"
+    );
+    ensure!(offset <= 1000, "No more results");
+    let (operation, hash, field) = match kind {
+        "tracks" => (
+            "searchTracks",
+            "b02683192a98dde7966b5e6655a79eeb62713eab703eda9902c932818dd52751",
+            "tracksV2",
+        ),
+        "artists" => (
+            "searchArtists",
+            "7bf95d754fdbe32c8b161fbbe54d1ae50974900df4dce4c8f1afcbcad153224d",
+            "artists",
+        ),
+        "albums" => (
+            "searchAlbums",
+            "202cb3305e31e5a0767ba7925f28bd728cf8f8b0217e6da43909056071cd70e9",
+            "albumsV2",
+        ),
+        "playlists" => (
+            "searchPlaylists",
+            "d520014e748f9ea44f7707d8df1819867ac1205e8b7f3e28f22fe5fc858921b1",
+            "playlists",
+        ),
+        "users" => (
+            "searchUsers",
+            "8f358dd82e62f61dd4ceaa9f8cd0889e644c9b707f1b724fbfb356a757cb7e5a",
+            "users",
+        ),
+        _ => anyhow::bail!("Unknown search category"),
+    };
+    let response = crate::catalogue::query(
+        session,
+        operation,
+        hash,
+        json!({
+            "searchTerm": query, "offset": offset, "limit": PAGE, "numberOfTopResults": PAGE,
+            "includeAudiobooks": false, "includePreReleases": false, "includeAuthors": false
+        }),
+    )
+    .await?;
+    parse_page(&response, field, offset)
+}
+
+fn parse_page(response: &Value, field: &str, offset: usize) -> Result<SearchPage> {
+    let section = &response["data"]["searchV2"][field];
+    let items = section["items"]
+        .as_array()
+        .context("Spotify search unavailable")?;
+    let mut results = SearchResults::default();
+    match field {
+        "tracksV2" => results.tracks = items.iter().filter_map(native_track).collect(),
+        "artists" => results.artists = items.iter().filter_map(native_artist).collect(),
+        "albumsV2" => results.albums = items.iter().filter_map(native_album).collect(),
+        "playlists" => results.playlists = parse_native(response)?,
+        _ => results.users = items.iter().filter_map(native_user).collect(),
+    }
+    let total = section["totalCount"].as_u64().unwrap_or_default();
+    Ok(SearchPage {
+        results,
+        more: !items.is_empty() && ((offset + items.len()) as u64) < total,
+    })
+}
+
+/// A Spotify user from native search.
+fn native_user(value: &Value) -> Option<crate::model::Profile> {
+    let value = data(value);
+    if value["__typename"].as_str() != Some("User") {
+        return None;
+    }
+    let id = value["uri"].as_str()?.strip_prefix("spotify:user:")?;
+    if !crate::user_profile::valid_user(id) {
+        return None;
+    }
+    let name = value["displayName"]
+        .as_str()
+        .or_else(|| value["username"].as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())?;
+    Some(crate::model::Profile {
+        id: id.into(),
+        display_name: Some(name.into()),
+        images: native_images(&value["avatar"]["sources"]),
+    })
 }
 
 pub async fn catalogue(session: &Session, query: &str) -> Result<SearchResults> {
@@ -156,6 +261,12 @@ fn parse_catalogue(response: &Value) -> Result<SearchResults> {
             .filter_map(native_album)
             .collect(),
         playlists: parse_native(response).unwrap_or_default(),
+        users: search["users"]["items"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(native_user)
+            .collect(),
         top_results: search["topResultsV2"]["itemsV2"]
             .as_array()
             .into_iter()
@@ -390,5 +501,57 @@ mod tests {
         assert!(results[0].owner.display_name.is_none());
         assert_eq!(results[1].owner.id, "spotify");
         assert!(parse_public(&json!({})).is_err());
+    }
+
+    #[test]
+    fn native_search_finds_profiles_and_pages_one_category() {
+        let user = |uri: &str, name: Value| {
+            json!({"__typename": "UserResponseWrapper", "data": {
+                "__typename": "User", "uri": uri, "displayName": name, "username": "handle",
+                "avatar": {"sources": [
+                    {"url": "https://i.scdn.co/image/avatar", "width": 300},
+                    {"url": "http://insecure.example/avatar", "width": 64}
+                ]}
+            }})
+        };
+        let page = json!({"data": {"searchV2": {"users": {
+            "totalCount": 5,
+            "items": [
+                user("spotify:user:friend", json!("Friend")),
+                user("spotify:user:quiet", Value::Null),
+                user("spotify:artist:0123456789abcdefghijkl", json!("Not a user"))
+            ]
+        }}}});
+        let parsed = parse_page(&page, "users", 0).unwrap();
+        let users = &parsed.results.users;
+        assert_eq!(users.len(), 2);
+        assert_eq!(users[0].id, "friend");
+        assert_eq!(users[0].display_name.as_deref(), Some("Friend"));
+        assert_eq!(users[0].images.len(), 1, "http avatars are dropped");
+        assert_eq!(users[1].display_name.as_deref(), Some("handle"));
+        assert!(parsed.more, "3 of 5 results seen");
+        let last = parse_page(&page, "users", 2).unwrap();
+        assert!(!last.more, "offset 2 plus 3 items reaches all 5");
+        assert!(parse_page(&json!({}), "tracksV2", 0).is_err());
+    }
+
+    #[test]
+    #[ignore = "Runs read-only native searches with the saved sign-in"]
+    fn live_search_pages_every_category() {
+        crate::native::with_live_session(async |session: &Session| {
+            let first = catalogue(session, "love").await.unwrap();
+            println!("first page: {} users", first.users.len());
+            for kind in ["tracks", "artists", "albums", "playlists", "users"] {
+                let next = page(session, "love", kind, PAGE).await.unwrap();
+                let results = &next.results;
+                let count = results.tracks.len()
+                    + results.artists.len()
+                    + results.albums.len()
+                    + results.playlists.len()
+                    + results.users.len();
+                println!("{kind}: {count} more, further pages: {}", next.more);
+                assert!(count > 0, "{kind} has a second page");
+            }
+        });
     }
 }

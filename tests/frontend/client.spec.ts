@@ -612,6 +612,29 @@ async function startClient(
               host.__clientTest.resolveDJRequest = resolve;
             });
           if (command === "follow_user") return args.follow;
+          if (command === "search_page")
+            return {
+              more: false,
+              results: {
+                tracks:
+                  args.kind === "tracks"
+                    ? Array.from({ length: 5 }, (_, index) => {
+                        const id = String(index + 21).padStart(22, "0");
+                        return {
+                          ...track,
+                          id,
+                          uri: `spotify:track:${id}`,
+                          name: `Song ${index + 21}`,
+                        };
+                      })
+                    : [],
+                artists: [],
+                albums: [],
+                playlists: [],
+                users: [],
+                top_results: [],
+              },
+            };
           if (command === "user_profile") {
             const profile = host.__clientTest.userProfiles?.[args.user];
             return profile
@@ -740,6 +763,13 @@ async function startClient(
                         },
                       ],
                       playlists: [],
+                      users: [
+                        {
+                          id: "friend",
+                          display_name: "Friend Person",
+                          images: track.album.images,
+                        },
+                      ],
                       top_results: [
                         "spotify:track:0000000000000000000001",
                         `spotify:artist:${track.artists[0].id}`,
@@ -4133,6 +4163,56 @@ test("playlist-only search results stay visible when songs are empty or playlist
   );
 });
 
+test("search finds profiles and loads further pages of a category", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    (window as any).__clientTest.userProfiles = {
+      friend: {
+        id: "friend",
+        name: "Friend Person",
+        images: [],
+        public_playlists: 0,
+        followers: 2,
+        following: 1,
+        is_current_user: false,
+        is_following: false,
+        allow_follows: true,
+        sections: [],
+      },
+    };
+  });
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  await search.fill("friend");
+  await search.press("Enter");
+  const results = page.getByRole("region", {
+    name: "Search results for friend",
+    exact: true,
+  });
+  await results.getByRole("tab", { name: "Songs", exact: true }).click();
+  await expect(results.getByText("Song 20", { exact: true })).toBeVisible();
+  await results.getByRole("button", { name: "Load more songs", exact: true }).click();
+  await expect(results.getByText("Song 25", { exact: true })).toBeVisible();
+  await expect(
+    results.getByRole("button", { name: "Load more songs", exact: true }),
+  ).toHaveCount(0);
+  const request = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "search_page")
+      .at(-1),
+  );
+  expect(request.args).toEqual({ query: "friend", kind: "tracks", offset: 20 });
+  await results.getByRole("tab", { name: "Profiles", exact: true }).click();
+  const card = results.locator(".home-card.artist-card");
+  await expect(card).toContainText("Friend Person");
+  await card.getByRole("button", { name: "Friend Person", exact: true }).click();
+  await expect(page.locator(".profile-hero h1")).toHaveText("Friend Person");
+});
+
 test("search matches compact Spotify layout and music category filters stay functional", async ({
   page,
 }) => {
@@ -4155,6 +4235,7 @@ test("search matches compact Spotify layout and music category filters stay func
     "Artists",
     "Playlists",
     "Albums",
+    "Profiles",
   ]);
   await expect(page.locator(".page-hero")).toHaveCount(0);
   expect(

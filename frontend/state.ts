@@ -10,6 +10,8 @@ import type {
   Album,
   TrackFacts,
   Word,
+  Profile,
+  SearchResults,
 } from "./types";
 /** A page as last loaded, shown instantly when revisited or prefetched. */
 export interface CachedPage {
@@ -17,6 +19,7 @@ export interface CachedPage {
   search_artists?: Artist[];
   search_albums?: Album[];
   search_top_results?: string[];
+  search_users?: Profile[];
   tracks?: Track[];
   more?: boolean;
   info?: BrowseInfo;
@@ -155,6 +158,7 @@ export const emptyState: AppState = {
   search_artists: [],
   search_albums: [],
   search_top_results: [],
+  search_users: [],
   search_playlists_loading: false,
   search_playlists_error: "",
   loading: false,
@@ -181,6 +185,7 @@ export type Action =
   | AppEvent
   | { type: "bootstrap"; snapshot: Snapshot }
   | { type: "navigate"; key: string; generation: number }
+  | { type: "search_more"; key: string; results: SearchResults }
   | { type: "play_requested"; track: Track }
   | { type: "settings"; settings: AppState["settings"] }
   | { type: "login_pending"; restoring?: boolean }
@@ -372,6 +377,7 @@ export function reducer(state: AppState, action: Action): AppState {
         search_artists: action.results.artists,
         search_albums: action.results.albums,
         search_top_results: action.results.top_results,
+        search_users: action.results.users ?? [],
         more: false,
       };
       return {
@@ -381,6 +387,42 @@ export function reducer(state: AppState, action: Action): AppState {
         pageError: "",
         search_playlists_loading: false,
         search_playlists_error: action.message,
+        pages: rememberPage(state.pages, action.key, page),
+      };
+    }
+    case "search_more": {
+      // A further page of one category; stale when the search changed.
+      if (action.key !== state.route) return state;
+      const add = <T,>(current: T[], next: T[], key: (item: T) => string) => {
+        const seen = new Set(current.map(key));
+        return [...current, ...next.filter((item) => !seen.has(key(item)))];
+      };
+      const page = {
+        tracks: add(state.tracks, action.results.tracks, (item) => item.uri),
+        search_artists: add(
+          state.search_artists,
+          action.results.artists,
+          (item) => item.uri || item.id || "",
+        ),
+        search_albums: add(
+          state.search_albums,
+          action.results.albums,
+          (item) => item.uri || item.id || "",
+        ),
+        search_playlists: add(
+          state.search_playlists,
+          action.results.playlists,
+          (item) => item.id,
+        ),
+        search_users: add(
+          state.search_users ?? [],
+          action.results.users ?? [],
+          (item) => item.id,
+        ),
+      };
+      return {
+        ...state,
+        ...page,
         pages: rememberPage(state.pages, action.key, page),
       };
     }
@@ -420,6 +462,7 @@ export function reducer(state: AppState, action: Action): AppState {
         search_artists: cached?.search_artists ?? [],
         search_albums: cached?.search_albums ?? [],
         search_top_results: cached?.search_top_results ?? [],
+        search_users: cached?.search_users ?? [],
         search_playlists_loading: action.key.startsWith("search:"),
         search_playlists_error: "",
         browse_info: info,

@@ -85,6 +85,8 @@ export interface SearchResults {
   artists: Artist[];
   albums: Album[];
   playlists: Playlist[];
+  /** Spotify user profiles; native search only. */
+  users?: Profile[];
   top_results: string[];
 }
 export interface Folder {
@@ -233,6 +235,7 @@ export interface Snapshot {
   search_artists: Artist[];
   search_albums: Album[];
   search_top_results: string[];
+  search_users?: Profile[];
   search_playlists_loading: boolean;
   search_playlists_error: string;
   browse_info?: BrowseInfo;

@@ -1219,7 +1219,15 @@ function App() {
     searchInput.current?.blur();
     if (item.track)
       play({ command: "play", uri: item.track.uri, track: item.track });
-    else navigate(item.route);
+    else if (item.route.startsWith("user:")) {
+      const user = item.route.slice(5);
+      profileTrail.current = [];
+      setProfileView({
+        user,
+        hint: { id: user, display_name: item.name, images: item.images },
+      });
+      setCenter("profile");
+    } else navigate(item.route);
   };
   // Native playlist info gives the owner's user ID; show their display name.
   const ownerId = playlistInfo?.owner || playlist?.owner.id;
@@ -1663,13 +1671,19 @@ function App() {
                     >
                       <Cover
                         images={item.images}
-                        className={item.kind === "Artist" ? "round" : ""}
+                        className={
+                          item.kind === "Artist" || item.kind === "Profile"
+                            ? "round"
+                            : ""
+                        }
                       />
                       <span>
                         <strong>{item.name}</strong>
                         <small>
                           {item.kind}
-                          {item.subtitle && item.kind !== "Artist"
+                          {item.subtitle &&
+                          item.kind !== "Artist" &&
+                          item.kind !== "Profile"
                             ? ` • ${item.subtitle}`
                             : ""}
                         </small>
@@ -2012,6 +2026,15 @@ function App() {
                 remember={(entry: SearchEntry) =>
                   updateRecentSearches((list) => rememberSearch(list, entry))
                 }
+                openUser={(user, hint) => {
+                  profileTrail.current = [];
+                  setProfileView({ user, hint });
+                  setCenter("profile");
+                }}
+                addResults={(results) =>
+                  dispatch({ type: "search_more", key: state.route, results })
+                }
+                notify={notify}
               />
             </div>
           ) : (

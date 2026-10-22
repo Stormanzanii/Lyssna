@@ -1,20 +1,28 @@
-import type { Album, Artist, Artwork, Playlist, Track } from "./types";
+import type {
+  Album,
+  Artist,
+  Artwork,
+  Playlist,
+  Profile,
+  Track,
+} from "./types";
 
 export type SearchCategory =
-  "All" | "Songs" | "Artists" | "Playlists" | "Albums";
+  "All" | "Songs" | "Artists" | "Playlists" | "Albums" | "Profiles";
 export const SEARCH_CATEGORIES: SearchCategory[] = [
   "All",
   "Songs",
   "Artists",
   "Playlists",
   "Albums",
+  "Profiles",
 ];
 export type SearchEntry = {
   uri: string;
   route: string;
   name: string;
   subtitle: string;
-  kind: "Song" | "Artist" | "Playlist" | "Album";
+  kind: "Song" | "Artist" | "Playlist" | "Album" | "Profile";
   images: Artwork[];
   track?: Track;
   artist?: Artist;
@@ -27,6 +35,7 @@ export function searchEntries(data: {
   search_albums: Album[];
   search_playlists: Playlist[];
   search_top_results: string[];
+  search_users?: Profile[];
 }) {
   const entries: SearchEntry[] = [
     ...data.tracks.map((track): SearchEntry => ({
@@ -63,6 +72,14 @@ export function searchEntries(data: {
       kind: "Album",
       images: album.images,
       album,
+    })),
+    ...(data.search_users ?? []).map((user): SearchEntry => ({
+      uri: `spotify:user:${user.id}`,
+      route: `user:${user.id}`,
+      name: user.display_name || user.id,
+      subtitle: "Profile",
+      kind: "Profile",
+      images: user.images ?? [],
     })),
   ];
   const byUri = new Map(entries.map((entry) => [entry.uri, entry]));

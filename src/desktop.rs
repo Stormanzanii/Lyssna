@@ -67,6 +67,7 @@ pub struct Snapshot {
     search_artists: Vec<crate::model::Artist>,
     search_albums: Vec<crate::model::Album>,
     search_top_results: Vec<String>,
+    search_users: Vec<crate::model::Profile>,
     search_playlists_loading: bool,
     search_playlists_error: String,
     browse_info: Option<BrowseInfo>,
@@ -313,6 +314,7 @@ impl Desktop {
                 search_artists: Vec::new(),
                 search_albums: Vec::new(),
                 search_top_results: Vec::new(),
+                search_users: Vec::new(),
                 search_playlists_loading: false,
                 search_playlists_error: String::new(),
                 browse_info: None,
@@ -569,6 +571,7 @@ impl Desktop {
                             snapshot.search_artists.clear();
                             snapshot.search_albums.clear();
                             snapshot.search_top_results.clear();
+                            snapshot.search_users.clear();
                             snapshot.search_playlists_loading = false;
                             snapshot.search_playlists_error.clear();
                             emit(json!({"type":"signed_out"}));
@@ -712,6 +715,7 @@ impl Desktop {
                             snapshot.search_artists = results.artists.clone();
                             snapshot.search_albums = results.albums.clone();
                             snapshot.search_top_results = results.top_results.clone();
+                            snapshot.search_users = results.users.clone();
                             snapshot.loading = false;
                             snapshot.more = false;
                             snapshot.search_playlists_loading = false;
@@ -1513,6 +1517,7 @@ fn browse(
             snapshot.search_artists.clear();
             snapshot.search_albums.clear();
             snapshot.search_top_results.clear();
+            snapshot.search_users.clear();
             snapshot.search_playlists_loading = key.starts_with("search:");
             snapshot.search_playlists_error.clear();
             snapshot.browse_info = snapshot
@@ -2541,6 +2546,30 @@ async fn follow_user(
         }
     })
 }
+/// The next page of one search category, for "Load more".
+#[tauri::command]
+async fn search_page(
+    state: State<'_, Desktop>,
+    query: String,
+    kind: String,
+    offset: usize,
+) -> std::result::Result<crate::search::SearchPage, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::search::page(session, &query, &kind, offset).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|_| "More results are unavailable right now. Try again shortly.".to_owned())
+}
 #[tauri::command]
 async fn resolve_album(
     state: State<'_, Desktop>,
@@ -2813,6 +2842,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             resolve_album,
             user_profile,
             follow_user,
+            search_page,
             app_update,
             media_state
         ])

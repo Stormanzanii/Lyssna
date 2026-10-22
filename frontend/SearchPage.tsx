@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
+import { rpc } from "./bridge";
 import {
   CircleCheck,
   CirclePlus,
@@ -9,7 +10,14 @@ import {
 import { ArtistLinks, Cover, cancelPrefetch, prefetchPage } from "./components";
 import { Shelf } from "./HomePage";
 import type { AppState } from "./state";
-import type { Album, Artist, HomeItem, Track } from "./types";
+import type {
+  Album,
+  Artist,
+  HomeItem,
+  Profile,
+  SearchResults,
+  Track,
+} from "./types";
 import {
   SEARCH_CATEGORIES,
   searchEntries,
@@ -29,6 +37,9 @@ export function SearchPage({
   follow,
   retry,
   remember,
+  openUser,
+  addResults,
+  notify,
 }: {
   state: AppState;
   navigate: (route: string) => void;
@@ -41,6 +52,10 @@ export function SearchPage({
   retry: () => void;
   /** Record an opened result for the search box's recent searches. */
   remember: (entry: SearchEntry) => void;
+  openUser: (id: string, hint: Profile) => void;
+  /** Append a further page of one category to this search. */
+  addResults: (results: SearchResults) => void;
+  notify: (message: string, error?: boolean) => void;
 }) {
   const [category, setCategory] = useState<SearchCategory>("All");
   const entries = useMemo(
@@ -51,8 +66,12 @@ export function SearchPage({
       state.search_albums,
       state.search_playlists,
       state.search_top_results,
+      state.search_users,
     ],
   );
+  // Further pages per category: next offset, or done once Spotify has no more.
+  const [pages, setPages] = useState<Partial<Record<SearchCategory, number | "done">>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
   const top = entries[0];
   const preview = entries.slice(1, 6);
   const previewUris = new Set([top?.uri, ...preview.map((entry) => entry.uri)]);
@@ -60,8 +79,8 @@ export function SearchPage({
   const message = state.search_playlists_error || state.pageError;
   const asItem = (entry: SearchEntry): HomeItem => ({
     ...entry,
-    kind: entry.kind.toLowerCase(),
-    playable: true,
+    kind: entry.kind === "Profile" ? "user" : entry.kind.toLowerCase(),
+    playable: entry.kind !== "Profile",
     format: "",
   });
   const start = (entry: SearchEntry) => {
@@ -78,7 +97,41 @@ export function SearchPage({
     if (entry.track) start(entry);
     else if (entry.artist) openArtist(entry.artist);
     else if (entry.album) openAlbum(entry.album);
+    else if (entry.kind === "Profile")
+      openUser(entry.route.slice(5), {
+        id: entry.route.slice(5),
+        display_name: entry.name,
+        images: entry.images,
+      });
     else navigate(entry.route);
+  };
+  const query = state.route.slice(7);
+  const loadMore = (shown: SearchCategory) => {
+    const kind = {
+      Songs: "tracks",
+      Artists: "artists",
+      Albums: "albums",
+      Playlists: "playlists",
+      Profiles: "users",
+    }[shown as Exclude<SearchCategory, "All">];
+    const offset = pages[shown];
+    if (!kind || offset === "done" || loadingMore) return;
+    const from = offset ?? 20;
+    setLoadingMore(true);
+    rpc<{ results: SearchResults; more: boolean }>("search_page", {
+      query,
+      kind,
+      offset: from,
+    })
+      .then(({ results, more }) => {
+        addResults(results);
+        setPages((current) => ({
+          ...current,
+          [shown]: more ? from + 20 : "done",
+        }));
+      })
+      .catch((error) => notify(String(error), true))
+      .finally(() => setLoadingMore(false));
   };
   const tabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next: number;
@@ -183,7 +236,7 @@ export function SearchPage({
       </article>
     );
   };
-  const shelf = (title: "Playlists" | "Artists" | "Albums") => {
+  const shelf = (title: "Playlists" | "Artists" | "Albums" | "Profiles") => {
     const items = entries.filter((entry) => entry.kind === title.slice(0, -1));
     if (!items.length) return null;
     return (
@@ -273,6 +326,7 @@ export function SearchPage({
             {shelf("Playlists")}
             {shelf("Artists")}
             {shelf("Albums")}
+            {shelf("Profiles")}
             {entries.some(
               (entry) => entry.track && !previewUris.has(entry.uri),
             ) && (
@@ -292,6 +346,23 @@ export function SearchPage({
         ) : (
           shelf(category)
         )}
+        {category !== "All" &&
+          filtered.length >= 10 &&
+          pages[category] !== "done" && (
+            <button
+              className="pill outline search-load-more"
+              disabled={loadingMore}
+              onClick={() => loadMore(category)}
+            >
+              {loadingMore ? (
+                <>
+                  <LoaderCircle size={16} className="spin" /> Loading…
+                </>
+              ) : (
+                `Load more ${category.toLowerCase()}`
+              )}
+            </button>
+          )}
         {!busy && !filtered.length && (
           <div className="search-empty">
             <Search size={30} />

@@ -1,70 +1,4 @@
-/* Settings page, laid out like Spotify's: one centred column, quiet section
-   headings, muted labels with their control on the right. */
-.settings-page {
-  height: 100%;
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-.settings-column {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 32px clamp(20px, 4vw, 40px) 96px;
-}
-.settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 48px;
-  margin-bottom: 28px;
-}
-.settings-header h1 {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-.settings-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: min(300px, 60%);
-  height: 36px;
-  padding: 0 4px 0 12px;
-  border-radius: 999px;
-  background: #ffffff14;
-  color: #b3b3b3;
-  border: 1px solid transparent;
-  transition: border-color 0.15s;
-}
-.settings-search:focus-within {
-  border-color: #ffffff4d;
-}
-.settings-search input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  outline: 0;
-  color: #fff;
-  font: inherit;
-  font-size: 14px;
-}
-.settings-search input:focus-visible {
-  box-shadow: none;
-}
-.settings-section {
-  margin-bottom: 36px;
-  scroll-margin-top: 24px;
-}
-.settings-section > h2 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 8px;
-}
-.settings-section:not(:has(.setting-row)) {
-  display: none;
-}
+/* Settings rows and controls, shared by the SpotiFlex settings window. */
 .setting-row {
   display: flex;
   align-items: center;
@@ -107,16 +41,6 @@
 }
 .setting-row.stacked .setting-control {
   display: block;
-}
-.settings-page .pill {
-  font-size: 14px;
-  padding: 7px 16px;
-}
-.settings-page .pill.outline {
-  border-color: #7c7c7c;
-}
-.settings-page .pill.outline:hover {
-  border-color: #fff;
 }
 .settings-select {
   appearance: none;
@@ -298,22 +222,10 @@
 .settings-key-form .consent-row {
   margin: 0;
 }
-.settings-empty {
-  display: none;
-  padding: 48px 0;
-  text-align: center;
-  font-size: 16px;
-  color: #b3b3b3;
-}
-.settings-page.searching
-  .settings-column:not(:has(.setting-row))
-  .settings-empty {
-  display: block;
-}
-
-/* Lyrics settings: a compact window opened from the lyrics toolbar gear.
-   Based on Spicy Lyrics' panel, tightened: one header row with search,
-   a segmented tab control and rows grouped into cards. */
+/* SpotiFlex settings: one window for every setting, opened from the
+   profile menu or the lyrics toolbar gear. Based on Spicy Lyrics' panel:
+   one header row with search, a segmented tab control and rows grouped
+   into cards. */
 /* Always glass: it opens over the lyrics, which should stay visible
    through a light dim instead of the usual dark blurred backdrop. */
 .lyrics-settings-backdrop {
@@ -505,7 +417,7 @@
   display: none;
 }
 .lyrics-settings-section h3 {
-  margin: 0 0 8px 4px;
+  margin: 0 0 8px 6px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -519,23 +431,84 @@
   box-shadow: 0 1px 0 #ffffff0a inset;
 }
 .lyrics-settings .setting-row {
-  min-height: 56px;
+  min-height: 58px;
   padding: 10px 16px;
+  gap: 20px;
+}
+.lyrics-settings .setting-row.stacked {
+  gap: 10px;
+  padding-block: 12px;
 }
 .lyrics-settings .setting-row + .setting-row {
   border-top: 1px solid #ffffff0d;
 }
 .lyrics-settings .setting-label {
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: #fff;
 }
 .lyrics-settings .setting-help {
+  margin-top: 2px;
   font-size: 12px;
+  color: #ffffffa6;
+}
+/* Every control shares one height, radius, fill and type size; fields and
+   selects also share one width so their right edges line up. */
+.lyrics-settings .pill,
+.lyrics-settings .settings-select,
+.lyrics-settings .number-field {
+  height: 32px;
+  font-size: 13px;
+}
+.lyrics-settings .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  font-weight: 600;
 }
 .lyrics-settings .pill.outline {
-  padding: 5px 14px;
-  font-size: 12.5px;
+  border: 1px solid #ffffff38;
+  background: #ffffff08;
+}
+.lyrics-settings .pill.outline:hover:not(:disabled) {
+  border-color: #ffffffa6;
+  background: #ffffff14;
+}
+.lyrics-settings .settings-select,
+.lyrics-settings .number-field {
+  border: 1px solid #ffffff1a;
+  border-radius: 8px;
+  background-color: #ffffff12;
+}
+.lyrics-settings .settings-select {
+  width: 220px;
+  min-width: 0;
+  max-width: none;
+}
+.lyrics-settings .settings-select:hover {
+  background-color: #ffffff1c;
+}
+.lyrics-settings .font-control {
+  width: 220px;
+}
+.lyrics-settings .settings-range input {
+  width: 180px;
+}
+.lyrics-settings .settings-range output {
+  width: 28px;
+  text-align: right;
+  font-size: 13px;
+}
+.lyrics-settings .settings-number {
+  font-size: 13px;
+}
+.lyrics-settings .settings-alert {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #ffffff0d;
+  border-radius: 0;
+  font-size: 13px;
 }
 .lyrics-settings-empty {
   display: none;

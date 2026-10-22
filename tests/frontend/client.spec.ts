@@ -321,21 +321,33 @@ test("bundled lyrics stay ready after sign-out and another sign-in", async ({
   page,
 }) => {
   await startClient(page, "liked", true);
-  await openSettings(page);
+  await openSettings(page, "Sources");
   await expect(
     page.getByRole("button", { name: "Save lyrics key", exact: true }),
   ).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "signed_out" }),
+  );
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toContainText(
+    "Spotify Premium required",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".setup-backdrop")).toBeVisible();
   await page.evaluate(() => {
-    const emit = (window as any).__clientTest.emit;
-    emit({ type: "signed_out" });
-    emit({
+    (window as any).__clientTest.emit({
       type: "session",
       profile: { id: "another-listener", display_name: "Listener", images: [] },
       can_follow: true,
     });
   });
   await expect(page.locator(".application")).toBeVisible();
-  await openSettings(page);
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toHaveCount(0);
+  await openSettings(page, "Sources");
   await expect(
     page.getByRole("button", { name: "Save lyrics key", exact: true }),
   ).toHaveCount(0);
@@ -528,17 +540,23 @@ test("metadata menus stay off blank rows, backgrounds and player controls", asyn
   ).toBeVisible();
 });
 
-async function openLyricsSettings(page: Page, tab: string) {
-  await openSettings(page);
-  await page
-    .locator(".setting-row", { hasText: "Lyrics settings" })
-    .getByRole("button", { name: "Open", exact: true })
-    .click();
-  await page.getByRole("tab", { name: tab, exact: true }).click();
+async function showLyrics(page: Page) {
+  const settings = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  if (await settings.count())
+    await settings.getByRole("button", { name: "Close settings" }).click();
+  if (!(await page.locator(".lyrics-page").count()))
+    await page.getByTitle("Lyrics", { exact: true }).click();
 }
-async function openSettings(page: Page) {
-  await page.getByRole("button", { name: "Account menu", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+/** Opens the SpotiFlex settings window, unless it is open, on a tab. */
+async function openSettings(page: Page, tab = "General") {
+  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  if (!(await dialog.count())) {
+    await page
+      .getByRole("button", { name: "Account menu", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  }
+  await page.getByRole("tab", { name: tab, exact: true }).click();
 }
 async function startClient(
   page: Page,
@@ -1995,14 +2013,14 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
     buffer: Buffer.from("<tt/>"),
   });
   await emitCanvas(page);
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
   await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
   await expect(page.getByLabel("Space Gravity")).not.toBeChecked();
   await page.getByLabel("Canvas in lyrics").check();
   await page.getByLabel("Space Gravity").check();
   await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   await expect(page.locator(".canvas-lyrics video")).toBeVisible();
   await expect(page.locator(".gravity-stage")).toBeVisible();
   expect(
@@ -2034,9 +2052,9 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
     titleLeft: true,
     titleBottom: true,
   });
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await page.getByLabel("Reduce motion").check();
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   await expect(page.locator(".gravity-stage")).toHaveCount(0);
   await expect(page.locator(".lyrics-canvas-cover")).toHaveCount(0);
   await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
@@ -2202,12 +2220,12 @@ test("timed syllables lift independently and font choices apply separately", asy
       .locator(".lyrics-page .lyrics-title")
       .evaluate((element) => getComputedStyle(element).fontFamily),
   ).toContain("Metropolis");
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await page.getByLabel("App font", { exact: true }).fill("Georgia");
-  await openLyricsSettings(page, "Appearance");
+  await openSettings(page, "Lyrics");
   await page.getByLabel("Lyrics font", { exact: true }).fill("Consolas");
   await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   expect(
     await page
       .locator(".application")
@@ -2227,7 +2245,7 @@ test("timed syllables lift independently and font choices apply separately", asy
 
 test("typed Windows font names apply immediately", async ({ page }) => {
   await startClient(page);
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   const appFont = page.getByLabel("App font", { exact: true });
   const lyricFont = page.getByLabel("Lyrics font", { exact: true });
   await appFont.clear();
@@ -2239,7 +2257,7 @@ test("typed Windows font names apply immediately", async ({ page }) => {
       .locator(".application")
       .evaluate((node) => getComputedStyle(node).fontFamily),
   ).toContain("Times New Roman");
-  await openLyricsSettings(page, "Appearance");
+  await openSettings(page, "Lyrics");
   await lyricFont.fill("Bahnschrift");
   await expect(lyricFont).toBeFocused();
   await expect(page.locator(".lyrics-settings")).toBeVisible();
@@ -2268,7 +2286,7 @@ test("typed Windows font names apply immediately", async ({ page }) => {
         getComputedStyle(node).getPropertyValue("--lyric-font"),
       ),
   ).toContain("Inter");
-  await page.keyboard.press("Escape");
+  await openSettings(page, "Appearance");
   await appFont.clear();
   expect(
     await page
@@ -2431,21 +2449,20 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
     });
   }, track.uri);
   await expect(page.locator(".lyrics-page .lyric-line.active")).toHaveCount(2);
+  // Wide lyrics start at 28% of their own viewport, independent of artwork.
   await expect
     .poll(() =>
       page.evaluate(() => {
         const line = document
             .querySelector(".lyrics-page .lyric-line")!
             .getBoundingClientRect(),
-          cover = document
-            .querySelector(".lyrics-album>.cover")!
+          view = document
+            .querySelector(".lyrics-page .lyric-scroll")!
             .getBoundingClientRect();
-        return Math.abs(
-          line.top + line.height / 2 - cover.top - cover.height / 2,
-        );
+        return (line.top - view.top) / view.height;
       }),
     )
-    .toBeLessThan(0.5);
+    .toBeCloseTo(0.28, 2);
   const leadTop = await page
     .locator(".lyrics-page .lyric-line")
     .first()
@@ -2493,13 +2510,9 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.getByRole("status", { name: "Instrumental break" }),
   ).toBeVisible();
-  await expect
-    .poll(() =>
-      page
-        .locator(".lyrics-page .lyric-wait[aria-hidden='false']")
-        .evaluate((element) => element.getBoundingClientRect().height),
-    )
-    .toBeCloseTo(48, 0);
+  const dots = page.locator(".lyrics-page .lyric-wait[aria-hidden='false'] i");
+  await expect(dots).toHaveCount(3);
+  for (const dot of await dots.all()) await expect(dot).toBeVisible();
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Community lyrics");
@@ -3150,10 +3163,10 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   }, track.uri);
   await page.getByTitle("Lyrics", { exact: true }).click();
   const mode = async (value: string) => {
-    await page.getByTitle("Lyrics settings", { exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Lyrics settings" });
+    await page.getByTitle("SpotiFlex settings", { exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
     await expect(
-      dialog.getByRole("tab", { name: "Appearance" }),
+      dialog.getByRole("tab", { name: "Lyrics", exact: true }),
     ).toHaveAttribute("aria-selected", "true");
     const select = dialog.getByLabel("Pinned Lyrics Footer", { exact: true });
     await expect(select.locator("option")).toHaveText([
@@ -3333,12 +3346,12 @@ test("Now playing retains the lyrics ambience with Liquid Glass enabled", async 
 }) => {
   await startClient(page);
   await playLyricTrack(page);
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.keyboard.press("Escape");
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await page.getByRole("switch", { name: "Liquid Glass" }).check();
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   await expect(
     page.locator(".lyrics-page > .ambience .ambient-layer"),
   ).toHaveCount(1);
@@ -3348,9 +3361,9 @@ test("Now playing retains the lyrics ambience with Liquid Glass enabled", async 
   await expect(
     page.locator(".now-playing > .ambience .ambient-layer"),
   ).toBeVisible();
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   await expect(
     page.locator(".now-playing > .ambience .ambient-layer"),
   ).toHaveCount(1);
@@ -3922,17 +3935,18 @@ test("Spotify+ copy actions, folder choice and contributor credits", async ({
   await page.getByRole("menuitem", { name: "Copy embed code" }).click();
   await expect.poll(clipboard).toContain("open.spotify.com/embed/track/");
   // The hide-menu toggles are gone; folder choice lives under Your Library.
-  await openSettings(page);
+  await openSettings(page, "Library");
   await expect(page.getByText("Hide Profile in the profile menu")).toHaveCount(
     0,
   );
   await expect(
     page
-      .locator(".settings-section", { hasText: "Your Library" })
+      .locator(".lyrics-settings-section", { hasText: "Your Library" })
       .getByText("Add to playlist folders"),
   ).toBeVisible();
   // Credits list the creator first, with GitHub avatars.
-  const people = page.locator(".settings-page .credit-person");
+  await page.getByRole("button", { name: /About and credits/ }).click();
+  const people = page.locator(".lyrics-settings .credit-person");
   await expect(people).toHaveCount(3);
   await expect(people.first()).toContainText("Arashii");
   await expect(people.first().locator("img")).toHaveAttribute(
@@ -3947,6 +3961,7 @@ test("Spotify+ copy actions, folder choice and contributor credits", async ({
         .at(-1)?.args.url,
   );
   expect(link).toBe("https://github.com/Stormanzanii");
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
@@ -4099,7 +4114,7 @@ test("Liquid Glass refracts only the lyrics toolbar and profile menu", async ({
 }) => {
   await startClient(page);
   await expect(page.locator("#glass-refraction")).toHaveCount(0);
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await expect(page.getByRole("switch", { name: "Refraction" })).toHaveCount(0);
   await page.getByRole("switch", { name: "Liquid Glass" }).check();
   await expect(page.locator("#glass-refraction")).toHaveCount(1);
@@ -4108,6 +4123,7 @@ test("Liquid Glass refracts only the lyrics toolbar and profile menu", async ({
       .locator(selector)
       .first()
       .evaluate((node) => getComputedStyle(node).backdropFilter);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   expect(await backdrop(".profile-menu")).toContain("glass-refraction");
   await page.keyboard.press("Escape");
@@ -4126,7 +4142,7 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
 }) => {
   await startClient(page);
   await expect(page.locator(".application")).not.toHaveClass(/liquid-glass/);
-  await openSettings(page);
+  await openSettings(page, "Appearance");
   await page.getByRole("switch", { name: "Liquid Glass" }).check();
   await expect(page.locator(".application")).toHaveClass(/liquid-glass/);
   await expect(page.locator(".glass-backdrop")).toHaveCount(1);
@@ -4140,11 +4156,10 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
       ),
     )
     .toBe(true);
-  await page.getByTitle("Search settings", { exact: true }).click();
   await page.getByLabel("Search settings").fill("glass");
   await expect(page.locator(".setting-row")).toHaveCount(1);
   await page.getByLabel("Search settings").fill("zzzz");
-  await expect(page.locator(".settings-empty")).toBeVisible();
+  await expect(page.locator(".lyrics-settings-empty")).toBeVisible();
 });
 
 test("Space Gravity waiting dots share the normal countdown and drift with words", async ({
@@ -4204,11 +4219,11 @@ test("Space Gravity waiting dots share the normal countdown and drift with words
     await position(time);
     normal.set(time, await dots());
   }
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
   await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   const waiting = page.locator(".gravity-wait");
   await expect(waiting.locator("i")).toHaveCount(3);
   for (const [time, expected] of normal) {
@@ -4303,11 +4318,11 @@ test("Space Gravity shares normal syllable joins and held-letter timing", async 
     await position(time);
     normalFills.set(time, await fills());
   }
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
   await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   await expect(page.locator(".gravity-word")).toHaveCount(4);
   await expect(letters).toHaveCount(10);
   for (const [time, expected] of normalFills) {
@@ -4340,7 +4355,7 @@ test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {
   await startClient(page);
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
   await page.keyboard.press("Escape");
@@ -4504,10 +4519,10 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
   await romanization.click();
   await expect(page.locator(".lyrics-page .lyric-main")).toHaveText("東京");
   await romanization.click();
-  await openLyricsSettings(page, "Effects");
+  await openSettings(page, "Effects");
   await page.getByLabel("Space Gravity").check();
   await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
+  await showLyrics(page);
   for (const [text, reading, expected] of samples) {
     await emit(text, reading);
     await expect(page.locator(".gravity-word:not(.exiting)")).toHaveText([
@@ -4551,8 +4566,8 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await expect(page.locator(".lyrics-page")).toHaveClass(/artwork-right/);
   await toolbar.getByTitle("Compact lyrics", { exact: true }).click();
   await expect(page.locator(".lyrics-page")).toHaveClass(/narrow/);
-  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Lyrics settings" });
+  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByLabel("Lyric text size", { exact: true }),
@@ -4562,25 +4577,25 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   expect(settingsBox.height).toBeGreaterThan(660);
   await page.screenshot({
     path: "target/diagnostics/lyrics-settings-size.png",
+    animations: "disabled",
   });
-  await expect(dialog.getByRole("tab", { name: "Appearance" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(
+    dialog.getByRole("tab", { name: "Lyrics", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   await expect(dialog).toContainText(`v${appVersion}`);
   await expect(
     dialog.getByRole("button", { name: /Website|Discord|Ko-fi/ }),
   ).toHaveCount(0);
   // Search reaches settings on other tabs.
-  await dialog.getByLabel("Search lyrics settings").fill("gravity");
+  await dialog.getByLabel("Search settings").fill("gravity");
   await expect(
     dialog.getByRole("switch", { name: "Space Gravity" }),
   ).toBeVisible();
   await dialog.getByRole("switch", { name: "Space Gravity" }).click();
   await expect.poll(() => saved("space_gravity")).toBe(true);
-  await dialog.getByLabel("Search lyrics settings").fill("nothing like this");
+  await dialog.getByLabel("Search settings").fill("nothing like this");
   await expect(dialog).toContainText("No settings match.");
-  await dialog.getByLabel("Search lyrics settings").fill("");
+  await dialog.getByLabel("Search settings").fill("");
   await dialog.getByRole("tab", { name: "Sources" }).click();
   await dialog.getByRole("button", { name: "Browse", exact: true }).click();
   await expect(
@@ -4591,10 +4606,10 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
     .getByRole("button", { name: /close/i })
     .first()
     .click();
-  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
   // About opens from the footer card and lists the credits.
   await expect(dialog.locator(".lyrics-settings-wordmark")).toHaveCount(1);
   await expect(dialog.getByRole("tab", { name: "About" })).toHaveCount(0);
@@ -4618,13 +4633,17 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await dialog.getByRole("button", { name: /Back to settings/ }).click();
   await expect(dialog.locator(".credit-person")).toHaveCount(0);
   // Credits remain searchable after moving About out of the tab bar.
-  await dialog.getByLabel("Search lyrics settings").fill("Spikerko");
+  await dialog.getByLabel("Search settings").fill("Spikerko");
   await expect(dialog.locator(".credit-person")).toHaveCount(3);
-  await dialog.getByLabel("Search lyrics settings").fill("");
+  await dialog.getByLabel("Search settings").fill("");
   await expect(dialog.locator(".credit-person")).toHaveCount(0);
-  await dialog.getByRole("tab", { name: "Advanced" }).click();
-  await dialog.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(page.locator(".settings-page")).toBeVisible();
+  await dialog.getByRole("tab", { name: "General" }).click();
+  await expect(
+    dialog.getByRole("combobox", { name: "Audio output" }),
+  ).toBeVisible();
+  await expect(page.locator(".settings-page")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.locator(".lyrics-page")).toBeVisible();
 });
 
 test("flat paragraph lyrics gain estimated word timing and revert when disabled", async ({
@@ -7282,7 +7301,10 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
     .getByRole("menu", { name: "Edit" })
     .getByRole("menuitem", { name: "Settings" })
     .click();
-  await expect(page.locator(".settings-page")).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   // Clicking elsewhere closes it.
   await menu.click();
   await page.locator(".center-panel").click({ position: { x: 300, y: 300 } });
@@ -7311,15 +7333,18 @@ test("Help > About SpotiFlex opens the About dialog", async ({ page }) => {
   await expect(about).toHaveCount(0);
 });
 
-test("lyrics options live in Lyrics settings with an ordered source list", async ({
+test("SpotiFlex settings combines app and lyrics options with ordered sources", async ({
   page,
 }) => {
   await startClient(page);
   await openSettings(page);
-  // Main Settings keeps app settings and only links to the lyrics window.
-  await expect(page.locator(".settings-page")).not.toContainText(
-    "Lyric text size",
-  );
+  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator(".settings-page")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("combobox", { name: "Audio output" }),
+  ).toBeVisible();
+  await expect(page.locator(".track-row").first()).toBeVisible();
   await expect(page.getByLabel("Lyrics font", { exact: true })).toHaveCount(0);
   const saved = (key: string) =>
     page.evaluate(
@@ -7329,7 +7354,7 @@ test("lyrics options live in Lyrics settings with an ordered source list", async
           .at(-1)?.args.settings[key],
       key,
     );
-  await openLyricsSettings(page, "Sources");
+  await openSettings(page, "Sources");
   const sources = page.locator(".lyric-sources li");
   await expect(sources).toHaveText([
     /Spicy Lyrics/,
@@ -7362,4 +7387,39 @@ test("lyrics options live in Lyrics settings with an ordered source list", async
     buffer: Buffer.from("<tt/>"),
   });
   await expect(page.locator(".lyrics-display")).toHaveClass(/lyrics-right/);
+  await openSettings(page, "Appearance");
+  await dialog.getByRole("switch", { name: "Liquid Glass" }).check();
+  await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
+  await dialog.screenshot({
+    path: "target/diagnostics/spotiflex-settings-glass.png",
+    animations: "disabled",
+  });
+  // Every category fits the smallest supported window.
+  await page.setViewportSize({ width: 900, height: 600 });
+  for (const tab of [
+    "General",
+    "Appearance",
+    "Library",
+    "Lyrics",
+    "Effects",
+    "Layout",
+    "Sources",
+  ]) {
+    await dialog.getByRole("tab", { name: tab, exact: true }).click();
+    expect(
+      await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    expect(
+      await dialog
+        .locator(".lyrics-settings-scroll")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+  }
+  await dialog.screenshot({
+    path: "target/diagnostics/spotiflex-settings-small.png",
+    animations: "disabled",
+  });
+  await page.mouse.click(5, 300);
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".lyrics-page")).toBeVisible();
 });

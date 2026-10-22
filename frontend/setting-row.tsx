@@ -41,3 +41,24 @@ export function SettingRow({
     </div>
   );
 }
+
+export function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <input
+      className="toggle"
+      type="checkbox"
+      role="switch"
+      aria-label={label}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+    />
+  );
+}

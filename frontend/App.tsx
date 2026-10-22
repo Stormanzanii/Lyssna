@@ -143,7 +143,6 @@ import {
   forgetPlaylist,
 } from "./library-order";
 import { fontFamily, loadSelectedFonts } from "./custom-fonts";
-import { SettingsPage } from "./settings-page";
 import { UpdatePrompt } from "./update-prompt";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
@@ -154,7 +153,7 @@ import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
 import { coverJpeg } from "./playlist-cover";
 import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
-import { LyricsSettings } from "./lyrics-settings";
+import { SettingsWindow, type SettingsTab } from "./settings-window";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
 import { GlassRefractionFilter } from "./glass-refraction";
@@ -186,7 +185,7 @@ const NON_TEXT_INPUTS = new Set([
   "file",
 ]);
 
-type Center = "browse" | "lyrics" | "settings" | "profile";
+type Center = "browse" | "lyrics" | "profile";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
   id: string;
@@ -365,7 +364,9 @@ function App() {
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
-  const [lyricsSettings, setLyricsSettings] = useState(false);
+  // The SpotiFlex settings window and the tab it opened on.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  useEffect(() => setSettingsTab(null), [state.profile?.id]);
   const [about, setAbout] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
   useEffect(
@@ -980,7 +981,7 @@ function App() {
     (artist: Artist) => {
       if (!artist.id) return;
       if (!stateRef.current.can_follow) {
-        setCenter("settings");
+        setSettingsTab("General");
         notify(
           "Enable artist following by updating Spotify permissions in Settings.",
         );
@@ -1217,7 +1218,7 @@ function App() {
         },
         {
           label: "Settings",
-          onSelect: () => setCenter("settings"),
+          onSelect: () => setSettingsTab("General"),
         },
       ],
     },
@@ -2093,7 +2094,7 @@ function App() {
                 setProfileView({ user: state.profile.id, hint: state.profile });
                 setCenter("profile");
               } else if (action === "recents") navigate("recent");
-              else if (action === "settings") setCenter("settings");
+              else if (action === "settings") setSettingsTab("General");
               else void call("sign_out");
             }}
           />
@@ -2351,22 +2352,14 @@ function App() {
                 </button>
                 <button
                   className="icon-button"
-                  title="Lyrics settings"
+                  title="SpotiFlex settings"
                   data-icon="settings"
-                  onClick={() => setLyricsSettings(true)}
+                  onClick={() => setSettingsTab("Lyrics")}
                 >
                   <SettingsIcon size={18} />
                 </button>
               </div>
             </LyricsPage>
-          ) : center === "settings" ? (
-            <SettingsPage
-              state={state}
-              onSettings={updateSettings}
-              onCall={call}
-              onNotice={notify}
-              onLyricsSettings={() => setLyricsSettings(true)}
-            />
           ) : center === "profile" ? (
             profileView && (
               <ProfilePage
@@ -4113,25 +4106,21 @@ function App() {
           onClose={() => setAbout(false)}
         />
       )}
-      {lyricsSettings && (
-        <LyricsSettings
+      {state.profile && settingsTab && (
+        <SettingsWindow
           state={state}
+          initialTab={settingsTab}
           onSettings={updateSettings}
           onLoadTtml={() => {
-            setLyricsSettings(false);
+            setSettingsTab(null);
             setTtmlOpen("load");
           }}
           onDatabase={() => {
-            setLyricsSettings(false);
+            setSettingsTab(null);
             setTtmlOpen("database");
           }}
-          onAllSettings={() => {
-            setLyricsSettings(false);
-            if (immersive) void fullscreen(false);
-            setCenter("settings");
-          }}
           onOpen={(url) => void call("open_link", { url })}
-          onClose={() => setLyricsSettings(false)}
+          onClose={() => setSettingsTab(null)}
           onCall={call}
           onNotice={notify}
         />

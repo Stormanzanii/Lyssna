@@ -13,17 +13,19 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  ExternalLink,
+  LibraryBig,
+  LogOut,
   Search,
-  SlidersHorizontal,
+  Settings2,
   Palette,
-  Mic2,
   X,
   AlignLeft,
 } from "lucide-react";
 import type { AppState } from "./state";
-import type { Settings } from "./types";
-import { SettingRow, SettingsQuery } from "./setting-row";
-import { Toggle } from "./settings-page";
+import type { Settings, SpotifyPlus } from "./types";
+import { SettingRow, SettingsQuery, Toggle } from "./setting-row";
+import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { LyricsProvider } from "./lyrics-provider";
@@ -67,34 +69,37 @@ const SOURCES: Record<string, { name: string; help: string }> = {
 };
 
 const TABS = [
+  ["General", Settings2],
   ["Appearance", Palette],
+  ["Library", LibraryBig],
   ["Lyrics", AlignLeft],
   ["Effects", FlaskConical],
-  ["Interface", AppWindow],
+  ["Layout", AppWindow],
   ["Sources", FileText],
-  ["Advanced", SlidersHorizontal],
 ] as const;
 /** About opens from the footer card rather than the tab bar. */
-type Tab = (typeof TABS)[number][0] | "About";
+export type SettingsTab = (typeof TABS)[number][0] | "About";
+type Tab = SettingsTab;
 
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
 }[keyof Settings];
 
-/** Lyrics settings in a compact window, laid out like Spicy Lyrics' own
- *  settings panel: category tabs, search, then rows. Only settings
- *  SpotiFlex really has appear here; everything else stays in Settings. */
-export function LyricsSettings({
+/** Every SpotiFlex setting in one window, laid out like Spicy Lyrics'
+ *  settings panel: category tabs, search across all of them, then rows
+ *  grouped into cards. */
+export function SettingsWindow({
   state,
+  initialTab = "General",
   onSettings,
   onLoadTtml,
   onDatabase,
-  onAllSettings,
   onOpen,
   onClose,
   onCall,
   onNotice,
 }: {
+  initialTab?: Tab;
   state: AppState;
   onSettings: (settings: Partial<Settings>) => void;
   onCall: <T = void>(
@@ -104,11 +109,10 @@ export function LyricsSettings({
   onNotice: (message: string, error?: boolean) => void;
   onLoadTtml: () => void;
   onDatabase: () => void;
-  onAllSettings: () => void;
   onOpen: (url: string) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("Appearance");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -116,6 +120,34 @@ export function LyricsSettings({
   const [marker, setMarker] = useState<{ left: number; width: number }>();
   const searching = !!query.trim();
   const settings = state.settings;
+  const [audioOutputs, setAudioOutputs] = useState<string[] | null>(null);
+  const [audioRefresh, setAudioRefresh] = useState(0);
+  const [testingOutput, setTestingOutput] = useState(false);
+  const [cacheBytes, setCacheBytes] = useState<number | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void onCall<number>("audio_cache_size").then((bytes) => {
+      if (active && typeof bytes === "number") setCacheBytes(bytes);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall]);
+  useEffect(() => {
+    if (!state.profile?.id) return;
+    let active = true;
+    void onCall<string[]>("audio_outputs").then((outputs) => {
+      if (active && Array.isArray(outputs)) setAudioOutputs(outputs);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall, state.profile?.id, audioRefresh]);
+  const plus = settings.spotify_plus ?? {};
+  const setPlus = (change: Partial<SpotifyPlus>) =>
+    onSettings({ spotify_plus: { ...plus, ...change } });
+  const chosenFolders = new Set(plus.playlist_folders ?? []);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -167,8 +199,312 @@ export function LyricsSettings({
   };
   const sections: [Tab, string, React.ReactNode[]][] = [
     [
+      "General",
+      "Account",
+      [
+        state.login_issue && !searching ? (
+          <div key="login" className="settings-alert" role="alert">
+            <p>{state.login_issue.message}</p>
+            <button
+              className="pill"
+              disabled={state.login_pending}
+              onClick={() => void onCall("sign_in", { clientId: "" })}
+            >
+              Sign in again
+            </button>
+          </div>
+        ) : null,
+        <SettingRow
+          key="account"
+          label={state.profile?.display_name || state.profile?.id || "Spotify"}
+          help="Spotify connected"
+          keywords="account sign out log out profile"
+        >
+          <button
+            className="pill outline"
+            onClick={() => void onCall("sign_out")}
+          >
+            <LogOut size={14} />
+            Sign out
+          </button>
+        </SettingRow>,
+        !state.can_follow ? (
+          <SettingRow
+            key="follow"
+            label="Artist following"
+            help="Allow SpotiFlex to follow your favourite artists."
+            keywords="permissions scopes"
+          >
+            <button
+              className="pill outline"
+              onClick={() => void onCall("sign_in", { clientId: "" })}
+            >
+              Update permissions
+              <ExternalLink size={13} />
+            </button>
+          </SettingRow>
+        ) : null,
+      ],
+    ],
+    [
+      "General",
+      "Playback",
+      [
+        <SettingRow
+          key="output"
+          label="Audio output"
+          help="Speakers or headphones for this computer."
+          keywords="device speaker headphones sound"
+        >
+          <select
+            className="settings-select"
+            aria-label="Audio output"
+            value={settings.audio_output || ""}
+            onChange={(event) =>
+              onSettings({ audio_output: event.target.value || null })
+            }
+          >
+            <option value="">System default</option>
+            {settings.audio_output &&
+              !audioOutputs?.includes(settings.audio_output) && (
+                <option value={settings.audio_output}>
+                  {settings.audio_output}
+                  {audioOutputs ? " (unavailable)" : ""}
+                </option>
+              )}
+            {audioOutputs?.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </SettingRow>,
+        <SettingRow
+          key="refresh"
+          label="New headphones or speakers"
+          help="Find outputs you connected while SpotiFlex was open."
+          keywords="audio output device refresh"
+        >
+          <button
+            className="pill outline"
+            onClick={() => setAudioRefresh((value) => value + 1)}
+          >
+            Refresh outputs
+          </button>
+        </SettingRow>,
+        <SettingRow
+          key="test"
+          label="Check output"
+          help="Play two quiet tones on the selected output."
+          keywords="audio output test sound"
+        >
+          <button
+            className="pill outline"
+            disabled={testingOutput}
+            onClick={async () => {
+              setTestingOutput(true);
+              try {
+                if (await onCall<boolean>("test_audio_output"))
+                  onNotice("Test sound sent to the selected output");
+              } finally {
+                setTestingOutput(false);
+              }
+            }}
+          >
+            {testingOutput ? "Playing test sound…" : "Test output"}
+          </button>
+        </SettingRow>,
+        <SettingRow
+          key="native"
+          label="Native audio"
+          help={
+            <span className={state.native_ready ? "native-ready" : ""}>
+              {state.native_status}
+            </span>
+          }
+          keywords="native audio reconnect playback engine"
+        >
+          <button
+            className="pill outline"
+            onClick={() => void onCall("retry_audio")}
+          >
+            Reconnect native audio
+          </button>
+        </SettingRow>,
+      ],
+    ],
+    [
+      "General",
+      "Storage",
+      [
+        <SettingRow
+          key="cache"
+          label={`Cache: ${cacheBytes === null ? "…" : `${Math.round(cacheBytes / 1_048_576).toLocaleString()} MB`}`}
+          help="Songs you have played, kept so they start faster and use less data."
+          keywords="cache storage disk offline data clear"
+        >
+          <button
+            className="pill outline"
+            disabled={clearingCache || !cacheBytes}
+            onClick={() => {
+              setClearingCache(true);
+              void onCall<number>("clear_audio_cache")
+                .then((freed) => {
+                  setCacheBytes(0);
+                  onNotice(
+                    `Cleared ${Math.round((freed ?? 0) / 1_048_576).toLocaleString()} MB of cached songs.`,
+                  );
+                })
+                .finally(() => setClearingCache(false));
+            }}
+          >
+            Clear cache
+          </button>
+        </SettingRow>,
+      ],
+    ],
+    [
+      "General",
+      "Updates",
+      [
+        <SettingRow
+          key="version"
+          label={`Version ${__APP_VERSION__}`}
+          help={
+            state.update_version
+              ? `${state.update_status} · v${state.update_version}`
+              : state.update_status
+          }
+          keywords="updates version check install"
+        >
+          <button
+            className="pill outline"
+            disabled={
+              IS_MAC || state.update_status.startsWith("Downloading update")
+            }
+            onClick={() =>
+              void onCall("app_update", {
+                action:
+                  state.update_status === "Ready to install"
+                    ? "install"
+                    : state.update_status === "Update available"
+                      ? "download"
+                      : "check",
+              })
+            }
+          >
+            {state.update_status === "Ready to install"
+              ? "Install update and restart"
+              : state.update_status === "Update available"
+                ? "Download update"
+                : "Check for updates"}
+          </button>
+        </SettingRow>,
+        !IS_MAC ? (
+          <SettingRow
+            key="auto-update"
+            label="Download updates automatically"
+            help="New versions are verified before they install."
+            keywords="updates auto"
+          >
+            <Toggle
+              label="Download updates automatically"
+              checked={settings.auto_download_updates}
+              onChange={(auto_download_updates) =>
+                onSettings({ auto_download_updates })
+              }
+            />
+          </SettingRow>
+        ) : null,
+      ],
+    ],
+    [
       "Appearance",
+      "Theme",
+      [
+        flag(
+          "liquid_glass",
+          "Liquid Glass",
+          "Frosted, translucent panels that pick up colour from the artwork you're playing.",
+          "theme glass blur translucent apple transparency",
+        ),
+        flag(
+          "reduce_motion",
+          "Reduce motion",
+          "Turn off animated backgrounds and word animations.",
+          "animation accessibility",
+        ),
+      ],
+    ],
+    [
       "Appearance",
+      "Font",
+      [
+        <FontSettings
+          key="ui-font"
+          field="ui_font"
+          settings={settings}
+          onSettings={onSettings}
+          onNotice={onNotice}
+        />,
+      ],
+    ],
+    [
+      "Library",
+      "Your Library",
+      [
+        flag(
+          "compact_library",
+          "Compact library",
+          "Show Your Library as a narrow column of covers.",
+          "compact library sidebar",
+        ),
+        <SettingRow
+          key="folders"
+          stacked
+          label="Add to playlist folders"
+          help={
+            state.library_folders?.length
+              ? "Offer only playlists directly inside the folders you choose. Choose none to offer every playlist you can edit."
+              : "Your library has no folders."
+          }
+          keywords="add playlist folders menu"
+        >
+          <div className="settings-folder-picks">
+            {(state.library_folders ?? []).map((folder) => (
+              <label key={folder.id}>
+                <input
+                  type="checkbox"
+                  checked={chosenFolders.has(folder.id)}
+                  onChange={(event) => {
+                    const next = new Set(chosenFolders);
+                    if (event.target.checked) next.add(folder.id);
+                    else next.delete(folder.id);
+                    setPlus({ playlist_folders: [...next] });
+                  }}
+                />
+                <span>
+                  {[
+                    ...folder.parents.map(
+                      (parent) =>
+                        state.library_folders?.find(
+                          (item) => item.id === parent,
+                        )?.name ?? "",
+                    ),
+                    folder.name,
+                  ]
+                    .filter(Boolean)
+                    .join(" / ")}
+                </span>
+              </label>
+            ))}
+          </div>
+        </SettingRow>,
+      ],
+    ],
+    [
+      "Lyrics",
+      "Look",
       [
         <SettingRow
           key="size"
@@ -256,7 +592,7 @@ export function LyricsSettings({
     ],
     [
       "Lyrics",
-      "Lyrics Display",
+      "Display",
       [
         <SettingRow
           key="offset"
@@ -332,7 +668,7 @@ export function LyricsSettings({
     ],
     [
       "Effects",
-      "Effects",
+      "Lyric effects",
       [
         flag(
           "space_gravity",
@@ -349,8 +685,8 @@ export function LyricsSettings({
       ],
     ],
     [
-      "Interface",
-      "Interface",
+      "Layout",
+      "Lyrics layout",
       [
         flag(
           "lyrics_compact",
@@ -386,7 +722,7 @@ export function LyricsSettings({
     ],
     [
       "Sources",
-      "Sources",
+      "Lyric sources",
       [
         <SettingRow
           key="sources"
@@ -448,6 +784,12 @@ export function LyricsSettings({
             Reset sources
           </button>
         </SettingRow>,
+      ],
+    ],
+    [
+      "Sources",
+      "Your lyrics",
+      [
         <LyricsProvider
           key="provider"
           state={state}
@@ -472,22 +814,6 @@ export function LyricsSettings({
         >
           <button className="pill outline" onClick={onDatabase}>
             Browse
-          </button>
-        </SettingRow>,
-      ],
-    ],
-    [
-      "Advanced",
-      "Advanced",
-      [
-        <SettingRow
-          key="all"
-          label="All SpotiFlex settings"
-          help="Fonts, provider key, playback, storage and updates."
-          keywords="settings fonts key"
-        >
-          <button className="pill outline" onClick={onAllSettings}>
-            Open
           </button>
         </SettingRow>,
       ],
@@ -522,18 +848,18 @@ export function LyricsSettings({
         className="lyrics-settings"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="lyrics-settings-title"
+        aria-labelledby="settings-window-title"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="lyrics-settings-head">
-          <h2 id="lyrics-settings-title">
-            <Mic2 size={20} />
-            Lyrics settings
+          <h2 id="settings-window-title">
+            <Settings2 size={20} />
+            SpotiFlex settings
           </h2>
           <label className="lyrics-settings-search">
             <Search size={15} />
             <input
-              aria-label="Search lyrics settings"
+              aria-label="Search settings"
               placeholder="Search"
               value={query}
               onChange={(event) => {
@@ -544,7 +870,7 @@ export function LyricsSettings({
           </label>
           <button
             className="icon-button"
-            aria-label="Close lyrics settings"
+            aria-label="Close settings"
             onClick={onClose}
           >
             <X size={18} />
@@ -603,7 +929,7 @@ export function LyricsSettings({
               <section className="lyrics-settings-about" aria-label="About">
                 <button
                   className="text-link lyrics-settings-back"
-                  onClick={() => select("Appearance")}
+                  onClick={() => select("General")}
                 >
                   <ChevronLeft size={16} />
                   Settings
@@ -613,7 +939,10 @@ export function LyricsSettings({
             ) : (
               <div role="tabpanel">
                 {visible.map(([key, title, rows]) => (
-                  <section key={key} className="lyrics-settings-section">
+                  <section
+                    key={`${key}-${title}`}
+                    className="lyrics-settings-section"
+                  >
                     <h3>{title}</h3>
                     <div className="lyrics-settings-group">{rows}</div>
                   </section>
@@ -626,7 +955,7 @@ export function LyricsSettings({
             <button
               className="lyrics-settings-about-link"
               aria-pressed={about}
-              onClick={() => select(about ? "Appearance" : "About")}
+              onClick={() => select(about ? "General" : "About")}
             >
               <span className="lyrics-settings-wordmark">SpotiFlex</span>
               <span className="lyrics-settings-version">

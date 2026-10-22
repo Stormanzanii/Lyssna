@@ -29,8 +29,12 @@ import {
   X,
   Pause,
   Play,
-  SkipBack,
-  SkipForward,
+  Rewind,
+  FastForward,
+  Heart,
+  Shuffle,
+  Repeat,
+  Repeat1,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
 import type {
@@ -983,12 +987,14 @@ function SongLyricsPage({
   onArtist,
   onImport,
   onRetry,
+  onSave,
   children,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onImport: () => void;
   onRetry: () => void;
+  onSave: (track: Track) => void;
   children?: ReactNode;
 } & Links) {
   const songTime = usePosition(state),
@@ -1013,6 +1019,25 @@ function SongLyricsPage({
     () => onPlayer({ command: playing ? "pause" : "play" }),
     [onPlayer, playing],
   );
+  const shuffle = state.playback.shuffle_state;
+  const toggleShuffle = useCallback(
+    () => onPlayer({ command: "shuffle", enabled: !shuffle }),
+    [onPlayer, shuffle],
+  );
+  const repeat = state.playback.repeat_state || "off";
+  const cycleRepeat = useCallback(
+    () =>
+      onPlayer({
+        command: "repeat",
+        repeat:
+          repeat === "off" ? "context" : repeat === "context" ? "track" : "off",
+      }),
+    [onPlayer, repeat],
+  );
+  const saved = !!(track && state.saved[track.uri]);
+  const toggleSaved = useCallback(() => {
+    if (track) onSave(track);
+  }, [onSave, track]);
   const backdrop = useRef<HTMLCanvasElement>(null);
   const [page, measuredNarrow] = useNarrowLyrics();
   // The toolbar shows while the pointer moves over the lyrics and fades a
@@ -1147,19 +1172,23 @@ function SongLyricsPage({
             {/* Full screen hides the player bar, so the page carries its own
                 controls, like Spicy Lyrics' full screen view. */}
             <div className="lyrics-fullscreen-controls">
-              <div className="lyrics-fullscreen-seek">
-                <time>{formatTime(seeking ?? songTime)}</time>
+              {/* A frosted glass track with a glowing fill; a transparent
+                  range on top handles dragging and the keyboard. */}
+              <div
+                className="lyrics-glass-seek"
+                style={
+                  {
+                    "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
+                  } as CSSProperties
+                }
+              >
+                <span className="lyrics-glass-fill" />
                 <input
                   type="range"
                   aria-label="Seek position"
                   min="0"
                   max={track.duration_ms || 1}
                   value={Math.min(seeking ?? songTime, track.duration_ms || 1)}
-                  style={
-                    {
-                      "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
-                    } as CSSProperties
-                  }
                   onChange={(event) => setSeeking(Number(event.target.value))}
                   onPointerDown={(event) =>
                     event.currentTarget.setPointerCapture(event.pointerId)
@@ -1169,25 +1198,44 @@ function SongLyricsPage({
                   onPointerCancel={() => setSeeking(null)}
                   onBlur={commitSeek}
                 />
+              </div>
+              <div className="lyrics-fullscreen-times">
+                <time>{formatTime(seeking ?? songTime)}</time>
                 <time>{formatTime(track.duration_ms)}</time>
               </div>
               <div className="lyrics-fullscreen-buttons">
+                <button
+                  className={`icon-button lyrics-fullscreen-like ${saved ? "is-saved" : ""}`}
+                  title={
+                    saved ? "Remove from Liked Songs" : "Save to Liked Songs"
+                  }
+                  onClick={toggleSaved}
+                >
+                  <Heart size={26} fill={saved ? "currentColor" : "none"} />
+                </button>
+                <button
+                  className={`icon-button ${state.playback.shuffle_state ? "active" : ""}`}
+                  title="Shuffle"
+                  onClick={toggleShuffle}
+                >
+                  <Shuffle size={20} />
+                </button>
                 <button
                   className="icon-button"
                   title="Previous song"
                   onClick={previousSong}
                 >
-                  <SkipBack size={22} fill="currentColor" />
+                  <Rewind size={26} fill="currentColor" />
                 </button>
                 <button
-                  className="play-toggle"
+                  className="icon-button lyrics-fullscreen-play"
                   aria-label={state.playback.is_playing ? "Pause" : "Play"}
                   onClick={togglePlay}
                 >
                   {state.playback.is_playing ? (
-                    <Pause size={20} fill="currentColor" />
+                    <Pause size={34} fill="currentColor" />
                   ) : (
-                    <Play size={20} fill="currentColor" />
+                    <Play size={34} fill="currentColor" />
                   )}
                 </button>
                 <button
@@ -1195,7 +1243,18 @@ function SongLyricsPage({
                   title="Next song"
                   onClick={nextSong}
                 >
-                  <SkipForward size={22} fill="currentColor" />
+                  <FastForward size={26} fill="currentColor" />
+                </button>
+                <button
+                  className={`icon-button ${repeat !== "off" ? "active" : ""}`}
+                  title="Repeat"
+                  onClick={cycleRepeat}
+                >
+                  {repeat === "track" ? (
+                    <Repeat1 size={20} />
+                  ) : (
+                    <Repeat size={20} />
+                  )}
                 </button>
               </div>
             </div>

@@ -2269,6 +2269,7 @@ function App() {
               onArtist={openArtist}
               onImport={() => setTtmlOpen("load")}
               onRetry={() => void call("retry_lyrics")}
+              onSave={save}
             >
               <div
                 className="lyrics-toolbar"

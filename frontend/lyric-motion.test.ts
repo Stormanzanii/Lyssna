@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   GLIDE_MS,
+  CountdownSprings,
   countdownDots,
   countdownVisible,
   MOTION,
@@ -16,7 +17,8 @@ import {
 } from "./lyric-motion";
 import type { Line } from "./types";
 // Measured from the supplied recording. Each dot's turn lasts about 7.2 s;
-// size and rise are normalized to its dormant 20 px diameter.
+// size is normalized to a dormant dot and rise is in pixels at a 60 px lyric
+// size (lift is in lyric sizes, as in Spicy Lyrics).
 it.each([
   [1000, 0.54, 1.12, 5.8],
   [2000, 0.69, 1.26, 10.5],
@@ -30,22 +32,22 @@ it.each([
     const dot = countdownDots({ start: 0, end: 22150, after: 0 }, time)[0];
     expect(Math.abs(dot.opacity - opacity)).toBeLessThan(0.08);
     expect(Math.abs(dot.scale - scale)).toBeLessThan(0.08);
-    expect(Math.abs(dot.lift * 20 - rise)).toBeLessThan(2);
+    expect(Math.abs(dot.lift * 60 - rise)).toBeLessThan(2);
   },
 );
 it("fills countdown dots in order and rewinds from song time", () => {
   const gap = { start: 1000, end: 7000, after: 0 };
   expect(countdownDots(gap, 0).map((dot) => dot.opacity)).toEqual([
-    0.3, 0.3, 0.3,
+    0.35, 0.35, 0.35,
   ]);
   const middle = countdownDots(gap, 3500);
   expect(middle[0].opacity).toBe(1);
   expect(middle[1].opacity).toBeGreaterThan(0.8);
   expect(middle[1].opacity).toBeLessThan(1);
-  expect(middle[2].opacity).toBe(0.3);
+  expect(middle[2].opacity).toBe(0.35);
   expect(countdownDots(gap, 8000).map((dot) => dot.opacity)).toEqual([1, 1, 1]);
   expect(countdownDots(gap, 1000).map((dot) => dot.opacity)).toEqual([
-    0.3, 0.3, 0.3,
+    0.35, 0.35, 0.35,
   ]);
 });
 it("swells continuously through an arc and settles below its peak size", () => {
@@ -69,6 +71,32 @@ it("swells continuously through an arc and settles below its peak size", () => {
   expect(settled[1].scale).toBeLessThan(1.1);
   expect(countdownDots(gap, 1800)).toEqual(middle);
   expect(countdownDots(gap, 1000)).toEqual(start);
+});
+it("eases countdown dots with springs and snaps on seeks", () => {
+  const gap = { start: 0, end: 22150, after: 0 };
+  const springs = new CountdownSprings();
+  const first = springs.frame(countdownDots(gap, 0), 0, 0);
+  expect(first).toEqual(countdownDots(gap, 0));
+  // A sudden target change is followed, not jumped to.
+  const target = countdownDots(gap, 3000);
+  const eased = springs.frame(target, 16, 16);
+  expect(eased[0].lift).toBeLessThan(target[0].lift);
+  // A seek lands straight on the new target.
+  expect(springs.frame(target, 3000, 32)).toEqual(target);
+  // Reduced motion never lags.
+  expect(springs.frame(countdownDots(gap, 3016), 3016, 48, true)).toEqual(
+    countdownDots(gap, 3016),
+  );
+});
+it("lands a finished dot with the fork's slight bounce", () => {
+  const gap = { start: 0, end: 22150, after: 0 };
+  const springs = new CountdownSprings();
+  let lowest = 0;
+  for (let time = 0; time <= 9000; time += 16) {
+    const [dot] = springs.frame(countdownDots(gap, time), time, time);
+    if (time > 7300) lowest = Math.min(lowest, dot.lift);
+  }
+  expect(lowest).toBeLessThan(-0.005);
 });
 it("finishes and contracts the countdown before the next vocal", () => {
   const gap = { start: 1000, end: 7000, after: 0 };

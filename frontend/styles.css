@@ -2677,7 +2677,8 @@ small {
     opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1),
     filter 0.5s cubic-bezier(0.61, 1, 0.88, 1);
 }
-.lyrics-page .lyric-line {
+.lyrics-page .lyric-line,
+.lyrics-page .lyric-wait {
   --lead-lyric-size: clamp(23px, 3.6cqw, var(--lyric-size));
   font-size: var(--lead-lyric-size);
 }
@@ -2685,7 +2686,8 @@ small {
   font-size: calc(var(--lead-lyric-size) * 0.58);
 }
 /* Stacked (narrow) layouts give lyrics the full width, so size them from it. */
-.lyrics-page.narrow .lyric-line {
+.lyrics-page.narrow .lyric-line,
+.lyrics-page.narrow .lyric-wait {
   --lead-lyric-size: clamp(26px, 5.4cqw, var(--lyric-size));
 }
 .lyric-line:focus,
@@ -2804,8 +2806,11 @@ small {
 .application.macos .lyrics-display {
   caret-color: transparent;
 }
+/* Sized from the lyrics like Spicy Lyrics: a sung dot is about 0.42 of the
+   lyric size, dots sit 0.7 apart and lift by lyric-size units. */
 .lyric-wait {
-  --dot-size: 20px;
+  --dot-lyric-size: var(--lead-lyric-size, var(--lyric-size, 32px));
+  --dot-size: calc(var(--dot-lyric-size) * 0.31);
   transition:
     opacity 0.3s ease,
     height 0.45s cubic-bezier(0.2, 0.7, 0.25, 1),
@@ -2813,10 +2818,10 @@ small {
   overflow: visible;
   display: flex;
   justify-content: flex-start;
-  gap: calc(var(--dot-size) * 1.1);
+  gap: calc(var(--dot-lyric-size) * 0.39);
   align-items: center;
-  height: 72px;
-  padding: 8px 4px;
+  height: calc(var(--dot-lyric-size) * 1.3);
+  padding: calc(var(--dot-lyric-size) * 0.2) 4px;
 }
 .lyric-wait[aria-hidden="true"] {
   overflow: hidden;
@@ -2826,7 +2831,7 @@ small {
   padding-block: 0;
   /* Stay fully bright while the dots collapse, then vanish. */
   transition:
-    opacity 0s linear 0.3s,
+    opacity 0s linear 0.4s,
     height 0.45s cubic-bezier(0.2, 0.7, 0.25, 1) 0.15s,
     padding 0.45s cubic-bezier(0.2, 0.7, 0.25, 1) 0.15s;
 }
@@ -2841,11 +2846,12 @@ small {
   transform-origin: center;
   transition: scale 0.3s cubic-bezier(0.2, 0.7, 0.25, 1);
 }
-/* As recorded: the finished group swells slightly, then collapses toward
-   its centre, accelerating, in about 0.3 s. */
+/* Spicy Lyrics' exit: the finished group swells about 19%, then collapses
+   toward its centre in 0.4 s. */
 .lyric-wait[aria-hidden="true"] .lyric-wait-dots {
   scale: 0;
-  transition: scale 0.3s cubic-bezier(0.5, -0.35, 0.85, 0.5);
+  transition: scale 0.4s
+    linear(0, -0.006 9.4%, -0.029 18%, -0.157 43.3%, -0.185 51.4%, -0.189 55.9%, -0.182 60%, -0.163 63.9%, -0.133 67.6%, -0.074 72.3%, 0.006 76.7%, 0.238 85%, 0.566 92.7%, 1);
 }
 .reduce-motion .lyric-wait-dots {
   transition: none;
@@ -2858,7 +2864,7 @@ small {
   border-radius: 50%;
   background: #fff;
   opacity: var(--dot-opacity);
-  transform: translateY(calc(var(--dot-lift) * var(--dot-size) * -1))
+  transform: translateY(calc(var(--dot-lift) * var(--dot-lyric-size) * -1))
     scale(var(--dot-scale));
   /* A compact halo follows the fork's text-shadow rather than a wide bloom. */
   box-shadow:
@@ -3309,9 +3315,7 @@ small {
   mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
 }
 .compact .lyric-wait {
-  --dot-size: 14px;
-  height: 48px;
-  padding: 6px 4px;
+  padding-inline: 4px;
 }
 .compact .lyric-wait[aria-hidden="true"] {
   height: 0;
@@ -4949,6 +4953,7 @@ input[type="range"]:hover {
 
 /* Side-by-side lyrics in a tight panel: cap large lyric sizes to the
    panel width so lines keep a few words each. */
-.lyrics-page:not(.narrow) .lyrics-body .lyric-line {
+.lyrics-page:not(.narrow) .lyrics-body .lyric-line,
+.lyrics-page:not(.narrow) .lyric-wait {
   --lead-lyric-size: min(var(--lyric-size), 4.6cqw);
 }

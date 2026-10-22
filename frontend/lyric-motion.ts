@@ -18,10 +18,11 @@ export interface VocalGap {
   after: number;
 }
 
-/** A dot waiting its turn, as measured from the recording. */
-export const DORMANT_DOT_OPACITY = 0.3;
-// Natural arcs follow the fork's dot tuning; normalized to a dormant dot's
-// diameter. Unlike a stepped envelope, these keep changing throughout a turn.
+/** A dot waiting its turn, as in Spicy Lyrics (its non-simple mode). */
+export const DORMANT_DOT_OPACITY = 0.35;
+// Spicy Lyrics' dot curves. Scale is normalized to a dormant dot (the fork's
+// 0.75 -> 1.05 -> 1), and lift is in lyric font sizes (the fork's -0.12em
+// YOffset). Its natural spline bows the lift to a peak near mid-turn.
 const DOT_MOTION = {
   scale: naturalSpline([
     [0, 1],
@@ -30,7 +31,7 @@ const DOT_MOTION = {
   ]),
   lift: naturalSpline([
     [0, 0],
-    [0.9, 0.36],
+    [0.9, 0.12],
     [1, 0],
   ]),
   opacity: naturalSpline([
@@ -44,13 +45,21 @@ export const COUNTDOWN_TAIL_MS = 550;
 export const countdownVisible = (gap: VocalGap, time: number) =>
   time >= gap.start && time < gap.end - 500;
 
-/** Each dot gradually swells, traces a smooth arc and settles slightly smaller.
- * All phases follow song time, including pauses and seeks. */
+export interface CountdownDot {
+  opacity: number;
+  scale: number;
+  glow: number;
+  lift: number;
+}
+
+/** Where each dot is heading: it gradually swells, traces a smooth arc and
+ * settles slightly smaller. All phases follow song time, including pauses and
+ * seeks. CountdownSprings eases the dots toward these targets. */
 export function countdownDots(
   gap: VocalGap,
   time: number,
   reduceMotion = false,
-) {
+): CountdownDot[] {
   const progress =
     (time - gap.start) / Math.max(1, gap.end - gap.start - COUNTDOWN_TAIL_MS);
   return [0, 1, 2].map((index) => {
@@ -63,6 +72,62 @@ export function countdownDots(
       lift: reduceMotion ? 0 : DOT_MOTION.lift(phase),
     };
   });
+}
+
+/** Spicy Lyrics' dot springs (frequency, damping). The lift is underdamped,
+ * so a finished dot lands with a slight bounce. */
+const DOT_SPRINGS = {
+  scale: [0.7, 0.6],
+  lift: [1.25, 0.4],
+  glow: [1, 0.5],
+  opacity: [1, 0.5],
+} as const;
+type DotKey = keyof typeof DOT_SPRINGS;
+const DOT_KEYS = Object.keys(DOT_SPRINGS) as DotKey[];
+
+/** Eases countdown dots toward their targets like the fork. Jumps in song
+ * time (a seek, a new gap) and reduced motion snap straight to the target. */
+export class CountdownSprings {
+  private dots?: Record<DotKey, Spring>[];
+  private last?: { time: number; at: number };
+  frame(
+    targets: CountdownDot[],
+    time: number,
+    now: number,
+    snap = false,
+  ): CountdownDot[] {
+    const elapsed = this.last ? (now - this.last.at) / 1000 : 0;
+    const jumped =
+      !this.last ||
+      Math.abs(time - this.last.time - elapsed * 1000) > 750 ||
+      time < this.last.time - 50;
+    this.last = { time, at: now };
+    const settle = snap || jumped || !this.dots;
+    this.dots ??= targets.map(
+      (target) =>
+        Object.fromEntries(
+          DOT_KEYS.map((key) => [
+            key,
+            new Spring(target[key], DOT_SPRINGS[key][0], DOT_SPRINGS[key][1]),
+          ]),
+        ) as Record<DotKey, Spring>,
+    );
+    const seconds = Math.min(Math.max(elapsed, 0), 0.1);
+    return targets.map((target, index) => {
+      const springs = this.dots![index];
+      const dot = {} as CountdownDot;
+      for (const key of DOT_KEYS) {
+        const spring = springs[key];
+        spring.goal = target[key];
+        if (settle) {
+          spring.position = target[key];
+          spring.velocity = 0;
+        } else spring.step(seconds);
+        dot[key] = spring.position;
+      }
+      return dot;
+    });
+  }
 }
 
 export function vocalGaps(lines: Line[]): VocalGap[] {

@@ -1045,9 +1045,13 @@ function SongLyricsPage({
       ref={page}
       className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""}`}
       style={
-        state.settings.lyrics_background === "color"
-          ? ({ "--hero": coverColour } as CSSProperties)
-          : undefined
+        {
+          // Shared by the lyric lines and, in Space Gravity, its countdown.
+          "--lyric-size": `${Math.round(state.settings.lyric_size * 1.6)}px`,
+          ...(state.settings.lyrics_background === "color"
+            ? { "--hero": coverColour }
+            : {}),
+        } as CSSProperties
       }
       onMouseMove={wakeTools}
       onMouseLeave={sleepTools}

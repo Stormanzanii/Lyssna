@@ -1,5 +1,10 @@
-import { memo, type CSSProperties, type Ref } from "react";
-import { countdownDots, countdownVisible, type VocalGap } from "./lyric-motion";
+import { memo, useRef, type CSSProperties, type Ref } from "react";
+import {
+  CountdownSprings,
+  countdownDots,
+  countdownVisible,
+  type VocalGap,
+} from "./lyric-motion";
 
 /** Shared waiting dots for the normal and floating lyrics views. */
 export const LyricCountdown = memo(function LyricCountdown({
@@ -18,6 +23,15 @@ export const LyricCountdown = memo(function LyricCountdown({
   ref?: Ref<HTMLDivElement>;
 }) {
   const shown = visible && countdownVisible(gap, time);
+  // Song time updates every frame; springs ease each dot toward its target.
+  const springs = useRef<CountdownSprings>(null);
+  springs.current ??= new CountdownSprings();
+  const dots = springs.current.frame(
+    countdownDots(gap, time, reduceMotion),
+    time,
+    performance.now(),
+    reduceMotion,
+  );
   return (
     <div
       ref={ref}
@@ -27,7 +41,7 @@ export const LyricCountdown = memo(function LyricCountdown({
       aria-label="Instrumental break"
     >
       <span className="lyric-wait-dots">
-        {countdownDots(gap, time, reduceMotion).map((dot, index) => (
+        {dots.map((dot, index) => (
           <i
             key={index}
             style={

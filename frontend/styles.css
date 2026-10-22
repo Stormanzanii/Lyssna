@@ -1811,9 +1811,6 @@ small {
 .track-row:hover {
   background: #ffffff0b;
 }
-.track-row.selected {
-  background: #ffffff17;
-}
 .track-number {
   position: relative;
   font-size: 13px;
@@ -1987,21 +1984,6 @@ small {
 }
 .page-sentinel {
   height: 1px;
-}
-.selection-bar {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: #2e2e2ef2;
-  backdrop-filter: blur(15px);
-  padding: 12px 25px;
-  font-size: 13px;
-}
-.selection-bar .pill {
-  padding: 7px 14px;
 }
 .album-grid {
   display: grid;

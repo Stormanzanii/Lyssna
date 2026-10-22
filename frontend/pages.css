@@ -299,9 +299,6 @@
 .track-row:hover {
   background: #ffffff1a;
 }
-.track-row.selected {
-  background: #ffffff2e;
-}
 .track-number {
   font-size: 16px;
   color: var(--text-subdued);

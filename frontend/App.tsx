@@ -40,7 +40,6 @@ import {
   Music2,
   Pause,
   Play,
-  Plus,
   RefreshCw,
   Repeat,
   Repeat1,
@@ -54,13 +53,14 @@ import {
   VolumeX,
   X,
   ListMusic,
-  Copy,
   ExternalLink,
   Pin,
   ChevronRight,
   ChevronLeft,
   Trash2,
   Folder,
+  Copy,
+  Plus,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { startIdleTrim } from "./memory-trim";
@@ -153,12 +153,7 @@ import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
 import { coverJpeg } from "./playlist-cover";
-import {
-  embedCode,
-  inChosenFolders,
-  songAndArtist,
-  trackIds,
-} from "./spotify-plus";
+import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
 import { LyricsSettings } from "./lyrics-settings";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
@@ -301,7 +296,6 @@ function App() {
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [deviceMenu]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [picker, setPicker] = useState<{
     tracks: Track[];
     x: number;
@@ -465,7 +459,6 @@ function App() {
       setAlbumFilter("all");
       setAllAlbums(false);
       setPopularMore(false);
-      setSelected(new Set());
       setSongMenu(null);
       const next = ++generation.current;
       const hint = stateRef.current.home?.sections
@@ -1797,14 +1790,6 @@ function App() {
         <div className="folder-entries">{entry.entries.map(libraryEntry)}</div>
       </details>
     );
-  const select = (track: Track, multiple: boolean) => {
-    setSelected((old) => {
-      const next = multiple ? new Set(old) : new Set<string>();
-      if (multiple && next.has(track.uri)) next.delete(track.uri);
-      else next.add(track.uri);
-      return next;
-    });
-  };
   const loadMore = useCallback(() => {
     const current = stateRef.current;
     const key = `${current.generation}:${current.tracks.length}`;
@@ -2684,49 +2669,6 @@ function App() {
                   </div>
                 </>
               )}
-              {selected.size > 0 && (
-                <div className="selection-bar">
-                  <span>{selected.size} selected</span>
-                  <button
-                    className="pill"
-                    onClick={(event) => {
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setPicker({
-                        tracks: displayTracks.filter((track) =>
-                          selected.has(track.uri),
-                        ),
-                        x: rect.left,
-                        y: rect.bottom + 6,
-                      });
-                    }}
-                  >
-                    <Plus size={15} />
-                    Add to playlist
-                  </button>
-                  <button
-                    className="pill"
-                    onClick={() =>
-                      copyText(
-                        trackIds(
-                          displayTracks.filter((track) =>
-                            selected.has(track.uri),
-                          ),
-                        ),
-                        `${selected.size === 1 ? "ID" : "IDs"} copied.`,
-                      )
-                    }
-                  >
-                    <Copy size={15} />
-                    Copy IDs
-                  </button>
-                  <button
-                    className="text-link"
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
               <div className={entity?.artist ? "artist-top" : "track-section"}>
                 <section>
                   {entity?.artist && displayTracks.length > 0 && (
@@ -2771,7 +2713,7 @@ function App() {
                               track.uri === state.playback.item?.uri;
                             return (
                               <div
-                                className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
+                                className={`track-row ${current ? "playing" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
                                 key={`${track.uri}-${index}`}
                                 draggable={reorderable}
                                 onDragStart={(event) => {
@@ -2805,22 +2747,6 @@ function App() {
                                 onDragEnd={() => {
                                   dragRow.current = null;
                                   setDropAt(null);
-                                }}
-                                onClick={(event) => {
-                                  // An artist or album link opens its page;
-                                  // only plain row clicks select the song.
-                                  if (
-                                    (event.target as HTMLElement).closest(
-                                      "a, button",
-                                    )
-                                  )
-                                    return;
-                                  select(
-                                    track,
-                                    event.ctrlKey ||
-                                      event.metaKey ||
-                                      event.shiftKey,
-                                  );
                                 }}
                                 onDoubleClick={() => playTrack(track, index)}
                                 onMouseEnter={() => prefetchCanvas(track.uri)}

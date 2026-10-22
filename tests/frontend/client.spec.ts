@@ -6242,6 +6242,27 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   ).toBe("artist:0123456789abcdefghij07");
 });
 
+test("a single click on a song selects nothing; a double click plays it", async ({
+  page,
+}) => {
+  await startClient(page);
+  const row = page.locator(".track-row").nth(1);
+  await row.locator(".track-name").click();
+  await expect(page.locator(".track-row.selected")).toHaveCount(0);
+  await expect(page.locator(".selection-bar")).toHaveCount(0);
+  await row.locator(".track-name").dblclick();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request.command,
+      ),
+    )
+    .toBeTruthy();
+});
+
 test("clicking an artist in a song row opens it without selecting the song", async ({
   page,
 }) => {

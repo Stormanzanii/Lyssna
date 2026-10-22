@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Copy, ExternalLink, MoreHorizontal, User } from "lucide-react";
 import type { HomeItem, Profile, UserProfilePage } from "./types";
-import { imageOf } from "./components";
+import { imageOf, titleSize } from "./components";
 import { Shelf } from "./HomePage";
 import { useArtworkColor } from "./artwork-color";
 import { rpc } from "./bridge";
@@ -123,7 +123,7 @@ export function ProfilePage({
           </div>
           <div className="hero-copy">
             <span className="eyebrow">Profile</span>
-            <h1 className={name.length > 18 ? "long-title" : ""}>{name}</h1>
+            <h1 className={titleSize(name)}>{name}</h1>
             {shown && (
               <p className="hero-meta profile-counts">
                 <span>{plural(shown.public_playlists, "Public Playlist")}</span>

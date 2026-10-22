@@ -100,6 +100,7 @@ import {
   Ambience,
   ArtistLinks,
   Cover,
+  titleSize,
   LyricsPage,
   Marquee,
   NowPlaying,
@@ -2130,7 +2131,7 @@ function App() {
                                 : "Playlist"}
                         </span>
                       )}
-                      <h1 className={title.length > 28 ? "long-title" : ""}>
+                      <h1 className={titleSize(title)}>
                         <span
                           data-context-route={state.route}
                           data-context-name={title}

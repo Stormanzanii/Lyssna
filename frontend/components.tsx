@@ -70,6 +70,10 @@ function setSourceSoon(element: HTMLImageElement, url: string) {
     });
   pendingSources.push([element, url]);
 }
+/** Hero title size tier: longer names step down, like Spotify's headers. */
+export const titleSize = (title: string) =>
+  title.length > 28 ? "long-title" : title.length > 14 ? "medium-title" : "";
+
 export function Cover({
   images,
   className = "",

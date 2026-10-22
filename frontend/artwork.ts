@@ -64,6 +64,10 @@ export function artworkFor(
 ) {
   const sizes = sized(images);
   if (!sizes.length)
-    return images?.find((image) => image.url.startsWith("https://"))?.url;
+    return images?.find(
+      (image) =>
+        image.url.startsWith("https://") ||
+        image.url.startsWith("data:image/jpeg;base64,"),
+    )?.url;
   return (sizes.find(([, size]) => size >= pixels) ?? sizes.at(-1)!)[0];
 }

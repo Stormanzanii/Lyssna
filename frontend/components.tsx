@@ -55,8 +55,11 @@ import { LyricAnimator } from "./lyric-animator";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
 
+/** Artwork is HTTPS, or a local JPEG preview of a cover being saved. */
+export const usableImage = (url: string) =>
+  url.startsWith("https://") || url.startsWith("data:image/jpeg;base64,");
 export const imageOf = (images?: { url: string }[]) =>
-  images?.find((image) => image.url.startsWith("https://"))?.url;
+  images?.find((image) => usableImage(image.url))?.url;
 export const artistNames = (track?: Track) =>
   track?.artists.map((artist) => artist.name).join(", ") ?? "";
 // Cover sizes are read during layout effects and applied together after

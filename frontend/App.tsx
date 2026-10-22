@@ -23,6 +23,7 @@ import {
   Heart,
   Home,
   ImagePlus,
+  Pencil,
   Library,
   LoaderCircle,
   Maximize2,
@@ -284,6 +285,10 @@ function App() {
     /** New cover as a JPEG data URL, once the user picks one. */
     cover?: string;
   } | null>(null);
+  // Covers just saved, shown at once while Spotify takes a few seconds.
+  const [coverPreviews, setCoverPreviews] = useState<Record<string, string>>(
+    {},
+  );
   // Row being dragged and where it would land, for playlist reordering.
   const dragRow = useRef<number | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
@@ -1124,7 +1129,12 @@ function App() {
   const artistVerified = entity?.overview?.verified ?? entity?.artist?.verified;
   const monthlyListeners =
     entity?.overview?.monthly_listeners ?? entity?.artist?.monthly_listeners;
-  const heroImages = entity?.images.length ? entity.images : playlist?.images;
+  const coverPreview = playlist && coverPreviews[playlist.id];
+  const heroImages = coverPreview
+    ? [{ url: coverPreview }]
+    : entity?.images.length
+      ? entity.images
+      : playlist?.images;
   // Liked Songs, or one artist's songs in it ("Liked Songs by Eminem").
   const likedArtist = state.route.startsWith("liked-artist:")
     ? state.route.slice(13)
@@ -2112,6 +2122,23 @@ function App() {
                       <div className="liked-cover hero-cover">
                         <Heart size={84} fill="currentColor" />
                       </div>
+                    ) : ownPlaylist && !artistPage ? (
+                      // Like Spotify, your own playlist's cover opens Edit details.
+                      <button
+                        className="hero-cover hero-cover-edit"
+                        aria-label="Choose photo"
+                        onClick={() => openEditDialog(ownPlaylist)}
+                      >
+                        <Cover
+                          images={heroImages ?? []}
+                          contextRoute={state.route}
+                          contextName={title}
+                        />
+                        <span className="hero-cover-hint" aria-hidden="true">
+                          <Pencil size={40} />
+                          Choose photo
+                        </span>
+                      </button>
                     ) : (
                       (!!entity?.images.length || !!playlist?.images.length) &&
                       !artistPage && (
@@ -3747,6 +3774,17 @@ function App() {
                 description: editDialog.description,
                 cover: editDialog.cover?.split(",", 2)[1] ?? null,
               });
+              const cover = editDialog.cover;
+              if (cover) {
+                const id = editDialog.playlist.id;
+                setCoverPreviews((current) => ({ ...current, [id]: cover }));
+                dispatch({
+                  type: "library",
+                  playlists: state.playlists.map((item) =>
+                    item.id === id ? { ...item, images: [{ url: cover }] } : item,
+                  ),
+                });
+              }
               setEditDialog(null);
             }}
           >

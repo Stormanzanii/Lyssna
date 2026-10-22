@@ -4599,6 +4599,15 @@ test("owners edit playlist name and description", async ({
   });
   // JPEG data starts with FF D8 FF, "/9j/" in base64.
   expect(saved.cover).toMatch(/^\/9j\//);
+  // The saved cover shows at once, and the cover itself reopens the editor.
+  const heroCover = page.getByRole("button", { name: "Choose photo", exact: true });
+  await expect(heroCover.locator("img")).toHaveAttribute(
+    "src",
+    /^data:image\/jpeg;base64,/,
+  );
+  await heroCover.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("songs drag into place in an editable playlist", async ({

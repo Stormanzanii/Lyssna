@@ -24,11 +24,11 @@ use serde_json::Value;
 use crate::lyrics::{Line, Lyrics, Word};
 use crate::model::Track;
 
-/// Every known source, in the fork's default order.
+/// Every known source, in default order.
 pub const DEFAULT_ORDER: [&str; 6] = [
     "spicy",
-    "musixmatch",
     "apple",
+    "musixmatch",
     "spotify",
     "lrclib",
     "netease",
@@ -750,8 +750,8 @@ mod tests {
             vec![
                 "lrclib",
                 "spicy",
-                "musixmatch",
                 "apple",
+                "musixmatch",
                 "spotify",
                 "netease"
             ]

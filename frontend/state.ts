@@ -148,8 +148,8 @@ export const emptyState: AppState = {
     lyrics_background: "animated",
     lyrics_source_order: [
       "spicy",
-      "musixmatch",
       "apple",
+      "musixmatch",
       "spotify",
       "lrclib",
       "netease",

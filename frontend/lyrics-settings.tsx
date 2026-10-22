@@ -28,11 +28,11 @@ import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { LyricsProvider } from "./lyrics-provider";
 
-/** The Spicy Lyrics fork's source order; LRCLIB and Netease start off. */
+/** Default source order; LRCLIB and Netease start off. */
 const DEFAULT_SOURCES = [
   "spicy",
-  "musixmatch",
   "apple",
+  "musixmatch",
   "spotify",
   "lrclib",
   "netease",

@@ -42,7 +42,7 @@ const DEFAULT_SOURCES_OFF = ["lrclib", "netease"];
 const SOURCES: Record<string, { name: string; help: string }> = {
   spicy: {
     name: "Spicy Lyrics",
-    help: "Community-contributed lyrics from Spicy Lyrics.",
+    help: "Community-contributed lyrics from Spicy Lyrics. Receives the track ID and your IP address.",
   },
   musixmatch: {
     name: "Musixmatch",

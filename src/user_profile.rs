@@ -10,6 +10,9 @@ use std::time::Duration;
 
 /// Spotify's persisted query for the viewer's top artists and tracks.
 const TOP_CONTENT_HASH: &str = "49ee15704de4a7fdeac65a02db20604aa11e46f02e809c55d9a89f6db9754356";
+/// One persisted document serves isFollowingUsers, followUsers and
+/// unfollowUsers in the desktop client.
+const FOLLOW_USERS_HASH: &str = "c00e0cb6c7766e7230fc256cf4fe07aec63b53d1160a323940fce7b664e95596";
 /// Response bodies are small JSON; refuse anything far larger.
 const MAX_BYTES: usize = 2_000_000;
 
@@ -22,6 +25,10 @@ pub struct UserProfilePage {
     pub followers: u64,
     pub following: u64,
     pub is_current_user: bool,
+    /// Whether the viewer follows this profile; unknown for their own.
+    pub is_following: Option<bool>,
+    /// The profile accepts new followers.
+    pub allow_follows: bool,
     /// Top artists, public playlists, recently played artists, followers
     /// and following, in Spotify's order. Empty lists are left out.
     pub sections: Vec<HomeSection>,
@@ -69,7 +76,13 @@ pub async fn fetch(session: &Session, user: &str) -> Result<UserProfilePage> {
         .await
         .ok()
     };
-    let (profile, followers, following, top) = tokio::join!(
+    let follows = async {
+        if own {
+            return None;
+        }
+        following_user(session, user).await.ok()
+    };
+    let (profile, followers, following, top, follows) = tokio::join!(
         view(format!(
             "/user-profile-view/v3/profile/{encoded}?playlist_limit=50&artist_limit=50&episode_limit=0&market=from_token"
         )),
@@ -80,14 +93,83 @@ pub async fn fetch(session: &Session, user: &str) -> Result<UserProfilePage> {
             "/user-profile-view/v3/profile/{encoded}/following?market=from_token"
         )),
         top,
+        follows,
     );
-    page(
+    let mut page = page(
         user,
         &profile?,
         top.as_ref(),
         followers.ok().as_ref(),
         following.ok().as_ref(),
+    )?;
+    page.is_following = follows;
+    Ok(page)
+}
+
+/// Whether the signed-in account follows `user`.
+pub async fn following_user(session: &Session, user: &str) -> Result<bool> {
+    ensure!(valid_user(user), "Invalid Spotify profile");
+    let uri = format!("spotify:user:{user}");
+    let value = crate::catalogue::query(
+        session,
+        "isFollowingUsers",
+        FOLLOW_USERS_HASH,
+        json!({ "uris": [uri] }),
     )
+    .await?;
+    following_from(&value, &uri).context("Spotify did not report follow status")
+}
+
+/// Follow or unfollow `user`, then confirm the change by reading it back.
+pub async fn set_following(session: &Session, user: &str, follow: bool) -> Result<bool> {
+    ensure!(valid_user(user), "Invalid Spotify profile");
+    ensure!(user != session.username(), "You cannot follow yourself");
+    let operation = if follow {
+        "followUsers"
+    } else {
+        "unfollowUsers"
+    };
+    let value = crate::catalogue::query(
+        session,
+        operation,
+        FOLLOW_USERS_HASH,
+        json!({ "usernames": [user] }),
+    )
+    .await?;
+    ensure!(
+        follow_applied(&value, follow, user),
+        "Spotify did not apply the change"
+    );
+    let now = following_user(session, user).await?;
+    ensure!(now == follow, "Spotify did not apply the change");
+    Ok(now)
+}
+
+fn following_from(value: &Value, uri: &str) -> Option<bool> {
+    value["data"]["users"].as_array()?.iter().find_map(|entry| {
+        (entry["uri"].as_str() == Some(uri)).then(|| match entry["__typename"].as_str() {
+            Some("User") => entry["following"].as_bool(),
+            Some("NotFound") => Some(false),
+            _ => None,
+        })?
+    })
+}
+
+fn follow_applied(value: &Value, follow: bool, user: &str) -> bool {
+    let (field, kind) = if follow {
+        ("followUsers", "FollowUserResult")
+    } else {
+        ("unfollowUsers", "UnfollowUserResult")
+    };
+    value["data"][field]["responses"]
+        .as_array()
+        .is_some_and(|responses| {
+            responses.iter().any(|entry| {
+                entry["__typename"].as_str() == Some(kind)
+                    && entry["result"].as_bool() == Some(true)
+                    && entry["username"].as_str() == Some(user)
+            })
+        })
 }
 
 /// Assemble the page; optional lists that failed to load are left out.
@@ -159,6 +241,8 @@ fn page(
         followers: count("followers_count"),
         following: count("following_count"),
         is_current_user: profile["is_current_user"].as_bool().unwrap_or_default(),
+        is_following: None,
+        allow_follows: profile["allow_follows"].as_bool().unwrap_or_default(),
         sections,
     })
 }
@@ -394,6 +478,27 @@ mod tests {
     }
 
     #[test]
+    fn follow_state_and_results_match_the_requested_user() {
+        let status = json!({"data": {"users": [
+            {"__typename": "User", "following": true, "uri": "spotify:user:friend"},
+            {"__typename": "NotFound", "uri": "spotify:user:gone"}
+        ]}});
+        assert_eq!(following_from(&status, "spotify:user:friend"), Some(true));
+        assert_eq!(following_from(&status, "spotify:user:gone"), Some(false));
+        assert_eq!(following_from(&status, "spotify:user:other"), None);
+        let followed = json!({"data": {"followUsers": {"responses": [
+            {"__typename": "FollowUserResult", "result": true, "username": "friend"}
+        ]}}});
+        assert!(follow_applied(&followed, true, "friend"));
+        assert!(!follow_applied(&followed, true, "someone-else"));
+        assert!(!follow_applied(&followed, false, "friend"));
+        let refused = json!({"data": {"unfollowUsers": {"responses": [
+            {"__typename": "UnfollowUserResult", "result": false, "username": "friend"}
+        ]}}});
+        assert!(!follow_applied(&refused, false, "friend"));
+    }
+
+    #[test]
     fn other_profiles_skip_missing_lists_and_reject_mismatched_accounts() {
         let mut other = profile();
         other["uri"] = json!("spotify:user:other");
@@ -433,5 +538,17 @@ mod tests {
             "{} public playlists, {} followers, {} following",
             page.public_playlists, page.followers, page.following
         );
+        // Another person's page carries the viewer's follow state.
+        if let Some(friend) = page
+            .sections
+            .iter()
+            .flat_map(|section| &section.items)
+            .find_map(|item| item.route.strip_prefix("user:"))
+        {
+            let other = login.runtime.block_on(fetch(&session, friend)).unwrap();
+            assert!(!other.is_current_user);
+            assert!(other.is_following.is_some());
+            println!("another profile: follow state read");
+        }
     }
 }

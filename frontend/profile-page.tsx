@@ -38,6 +38,7 @@ export function ProfilePage({
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [menu, setMenu] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [heroGone, setHeroGone] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const hero = useRef<HTMLElement>(null);
@@ -45,6 +46,7 @@ export function ProfilePage({
     setPage(pages.get(user));
     setFailed(false);
     setMenu(false);
+    setFollowing(false);
     root.current?.scrollTo({ top: 0 });
     let live = true;
     rpc<UserProfilePage>("user_profile", { user })
@@ -136,6 +138,37 @@ export function ProfilePage({
           </div>
         </section>
         <div className="browse-actions profile-actions">
+          {shown &&
+            !shown.is_current_user &&
+            shown.is_following != null &&
+            (shown.allow_follows || shown.is_following) && (
+              <button
+                className={`pill outline profile-follow ${shown.is_following ? "following" : ""}`}
+                disabled={following}
+                aria-pressed={shown.is_following}
+                onClick={() => {
+                  const follow = !shown.is_following;
+                  setFollowing(true);
+                  rpc<boolean>("follow_user", { user, follow })
+                    .then((now) => {
+                      const next = {
+                        ...shown,
+                        is_following: now,
+                        followers: Math.max(
+                          0,
+                          shown.followers + (now === !!shown.is_following ? 0 : now ? 1 : -1),
+                        ),
+                      };
+                      pages.set(user, next);
+                      setPage((current) => (current?.id === user ? next : current));
+                    })
+                    .catch((error) => onNotice(String(error), true))
+                    .finally(() => setFollowing(false));
+                }}
+              >
+                {shown.is_following ? "Following" : "Follow"}
+              </button>
+            )}
           <div className="profile-more">
             <button
               className={`icon-button ${menu ? "active" : ""}`}

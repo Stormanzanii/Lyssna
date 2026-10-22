@@ -270,6 +270,9 @@ export type UserProfilePage = {
   followers: number;
   following: number;
   is_current_user: boolean;
+  /** Whether the viewer follows this profile; absent for their own. */
+  is_following?: boolean | null;
+  allow_follows: boolean;
   sections: HomeSection[];
 };
 export type HomePage = {

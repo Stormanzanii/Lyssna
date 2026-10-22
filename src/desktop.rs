@@ -2508,6 +2508,39 @@ async fn user_profile(
     .map_err(error)?
     .map_err(|_| "Profile unavailable. Try again shortly.".to_owned())
 }
+/// Follow or unfollow a Spotify user; returns the confirmed state.
+#[tauri::command]
+async fn follow_user(
+    state: State<'_, Desktop>,
+    user: String,
+    follow: bool,
+) -> std::result::Result<bool, String> {
+    if !crate::user_profile::valid_user(&user) {
+        return Err("Invalid Spotify profile".into());
+    }
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls
+            .run(async |session| crate::user_profile::set_following(session, &user, follow).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|_| {
+        if follow {
+            "Could not follow this profile. Try again shortly.".to_owned()
+        } else {
+            "Could not unfollow this profile. Try again shortly.".to_owned()
+        }
+    })
+}
 #[tauri::command]
 async fn resolve_album(
     state: State<'_, Desktop>,
@@ -2779,6 +2812,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             open_creator_profile,
             resolve_album,
             user_profile,
+            follow_user,
             app_update,
             media_state
         ])

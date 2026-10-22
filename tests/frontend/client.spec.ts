@@ -611,6 +611,7 @@ async function startClient(
             return new Promise<void>((resolve) => {
               host.__clientTest.resolveDJRequest = resolve;
             });
+          if (command === "follow_user") return args.follow;
           if (command === "user_profile") {
             const profile = host.__clientTest.userProfiles?.[args.user];
             return profile
@@ -3324,6 +3325,8 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
           followers: 3,
           following: 0,
           is_current_user: false,
+          is_following: false,
+          allow_follows: true,
           sections: [],
         },
       };
@@ -3355,6 +3358,20 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   await expect(page.locator(".profile-empty")).toHaveText(
     "This profile has nothing public yet.",
   );
+  const actions = page.locator(".profile-actions");
+  await actions.getByRole("button", { name: "Follow", exact: true }).click();
+  await expect(
+    actions.getByRole("button", { name: "Following", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(hero.locator(".profile-counts > *").nth(1)).toHaveText(
+    "4 Followers",
+  );
+  const followCall = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "follow_user")
+      .at(-1),
+  );
+  expect(followCall.args).toEqual({ user: "friend", follow: true });
   await page.getByTitle("Go back", { exact: true }).click();
   await expect(hero.locator("h1")).toHaveText("Test Listener");
   await page

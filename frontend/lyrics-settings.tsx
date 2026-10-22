@@ -9,11 +9,12 @@ import {
   AppWindow,
   FileText,
   FlaskConical,
-  Info,
+  ChevronLeft,
+  ChevronRight,
   Search,
   SlidersHorizontal,
   Palette,
-  WandSparkles,
+  Mic2,
   X,
   AlignLeft,
 } from "lucide-react";
@@ -30,9 +31,9 @@ const TABS = [
   ["Interface", AppWindow],
   ["Sources", FileText],
   ["Advanced", SlidersHorizontal],
-  ["About", Info],
 ] as const;
-type Tab = (typeof TABS)[number][0];
+/** About opens from the footer card rather than the tab bar. */
+type Tab = (typeof TABS)[number][0] | "About";
 
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
@@ -295,6 +296,7 @@ export function LyricsSettings({
       ],
     ],
   ];
+  const about = tab === "About" && !searching;
   const visible = sections.filter(([key]) => searching || key === tab);
   const status =
     state.update_status === "Up to date"
@@ -314,7 +316,7 @@ export function LyricsSettings({
       >
         <header className="lyrics-settings-head">
           <h2 id="lyrics-settings-title">
-            <WandSparkles size={18} />
+            <Mic2 size={20} />
             Lyrics settings
           </h2>
           <label className="lyrics-settings-search">
@@ -346,7 +348,7 @@ export function LyricsSettings({
             className="lyrics-settings-marker"
             aria-hidden="true"
             style={
-              marker && !searching
+              marker && !searching && tab !== "About"
                 ? {
                     opacity: 1,
                     transform: `translateX(${marker.left}px)`,
@@ -386,18 +388,35 @@ export function LyricsSettings({
         </div>
         <div className="lyrics-settings-scroll" ref={scroll}>
           <SettingsQuery.Provider value={query}>
-            <div role="tabpanel">
-              {visible.map(([key, title, rows]) => (
-                <section key={key} className="lyrics-settings-section">
-                  <h3>{title}</h3>
-                  <div className="lyrics-settings-group">{rows}</div>
-                </section>
-              ))}
-              <p className="lyrics-settings-empty">No settings match.</p>
-            </div>
+            {about ? (
+              <section className="lyrics-settings-about" aria-label="About">
+                <button
+                  className="text-link lyrics-settings-back"
+                  onClick={() => select("Appearance")}
+                >
+                  <ChevronLeft size={16} />
+                  Settings
+                </button>
+                <Credits onOpen={onOpen} />
+              </section>
+            ) : (
+              <div role="tabpanel">
+                {visible.map(([key, title, rows]) => (
+                  <section key={key} className="lyrics-settings-section">
+                    <h3>{title}</h3>
+                    <div className="lyrics-settings-group">{rows}</div>
+                  </section>
+                ))}
+                <p className="lyrics-settings-empty">No settings match.</p>
+              </div>
+            )}
           </SettingsQuery.Provider>
           <footer className="lyrics-settings-footer">
-            <div>
+            <button
+              className="lyrics-settings-about-link"
+              aria-pressed={about}
+              onClick={() => select(about ? "Appearance" : "About")}
+            >
               <span className="lyrics-settings-wordmark">SpotiFlex</span>
               <span className="lyrics-settings-version">
                 v{__APP_VERSION__}
@@ -407,10 +426,13 @@ export function LyricsSettings({
                   </span>
                 )}
               </span>
-            </div>
+              <span className="lyrics-settings-about-hint">
+                {about ? "Back to settings" : "About and credits"}
+                <ChevronRight size={14} />
+              </span>
+            </button>
             <span className="lyrics-settings-build">
               {import.meta.env.DEV ? "Development build" : "Release build"}
-
             </span>
           </footer>
         </div>

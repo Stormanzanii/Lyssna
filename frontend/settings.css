@@ -361,7 +361,7 @@
   letter-spacing: -0.01em;
 }
 .lyrics-settings-head h2 svg {
-  color: #1ed760;
+  color: #fff;
 }
 .lyrics-settings-search {
   display: flex;
@@ -373,7 +373,9 @@
   border-radius: 999px;
   background: #ffffff0f;
   color: #ffffff80;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 }
 .lyrics-settings-search:focus-within {
   background: #ffffff17;
@@ -411,7 +413,9 @@
   font-weight: 600;
   color: #ffffff99;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .lyrics-settings-tabs button:hover {
   color: #fff;
@@ -495,7 +499,9 @@
   font-size: 13px;
   color: #a7a7a7;
 }
-.lyrics-settings [role="tabpanel"]:not(:has(.setting-row)) .lyrics-settings-empty {
+.lyrics-settings
+  [role="tabpanel"]:not(:has(.setting-row))
+  .lyrics-settings-empty {
   display: block;
 }
 .lyrics-settings-footer {
@@ -558,70 +564,143 @@
   display: grid;
   gap: 10px;
 }
+.credits-heading {
+  margin: 6px 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff80;
+}
 .credit-people {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 8px;
-  margin-bottom: 4px;
 }
 .credit-person {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: #ffffff0a;
   text-align: left;
   transition: background 0.15s;
 }
 .credit-person:hover,
-.credit-person:focus-visible {
-  background: #ffffff17;
+.credit-person:focus-visible,
+.credit-row:hover,
+.credit-row:focus-visible {
+  background: #ffffff14;
 }
 .credit-person img {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   border-radius: 50%;
   background: #282828;
 }
-.credit-person span,
-.credit-row > div {
+.credit-person span {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
-.credit-person strong,
-.credit-row strong {
-  font-size: 13.5px;
+.credit-person strong {
+  font-size: 14px;
   color: #fff;
 }
-.credit-person small,
-.credit-row small {
+.credit-person small {
   font-size: 12px;
-  color: #a7a7a7;
+  line-height: 1.35;
+  color: #ffffff99;
+}
+.credit-projects {
+  overflow: hidden;
+  border: 1px solid #ffffff0d;
+  border-radius: 12px;
+  background: #ffffff06;
 }
 .credit-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 2px;
-  border-top: 1px solid #ffffff0f;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  transition: background 0.15s;
 }
-.credit-row p {
-  margin: 4px 0 0;
+.credit-row + .credit-row {
+  border-top: 1px solid #ffffff0d;
+}
+.credit-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.credit-row-head strong {
+  font-size: 14px;
+  color: #fff;
+}
+.credit-row-head svg {
+  margin-left: auto;
+  color: #ffffff66;
+}
+.credit-licence {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #ffffff12;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffffb3;
+}
+.credit-row small {
   font-size: 12px;
+  color: #ffffff99;
+}
+.credit-note {
+  margin-top: 3px;
+  font-size: 12.5px;
   line-height: 1.45;
-  color: #a7a7a7b3;
+  color: #ffffff80;
 }
 .credits-licence {
-  margin: 4px 0 0;
+  margin: 6px 2px 0;
   font-size: 12px;
-  line-height: 1.5;
-  color: #a7a7a7;
+  line-height: 1.55;
+  color: #ffffff80;
 }
 .credits-licence .text-link {
+  color: #fff;
+}
+/* About opens from the footer card of Lyrics settings. */
+.lyrics-settings-about {
+  margin: 12px 0 24px;
+}
+.lyrics-settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #ffffffb3;
+}
+.lyrics-settings-about-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.lyrics-settings-about-hint {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ffffff80;
+}
+.lyrics-settings-about-link:hover .lyrics-settings-about-hint {
   color: #fff;
 }
 .settings-folder-picks {

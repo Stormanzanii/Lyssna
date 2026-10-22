@@ -4,35 +4,43 @@ import { ExternalLink } from "lucide-react";
  *  first. Avatars and profiles come from GitHub. */
 export const PEOPLE = [
   { login: "Stormanzanii", name: "Arashii", role: "Creator of SpotiFlex" },
-  { login: "iPixelGalaxy", name: "iPixelGalaxy", role: "Spotify+ and the Spicy Lyrics fork" },
+  {
+    login: "iPixelGalaxy",
+    name: "iPixelGalaxy",
+    role: "Spotify+ and the Spicy Lyrics fork",
+  },
   { login: "Spikerko", name: "Spikerko", role: "Creator of Spicy Lyrics" },
 ] as const;
 
 /** Who SpotiFlex builds on, and under which licence. Shown in Settings and
- *  in the Lyrics settings About tab. */
+ *  in the Lyrics settings About screen. */
 export const CREDITS = [
   {
     name: "Spotify+",
     by: "iPixelGalaxy",
-    note: "Interface options and menus are reimplemented from its feature descriptions. No source is copied; the project declares no licence.",
+    licence: "No licence declared",
+    note: "Interface options and menus, reimplemented from its feature descriptions. No source is copied.",
     url: "https://github.com/iPixelGalaxy/spotify-plus",
   },
   {
     name: "Spicy Lyrics",
-    by: "Spikerko, with iPixelGalaxy's fork",
-    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows. AGPL-3.0.",
+    by: "Spikerko · fork by iPixelGalaxy",
+    licence: "AGPL-3.0",
+    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows.",
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
   },
   {
     name: "librespot",
     by: "librespot contributors",
-    note: "Spotify playback and Connect. MIT.",
+    licence: "MIT",
+    note: "Spotify playback and Connect.",
     url: "https://github.com/librespot-org/librespot",
   },
   {
     name: "spr",
     by: "Fraktality",
-    note: "The spring that animates lyrics. MIT.",
+    licence: "MIT",
+    note: "The spring that animates lyrics.",
     url: "https://github.com/Fraktality/spr",
   },
 ] as const;
@@ -40,6 +48,7 @@ export const CREDITS = [
 export function Credits({ onOpen }: { onOpen: (url: string) => void }) {
   return (
     <div className="credits">
+      <h4 className="credits-heading">People</h4>
       <div className="credit-people">
         {PEOPLE.map((person) => (
           <button
@@ -61,23 +70,25 @@ export function Credits({ onOpen }: { onOpen: (url: string) => void }) {
           </button>
         ))}
       </div>
-      {CREDITS.map((credit) => (
-        <div className="credit-row" key={credit.name}>
-          <div>
-            <strong>{credit.name}</strong>
-            <small>{credit.by}</small>
-            <p>{credit.note}</p>
-          </div>
+      <h4 className="credits-heading">Built on</h4>
+      <div className="credit-projects">
+        {CREDITS.map((credit) => (
           <button
-            className="icon-button"
-            aria-label={`Open ${credit.name}`}
-            title={`Open ${credit.name}`}
+            key={credit.name}
+            className="credit-row"
+            title={`Open ${credit.name} on GitHub`}
             onClick={() => onOpen(credit.url)}
           >
-            <ExternalLink size={16} />
+            <span className="credit-row-head">
+              <strong>{credit.name}</strong>
+              <span className="credit-licence">{credit.licence}</span>
+              <ExternalLink size={14} aria-hidden="true" />
+            </span>
+            <small>{credit.by}</small>
+            <span className="credit-note">{credit.note}</span>
           </button>
-        </div>
-      ))}
+        ))}
+      </div>
       <p className="credits-licence">
         SpotiFlex is free software under the GNU Affero General Public License
         v3.0. Spotify is a trademark of Spotify AB; SpotiFlex is not affiliated

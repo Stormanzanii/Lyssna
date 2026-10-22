@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -193,6 +194,13 @@ type EntityMenu = {
   y: number;
 };
 const windowHandle = () => getCurrentWindow();
+/** Fit menus using their rendered size, including newly added actions. */
+const keepOnScreen = (menu: HTMLElement | null, x: number, y: number) => {
+  if (!menu) return;
+  const { width, height } = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
+};
 /** Spotify-style total length: "1 hr 42 min" or "38 min 12 sec". */
 const longDuration = (ms: number) => {
   const minutes = Math.floor(ms / 60_000);
@@ -579,8 +587,17 @@ function App() {
     },
     [notify, updateSettings],
   );
-  useEffect(() => {
+  const songMenuElement = useRef<HTMLDivElement>(null);
+  const entityMenuElement = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
     if (!entityMenu && !songMenu) return;
+    const position = () => {
+      if (songMenu)
+        keepOnScreen(songMenuElement.current, songMenu.x, songMenu.y);
+      if (entityMenu)
+        keepOnScreen(entityMenuElement.current, entityMenu.x, entityMenu.y);
+    };
+    position();
     document.querySelector<HTMLButtonElement>(".song-menu button")?.focus();
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -588,8 +605,12 @@ function App() {
         setSongMenu(null);
       }
     };
+    window.addEventListener("resize", position);
     window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("keydown", close);
+    };
   }, [entityMenu, songMenu]);
   const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
   const refreshHome = useCallback(() => {
@@ -3256,12 +3277,13 @@ function App() {
             }}
           />
           <div
+            ref={songMenuElement}
             className="song-menu popover"
             role="menu"
             aria-label="Song actions"
             style={{
-              left: Math.min(songMenu.x, window.innerWidth - 240),
-              top: Math.max(8, Math.min(songMenu.y, window.innerHeight - 320)),
+              left: songMenu.x,
+              top: songMenu.y,
             }}
           >
             {[
@@ -3497,12 +3519,13 @@ function App() {
                 onClick={() => setEntityMenu(null)}
               />
               <div
+                ref={entityMenuElement}
                 role="menu"
                 aria-label={`${menu.kind} actions`}
                 className="song-menu popover entity-menu"
                 style={{
-                  left: Math.max(8, Math.min(menu.x, window.innerWidth - 250)),
-                  top: Math.max(8, Math.min(menu.y, window.innerHeight - 280)),
+                  left: menu.x,
+                  top: menu.y,
                 }}
                 onKeyDown={(event) => {
                   if (

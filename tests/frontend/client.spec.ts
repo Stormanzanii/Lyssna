@@ -3479,6 +3479,86 @@ test("Spotify+ options trim menus, copy details and credit contributors", async 
   await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
 });
 
+test("song and playlist menus fit when opened, moved and resized", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 720 });
+  await startClient(page);
+  const fits = async (menu: Locator) => {
+    await expect(menu).toBeVisible();
+    await expect
+      .poll(() =>
+        menu.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          return Math.min(
+            box.top,
+            box.left,
+            window.innerWidth - box.right,
+            window.innerHeight - box.bottom,
+          );
+        }),
+      )
+      .toBeGreaterThanOrEqual(7.5);
+    await expect(menu.getByRole("menuitem").last()).toBeInViewport();
+  };
+  const openAt = (target: Locator, x: number, y: number) =>
+    target.evaluate(
+      (element, position) =>
+        element.dispatchEvent(
+          new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: position.x,
+            clientY: position.y,
+          }),
+        ),
+      { x, y },
+    );
+  const title = page.locator(".player-song .song-title");
+  const songs = page.getByRole("menu", { name: "Song actions" });
+  await title.click({ button: "right" });
+  await fits(songs);
+  // Reposition an already-open menu without remounting it.
+  await openAt(title, 1390, 710);
+  await fits(songs);
+  await page.setViewportSize({ width: 900, height: 600 });
+  await fits(songs);
+  await page.keyboard.press("Escape");
+
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "library",
+      playlists: [
+        {
+          id: "5123456789abcdefghijkl",
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    });
+    host.emit({
+      type: "library_folders",
+      folders: [{ id: "gym", name: "Gym", parents: [] }],
+    });
+  });
+  const playlist = page.locator(".library-row", { hasText: "Road trip" });
+  await openAt(playlist, 890, 590);
+  const playlists = page.getByRole("menu", { name: "playlist actions" });
+  await fits(playlists);
+  await openAt(playlist, 40, 40);
+  await fits(playlists);
+  await expect
+    .poll(() =>
+      playlists.evaluate((element) => element.getBoundingClientRect().top),
+    )
+    .toBe(40);
+  await page.keyboard.press("Escape");
+  await expect(playlists).toHaveCount(0);
+});
+
 test("the avatar menu opens settings, profile and grouped recents", async ({
   page,
 }) => {
@@ -3975,10 +4055,14 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
     "true",
   );
   await expect(dialog).toContainText(`v${"0.1.0"}`);
-  await expect(dialog.getByRole("button", { name: /Website|Discord|Ko-fi/ })).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: /Website|Discord|Ko-fi/ }),
+  ).toHaveCount(0);
   // Search reaches settings on other tabs.
   await dialog.getByLabel("Search lyrics settings").fill("gravity");
-  await expect(dialog.getByRole("switch", { name: "Space Gravity" })).toBeVisible();
+  await expect(
+    dialog.getByRole("switch", { name: "Space Gravity" }),
+  ).toBeVisible();
   await dialog.getByRole("switch", { name: "Space Gravity" }).click();
   await expect.poll(() => saved("space_gravity")).toBe(true);
   await dialog.getByLabel("Search lyrics settings").fill("nothing like this");
@@ -3986,12 +4070,45 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await dialog.getByLabel("Search lyrics settings").fill("");
   await dialog.getByRole("tab", { name: "Sources" }).click();
   await dialog.getByRole("button", { name: "Browse", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "TTML Database" })).toBeVisible();
-  await page.getByRole("dialog", { name: "TTML Database" }).getByRole("button", { name: /close/i }).first().click();
+  await expect(
+    page.getByRole("dialog", { name: "TTML Database" }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "TTML Database" })
+    .getByRole("button", { name: /close/i })
+    .first()
+    .click();
   await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  // About opens from the footer card and lists the credits.
+  await expect(dialog.locator(".lyrics-settings-wordmark")).toHaveCount(1);
+  await expect(dialog.getByRole("tab", { name: "About" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: /About and credits/ }).click();
+  await expect(dialog.locator(".credit-person")).toHaveCount(3);
+  await expect(dialog.locator(".credit-row").first()).toContainText("Spotify+");
+  await expect(dialog.locator(".credit-row").first()).toContainText(
+    "No licence declared",
+  );
+  await dialog.locator(".credit-row").first().click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "open_link")
+            .at(-1)?.args.url,
+      ),
+    )
+    .toBe("https://github.com/iPixelGalaxy/spotify-plus");
+  await dialog.getByRole("button", { name: /Back to settings/ }).click();
+  await expect(dialog.locator(".credit-person")).toHaveCount(0);
+  // Credits remain searchable after moving About out of the tab bar.
+  await dialog.getByLabel("Search lyrics settings").fill("Spikerko");
+  await expect(dialog.locator(".credit-person")).toHaveCount(3);
+  await dialog.getByLabel("Search lyrics settings").fill("");
+  await expect(dialog.locator(".credit-person")).toHaveCount(0);
   await dialog.getByRole("tab", { name: "Advanced" }).click();
   await dialog.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".settings-page")).toBeVisible();

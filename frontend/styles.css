@@ -3533,7 +3533,11 @@ input[type="range"]:hover {
 }
 .song-menu {
   position: fixed;
+  width: max-content;
   min-width: 210px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 .song-menu > button {
   display: flex;

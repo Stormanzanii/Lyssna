@@ -315,9 +315,8 @@
   display: none;
 }
 
-/* Refraction (opt-in): small glass controls bend what's behind them at
-   their rims. Big panels keep the cheap frosted look; re-rendering a
-   window-sized backdrop every frame costs too much GPU. */
+/* Refraction (opt-in, flagged for its GPU cost): glass bends what's
+   behind it at the rim. */
 .glass-refraction-defs {
   position: absolute;
   width: 0;
@@ -332,15 +331,45 @@
 .glass-refraction .profile-menu,
 .glass-refraction .app-menu,
 .glass-refraction .sort-menu {
-  -webkit-backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.7);
-  backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.7);
-  /* A lens: a bright top rim, a soft lower shade and a thin edge line, so
-     the glass reads as raised even over a smooth backdrop. */
+  -webkit-backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
+    brightness(1.08);
+  backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
+    brightness(1.08);
+  /* A clear lens: a thin bright top rim and a soft lower shade give depth
+     without washing the colours behind it out to white. */
   box-shadow:
-    inset 0 1px 0 #ffffff8c,
-    inset 0 -1px 0 #ffffff26,
-    inset 0 0 0 1px #ffffff1f,
-    inset 0 10px 18px -12px #ffffff59,
+    inset 0 1px 0 #ffffff73,
+    inset 0 0 0 1px #ffffff17,
     inset 0 -12px 20px -14px #00000073,
     0 10px 30px #00000059;
+}
+
+/* Refracting menus use a lighter fill so the bent backdrop shows through;
+   the extra blur keeps their text readable. */
+.glass-refraction .popover:not(.recent-searches, .device-menu),
+.glass-refraction .profile-menu,
+.glass-refraction .app-menu,
+.glass-refraction .sort-menu {
+  background: #14141a8c;
+  -webkit-backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
+  backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
+}
+
+/* The main sheets refract the ambience behind them too. They keep their
+   own rim and sheen; a lens shade adds depth at the edges. The bend is
+   applied without extra blur because the ambience is already soft. */
+.glass-refraction .library-panel,
+.glass-refraction .center-panel,
+.glass-refraction .now-playing,
+.glass-refraction .player-bar {
+  -webkit-backdrop-filter: url(#glass-refraction) saturate(1.8);
+  backdrop-filter: url(#glass-refraction) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 #ffffff47,
+    inset 0 -20px 30px -24px #00000080,
+    var(--glass-shadow);
+}
+
+.glass-refraction .search-box::before {
+  background: #ffffff0a;
 }

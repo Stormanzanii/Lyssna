@@ -73,9 +73,9 @@ export function GlassRefractionFilter() {
             glass dispersing light, which fringes colour at the rim. */}
         {(
           [
-            ["r", 0.12, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"],
-            ["g", 0.135, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"],
-            ["b", 0.15, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"],
+            ["r", 0.1, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"],
+            ["g", 0.13, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"],
+            ["b", 0.17, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"],
           ] as const
         ).map(([channel, scale, matrix]) => (
           <Fragment key={channel}>

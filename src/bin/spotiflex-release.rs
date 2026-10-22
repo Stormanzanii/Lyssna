@@ -1,3 +1,4 @@
+use spotiflex::credential as keyring;
 use std::{
     fs::{self, File},
     io::Write,

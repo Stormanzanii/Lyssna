@@ -1,3 +1,4 @@
+use crate::credential as keyring;
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -400,7 +401,7 @@ impl Tokens {
     pub fn save(&self, client_id: &str) -> Result<()> {
         keyring::Entry::new("SpotiFlex/Spotify", client_id)?
             .set_password(&serde_json::to_string(self)?)
-            .context("Cannot save login to the operating system credential store")
+            .context("Cannot save login to the secure credential store")
     }
 
     pub fn load(client_id: &str) -> Result<Option<Self>> {

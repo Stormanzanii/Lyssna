@@ -27,7 +27,7 @@ export function LyricsProvider({
       label="Lyrics API key"
       help={
         state.provider_kind === "spicy"
-          ? "Your Spicy Lyrics key is saved in the system credential store."
+          ? "Your Spicy Lyrics key is saved securely on this device."
           : state.provider_configured
             ? "A previous lyrics provider is configured. Save your Spicy Lyrics key below to switch."
             : "Create an application in the Spicy Lyrics dashboard. Enable Client access and No origin header for this desktop app."

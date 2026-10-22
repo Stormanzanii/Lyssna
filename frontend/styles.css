@@ -2763,6 +2763,15 @@ small {
 .application.macos .lyric-line.active :is(.lyric-syllable, .lyric-letter) {
   will-change: auto;
 }
+/* Filtered, moving text over video can retain stale WebKit tiles. Keep word
+   timing, gradients and motion, using opacity for inactive lines on macOS. */
+.application.macos .lyric-line {
+  filter: none;
+  transition: opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1);
+}
+.application.macos .lyrics-display {
+  caret-color: transparent;
+}
 .lyric-wait {
   transition:
     opacity 0.3s ease,

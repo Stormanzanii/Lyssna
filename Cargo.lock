@@ -3330,8 +3330,6 @@ dependencies = [
  "byteorder",
  "dbus-secret-service",
  "log",
- "security-framework 2.11.1",
- "security-framework 3.7.0",
  "windows-sys 0.60.2",
  "zeroize",
 ]
@@ -6406,6 +6404,7 @@ dependencies = [
  "getrandom 0.3.4",
  "image",
  "keyring",
+ "libc",
  "librespot-connect",
  "librespot-core",
  "librespot-metadata",
@@ -6413,6 +6412,7 @@ dependencies = [
  "librespot-protocol",
  "protobuf",
  "reqwest 0.12.28",
+ "ring",
  "rodio",
  "roxmltree",
  "self-replace",
@@ -6435,6 +6435,7 @@ dependencies = [
  "whisper-rs",
  "windows 0.61.3",
  "winresource",
+ "zeroize",
 ]
 
 [[package]]

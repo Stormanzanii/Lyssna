@@ -31,7 +31,6 @@ tauri = { version = "2", optional = true, features = ["image-ico"] }
 tauri-plugin-window-state = { version = "2", optional = true }
 getrandom = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-keyring = { version = "3.6", features = ["windows-native", "apple-native", "sync-secret-service"] }
 librespot-connect = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-metadata = { version = "0.8", default-features = false }
@@ -54,6 +53,14 @@ librespot-protocol = "0.8"
 protobuf = "3.7"
 
 # Native microphone capture, local recognition and system media controls.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+keyring = { version = "3.6", features = ["windows-native", "sync-secret-service"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+ring = "0.17"
+zeroize = "1"
+
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 cpal = "0.16"
 webrtc-vad = "0.4"

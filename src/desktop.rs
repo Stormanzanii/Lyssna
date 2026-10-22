@@ -273,6 +273,10 @@ impl Desktop {
         let notifier = Notifier::new(move || {
             let _ = wake.try_send(());
         });
+        crate::lyric_sources::configure(
+            &settings.lyrics_source_order,
+            &settings.lyrics_sources_disabled,
+        );
         let worker = Worker::start(notifier.clone());
         let updates = updater::Updater::start(notifier);
         let route = settings.last_view.clone();
@@ -2054,7 +2058,16 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        settings.lyrics_source_order =
+            crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
+        if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
+            settings.lyrics_background = "animated".into();
+        }
         settings.save()?;
+        crate::lyric_sources::configure(
+            &settings.lyrics_source_order,
+            &settings.lyrics_sources_disabled,
+        );
         if output_changed && let Some(profile) = snapshot.profile.as_ref() {
             state
                 .0

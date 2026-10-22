@@ -19,6 +19,7 @@ pub mod desktop;
 pub mod dj;
 pub mod home;
 pub mod library_cache;
+pub mod lyric_sources;
 pub mod lyrics;
 #[cfg(feature = "desktop")]
 pub mod media;

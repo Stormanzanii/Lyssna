@@ -29,6 +29,21 @@ pub struct Settings {
     pub lyrics_hide_artwork: bool,
     pub lyrics_artwork_right: bool,
     pub lyrics_compact: bool,
+    /// Lyrics display options from Spicy Lyrics' settings panel.
+    pub lyrics_right_align: bool,
+    pub lyrics_flip_duet: bool,
+    pub lyrics_wide_duet: bool,
+    pub lyrics_simple: bool,
+    pub lyrics_line_hover: bool,
+    pub lyrics_early_scroll: bool,
+    pub lyrics_hide_year: bool,
+    pub lyrics_hide_npv: bool,
+    pub lyrics_hide_npv_empty: bool,
+    /// Lyrics page background: "animated", "static" or "color".
+    pub lyrics_background: String,
+    /// Lyric sources in the order they are tried, and the ones turned off.
+    pub lyrics_source_order: Vec<String>,
+    pub lyrics_sources_disabled: Vec<String>,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -75,6 +90,21 @@ impl Default for Settings {
             lyrics_hide_artwork: false,
             lyrics_artwork_right: false,
             lyrics_compact: false,
+            lyrics_right_align: false,
+            lyrics_flip_duet: false,
+            lyrics_wide_duet: true,
+            lyrics_simple: false,
+            lyrics_line_hover: true,
+            lyrics_early_scroll: false,
+            lyrics_hide_year: false,
+            lyrics_hide_npv: false,
+            lyrics_hide_npv_empty: false,
+            lyrics_background: "animated".into(),
+            lyrics_source_order: crate::lyric_sources::DEFAULT_ORDER
+                .iter()
+                .map(|id| (*id).into())
+                .collect(),
+            lyrics_sources_disabled: vec!["lrclib".into()],
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),
@@ -123,6 +153,14 @@ impl Settings {
         settings.lyric_size = settings.lyric_size.clamp(18.0, 60.0);
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
+            settings.lyrics_background = "animated".into();
+        }
+        settings.lyrics_source_order =
+            crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
+        settings
+            .lyrics_sources_disabled
+            .retain(|id| crate::lyric_sources::DEFAULT_ORDER.contains(&id.as_str()));
         settings.audio_output = settings
             .audio_output
             .filter(|name| crate::audio_output::valid_name(name));

@@ -804,24 +804,43 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
     if let Some(lyrics) = load_local_in(&root.join("local"), track) {
         return Ok(lyrics);
     }
-    let cache = root.join("cache").join(crate::provider::cache_namespace()?);
-    let file = cache.join(format!("{key}.json"));
-    let fresh = fs::metadata(&file)
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
-    if fresh
-        && let Ok(bytes) = fs::read(&file)
-        && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
-    {
-        return Ok(lyrics);
+    // Try each enabled source in the order chosen in Lyrics settings.
+    let mut failure = None;
+    for source in crate::lyric_sources::enabled() {
+        let attempt = (|| -> Result<Lyrics> {
+            let namespace = match source.as_str() {
+                "lrclib" => "lrclib".to_owned(),
+                _ => crate::provider::cache_namespace()?,
+            };
+            let cache = root.join("cache").join(namespace);
+            let file = cache.join(format!("{key}.json"));
+            let fresh = fs::metadata(&file)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
+            if fresh
+                && let Ok(bytes) = fs::read(&file)
+                && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
+            {
+                return Ok(lyrics);
+            }
+            let lyrics = match source.as_str() {
+                "lrclib" => crate::lyric_sources::lrclib(client, track)?,
+                _ => crate::provider::fetch(client, track, access_token)?,
+            };
+            if fs::create_dir_all(&cache).is_ok() {
+                let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
+            }
+            Ok(lyrics)
+        })();
+        match attempt {
+            Ok(lyrics) if lyrics.instrumental || !lyrics.lines.is_empty() => return Ok(lyrics),
+            Ok(_) => {}
+            Err(error) => failure = Some(error),
+        }
     }
-    let lyrics = crate::provider::fetch(client, track, access_token)?;
-    if fs::create_dir_all(&cache).is_ok() {
-        let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
-    }
-    Ok(lyrics)
+    Err(failure.unwrap_or_else(|| anyhow::anyhow!("No lyrics source found lyrics for this song")))
 }
 #[cfg(test)]
 mod tests {

@@ -24,6 +24,7 @@ import {
   Home,
   Library,
   LoaderCircle,
+  Lock,
   Maximize2,
   PanelRight,
   CirclePlus,
@@ -4230,15 +4231,6 @@ function Setup({
               )}
           </div>
         )}
-        <button
-          className="text-link"
-          disabled={state.login_pending}
-          onClick={() => setDeveloperMode(!developerMode)}
-        >
-          {developerMode
-            ? "Use Spotify account sign-in"
-            : "Developer connection (optional)"}
-        </button>
         {developerMode && (
           <div className="setup-steps">
             <button className="text-link" onClick={onOpenDashboard}>
@@ -4282,7 +4274,7 @@ function Setup({
             "Sign in with Spotify"
           )}
         </button>
-        {state.login_pending && (
+        {state.login_pending ? (
           <>
             <p className="setup-help">
               Complete sign-in in your browser.
@@ -4294,8 +4286,22 @@ function Setup({
               Cancel sign-in
             </button>
           </>
+        ) : (
+          <button
+            className="text-link muted setup-mode"
+            aria-expanded={developerMode}
+            onClick={() => setDeveloperMode(!developerMode)}
+          >
+            {developerMode
+              ? "Use Spotify account sign-in"
+              : "Developer connection (optional)"}
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
         )}
-        <small>No password or client secret is stored in SpotiFlex.</small>
+        <small>
+          <Lock size={12} aria-hidden="true" />
+          No password or client secret is stored in SpotiFlex.
+        </small>
       </section>
     </div>
   );

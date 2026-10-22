@@ -3732,35 +3732,56 @@ input[type="range"]:hover {
   justify-content: flex-end;
   margin-top: 24px;
 }
+/* First-run sign-in: one clear action, with the optional developer
+   route tucked beneath it. A faint green glow ties it to Spotify. */
 .setup-dialog {
-  width: min(100%, 510px);
-  padding: 35px 42px;
+  width: min(100%, 440px);
+  padding: 40px 40px 28px;
   text-align: center;
+  background:
+    radial-gradient(120% 60% at 50% 0%, #1ed7601a, transparent 70%),
+    #181818;
+  border-color: #ffffff12;
+  box-shadow:
+    0 30px 120px #000a,
+    0 0 0 1px #00000066;
 }
 .setup-logo {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 22px;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: #ffffff0d;
+  box-shadow: inset 0 0 0 1px #ffffff14;
 }
 .premium-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
-  font-weight: 750;
-  border: 1px solid #1ed76055;
-  background: #1ed76012;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid #1ed76066;
+  background: #1ed7601a;
   color: #1ed760;
-  padding: 6px 12px;
-  border-radius: 16px;
-  margin-bottom: 18px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 20px;
 }
 .setup-dialog h1 {
-  font-size: 35px;
-  letter-spacing: -1px;
-  margin-bottom: 15px;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+  text-wrap: balance;
 }
 .setup-dialog > p {
+  max-width: 320px;
+  margin: 0 auto 28px;
   font-size: 14px;
-  margin-bottom: 23px;
+  line-height: 1.5;
+  color: #b3b3b3;
+  text-wrap: pretty;
 }
 .setup-steps {
   text-align: left;
@@ -3768,7 +3789,11 @@ input[type="range"]:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 25px 0 21px;
+  margin: 0 0 20px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #ffffff08;
+  border: 1px solid #ffffff0f;
 }
 .setup-steps > .text-link {
   color: #1ed760;
@@ -3803,17 +3828,50 @@ input[type="range"]:hover {
 }
 .setup-sign-in {
   width: 100%;
+  min-height: 48px;
   padding: 13px 15px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.setup-dialog .pill.primary.setup-sign-in {
+  background: #1ed760;
+  color: #000;
+}
+.setup-dialog .pill.primary.setup-sign-in:hover:not(:disabled) {
+  background: #3be477;
+  transform: scale(1.02);
+}
+.setup-dialog .pill.primary.setup-sign-in:disabled {
+  opacity: 0.6;
+}
+.setup-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.setup-mode svg {
+  transition: transform 0.15s;
+}
+.setup-mode[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 .setup-dialog > small {
-  display: block;
-  font-size: 11px;
-  color: #999999;
-  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff12;
+  font-size: 12px;
+  color: #8a8a8a;
 }
 .setup-dialog .setup-help {
-  font-size: 12px;
-  margin: 17px 0 10px;
+  font-size: 13px;
+  color: #b3b3b3;
+  margin: 16px 0 6px;
 }
 .setup-recovery {
   padding: 14px;

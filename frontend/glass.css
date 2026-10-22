@@ -3,7 +3,7 @@
    panels become frosted, translucent sheets with a bright specular rim. */
 .liquid-glass {
   --glass-fill: #16161a6b;
-  --glass-fill-strong: #1e1e23b8;
+  --glass-fill-strong: #1e1e23db;
   --glass-blur: blur(30px) saturate(175%);
   --glass-shadow:
     0 1px 0 #ffffff1f inset, 0 0 0 1px #ffffff0a inset, 0 18px 50px #00000040;
@@ -242,6 +242,13 @@
 /* Recent searches hang under the search box, not the window. */
 .liquid-glass .recent-searches {
   position: absolute;
+}
+/* Panels nested inside another frosted panel (a submenu inside the menu,
+   recent searches inside the search box) cannot blur the page behind them,
+   so they get a near-solid fill instead of showing it through. */
+.liquid-glass .app-submenu,
+.liquid-glass .recent-searches {
+  background: #1f1f24f5;
 }
 .liquid-glass .profile-menu,
 .liquid-glass .app-menu,

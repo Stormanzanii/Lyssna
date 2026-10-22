@@ -69,10 +69,13 @@ const systemFonts = [
   "Consolas",
 ];
 export function FontSettings({
+  field,
   settings,
   onSettings,
   onNotice,
 }: {
+  /** Which font this panel sets: the app's or the lyrics'. */
+  field: "ui_font" | "lyric_font";
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => void;
   onNotice: (message: string) => void;
@@ -126,8 +129,12 @@ export function FontSettings({
         ...previous.filter((font) => font.family !== family),
         font,
       ]);
-      onSettings({ lyric_font: family });
-      onNotice("Font imported and applied to lyrics.");
+      onSettings({ [field]: family });
+      onNotice(
+        field === "lyric_font"
+          ? "Font imported and applied to lyrics."
+          : "Font imported and applied to the app.",
+      );
     } catch (error) {
       onNotice(
         error instanceof Error ? error.message : "Could not import this font.",
@@ -144,48 +151,50 @@ export function FontSettings({
           ["ui_font", "App font", "Used across menus, lists and the player."],
           ["lyric_font", "Lyrics font", "Used for lyric lines only."],
         ] as const
-      ).map(([key, label, help]) => (
-        <SettingRow
-          key={key}
-          label={label}
-          help={`${help} Type an installed Windows font name to apply immediately.`}
-          keywords="font typeface"
-        >
-          <div className="font-control">
-            <input
-              className="settings-select font-select"
-              type="text"
-              aria-label={label}
-              list={`${key}-fonts`}
-              placeholder="Default"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={100}
-              value={
-                fonts.find((font) => font.family === settings[key])?.name ??
-                (settings[key]?.startsWith("SpotiFlexFont_")
-                  ? "Saved custom font"
-                  : (settings[key] ?? ""))
-              }
-              onChange={(event) => {
-                const name = event.target.value;
-                const imported = fonts.find(
-                  (font) => font.name.toLowerCase() === name.toLowerCase(),
-                );
-                onSettings({ [key]: imported?.family ?? name });
-              }}
-            />
-            <datalist id={`${key}-fonts`}>
-              {systemFonts.map((name) => (
-                <option key={name} value={name} />
-              ))}
-              {fonts.map((font) => (
-                <option key={font.family} value={font.name} />
-              ))}
-            </datalist>
-          </div>
-        </SettingRow>
-      ))}
+      )
+        .filter(([key]) => key === field)
+        .map(([key, label, help]) => (
+          <SettingRow
+            key={key}
+            label={label}
+            help={`${help} Type an installed Windows font name to apply immediately.`}
+            keywords="font typeface"
+          >
+            <div className="font-control">
+              <input
+                className="settings-select font-select"
+                type="text"
+                aria-label={label}
+                list={`${key}-fonts`}
+                placeholder="Default"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={100}
+                value={
+                  fonts.find((font) => font.family === settings[key])?.name ??
+                  (settings[key]?.startsWith("SpotiFlexFont_")
+                    ? "Saved custom font"
+                    : (settings[key] ?? ""))
+                }
+                onChange={(event) => {
+                  const name = event.target.value;
+                  const imported = fonts.find(
+                    (font) => font.name.toLowerCase() === name.toLowerCase(),
+                  );
+                  onSettings({ [key]: imported?.family ?? name });
+                }}
+              />
+              <datalist id={`${key}-fonts`}>
+                {systemFonts.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+                {fonts.map((font) => (
+                  <option key={font.family} value={font.name} />
+                ))}
+              </datalist>
+            </div>
+          </SettingRow>
+        ))}
       <SettingRow
         label="Custom fonts"
         help="Import a TTF, OTF, WOFF or WOFF2 file up to 5 MB."

@@ -11,6 +11,8 @@ import {
   FlaskConical,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Search,
   SlidersHorizontal,
   Palette,
@@ -23,6 +25,20 @@ import type { Settings } from "./types";
 import { SettingRow, SettingsQuery } from "./setting-row";
 import { Toggle } from "./settings-page";
 import { CREDITS, Credits } from "./credits";
+import { FontSettings } from "./custom-fonts";
+import { LyricsProvider } from "./lyrics-provider";
+
+/** Lyric sources SpotiFlex can use, as listed in Sources. */
+const SOURCES: Record<string, { name: string; help: string }> = {
+  spicy: {
+    name: "Spicy Lyrics",
+    help: "Word-synced lyrics, including Apple Music and community TTML.",
+  },
+  lrclib: {
+    name: "LRCLIB",
+    help: "Free open lyrics database. Receives the title, artist, album and length.",
+  },
+};
 
 const TABS = [
   ["Appearance", Palette],
@@ -50,9 +66,16 @@ export function LyricsSettings({
   onAllSettings,
   onOpen,
   onClose,
+  onCall,
+  onNotice,
 }: {
   state: AppState;
   onSettings: (settings: Partial<Settings>) => void;
+  onCall: <T = void>(
+    command: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T | undefined>;
+  onNotice: (message: string, error?: boolean) => void;
   onLoadTtml: () => void;
   onDatabase: () => void;
   onAllSettings: () => void;
@@ -102,11 +125,18 @@ export function LyricsSettings({
     </SettingRow>
   );
   const lyricSize = settings.lyric_size || 40;
-  const provider = state.provider_builtin
-    ? "The built-in lyrics provider is ready."
-    : state.provider_configured
-      ? "Your lyrics provider is configured."
-      : "No lyrics provider is set up yet.";
+  const order = settings.lyrics_source_order?.length
+    ? settings.lyrics_source_order
+    : ["spicy", "lrclib"];
+  const disabled = new Set(settings.lyrics_sources_disabled ?? ["lrclib"]);
+  const move = (id: string, step: -1 | 1) => {
+    const next = [...order];
+    const index = next.indexOf(id);
+    const to = index + step;
+    if (index < 0 || to < 0 || to >= next.length) return;
+    [next[index], next[to]] = [next[to], next[index]];
+    onSettings({ lyrics_source_order: next });
+  };
   const sections: [Tab, string, React.ReactNode[]][] = [
     [
       "Appearance",
@@ -137,11 +167,40 @@ export function LyricsSettings({
             <output>{Math.round(lyricSize)}</output>
           </span>
         </SettingRow>,
+        <FontSettings
+          key="font"
+          field="lyric_font"
+          settings={settings}
+          onSettings={onSettings}
+          onNotice={onNotice}
+        />,
+        <SettingRow
+          key="background"
+          label="Background"
+          help="Moving artwork, still artwork, or one colour from the cover behind the lyrics."
+          keywords="background ambience dynamic static colour color"
+        >
+          <select
+            className="settings-select"
+            aria-label="Lyrics background"
+            value={settings.lyrics_background ?? "animated"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_background: event.target
+                  .value as Settings["lyrics_background"],
+              })
+            }
+          >
+            <option value="animated">Animated artwork</option>
+            <option value="static">Still artwork</option>
+            <option value="color">Cover colour</option>
+          </select>
+        </SettingRow>,
         flag(
-          "liquid_glass",
-          "Liquid Glass",
-          "Frosted panels over the playing song's colours.",
-          "glass background blur",
+          "lyrics_hide_year",
+          "Hide release year",
+          "Leave the year out of the song details beside the lyrics.",
+          "year date metadata",
         ),
       ],
     ],
@@ -183,6 +242,42 @@ export function LyricsSettings({
           "Estimate word timing for line-synced or plain lyrics. Timing may be off.",
           "word timing estimate",
         ),
+        flag(
+          "lyrics_simple",
+          "Simple lyrics mode",
+          "Fill lines without the per-word lift, scale and glow.",
+          "simple minimal animation",
+        ),
+        flag(
+          "lyrics_early_scroll",
+          "Early scroll",
+          "Start moving to the next line a moment before it is sung.",
+          "scroll ahead",
+        ),
+        flag(
+          "lyrics_right_align",
+          "Right align lyrics",
+          "Line lyrics up on the right instead of the left.",
+          "alignment",
+        ),
+        flag(
+          "lyrics_flip_duet",
+          "Flip duet sides",
+          "Swap which side each duet voice sits on.",
+          "duet opposite alignment",
+        ),
+        flag(
+          "lyrics_wide_duet",
+          "Wide duet line padding",
+          "Separate duet voices into wider columns.",
+          "duet padding",
+        ),
+        flag(
+          "lyrics_line_hover",
+          "Line hover background",
+          "Highlight a line when you point at it.",
+          "hover highlight",
+        ),
       ],
     ],
     [
@@ -200,12 +295,6 @@ export function LyricsSettings({
           "Canvas in lyrics",
           "Play the track's Canvas video behind the lyrics page.",
           "video background",
-        ),
-        flag(
-          "reduce_motion",
-          "Reduce motion",
-          "Calm animations across the app, including the lyrics.",
-          "animation motion",
         ),
       ],
     ],
@@ -231,6 +320,18 @@ export function LyricsSettings({
           "Put the album cover on the right of the lyrics.",
           "cover side swap",
         ),
+        flag(
+          "lyrics_hide_npv",
+          "Hide lyrics in Now playing",
+          "Never show the lyrics card in the Now playing panel.",
+          "now playing card sidebar",
+        ),
+        flag(
+          "lyrics_hide_npv_empty",
+          "Hide the Now playing card without lyrics",
+          "Remove the lyrics card when the current song has no lyrics.",
+          "now playing card empty",
+        ),
       ],
     ],
     [
@@ -238,10 +339,70 @@ export function LyricsSettings({
       "Sources",
       [
         <SettingRow
+          key="sources"
+          stacked
+          label="Lyric sources"
+          help="Tried top to bottom until one has lyrics for the song."
+          keywords="sources priority order lrclib spicy provider"
+        >
+          <ol className="lyric-sources">
+            {order.map((id, index) => {
+              const source = SOURCES[id];
+              if (!source) return null;
+              const on = !disabled.has(id);
+              return (
+                <li key={id} className={on ? "" : "off"}>
+                  <span className="lyric-source-name">
+                    <strong>{source.name}</strong>
+                    <small>{source.help}</small>
+                  </span>
+                  <button
+                    className="icon-button"
+                    title={`Move ${source.name} up`}
+                    disabled={index === 0}
+                    onClick={() => move(id, -1)}
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    title={`Move ${source.name} down`}
+                    disabled={index === order.length - 1}
+                    onClick={() => move(id, 1)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                  <Toggle
+                    label={source.name}
+                    checked={on}
+                    onChange={(checked) => {
+                      const next = new Set(disabled);
+                      if (checked) next.delete(id);
+                      else next.add(id);
+                      onSettings({ lyrics_sources_disabled: [...next] });
+                    }}
+                  />
+                </li>
+              );
+            })}
+          </ol>
+          <button
+            className="text-link lyric-sources-reset"
+            onClick={() =>
+              onSettings({
+                lyrics_source_order: ["spicy", "lrclib"],
+                lyrics_sources_disabled: ["lrclib"],
+              })
+            }
+          >
+            Reset sources
+          </button>
+        </SettingRow>,
+        <LyricsProvider
           key="provider"
-          label="Lyrics provider"
-          help={provider}
-          keywords="spicy provider key"
+          state={state}
+          onCall={onCall}
+          onNotice={onNotice}
         />,
         <SettingRow
           key="ttml"

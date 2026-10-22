@@ -4790,3 +4790,49 @@ input[type="range"]:hover {
   margin: 0 2px;
   background: #ffffff26;
 }
+
+/* Lyrics display options from Lyrics settings. */
+.lyrics-right .lyric-line {
+  text-align: right;
+  transform-origin: right center;
+}
+.lyrics-right .lyric-line.opposite {
+  text-align: left;
+  transform-origin: left center;
+}
+.lyrics-flip-duet .lyric-line {
+  text-align: right;
+  transform-origin: right center;
+}
+.lyrics-flip-duet .lyric-line.opposite {
+  text-align: left;
+  transform-origin: left center;
+}
+.lyrics-wide-duet.has-duet .lyric-line:not(.opposite) {
+  padding-right: 14%;
+}
+.lyrics-wide-duet.has-duet .lyric-line.opposite {
+  padding-left: 14%;
+}
+.lyrics-flip-duet.lyrics-wide-duet.has-duet .lyric-line:not(.opposite) {
+  padding-right: 0;
+  padding-left: 14%;
+}
+.lyrics-flip-duet.lyrics-wide-duet.has-duet .lyric-line.opposite {
+  padding-left: 0;
+  padding-right: 14%;
+}
+.lyrics-line-hover .lyric-line {
+  border-radius: 10px;
+  transition:
+    opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1),
+    filter 0.5s cubic-bezier(0.61, 1, 0.88, 1),
+    background-color 0.15s;
+}
+.lyrics-line-hover .lyric-line:hover {
+  background-color: #ffffff0f;
+}
+/* "Cover colour" background: one colour from the artwork, fading down. */
+.lyrics-page.colour-background {
+  background: linear-gradient(var(--hero, #282828), #0b0b0b 85%);
+}

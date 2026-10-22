@@ -111,6 +111,18 @@ export interface Settings {
   lyrics_hide_artwork?: boolean;
   lyrics_artwork_right?: boolean;
   lyrics_compact?: boolean;
+  lyrics_right_align?: boolean;
+  lyrics_flip_duet?: boolean;
+  lyrics_wide_duet?: boolean;
+  lyrics_simple?: boolean;
+  lyrics_line_hover?: boolean;
+  lyrics_early_scroll?: boolean;
+  lyrics_hide_year?: boolean;
+  lyrics_hide_npv?: boolean;
+  lyrics_hide_npv_empty?: boolean;
+  lyrics_background?: "animated" | "static" | "color";
+  lyrics_source_order?: string[];
+  lyrics_sources_disabled?: string[];
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;

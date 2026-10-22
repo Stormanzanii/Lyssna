@@ -32,9 +32,12 @@ export function SettingsPage({
   onSettings,
   onCall,
   onNotice,
+  onLyricsSettings,
 }: {
   state: AppState;
   onSettings: (settings: Partial<Settings>) => void;
+  /** Opens the Lyrics settings window. */
+  onLyricsSettings: () => void;
   onCall: <T = void>(
     command: string,
     args?: Record<string, unknown>,
@@ -369,191 +372,27 @@ export function SettingsPage({
           </section>
 
           <section className="settings-section">
+            <h2>Lyrics</h2>
+            <SettingRow
+              label="Lyrics settings"
+              help="Lyric size, timing, font, effects, sources and Space Gravity live in their own window."
+              keywords="lyrics font size offset romanized canvas gravity word sync spicy provider key sources"
+            >
+              <button className="pill outline" onClick={onLyricsSettings}>
+                Open
+              </button>
+            </SettingRow>
+          </section>
+
+          <section className="settings-section">
             <h2>Fonts</h2>
             <FontSettings
+              field="ui_font"
               settings={settings}
               onSettings={onSettings}
               onNotice={onNotice}
             />
           </section>
-
-          <section className="settings-section">
-            <h2>Lyrics</h2>
-            <SettingRow
-              label="Lyric text size"
-              help="Make room for every word."
-              keywords="lyrics size font scale"
-            >
-              <span className="settings-range">
-                <input
-                  type="range"
-                  aria-label="Lyric text size"
-                  min="18"
-                  max="60"
-                  value={lyricSize}
-                  style={
-                    {
-                      "--fill": `${((lyricSize - 18) / 42) * 100}%`,
-                    } as CSSProperties
-                  }
-                  onChange={(event) =>
-                    onSettings({ lyric_size: Number(event.target.value) })
-                  }
-                />
-                <output>{Math.round(lyricSize)}</output>
-              </span>
-            </SettingRow>
-            <SettingRow
-              label="Timing offset"
-              help="Shift lyrics earlier or later to match what you hear."
-              keywords="lyrics sync delay offset milliseconds"
-            >
-              <span className="settings-number">
-                <input
-                  className="number-field"
-                  type="number"
-                  aria-label="Timing offset"
-                  min="-10000"
-                  max="10000"
-                  step="50"
-                  value={settings.lyric_offset_ms}
-                  onChange={(event) =>
-                    onSettings({ lyric_offset_ms: Number(event.target.value) })
-                  }
-                />
-                ms
-              </span>
-            </SettingRow>
-            {(
-              [
-                [
-                  "romanized",
-                  "Show romanized lyrics",
-                  "Display Latin-alphabet readings. Supplied readings are preferred; automatic transliteration is approximate.",
-                ],
-                [
-                  "canvas_lyrics",
-                  "Canvas in lyrics",
-                  "Play the track's Canvas video behind the lyrics page.",
-                ],
-                [
-                  "space_gravity",
-                  "Space Gravity",
-                  "Words float in zero gravity, drift as they're sung and react when you move the window.",
-                ],
-                [
-                  "experimental_word_sync",
-                  "Experimental word sync",
-                  "Estimate word timing for line-synced or plain lyrics. Plain lyrics also use estimated line timing. Timing may be off.",
-                ],
-              ] as const
-            ).map(([key, label, help]) => (
-              <SettingRow key={key} label={label} help={help}>
-                <Toggle
-                  label={label}
-                  checked={Boolean(settings[key])}
-                  onChange={(checked) => onSettings({ [key]: checked })}
-                />
-              </SettingRow>
-            ))}
-          </section>
-
-          {!state.provider_configured && (
-            <section className="settings-section">
-              <h2>Spicy Lyrics</h2>
-              {state.provider_builtin ? (
-                <SettingRow
-                  label="Built-in lyrics provider"
-                  help="Spicy Lyrics is included and ready to use. It receives the current track ID and your IP address; Spotify tokens stay on this computer."
-                  keywords="lyrics provider spicy"
-                />
-              ) : (
-                <SettingRow
-                  stacked
-                  label="Lyrics API key"
-                  help={
-                    state.provider_kind === "spicy"
-                      ? "Your Spicy Lyrics key is saved in Windows Credential Manager."
-                      : state.provider_configured
-                        ? "A previous lyrics provider is configured. Save your Spicy Lyrics key below to switch."
-                        : "Create an application in the Spicy Lyrics dashboard. Enable Client access and No origin header for this desktop app."
-                  }
-                  keywords="lyrics provider spicy key"
-                >
-                  <div className="settings-key-form">
-                    <button
-                      className="text-link"
-                      onClick={() =>
-                        void onCall("open_link", {
-                          url: "https://developers.spicylyrics.org/dashboard",
-                        })
-                      }
-                    >
-                      Open Spicy Lyrics dashboard
-                      <ExternalLink size={13} />
-                    </button>
-                    <input
-                      className="field"
-                      aria-label="Lyrics API key"
-                      type="password"
-                      autoComplete="new-password"
-                      spellCheck={false}
-                      value={lyricsKey}
-                      placeholder="sl_pk_…"
-                      onChange={(event) => {
-                        setLyricsKey(event.target.value);
-                        setConsent(false);
-                      }}
-                    />
-                    <p className="setting-help">
-                      <Info size={13} />
-                      Spicy Lyrics receives the current track ID and your IP
-                      address. Spotify tokens stay on this computer.
-                    </p>
-                    {state.lyric_error && state.provider_kind === "spicy" && (
-                      <p className="source-error">{state.lyric_error}</p>
-                    )}
-                    <label className="consent-row">
-                      <input
-                        type="checkbox"
-                        checked={consent}
-                        onChange={(event) => setConsent(event.target.checked)}
-                      />
-                      <span>
-                        Allow SpotiFlex to request lyrics from Spicy Lyrics
-                        using this key and the current Spotify track ID.
-                      </span>
-                    </label>
-                    {lyricsKey.trim().startsWith("sl_sk_") && (
-                      <p className="source-error">
-                        Use a publishable sl_pk_ key. Secret sl_sk_ keys belong
-                        on your server.
-                      </p>
-                    )}
-                    <button
-                      className="pill"
-                      disabled={
-                        !lyricsKey.trim() ||
-                        !consent ||
-                        lyricsKey.trim().startsWith("sl_sk_")
-                      }
-                      onClick={() => {
-                        void onCall("configure_spicy_lyrics", {
-                          key: lyricsKey.trim(),
-                          consent,
-                        });
-                        setLyricsKey("");
-                        setConsent(false);
-                        onNotice("Saving Spicy Lyrics key…");
-                      }}
-                    >
-                      Save lyrics key
-                    </button>
-                  </div>
-                </SettingRow>
-              )}
-            </section>
-          )}
 
           <section className="settings-section">
             <h2>Storage</h2>

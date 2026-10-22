@@ -2290,6 +2290,7 @@ function App() {
               onSettings={updateSettings}
               onCall={call}
               onNotice={notify}
+              onLyricsSettings={() => setLyricsSettings(true)}
             />
           ) : center === "profile" ? (
             profileView && (
@@ -3421,7 +3422,14 @@ function App() {
                 onQueue={() => setPanel("queue")}
                 onFollow={follow}
                 onSave={save}
-                showLyricsPreview={center !== "lyrics"}
+                showLyricsPreview={
+                  center !== "lyrics" &&
+                  !state.settings.lyrics_hide_npv &&
+                  !(
+                    state.settings.lyrics_hide_npv_empty &&
+                    !state.lyrics?.lines.length
+                  )
+                }
               />
             )}
           </>
@@ -4099,6 +4107,8 @@ function App() {
           }}
           onOpen={(url) => void call("open_link", { url })}
           onClose={() => setLyricsSettings(false)}
+          onCall={call}
+          onNotice={notify}
         />
       )}
       {ttmlOpen && (

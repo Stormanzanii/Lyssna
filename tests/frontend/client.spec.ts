@@ -528,6 +528,14 @@ test("metadata menus stay off blank rows, backgrounds and player controls", asyn
   ).toBeVisible();
 });
 
+async function openLyricsSettings(page: Page, tab: string) {
+  await openSettings(page);
+  await page
+    .locator(".setting-row", { hasText: "Lyrics settings" })
+    .getByRole("button", { name: "Open", exact: true })
+    .click();
+  await page.getByRole("tab", { name: tab, exact: true }).click();
+}
 async function openSettings(page: Page) {
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
@@ -1957,12 +1965,13 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
     buffer: Buffer.from("<tt/>"),
   });
   await emitCanvas(page);
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await expect(page.getByLabel("Lyrics API key")).toHaveCount(0);
   await expect(page.getByLabel("Canvas in lyrics")).toBeChecked();
   await expect(page.getByLabel("Space Gravity")).not.toBeChecked();
   await page.getByLabel("Canvas in lyrics").check();
   await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".canvas-lyrics video")).toBeVisible();
   await expect(page.locator(".gravity-stage")).toBeVisible();
@@ -2159,7 +2168,9 @@ test("timed syllables lift independently and font choices apply separately", asy
   expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
   await openSettings(page);
   await page.getByLabel("App font", { exact: true }).fill("Georgia");
+  await openLyricsSettings(page, "Appearance");
   await page.getByLabel("Lyrics font", { exact: true }).fill("Consolas");
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   expect(
     await page
@@ -2187,9 +2198,10 @@ test("typed Windows font names apply immediately", async ({ page }) => {
       .locator(".application")
       .evaluate((node) => getComputedStyle(node).fontFamily),
   ).toContain("Times New Roman");
+  await openLyricsSettings(page, "Appearance");
   await lyricFont.fill("Bahnschrift");
   await expect(lyricFont).toBeFocused();
-  await expect(page.locator(".settings-page")).toBeVisible();
+  await expect(page.locator(".lyrics-settings")).toBeVisible();
   expect(
     await page
       .locator(".application")
@@ -2215,6 +2227,7 @@ test("typed Windows font names apply immediately", async ({ page }) => {
         getComputedStyle(node).getPropertyValue("--lyric-font"),
       ),
   ).toContain("Inter");
+  await page.keyboard.press("Escape");
   await appFont.clear();
   expect(
     await page
@@ -2887,8 +2900,10 @@ test("Now playing retains the lyrics ambience with Liquid Glass enabled", async 
 }) => {
   await startClient(page);
   await playLyricTrack(page);
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.keyboard.press("Escape");
+  await openSettings(page);
   await page.getByRole("switch", { name: "Liquid Glass" }).check();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(
@@ -3732,9 +3747,10 @@ test("Space Gravity waiting dots share the normal countdown and drift with words
     await position(time);
     normal.set(time, await dots());
   }
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   const waiting = page.locator(".gravity-wait");
   await expect(waiting.locator("i")).toHaveCount(3);
@@ -3830,9 +3846,10 @@ test("Space Gravity shares normal syllable joins and held-letter timing", async 
     await position(time);
     normalFills.set(time, await fills());
   }
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".gravity-word")).toHaveCount(4);
   await expect(letters).toHaveCount(10);
@@ -3866,9 +3883,10 @@ test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {
   await startClient(page);
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await page.getByLabel("Canvas in lyrics").uncheck();
   await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page.locator(".file-input").setInputFiles({
     name: "timing.ttml",
@@ -4029,8 +4047,9 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
   await romanization.click();
   await expect(page.locator(".lyrics-page .lyric-main")).toHaveText("東京");
   await romanization.click();
-  await openSettings(page);
+  await openLyricsSettings(page, "Effects");
   await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   for (const [text, reading, expected] of samples) {
     await emit(text, reading);
@@ -6388,14 +6407,12 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
             : toolbar.right <= album.right + 40),
       };
     });
-  await expect
-    .poll(layout)
-    .toEqual({
-      albumRight: false,
-      oneRow: true,
-      toolbarRight: false,
-      overArtwork: true,
-    });
+  await expect.poll(layout).toEqual({
+    albumRight: false,
+    oneRow: true,
+    toolbarRight: false,
+    overArtwork: true,
+  });
   // The flip animates: the browser's transition starts and is not skipped.
   await page.evaluate(() => {
     const original = (document as any).startViewTransition.bind(document);
@@ -6418,14 +6435,12 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
   expect(
     await page.evaluate(() => Promise.all((window as any).__transitions)),
   ).toEqual(["ran"]);
-  await expect
-    .poll(layout)
-    .toEqual({
-      albumRight: true,
-      oneRow: true,
-      toolbarRight: true,
-      overArtwork: true,
-    });
+  await expect.poll(layout).toEqual({
+    albumRight: true,
+    oneRow: true,
+    toolbarRight: true,
+    overArtwork: true,
+  });
 });
 
 test("Home artist cards open with their name and photo at once and prefetch on hover", async ({
@@ -6770,4 +6785,46 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
   await menu.click();
   await page.locator(".center-panel").click({ position: { x: 300, y: 300 } });
   await expect(page.getByRole("menu", { name: "Menu" })).toHaveCount(0);
+});
+
+test("lyrics options live in Lyrics settings with an ordered source list", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  // Main Settings keeps app settings and only links to the lyrics window.
+  await expect(page.locator(".settings-page")).not.toContainText(
+    "Lyric text size",
+  );
+  await expect(page.getByLabel("Lyrics font", { exact: true })).toHaveCount(0);
+  const saved = (key: string) =>
+    page.evaluate(
+      (key) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings[key],
+      key,
+    );
+  await openLyricsSettings(page, "Sources");
+  const sources = page.locator(".lyric-sources li");
+  await expect(sources).toHaveText([/Spicy Lyrics/, /LRCLIB/]);
+  await page.getByRole("switch", { name: "LRCLIB", exact: true }).check();
+  await expect.poll(() => saved("lyrics_sources_disabled")).toEqual([]);
+  await page.getByTitle("Move LRCLIB up", { exact: true }).click();
+  await expect
+    .poll(() => saved("lyrics_source_order"))
+    .toEqual(["lrclib", "spicy"]);
+  await expect(sources.first()).toContainText("LRCLIB");
+  await page.getByRole("tab", { name: "Lyrics", exact: true }).click();
+  await page.getByRole("switch", { name: "Right align lyrics" }).check();
+  await page.getByRole("switch", { name: "Simple lyrics mode" }).check();
+  await expect.poll(() => saved("lyrics_simple")).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await expect(page.locator(".lyrics-display")).toHaveClass(/lyrics-right/);
 });

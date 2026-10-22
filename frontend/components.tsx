@@ -13,6 +13,7 @@ import { artworkFor } from "./artwork";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
+import { useArtworkColor } from "./artwork-color";
 import {
   BadgeCheck,
   Music2,
@@ -428,12 +429,15 @@ export function LyricsDisplay({
       />
     );
   };
-  const active = activeLines(lyrics.lines, positionMs);
+  // Early scroll follows the line about to be sung; highlighting still
+  // follows the real song time.
+  const scrollTime = positionMs + (settings.lyrics_early_scroll ? 350 : 0);
+  const active = activeLines(lyrics.lines, scrollTime);
   const primary =
     active.find((index) => !lyrics.lines[index].background) ??
     lyrics.lines.reduce(
       (last, line, index) =>
-        line.start_ms <= positionMs && !line.background ? index : last,
+        line.start_ms <= scrollTime && !line.background ? index : last,
       0,
     );
   useEffect(() => {
@@ -450,11 +454,11 @@ export function LyricsDisplay({
     const instance = new LyricAnimator(
       lyrics,
       (index) => lines.current[index] ?? null,
-      settings.reduce_motion,
+      settings.reduce_motion || !!settings.lyrics_simple,
     );
     animator.current = instance;
     return () => instance.dispose();
-  }, [lyrics, settings.reduce_motion]);
+  }, [lyrics, settings.reduce_motion, settings.lyrics_simple]);
   useLayoutEffect(() => {
     if (!lyrics.synced) return;
     if (jumped.current) {
@@ -583,7 +587,7 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover === false ? "" : "lyrics-line-hover"} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""}`}
       data-following={following}
     >
       <div
@@ -901,6 +905,12 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
+  const coverColour =
+    useArtworkColor(
+      state.settings.lyrics_background === "color"
+        ? imageOf(track?.album.images)
+        : undefined,
+    ) ?? "rgb(40 40 40)";
   // Space Gravity needs word timing, including estimates for static lyrics.
   const gravity = !!(
     state.settings.space_gravity &&
@@ -918,18 +928,27 @@ function SongLyricsPage({
   return (
     <section
       ref={page}
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""}`}
+      style={
+        state.settings.lyrics_background === "color"
+          ? ({ "--hero": coverColour } as CSSProperties)
+          : undefined
+      }
       onMouseMove={wakeTools}
       onMouseLeave={sleepTools}
     >
       {children}
-      {(!canvas || !canvasPlaying) && (
-        <Ambience
-          track={track}
-          reduceMotion={state.settings.reduce_motion}
-          animate={state.playback.is_playing}
-        />
-      )}
+      {(!canvas || !canvasPlaying) &&
+        state.settings.lyrics_background !== "color" && (
+          <Ambience
+            track={track}
+            reduceMotion={state.settings.reduce_motion}
+            animate={
+              state.playback.is_playing &&
+              state.settings.lyrics_background !== "static"
+            }
+          />
+        )}
       {canvas && (
         <canvas
           className="lyrics-canvas-backdrop"
@@ -968,11 +987,11 @@ function SongLyricsPage({
               className="lyrics-title"
             />
             <Marquee
-              text={`${track.album.release_date?.slice(0, 4) ? track.album.release_date.slice(0, 4) + " · " : ""}${artistNames(track)}`}
+              text={`${track.album.release_date?.slice(0, 4) && !state.settings.lyrics_hide_year ? track.album.release_date.slice(0, 4) + " · " : ""}${artistNames(track)}`}
               reduceMotion={state.settings.reduce_motion}
               className="lyrics-artists"
             >
-              {track.album.release_date && (
+              {track.album.release_date && !state.settings.lyrics_hide_year && (
                 <span>{track.album.release_date.slice(0, 4)} · </span>
               )}
               <ArtistLinks artists={track.artists} onArtist={onArtist} />

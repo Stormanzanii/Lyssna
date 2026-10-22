@@ -944,3 +944,43 @@
   font-size: 12px;
   color: #ffffff80;
 }
+
+/* Lyrics settings → Sources: ordered source list. */
+.lyric-sources {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.lyric-sources li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff0d;
+}
+.lyric-sources li.off .lyric-source-name {
+  opacity: 0.5;
+}
+.lyric-source-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.lyric-source-name strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.lyric-source-name small {
+  font-size: 12px;
+  color: #ffffff99;
+}
+.lyric-sources-reset {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #ffffffb3;
+}

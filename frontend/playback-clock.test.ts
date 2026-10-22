@@ -94,3 +94,19 @@ it("keeps moving when a correction and ordinary tick report the same packet", ()
   clock.observe(update, 251, 0, 251, 251);
   expect(clock.read(267)).toBeGreaterThan(before);
 });
+it("snaps back to the start when repeat restarts the same song", () => {
+  // Repeat replays the song in place: same track, still playing, no seek
+  // flag. The clock used to ease back over minutes, pinned at the end.
+  const clock = new PlaybackClock();
+  clock.observe({ ...playback, progress_ms: 99000 }, 0, 0, 0, 0);
+  expect(clock.read(500)).toBeGreaterThan(99000);
+  clock.observe({ ...playback, progress_ms: 0 }, 1200, 0, 1200, 1200);
+  expect(clock.read(1200)).toBeLessThan(100);
+  expect(clock.read(1700)).toBeLessThan(700);
+});
+it("does not jump back for a slightly late position report", () => {
+  const clock = new PlaybackClock();
+  clock.observe({ ...playback, progress_ms: 50000 }, 0, 0, 0, 0);
+  clock.observe({ ...playback, progress_ms: 49700 }, 300, 0, 300, 300);
+  expect(clock.read(300)).toBeGreaterThan(50000);
+});

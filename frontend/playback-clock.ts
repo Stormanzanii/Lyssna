@@ -46,10 +46,16 @@ export class PlaybackClock {
       (playback.is_playing
         ? Math.min(native ? 500 : Infinity, Math.max(0, wallTime - observedAt))
         : 0);
+    // Repeat replays a song in place: same track, still playing, no seek.
+    // Native reports only snap forward, so treat a jump back to the start
+    // as a restart rather than easing back over minutes.
+    const restarted =
+      native && current - desired > 3000 && (playback.progress_ms ?? 0) < 1500;
     const snap =
       this.track !== playback.item?.uri ||
       this.playing !== playback.is_playing ||
       this.revision !== revision ||
+      restarted ||
       (native ? desired - current : Math.abs(desired - current)) > 1000 ||
       (native && stalled && desired >= current && !repeated);
     this.track = playback.item?.uri;

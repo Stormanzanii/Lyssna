@@ -2074,6 +2074,7 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.lyrics_source_order =
             crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
+        crate::config::clean_song_sorts(&mut settings.song_sorts);
         if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
             settings.lyrics_background = "animated".into();
         }

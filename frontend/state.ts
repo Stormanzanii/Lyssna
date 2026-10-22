@@ -145,6 +145,8 @@ export const emptyState: AppState = {
     lyrics_hide_year: false,
     lyrics_hide_npv: false,
     lyrics_hide_npv_empty: false,
+    now_playing_open: true,
+    song_sorts: {},
     lyrics_background: "animated",
     lyrics_source_order: [
       "spicy",

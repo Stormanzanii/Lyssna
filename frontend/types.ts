@@ -120,6 +120,8 @@ export interface Settings {
   lyrics_hide_year?: boolean;
   lyrics_hide_npv?: boolean;
   lyrics_hide_npv_empty?: boolean;
+  now_playing_open?: boolean;
+  song_sorts?: Record<string, string>;
   lyrics_background?: "animated" | "static" | "color";
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];

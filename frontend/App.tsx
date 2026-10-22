@@ -260,7 +260,10 @@ function App() {
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
-  const [sidebar, setSidebar] = useState(true);
+  // Now playing stays open or closed across restarts.
+  const sidebar = state.settings.now_playing_open !== false;
+  const setSidebar = (open: boolean) =>
+    updateSettings({ now_playing_open: open });
   // The right panel shows Now playing or the queue.
   const [panel, setPanel] = useState<"now" | "queue">("now");
   const toggleQueue = () => {
@@ -377,14 +380,20 @@ function App() {
   const [songSearch, setSongSearch] = useState(false);
   const [songQuery, setSongQuery] = useState(""),
     [songGenre, setSongGenre] = useState(""),
-    [songAge, setSongAge] = useState(""),
-    [songSort, setSongSort] = useState("order");
+    [songAge, setSongAge] = useState("");
+  // Each page remembers its own sort across restarts, like Spotify.
+  const songSort = state.settings.song_sorts?.[state.route] ?? "order";
+  const setSongSort = (sort: string) => {
+    const song_sorts = { ...state.settings.song_sorts };
+    if (sort === "order") delete song_sorts[state.route];
+    else song_sorts[state.route] = sort;
+    updateSettings({ song_sorts });
+  };
   useEffect(() => {
     setSongSearch(false);
     setSongQuery("");
     setSongGenre("");
     setSongAge("");
-    setSongSort("order");
   }, [state.route]);
   const generation = useRef(0),
     bootRoute = useRef("home"),

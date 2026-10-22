@@ -2299,6 +2299,32 @@ test("playlist search spans unloaded pages and play counts drive sorting", async
   await expect(page.locator(".track-row")).toHaveCount(1);
 });
 
+test("Now playing and each page's sort are saved for the next launch", async ({
+  page,
+}) => {
+  await startClient(page);
+  const saved = (key: string) =>
+    page.evaluate(
+      (key) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings[key],
+      key,
+    );
+  await page
+    .locator("footer")
+    .getByTitle("Now playing", { exact: true })
+    .click();
+  await expect.poll(() => saved("now_playing_open")).toBe(false);
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  await page.getByTitle("Sort and filter", { exact: true }).click();
+  await page.getByRole("button", { name: "Most played", exact: true }).click();
+  await expect.poll(() => saved("song_sorts")).toEqual({ liked: "popular" });
+});
+
 test("near-bottom scrolling automatically loads one page per offset", async ({
   page,
 }) => {

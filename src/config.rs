@@ -6,6 +6,23 @@ use serde::{Deserialize, Serialize};
 
 pub const REDIRECT_URI: &str = "http://127.0.0.1:43821/callback";
 pub const DASHBOARD_URL: &str = "https://developer.spotify.com/dashboard";
+/// Song sort choices a playlist, album or Liked Songs page can remember.
+pub const SONG_SORTS: [&str; 5] = ["recent", "added_oldest", "newest", "oldest", "popular"];
+pub const MAX_SONG_SORTS: usize = 500;
+
+/// Keep remembered sorts that name a known choice for a short page key,
+/// capped so the settings file stays small.
+pub fn clean_song_sorts(sorts: &mut std::collections::BTreeMap<String, String>) {
+    sorts.retain(|key, sort| {
+        !key.is_empty()
+            && key.len() <= 80
+            && key.bytes().all(|byte| byte.is_ascii_graphic())
+            && SONG_SORTS.contains(&sort.as_str())
+    });
+    while sorts.len() > MAX_SONG_SORTS {
+        sorts.pop_last();
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -51,6 +68,10 @@ pub struct Settings {
     pub audio_output: Option<String>,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
+    /// Whether the Now playing panel is open, kept across restarts.
+    pub now_playing_open: bool,
+    /// Song sort chosen per page (route key); pages missing use playlist order.
+    pub song_sorts: std::collections::BTreeMap<String, String>,
     /// Interface options modelled on the Spotify+ extension.
     pub spotify_plus: SpotifyPlus,
 }
@@ -108,6 +129,8 @@ impl Default for Settings {
             audio_output: None,
             auto_download_updates: true,
             folders: Vec::new(),
+            now_playing_open: true,
+            song_sorts: Default::default(),
             spotify_plus: SpotifyPlus::default(),
         }
     }
@@ -159,6 +182,7 @@ impl Settings {
         settings.audio_output = settings
             .audio_output
             .filter(|name| crate::audio_output::valid_name(name));
+        clean_song_sorts(&mut settings.song_sorts);
         Ok(settings)
     }
 
@@ -202,5 +226,29 @@ mod tests {
         let saved = serde_json::to_value(&settings).unwrap();
         assert_eq!(saved["space_gravity"], true);
         assert!(saved.get("floating_lyrics").is_none());
+    }
+
+    #[test]
+    fn older_settings_keep_now_playing_open_and_default_sorts() {
+        let settings: Settings = serde_json::from_str("{}").unwrap();
+        assert!(settings.now_playing_open);
+        assert!(settings.song_sorts.is_empty());
+    }
+
+    #[test]
+    fn song_sorts_keep_only_known_choices_within_limits() {
+        let mut sorts = std::collections::BTreeMap::from([
+            ("playlist:abc".to_owned(), "recent".to_owned()),
+            ("liked".to_owned(), "bogus".to_owned()),
+            ("x".repeat(200), "recent".to_owned()),
+        ]);
+        super::clean_song_sorts(&mut sorts);
+        assert_eq!(sorts.len(), 1);
+        assert_eq!(sorts["playlist:abc"], "recent");
+        let mut many: std::collections::BTreeMap<_, _> = (0..900)
+            .map(|index| (format!("playlist:{index}"), "popular".to_owned()))
+            .collect();
+        super::clean_song_sorts(&mut many);
+        assert_eq!(many.len(), super::MAX_SONG_SORTS);
     }
 }

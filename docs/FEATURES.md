@@ -180,6 +180,8 @@ Lyric layout (2026-10-22): wide lyrics begin at 28% of the lyric viewport, then 
 
 SpotiFlex settings uses a translucent Liquid Glass sheet with artwork showing through a saturated blur, a specular rim, static highlights, and inset glass controls. It works with either application theme. The system's reduced-transparency preference uses a dense fill without backdrop blur.
 
+The return-to-current-lyric button uses a borderless dark 64 px square with 20 px corners and a 32 px white arrow, following the fork's appearance. Hover retains the white arrow; pressing contracts the button. Direction, placement and scroll behavior remain unchanged. Reduce motion removes its transition.
+
 Interlude dots use natural cubic arcs from the fork's tuning: gradual brightness and size growth, a continuous rise and fall, a small scale overshoot, and a tighter halo. Dots finish 550 ms before the next vocal; the group contracts during the final 500 ms. The sequence follows song position across pauses and seeks and is shared with Space Gravity. Full-view dormant dots are 20 px, peaking around 28 px and settling near 27 px; compact dormant dots are 14 px. Six checkpoints measured from the supplied recording check opacity, size and rise. Browser checks compare the normal and Space Gravity countdowns. Reduced motion removes vertical movement and group transitions. A local side-by-side video compares the supplied crop with the rendered component; live visual confirmation remains pending.
 
 

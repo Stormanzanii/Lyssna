@@ -1740,10 +1740,6 @@ small {
   transform: translateX(2.5%);
   left: 0 !important;
 }
-.follow-lyrics:hover {
-  background: #2e2e2e;
-  transform: none;
-}
 .lyric-end-credits {
   /* Leave room below so credits can scroll clear of the bottom fade. */
   padding: 24px 2px 48px;
@@ -2925,18 +2921,25 @@ small {
   position: absolute;
   bottom: 35px;
   right: 16px;
-  width: 42px;
-  height: 42px;
-  border: 1px solid #ffffff50;
-  border-radius: 12px;
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 20px;
   background: #171717;
   color: #fff;
   z-index: 2;
+  transition:
+    background 0.2s ease,
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .follow-lyrics:hover {
-  background: white;
-  color: #171717;
-  transform: scale(1.03);
+  background: #292929;
+}
+.follow-lyrics:active {
+  transform: scale(0.94);
+}
+.reduce-motion .follow-lyrics {
+  transition: none;
 }
 .page-hero .eyebrow {
   font-family: inherit;

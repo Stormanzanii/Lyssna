@@ -703,9 +703,9 @@ export function LyricsDisplay({
           onClick={() => setFollowing(true)}
         >
           {returnDirection === "up" ? (
-            <ArrowUp size={21} />
+            <ArrowUp size={32} />
           ) : (
-            <ArrowDown size={21} />
+            <ArrowDown size={32} />
           )}
         </button>
       )}

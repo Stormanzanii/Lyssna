@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   AppWindow,
   FileText,
@@ -51,6 +57,8 @@ export function LyricsSettings({
   const [query, setQuery] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The highlight slides under the selected tab; hidden while searching.
+  const [marker, setMarker] = useState<{ left: number; width: number }>();
   const searching = !!query.trim();
   const settings = state.settings;
   useEffect(() => {
@@ -60,6 +68,19 @@ export function LyricsSettings({
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [onClose]);
+  useLayoutEffect(() => {
+    const index = TABS.findIndex(([label]) => label === tab);
+    const measure = () => {
+      const button = tabs.current[index];
+      if (button)
+        setMarker({ left: button.offsetLeft, width: button.offsetWidth });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    const list = tabs.current[index]?.parentElement;
+    if (list) observer.observe(list);
+    return () => observer.disconnect();
+  }, [tab]);
   const select = (next: Tab) => {
     setTab(next);
     setQuery("");
@@ -302,6 +323,19 @@ export function LyricsSettings({
           role="tablist"
           aria-label="Settings categories"
         >
+          <span
+            className="lyrics-settings-marker"
+            aria-hidden="true"
+            style={
+              marker && !searching
+                ? {
+                    opacity: 1,
+                    transform: `translateX(${marker.left}px)`,
+                    width: marker.width,
+                  }
+                : { opacity: 0 }
+            }
+          />
           {TABS.map(([label, Icon], index) => (
             <button
               key={label}

@@ -314,23 +314,35 @@
 /* Lyrics settings: a compact window opened from the lyrics toolbar gear.
    Based on Spicy Lyrics' panel, tightened: one header row with search,
    a segmented tab control and rows grouped into cards. */
+/* Always glass: it opens over the lyrics, which should stay visible
+   through a light dim instead of the usual dark blurred backdrop. */
 .lyrics-settings-backdrop {
   inset: 0;
   z-index: 80;
+  background: #0000004d;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .lyrics-settings {
   display: flex;
   flex-direction: column;
-  width: min(680px, calc(100vw - 48px));
+  width: min(760px, calc(100vw - 48px));
   /* Fixed height so switching tabs does not resize the window. */
-  height: min(600px, calc(100vh - 96px));
+  height: min(660px, calc(100vh - 96px));
   overflow: hidden;
-  border: 1px solid #ffffff1a;
-  border-radius: 16px;
-  background: #16181ceb;
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  backdrop-filter: blur(24px) saturate(140%);
-  box-shadow: 0 24px 80px #0009;
+  border: 1px solid #ffffff24;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #ffffff14, #ffffff05 45%), #16161a8c;
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow:
+    0 24px 80px #0008,
+    0 1px 0 #ffffff26 inset;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .lyrics-settings {
+    background: #1e1e23f2;
+  }
 }
 .lyrics-settings-head {
   display: flex;
@@ -377,6 +389,7 @@
   color: #fff;
 }
 .lyrics-settings-tabs {
+  position: relative;
   display: flex;
   gap: 2px;
   margin: 0 20px 4px;
@@ -391,10 +404,10 @@
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   padding: 0 8px;
   border-radius: 7px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #ffffff99;
   white-space: nowrap;
@@ -403,10 +416,28 @@
 .lyrics-settings-tabs button:hover {
   color: #fff;
 }
+.lyrics-settings-tabs button {
+  position: relative;
+  z-index: 1;
+}
 .lyrics-settings-tabs button.active {
   color: #fff;
+}
+.lyrics-settings-marker {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  border-radius: 7px;
   background: #ffffff1f;
   box-shadow: 0 1px 2px #0006;
+  transition:
+    transform 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
+    width 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.15s;
+}
+.reduce-motion .lyrics-settings-marker {
+  transition: none;
 }
 .lyrics-settings-scroll {
   display: flex;

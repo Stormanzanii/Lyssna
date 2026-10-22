@@ -2824,6 +2824,11 @@ small {
   pointer-events: none;
   height: 0;
   padding-block: 0;
+  /* Stay fully bright while the dots collapse, then vanish. */
+  transition:
+    opacity 0s linear 0.3s,
+    height 0.45s cubic-bezier(0.2, 0.7, 0.25, 1) 0.15s,
+    padding 0.45s cubic-bezier(0.2, 0.7, 0.25, 1) 0.15s;
 }
 .lyric-wait.opposite {
   justify-content: flex-end;
@@ -2836,8 +2841,11 @@ small {
   transform-origin: center;
   transition: scale 0.3s cubic-bezier(0.2, 0.7, 0.25, 1);
 }
+/* As recorded: the finished group swells slightly, then collapses toward
+   its centre, accelerating, in about 0.3 s. */
 .lyric-wait[aria-hidden="true"] .lyric-wait-dots {
   scale: 0;
+  transition: scale 0.3s cubic-bezier(0.5, -0.35, 0.85, 0.5);
 }
 .reduce-motion .lyric-wait-dots {
   transition: none;

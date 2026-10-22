@@ -2860,6 +2860,235 @@ async function playLyricTrack(page: Page, playing = true) {
     });
   }, playing);
 }
+test("lyric browsing stays put until the directional return button is clicked", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const position = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) => {
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        });
+      },
+      { uri: track.uri, position_ms },
+    );
+  await position(40_500);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const display = page.locator(".lyrics-page .lyrics-display"),
+    flow = display.locator(".lyric-scroll"),
+    back = display.getByRole("button", { name: "Return to current lyric" });
+  await expect
+    .poll(() => flow.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(100);
+  await expect
+    .poll(() =>
+      flow.evaluate((node) => {
+        const view = node.getBoundingClientRect(),
+          line = node
+            .querySelector(".lyric-line.active")!
+            .getBoundingClientRect();
+        return Math.abs(line.top - view.top - view.height * 0.28);
+      }),
+    )
+    .toBeLessThan(3);
+  await flow.hover();
+  await page.mouse.wheel(0, 900);
+  await expect(display).toHaveAttribute("data-following", "false");
+  await page.waitForTimeout(500);
+  const browsed = await flow.evaluate((node) => node.scrollTop);
+  await page.waitForTimeout(3200);
+  expect(
+    Math.abs((await flow.evaluate((node) => node.scrollTop)) - browsed),
+  ).toBeLessThan(2);
+  await expect(back).toBeVisible();
+  await expect(back.locator(".lucide-arrow-up")).toBeVisible();
+  await position(95_500);
+  await expect(display).toHaveAttribute("data-following", "false");
+  await expect(back.locator(".lucide-arrow-down")).toBeVisible();
+  await back.click();
+  await expect(display).toHaveAttribute("data-following", "true");
+  await expect(back).toHaveCount(0);
+  await expect
+    .poll(() => flow.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(browsed + 100);
+});
+
+test("wide lyrics start at a fixed upper anchor and end above padded credits", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const position = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) => {
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        });
+      },
+      { uri: track.uri, position_ms },
+    );
+  await position(10_500);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const flow = page.locator(".lyrics-page .lyric-scroll");
+  const anchor = () =>
+    flow.evaluate((node) => {
+      const view = node.getBoundingClientRect(),
+        line = node
+          .querySelector(".lyric-line.active")!
+          .getBoundingClientRect();
+      return (line.top - view.top) / view.height;
+    });
+  await expect.poll(anchor).toBeCloseTo(0.28, 1);
+  await position(40_500);
+  await expect.poll(anchor).toBeCloseTo(0.28, 1);
+  await position(98_500);
+  await expect
+    .poll(() =>
+      flow.evaluate((node) =>
+        Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop),
+      ),
+    )
+    .toBeLessThan(2);
+  const ending = await flow.evaluate((node) => {
+    const view = node.getBoundingClientRect(),
+      source = node
+        .querySelector(".lyric-end-credits .lyric-source")!
+        .getBoundingClientRect(),
+      last = node.querySelector(".lyric-line.active")!.getBoundingClientRect();
+    return {
+      gap: view.bottom - source.bottom,
+      last: (last.top - view.top) / view.height,
+    };
+  });
+  expect(ending.gap).toBeGreaterThanOrEqual(40);
+  expect(ending.gap).toBeLessThanOrEqual(80);
+  expect(ending.last).toBeGreaterThan(0.6);
+  await page.screenshot({
+    path: "target/diagnostics/lyrics-ending-spacing.png",
+  });
+});
+
+test("backing vocals keep their smaller size and selected lyric font", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ uri, settings }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "settings",
+        settings: { ...settings, lyric_font: "Arial" },
+      });
+      host.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "test",
+          synced: true,
+          instrumental: false,
+          lines: [false, true].map((background) => ({
+            text: background ? "Backing vocal" : "Lead vocal",
+            start_ms: 0,
+            end_ms: 60_000,
+            background,
+            opposite: false,
+            words: [],
+          })),
+        },
+      });
+    },
+    { uri: track.uri, settings: emptyState.settings },
+  );
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  for (const width of [1920, 1440, 1100]) {
+    await page.setViewportSize({ width, height: 1080 });
+    const styles = await page
+      .locator(".lyrics-page .lyric-line")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node);
+          return { size: parseFloat(style.fontSize), font: style.fontFamily };
+        }),
+      );
+    expect(styles[1].size / styles[0].size).toBeGreaterThan(0.5);
+    expect(styles[1].size / styles[0].size).toBeLessThan(0.7);
+    expect(styles[1].font).toBe(styles[0].font);
+    expect(styles[1].font).toContain("Arial");
+  }
+});
+
+for (const route of [
+  "liked",
+  `playlist:${track.id}`,
+  `album:${track.album.id}`,
+]) {
+  test(`song table headings line up with numbers and duration text in ${route.split(":")[0]}`, async ({
+    page,
+  }) => {
+    await startClient(page, route);
+    await page.evaluate(
+      ({ route, track }) => {
+        const host = (window as any).__clientTest;
+        const generation = host.commands
+          .filter(
+            (entry: any) =>
+              entry.command === "browse" && entry.args.key === route,
+          )
+          .at(-1).args.generation;
+        host.emit({
+          type: "browse_info",
+          generation,
+          info: {
+            key: route,
+            title: "Alignment test",
+            subtitle: "",
+            images: [],
+            albums: [],
+            album: route.startsWith("album:") ? track.album : undefined,
+          },
+        });
+      },
+      { route, track },
+    );
+    for (const width of [1920, 1200]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const offsets = await page.locator(".track-table").evaluate((table) => {
+        const center = (selector: string) => {
+          const element = table.querySelector(selector)!;
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const box = element.matches("svg")
+            ? element.getBoundingClientRect()
+            : range.getBoundingClientRect();
+          return (box.left + box.right) / 2;
+        };
+        return {
+          number: Math.abs(
+            center(".track-table-head > span:first-child") -
+              center(".track-number"),
+          ),
+          duration: Math.abs(
+            center(".track-table-head svg") - center(".row-end > span"),
+          ),
+        };
+      });
+      expect(offsets.number).toBeLessThan(1);
+      expect(offsets.duration).toBeLessThan(1);
+    }
+  });
+}
+
 test("stacked lyrics centre the active line in the lyric view", async ({
   page,
 }) => {
@@ -4150,6 +4379,15 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Lyrics settings" });
   await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByLabel("Lyric text size", { exact: true }),
+  ).toHaveValue("36");
+  const settingsBox = (await dialog.boundingBox())!;
+  expect(settingsBox.width).toBeGreaterThan(760);
+  expect(settingsBox.height).toBeGreaterThan(660);
+  await page.screenshot({
+    path: "target/diagnostics/lyrics-settings-size.png",
+  });
   await expect(dialog.getByRole("tab", { name: "Appearance" })).toHaveAttribute(
     "aria-selected",
     "true",

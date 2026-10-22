@@ -125,7 +125,7 @@ export const emptyState: AppState = {
     last_view: "home",
     show_lyrics: true,
     compact_library: false,
-    lyric_size: 32,
+    lyric_size: 36,
     lyric_offset_ms: 0,
     romanized: false,
     reduce_motion: false,

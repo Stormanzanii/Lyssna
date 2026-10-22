@@ -23,6 +23,8 @@ import {
   Mic2,
   CirclePlus,
   CircleCheck,
+  ArrowUp,
+  ArrowDown,
   X,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
@@ -378,16 +380,13 @@ export function LyricsDisplay({
   const scroll = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
-  const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Browsing pauses follow mode; it resumes on its own once scrolling stops.
+  const [returnDirection, setReturnDirection] = useState<"up" | "down">("down");
+  // Browsing stays paused until the user returns or selects a lyric.
   const glide = useRef<{ from: number; start: number }>(undefined);
   const browse = () => {
     glide.current = undefined;
     setFollowing(false);
-    clearTimeout(resume.current);
-    resume.current = setTimeout(() => setFollowing(true), 3000);
   };
-  useEffect(() => () => clearTimeout(resume.current), []);
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
   const seek = useRef(onSeek);
   useLayoutEffect(() => {
@@ -447,7 +446,8 @@ export function LyricsDisplay({
   // slide straight there instead of springing through the whole song.
   const lastPosition = useRef(positionMs),
     jumped = useRef(false);
-  if (Math.abs(positionMs - lastPosition.current) > 1500) jumped.current = true;
+  const positionJumped = Math.abs(positionMs - lastPosition.current) > 1500;
+  if (positionJumped) jumped.current = true;
   lastPosition.current = positionMs;
   const animator = useRef<LyricAnimator>(undefined);
   useLayoutEffect(() => {
@@ -461,16 +461,13 @@ export function LyricsDisplay({
   }, [lyrics, settings.reduce_motion, settings.lyrics_simple]);
   useLayoutEffect(() => {
     if (!lyrics.synced) return;
-    if (jumped.current) {
-      animator.current?.reset();
-      setFollowing(true);
-    }
+    if (positionJumped) animator.current?.reset();
     animator.current?.update(positionMs);
   }, [positionMs, lyrics, settings.reduce_motion]);
   useLayoutEffect(() => {
     const container = scroll.current,
       line = gap ? waiting.current : lines.current[primary];
-    if (!container || !line || !following || !lyrics.synced) {
+    if (!container || !line || !lyrics.synced) {
       spring.current.velocity = 0;
       return;
     }
@@ -507,33 +504,33 @@ export function LyricsDisplay({
       else container.scrollTop = motion.target;
     };
     const retarget = () => {
-      const cover = container
+      const stacked = container
         .closest(".lyrics-page")
-        ?.querySelector(".lyrics-album>.cover");
-      const coverBox = cover?.getBoundingClientRect(),
-        box = container.getBoundingClientRect();
-      // Align with the cover only when it sits beside the lyrics; narrow
-      // layouts stack a small cover above them, so centre in the view.
-      const beside = !!coverBox && coverBox.right <= box.left + 1;
+        ?.classList.contains("narrow");
+      // Wide lyrics keep the line's top at a fixed reading position. Stacked
+      // lyrics retain their centred line; neither anchor depends on artwork.
       const focus = compact
         ? Math.min(72, container.clientHeight * 0.25)
-        : beside
-          ? coverBox.top + coverBox.height / 2 - box.top
-          : container.clientHeight / 2;
-      container.style.setProperty("--lead-top", `${focus}px`);
-      const lastLine = lines.current.at(-1),
-        credits = container.querySelector(".lyric-end-credits");
+        : container.clientHeight * (stacked ? 0.5 : 0.28);
+      const centred = !compact && stacked;
       container.style.setProperty(
-        "--tail-space",
-        `${compact ? 0 : Math.max(0, container.clientHeight - focus - (lastLine?.offsetHeight ?? 0) / 2 - (credits?.getBoundingClientRect().height ?? 0))}px`,
+        "--lead-top",
+        `${Math.max(0, focus - (centred ? (lines.current[0]?.offsetHeight ?? 0) / 2 : 0))}px`,
       );
       spring.current.target = Math.max(
         0,
         Math.min(
           container.scrollHeight - container.clientHeight,
-          line.offsetTop + (compact ? 0 : line.offsetHeight / 2) - focus,
+          line.offsetTop + (centred ? line.offsetHeight / 2 : 0) - focus,
         ),
       );
+      if (!following) {
+        spring.current.velocity = 0;
+        setReturnDirection(
+          container.scrollTop > spring.current.target ? "up" : "down",
+        );
+        return;
+      }
       if (jumped.current && !settings.reduce_motion)
         glide.current = {
           from: container.scrollTop,
@@ -573,7 +570,7 @@ export function LyricsDisplay({
     gap?.start,
   ]);
   useLayoutEffect(() => {
-    // Held until follow mode resumes, so a jump while browsing still snaps.
+    // Held until follow mode resumes, so a jump while browsing still glides.
     if (following) jumped.current = false;
   }, [positionMs, following]);
   if (lyrics.instrumental)
@@ -598,10 +595,28 @@ export function LyricsDisplay({
           setAtEnd(
             node.scrollTop + node.clientHeight >= node.scrollHeight - 24,
           );
+          if (!following)
+            setReturnDirection(
+              node.scrollTop > spring.current.target ? "up" : "down",
+            );
         }}
         ref={scroll}
         onWheel={browse}
         onTouchStart={browse}
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (
+            [
+              "ArrowUp",
+              "ArrowDown",
+              "PageUp",
+              "PageDown",
+              "Home",
+              "End",
+            ].includes(event.key)
+          )
+            browse();
+        }}
         style={
           compact
             ? undefined
@@ -653,6 +668,22 @@ export function LyricsDisplay({
           <LyricCredits lyrics={lyrics} expanded />
         </div>
       </div>
+      {!following && lyrics.synced && (
+        <button
+          type="button"
+          className="follow-lyrics"
+          title="Return to current lyric"
+          aria-label="Return to current lyric"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setFollowing(true)}
+        >
+          {returnDirection === "up" ? (
+            <ArrowUp size={21} />
+          ) : (
+            <ArrowDown size={21} />
+          )}
+        </button>
+      )}
     </div>
   );
 }

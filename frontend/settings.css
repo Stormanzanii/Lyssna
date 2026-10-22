@@ -326,9 +326,9 @@
 .lyrics-settings {
   display: flex;
   flex-direction: column;
-  width: min(760px, calc(100vw - 48px));
+  width: min(840px, calc(100vw - 48px));
   /* Fixed height so switching tabs does not resize the window. */
-  height: min(660px, calc(100vh - 96px));
+  height: min(720px, calc(100vh - 96px));
   overflow: hidden;
   border: 1px solid #ffffff24;
   border-radius: 20px;

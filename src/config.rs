@@ -93,7 +93,7 @@ impl Default for Settings {
             last_view: "home".into(),
             show_lyrics: true,
             compact_library: false,
-            lyric_size: 32.0,
+            lyric_size: 36.0,
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,

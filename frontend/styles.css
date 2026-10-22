@@ -1749,7 +1749,7 @@ small {
 }
 .lyric-end-credits {
   /* Leave room below so credits can scroll clear of the bottom fade. */
-  padding: 24px 2px 24px;
+  padding: 24px 2px 48px;
   color: #d9d9d9a6;
   font-size: 15px;
   line-height: 1.6;
@@ -1793,8 +1793,15 @@ small {
   color: var(--muted);
   margin-bottom: 8px;
 }
+.track-table-head > span:first-child {
+  text-align: center;
+}
 .track-table-head > span:last-child {
-  justify-self: center;
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25px;
+  column-gap: 5px;
+  justify-items: center;
 }
 .track-row {
   height: 61px;
@@ -1870,12 +1877,16 @@ small {
   white-space: nowrap;
 }
 .row-end {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25px;
   align-items: center;
   justify-content: flex-end;
   gap: 5px;
   color: var(--muted);
   font-size: 12px;
+}
+.row-end > span {
+  text-align: center;
 }
 .row-end .icon-button {
   opacity: 0;
@@ -2612,14 +2623,6 @@ small {
 .lyric-scroll::-webkit-scrollbar {
   display: none;
 }
-.lyric-scroll::after {
-  content: "";
-  display: block;
-  height: var(--tail-space, 0px);
-}
-.lyrics-display[data-following="false"] .lyric-scroll::after {
-  height: 0;
-}
 .lyric-scroll[data-at-end="true"] {
   mask-image: linear-gradient(transparent, #000 10%, #000);
 }
@@ -2659,17 +2662,15 @@ small {
     filter 0.5s cubic-bezier(0.61, 1, 0.88, 1);
 }
 .lyrics-page .lyric-line {
-  font-size: clamp(23px, 3.6cqw, var(--lyric-size));
+  --lead-lyric-size: clamp(23px, 3.6cqw, var(--lyric-size));
+  font-size: var(--lead-lyric-size);
 }
 .lyrics-page .lyric-line.background-vocal {
-  font-size: clamp(18px, 2.1cqw, calc(var(--lyric-size) * 0.58));
+  font-size: calc(var(--lead-lyric-size) * 0.58);
 }
 /* Stacked (narrow) layouts give lyrics the full width, so size them from it. */
 .lyrics-page.narrow .lyric-line {
-  font-size: clamp(26px, 5.4cqw, var(--lyric-size));
-}
-.lyrics-page.narrow .lyric-line.background-vocal {
-  font-size: clamp(19px, 3.1cqw, calc(var(--lyric-size) * 0.58));
+  --lead-lyric-size: clamp(26px, 5.4cqw, var(--lyric-size));
 }
 .lyric-line:focus,
 .lyric-line:focus-visible {
@@ -2886,6 +2887,8 @@ small {
   margin-top: 9px;
 }
 .follow-lyrics {
+  display: grid;
+  place-items: center;
   position: absolute;
   bottom: 35px;
   right: 16px;
@@ -2899,6 +2902,7 @@ small {
 }
 .follow-lyrics:hover {
   background: white;
+  color: #171717;
   transform: scale(1.03);
 }
 .page-hero .eyebrow {
@@ -4148,7 +4152,7 @@ input[type="range"]:hover {
   .track-row {
     grid-template-columns: 26px minmax(150px, 1fr) 65px;
   }
-  .track-table-head > span:nth-child(3),
+  .track-table:not(.album-table) .track-table-head > span:nth-child(3),
   .track-row > .album-link {
     display: none;
   }
@@ -4912,5 +4916,5 @@ input[type="range"]:hover {
 /* Side-by-side lyrics in a tight panel: cap large lyric sizes to the
    panel width so lines keep a few words each. */
 .lyrics-page:not(.narrow) .lyrics-body .lyric-line {
-  font-size: min(var(--lyric-size), 4.6cqw);
+  --lead-lyric-size: min(var(--lyric-size), 4.6cqw);
 }

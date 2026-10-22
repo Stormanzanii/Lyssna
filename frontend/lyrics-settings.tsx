@@ -150,7 +150,7 @@ export function LyricsSettings({
       />
     </SettingRow>
   );
-  const lyricSize = settings.lyric_size || 40;
+  const lyricSize = settings.lyric_size || 36;
   const order = settings.lyrics_source_order?.length
     ? settings.lyrics_source_order
     : DEFAULT_SOURCES;

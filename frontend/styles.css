@@ -2802,7 +2802,12 @@ small {
   opacity: var(--dot-opacity);
   transform: translateY(calc(var(--dot-lift) * -6px))
     scale(calc(1 + var(--dot-lift) * 0.15));
-  box-shadow: 0 0 12px #fff4;
+  /* Glow like sung words: brighter and wider as each dot lights up. */
+  box-shadow:
+    0 0 calc(6px + var(--dot-lift) * 14px)
+      rgb(255 255 255 / calc(0.3 + var(--dot-lift) * 0.45)),
+    0 0 calc(18px + var(--dot-lift) * 22px)
+      rgb(255 255 255 / calc(0.12 + var(--dot-lift) * 0.25));
 }
 .reduce-motion .lyric-wait i {
   animation: none;

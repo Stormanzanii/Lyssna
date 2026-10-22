@@ -4198,6 +4198,11 @@ function Setup({
   }, [state.settings.client_id]);
   return (
     <div className="setup-backdrop">
+      <div className="setup-ambience" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
       <section
         className="setup-dialog"
         role="dialog"

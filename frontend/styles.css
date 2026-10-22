@@ -3745,6 +3745,59 @@ input[type="range"]:hover {
   background: #121212;
   backdrop-filter: none;
   padding: 24px 24px 84px;
+  overflow: hidden;
+}
+/* Soft out-of-focus colour behind the sign-in column. */
+.setup-ambience {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.setup-ambience span {
+  position: absolute;
+  width: 55vmax;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: 0.26;
+  animation: setup-drift 28s ease-in-out infinite alternate;
+}
+.setup-ambience span:nth-child(1) {
+  top: -20vmax;
+  left: -12vmax;
+  background: #1ed760;
+  opacity: 0.2;
+}
+.setup-ambience span:nth-child(2) {
+  right: -18vmax;
+  top: 10vmax;
+  background: #6d3fd8;
+  animation-duration: 34s;
+  animation-delay: -12s;
+}
+.setup-ambience span:nth-child(3) {
+  bottom: -28vmax;
+  left: 22vmax;
+  background: #1e5fd1;
+  opacity: 0.26;
+  animation-duration: 40s;
+  animation-delay: -20s;
+}
+@keyframes setup-drift {
+  to {
+    transform: translate(6vmax, 4vmax) scale(1.12);
+  }
+}
+.reduce-motion .setup-ambience span {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-ambience span {
+    animation: none;
+  }
+}
+.setup-dialog {
+  position: relative;
 }
 .setup-dialog {
   width: min(100%, 360px);

@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 /**
  * Liquid Glass refraction: an SVG displacement filter for `backdrop-filter`.
  * The displacement map is flat in the middle and ramps near every edge, so
@@ -67,13 +69,34 @@ export function GlassRefractionFilter() {
           result="map"
         />
         <feGaussianBlur in="SourceGraphic" stdDeviation="0.004" result="soft" />
-        <feDisplacementMap
-          in="soft"
-          in2="map"
-          scale="0.08"
-          xChannelSelector="R"
-          yChannelSelector="G"
-        />
+        {/* Red, green and blue bend by slightly different amounts, like
+            glass dispersing light, which fringes colour at the rim. */}
+        {(
+          [
+            ["r", 0.12, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"],
+            ["g", 0.135, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"],
+            ["b", 0.15, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"],
+          ] as const
+        ).map(([channel, scale, matrix]) => (
+          <Fragment key={channel}>
+            <feDisplacementMap
+              in="soft"
+              in2="map"
+              scale={scale}
+              xChannelSelector="R"
+              yChannelSelector="G"
+              result={`${channel}-bent`}
+            />
+            <feColorMatrix
+              in={`${channel}-bent`}
+              type="matrix"
+              values={matrix}
+              result={channel}
+            />
+          </Fragment>
+        ))}
+        <feBlend in="r" in2="g" mode="screen" result="rg" />
+        <feBlend in="rg" in2="b" mode="screen" />
       </filter>
     </svg>
   );

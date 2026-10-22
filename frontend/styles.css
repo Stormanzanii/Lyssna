@@ -3013,8 +3013,8 @@ small {
   display: flex;
   gap: 6px;
   z-index: 4;
-  background: #13131326;
-  backdrop-filter: blur(15px);
+  background: #0d0d0f6b;
+  backdrop-filter: blur(15px) brightness(0.85);
   border: 1px solid #ffffff13;
   border-radius: 30px;
   padding: 4px;
@@ -3040,7 +3040,7 @@ small {
 }
 /* Hovering darkens the frosted bar without making it opaque. */
 .lyrics-toolbar:hover {
-  background: #00000047;
+  background: #00000080;
 }
 .lyrics-toolbar .icon-button:hover {
   color: #fff;

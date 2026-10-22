@@ -7444,7 +7444,8 @@ test("Title, Album and Date added headers sort like Spotify", async ({
           .filter((entry: any) => entry.command === "save_settings")
           .at(-1)?.args.settings.song_sorts?.liked ?? "order",
     );
-  const first = () => page.locator(".track-row .track-name").first().innerText();
+  const first = () =>
+    page.locator(".track-row .track-name").first().innerText();
   const head = page.locator(".track-table-head");
   const title = head.getByRole("button", { name: /Sort by Title/ });
   await title.click();
@@ -7521,7 +7522,8 @@ test("custom header fonts retain italic overhang and artist descenders", async (
               style.fontSize +
               " " +
               style.fontFamily;
-          canvas.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
+            canvas.letterSpacing =
+              style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
             const metrics = canvas.measureText(element.textContent ?? "");
             const marker = document.createElement("span");
             marker.style.cssText =
@@ -7529,24 +7531,56 @@ test("custom header fonts retain italic overhang and artist descenders", async (
             element.prepend(marker);
             const origin = marker.getBoundingClientRect();
             marker.remove();
-          const marquee = element.closest(".marquee")!;
-          const clip = marquee.getBoundingClientRect();
-          return [
+            const marquee = element.closest(".marquee")!;
+            const clip = marquee.getBoundingClientRect();
+            return [
               clip.top - (origin.top - metrics.actualBoundingBoxAscent),
               origin.top + metrics.actualBoundingBoxDescent - clip.bottom,
-            ...marquee.classList.contains("scrolling") ? [] : [
-              clip.left - (origin.left - metrics.actualBoundingBoxLeft),
-              origin.left + metrics.actualBoundingBoxRight - clip.right,
-            ],
+              ...(marquee.classList.contains("scrolling")
+                ? []
+                : [
+                    clip.left - (origin.left - metrics.actualBoundingBoxLeft),
+                    origin.left + metrics.actualBoundingBoxRight - clip.right,
+                  ]),
             ];
           }),
         );
       });
   await expect.poll(overflow).toBeLessThanOrEqual(1);
-  await page
-    .locator(".lyrics-album")
-    .screenshot({
-      path: "target/diagnostics/lyrics-header-font.png",
-      animations: "disabled",
-    });
+  await page.locator(".lyrics-album").screenshot({
+    path: "target/diagnostics/lyrics-header-font.png",
+    animations: "disabled",
+  });
+});
+
+test("clicking empty top bar space never starts a window drag; moving does", async ({
+  page,
+}) => {
+  await startClient(page);
+  // Find a point where the top bar itself, not a control, is hit.
+  const point = await page.evaluate(() => {
+    const bar = document.querySelector(".topbar")!.getBoundingClientRect();
+    for (let x = bar.left + 4; x < bar.right; x += 6) {
+      const y = bar.top + bar.height / 2;
+      if (document.elementFromPoint(x, y)?.classList.contains("topbar"))
+        return { x, y };
+    }
+    return null;
+  });
+  expect(point).not.toBeNull();
+  const drags = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter((entry: any) =>
+          String(entry.command).includes("start_dragging"),
+        ).length,
+    );
+  await page.mouse.move(point!.x, point!.y);
+  await page.mouse.down();
+  await page.mouse.up();
+  expect(await drags()).toBe(0);
+  await page.mouse.down();
+  await page.mouse.move(point!.x + 20, point!.y + 2, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(drags).toBe(1);
 });

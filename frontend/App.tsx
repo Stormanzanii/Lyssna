@@ -273,6 +273,8 @@ function App() {
   const [libraryFilter, setLibraryFilter] = useState("all");
   // The Spotify folders opened in Your Library, outermost first.
   const [folderPath, setFolderPath] = useState<string[]>([]);
+  // Where a press on the empty top bar began, until it becomes a drag.
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
   // Now playing stays open or closed across restarts.
   const sidebar = state.settings.now_playing_open !== false;
   const setSidebar = (open: boolean) =>
@@ -2008,7 +2010,30 @@ function App() {
       )}
       <header
         className={`topbar ${sessionScreen(state) === "client" ? "" : "signed-out"}`}
-        data-tauri-drag-region
+        // Empty top-bar space moves the window, but only once the pointer
+        // actually moves: starting a drag on press made Windows restore a
+        // maximized window on a plain click.
+        onPointerDown={(event) => {
+          if (event.button === 0 && event.target === event.currentTarget)
+            dragStart.current = { x: event.clientX, y: event.clientY };
+        }}
+        onPointerMove={(event) => {
+          const start = dragStart.current;
+          if (
+            start &&
+            Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4
+          ) {
+            dragStart.current = null;
+            void windowHandle().startDragging();
+          }
+        }}
+        onPointerUp={() => {
+          dragStart.current = null;
+        }}
+        onDoubleClick={(event) => {
+          if (event.target === event.currentTarget)
+            void windowHandle().toggleMaximize();
+        }}
       >
         {!nativeMenuReady && <AppMenu groups={menuGroups} />}
         <div className="history-buttons">

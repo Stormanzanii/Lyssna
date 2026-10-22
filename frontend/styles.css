@@ -4898,3 +4898,10 @@ input[type="range"]:hover {
   display: inline;
   margin-top: 0;
 }
+/* The lyrics font also sets the song details and credits beside the lyrics. */
+.lyrics-title,
+.lyrics-artists,
+.lyric-source,
+.lyric-end-credits {
+  font-family: var(--lyric-font, inherit);
+}

@@ -18,7 +18,11 @@
   },
   "bundle": {
     "targets": ["app", "dmg"],
-    "icon": ["assets/spotiflex.icns", "assets/spotiflex.ico"],
+    "icon": [
+      "assets/spotiflex.icns",
+      "assets/spotiflex.png",
+      "assets/spotiflex.ico"
+    ],
     "category": "Music",
     "macOS": {
       "minimumSystemVersion": "12.0",

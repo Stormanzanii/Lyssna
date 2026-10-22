@@ -4094,68 +4094,31 @@ test("the avatar menu opens settings, profile and grouped recents", async ({
   await expect(page.locator(".recents-tracks li")).toHaveCount(2);
 });
 
-test("Liquid Glass refraction is an opt-in with a GPU note", async ({
+test("Liquid Glass refracts only the lyrics toolbar and profile menu", async ({
   page,
 }) => {
   await startClient(page);
-  await openSettings(page);
-  const refraction = page.getByRole("switch", { name: "Refraction" });
-  await expect(refraction).toHaveCount(0);
-  await page.getByRole("switch", { name: "Liquid Glass" }).check();
-  await expect(refraction).not.toBeChecked();
-  await expect(
-    page.locator(".setting-row", { hasText: "Refraction" }),
-  ).toContainText("more GPU");
   await expect(page.locator("#glass-refraction")).toHaveCount(0);
-  await refraction.check();
-  await expect(page.locator(".application")).toHaveClass(/glass-refraction/);
+  await openSettings(page);
+  await expect(page.getByRole("switch", { name: "Refraction" })).toHaveCount(0);
+  await page.getByRole("switch", { name: "Liquid Glass" }).check();
   await expect(page.locator("#glass-refraction")).toHaveCount(1);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as any).__clientTest.commands
-            .filter((entry: any) => entry.command === "save_settings")
-            .at(-1)?.args.settings.liquid_glass_refraction,
-      ),
-    )
-    .toBe(true);
+  const backdrop = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((node) => getComputedStyle(node).backdropFilter);
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  expect(await backdrop(".profile-menu")).toContain("glass-refraction");
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  expect(await backdrop(".lyrics-toolbar")).toContain("glass-refraction");
+  expect(await backdrop(".library-panel")).not.toContain("glass-refraction");
   expect(
     await page
       .locator(".search-box")
       .evaluate((node) => getComputedStyle(node, "::before").backdropFilter),
   ).not.toContain("glass-refraction");
-  // The main sheets never refract; it was far too slow.
-  expect(
-    await page
-      .locator(".library-panel")
-      .evaluate((node) => getComputedStyle(node).backdropFilter),
-  ).not.toContain("glass-refraction");
-  // Only the lyrics toolbar and profile menu refract.
-  await page.keyboard.press("Escape");
-  await page.getByTitle("Lyrics", { exact: true }).click();
-  await page
-    .locator(".lyrics-toolbar")
-    .getByTitle("Lyrics settings", { exact: true })
-    .click();
-  expect(
-    await page
-      .locator(".lyrics-toolbar")
-      .evaluate((node) => getComputedStyle(node).backdropFilter),
-  ).toContain("glass-refraction");
-  expect(
-    await page
-      .locator(".lyrics-settings")
-      .evaluate((node) => getComputedStyle(node).backdropFilter),
-  ).not.toContain("glass-refraction");
-  await page.keyboard.press("Escape");
-  await openSettings(page);
-  // Turning Liquid Glass off hides the option and the effect.
-  await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
-  await expect(refraction).toHaveCount(0);
-  await expect(page.locator(".application")).not.toHaveClass(
-    /glass-refraction/,
-  );
 });
 
 test("Liquid Glass is off by default and toggles from Settings", async ({
@@ -4179,8 +4142,7 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
     .toBe(true);
   await page.getByTitle("Search settings", { exact: true }).click();
   await page.getByLabel("Search settings").fill("glass");
-  // Liquid Glass and, while it is on, its Refraction option.
-  await expect(page.locator(".setting-row")).toHaveCount(2);
+  await expect(page.locator(".setting-row")).toHaveCount(1);
   await page.getByLabel("Search settings").fill("zzzz");
   await expect(page.locator(".settings-empty")).toBeVisible();
 });

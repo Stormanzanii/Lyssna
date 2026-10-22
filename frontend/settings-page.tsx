@@ -266,21 +266,6 @@ export function SettingsPage({
                 onChange={(liquid_glass) => onSettings({ liquid_glass })}
               />
             </SettingRow>
-            {settings.liquid_glass && (
-              <SettingRow
-                label="Refraction"
-                help="The lyrics toolbar and profile menu bend what's behind them like curved glass. Uses more GPU."
-                keywords="liquid glass refraction lens distortion gpu"
-              >
-                <Toggle
-                  label="Refraction"
-                  checked={Boolean(settings.liquid_glass_refraction)}
-                  onChange={(liquid_glass_refraction) =>
-                    onSettings({ liquid_glass_refraction })
-                  }
-                />
-              </SettingRow>
-            )}
             <SettingRow
               label="Reduce motion"
               help="Turn off animated backgrounds and word animations."

@@ -47,8 +47,6 @@ pub struct Settings {
     pub romanized: bool,
     pub reduce_motion: bool,
     pub liquid_glass: bool,
-    /// Real-time refraction on Liquid Glass controls; uses more GPU.
-    pub liquid_glass_refraction: bool,
     pub canvas_lyrics: bool,
     /// Space Gravity lyrics; replaced the earlier floating lyrics option.
     #[serde(alias = "floating_lyrics")]
@@ -111,7 +109,6 @@ impl Default for Settings {
             romanized: false,
             reduce_motion: false,
             liquid_glass: false,
-            liquid_glass_refraction: false,
             canvas_lyrics: true,
             space_gravity: false,
             experimental_word_sync: false,

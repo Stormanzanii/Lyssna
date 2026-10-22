@@ -315,9 +315,8 @@
   display: none;
 }
 
-/* Refraction (opt-in, flagged for its GPU cost): only the lyrics toolbar
-   and the profile menu bend what's behind them. Anything bigger or moving
-   made the app crawl. */
+/* Liquid Glass refraction: only the lyrics toolbar and the profile menu
+   bend what's behind them. Anything bigger or moving made the app crawl. */
 .glass-refraction-defs {
   position: absolute;
   width: 0;
@@ -326,10 +325,16 @@
   pointer-events: none;
 }
 .glass-refraction .lyrics-toolbar {
-  -webkit-backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
-    brightness(1.08);
-  backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
-    brightness(1.08);
+  /* Dark and dimmed, so the icons stay readable over bright artwork while
+     the bend still shows. */
+  background: #08080bbf;
+  -webkit-backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.3)
+    brightness(0.7);
+  backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.3)
+    brightness(0.7);
+}
+.glass-refraction .lyrics-toolbar:hover {
+  background: #050507d9;
 }
 .glass-refraction .profile-menu {
   /* A lighter fill lets the bent backdrop show; the blur keeps text clear. */

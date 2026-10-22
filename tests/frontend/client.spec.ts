@@ -4125,12 +4125,12 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
       .locator(".search-box")
       .evaluate((node) => getComputedStyle(node, "::before").backdropFilter),
   ).toContain("glass-refraction");
-  // The main sheets refract too.
+  // The main sheets never refract; it was far too slow.
   expect(
     await page
       .locator(".library-panel")
       .evaluate((node) => getComputedStyle(node).backdropFilter),
-  ).toContain("glass-refraction");
+  ).not.toContain("glass-refraction");
   // Turning Liquid Glass off hides the option and the effect.
   await page.getByRole("switch", { name: "Liquid Glass" }).uncheck();
   await expect(refraction).toHaveCount(0);

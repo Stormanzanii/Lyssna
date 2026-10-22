@@ -355,20 +355,8 @@
   backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
 }
 
-/* The main sheets refract the ambience behind them too. They keep their
-   own rim and sheen; a lens shade adds depth at the edges. The bend is
-   applied without extra blur because the ambience is already soft. */
-.glass-refraction .library-panel,
-.glass-refraction .center-panel,
-.glass-refraction .now-playing,
-.glass-refraction .player-bar {
-  -webkit-backdrop-filter: url(#glass-refraction) saturate(1.8);
-  backdrop-filter: url(#glass-refraction) saturate(1.8);
-  box-shadow:
-    inset 0 1px 0 #ffffff47,
-    inset 0 -20px 30px -24px #00000080,
-    var(--glass-shadow);
-}
+/* The main sheets never refract: bending window-sized panels every frame
+   made the whole app crawl and fringed their edges. */
 
 .glass-refraction .search-box::before {
   background: #ffffff0a;

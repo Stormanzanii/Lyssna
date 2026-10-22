@@ -2797,7 +2797,7 @@ small {
   overflow: visible;
   display: flex;
   justify-content: flex-start;
-  gap: var(--dot-size);
+  gap: calc(var(--dot-size) * 1.1);
   align-items: center;
   height: 72px;
   padding: 8px 4px;
@@ -2812,6 +2812,20 @@ small {
 .lyric-wait.opposite {
   justify-content: flex-end;
 }
+.lyric-wait-dots {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  scale: 1;
+  transform-origin: center;
+  transition: scale 0.3s cubic-bezier(0.2, 0.7, 0.25, 1);
+}
+.lyric-wait[aria-hidden="true"] .lyric-wait-dots {
+  scale: 0;
+}
+.reduce-motion .lyric-wait-dots {
+  transition: none;
+}
 .lyric-wait i {
   display: block;
   width: var(--dot-size);
@@ -2822,12 +2836,10 @@ small {
   opacity: var(--dot-opacity);
   transform: translateY(calc(var(--dot-lift) * var(--dot-size) * -1))
     scale(var(--dot-scale));
-  /* Lit dots keep their larger size and soft glow after settling. */
+  /* A compact halo follows the fork's text-shadow rather than a wide bloom. */
   box-shadow:
-    0 0 calc(4px + var(--dot-glow) * 8px)
-      rgb(255 255 255 / calc(0.05 + var(--dot-glow) * 0.35)),
-    0 0 calc(12px + var(--dot-glow) * 12px)
-      rgb(255 255 255 / calc(0.02 + var(--dot-glow) * 0.14));
+    0 0 calc(4px + var(--dot-glow) * 6px)
+      rgb(255 255 255 / calc(var(--dot-glow) * 0.9));
 }
 .reduce-motion .lyric-wait i {
   animation: none;
@@ -3276,7 +3288,6 @@ small {
   --dot-size: 14px;
   height: 48px;
   padding: 6px 4px;
-  gap: 12px;
 }
 .compact .lyric-wait[aria-hidden="true"] {
   height: 0;

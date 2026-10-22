@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   GLIDE_MS,
   countdownDots,
+  countdownVisible,
   MOTION,
   glideScroll,
   Spring,
@@ -14,42 +15,68 @@ import {
   wordGoal,
 } from "./lyric-motion";
 import type { Line } from "./types";
+// Measured from the supplied recording. Each dot's turn lasts about 7.2 s;
+// size and rise are normalized to its dormant 20 px diameter.
+it.each([
+  [1000, 0.54, 1.12, 5.8],
+  [2000, 0.69, 1.26, 10.5],
+  [3000, 0.85, 1.35, 14.5],
+  [4000, 0.96, 1.42, 16.6],
+  [5000, 0.97, 1.45, 14.9],
+  [6000, 0.98, 1.43, 9.2],
+])(
+  "tracks the recorded countdown arc at %i ms",
+  (time, opacity, scale, rise) => {
+    const dot = countdownDots({ start: 0, end: 22150, after: 0 }, time)[0];
+    expect(Math.abs(dot.opacity - opacity)).toBeLessThan(0.08);
+    expect(Math.abs(dot.scale - scale)).toBeLessThan(0.08);
+    expect(Math.abs(dot.lift * 20 - rise)).toBeLessThan(2);
+  },
+);
 it("fills countdown dots in order and rewinds from song time", () => {
   const gap = { start: 1000, end: 7000, after: 0 };
   expect(countdownDots(gap, 0).map((dot) => dot.opacity)).toEqual([
     0.35, 0.35, 0.35,
   ]);
-  expect(countdownDots(gap, 4000).map((dot) => dot.opacity)).toEqual([
-    1, 1, 0.35,
-  ]);
+  const middle = countdownDots(gap, 3500);
+  expect(middle[0].opacity).toBe(1);
+  expect(middle[1].opacity).toBeGreaterThan(0.8);
+  expect(middle[1].opacity).toBeLessThan(1);
+  expect(middle[2].opacity).toBe(0.35);
   expect(countdownDots(gap, 8000).map((dot) => dot.opacity)).toEqual([1, 1, 1]);
   expect(countdownDots(gap, 1000).map((dot) => dot.opacity)).toEqual([
     0.35, 0.35, 0.35,
   ]);
 });
-it("grows each countdown dot, holds its lift, then settles at its lit size", () => {
+it("swells continuously through an arc and settles below its peak size", () => {
   const gap = { start: 1000, end: 7000, after: 0 };
   const start = countdownDots(gap, 1000),
-    rising = countdownDots(gap, 1200),
-    held = countdownDots(gap, 1800),
+    rising = countdownDots(gap, 1400),
+    middle = countdownDots(gap, 1800),
+    peak = countdownDots(gap, 2400),
     settled = countdownDots(gap, 3000);
   expect(start[0]).toMatchObject({ scale: 1, lift: 0, glow: 0 });
   expect(rising[0].lift).toBeGreaterThan(0);
-  expect(held[0]).toMatchObject({ opacity: 1, scale: 1.35, lift: 1, glow: 1 });
+  expect(middle[0].lift).toBeGreaterThan(rising[0].lift);
+  expect(middle[0].scale).toBeGreaterThan(rising[0].scale);
+  expect(peak[0].scale).toBeGreaterThan(settled[0].scale);
   expect(settled[0]).toMatchObject({
     opacity: 1,
-    scale: 1.35,
+    scale: 4 / 3,
     lift: 0,
     glow: 1,
   });
-  expect(settled[1]).toMatchObject({
-    opacity: 0.35,
-    scale: 1,
-    lift: 0,
-    glow: 0,
-  });
-  expect(countdownDots(gap, 1800)).toEqual(held);
+  expect(settled[1].scale).toBeLessThan(1.1);
+  expect(countdownDots(gap, 1800)).toEqual(middle);
   expect(countdownDots(gap, 1000)).toEqual(start);
+});
+it("finishes and contracts the countdown before the next vocal", () => {
+  const gap = { start: 1000, end: 7000, after: 0 };
+  expect(countdownVisible(gap, 900)).toBe(false);
+  expect(countdownVisible(gap, 1000)).toBe(true);
+  expect(countdownVisible(gap, 6499)).toBe(true);
+  expect(countdownVisible(gap, 6500)).toBe(false);
+  expect(countdownDots(gap, 6450).every((dot) => dot.lift === 0)).toBe(true);
 });
 it("keeps countdown progress with reduced motion while removing the lift", () => {
   const gap = { start: 1000, end: 7000, after: 0 };

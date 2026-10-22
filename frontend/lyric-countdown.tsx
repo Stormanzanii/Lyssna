@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type Ref } from "react";
-import { countdownDots, type VocalGap } from "./lyric-motion";
+import { countdownDots, countdownVisible, type VocalGap } from "./lyric-motion";
 
 /** Shared waiting dots for the normal and floating lyrics views. */
 export const LyricCountdown = memo(function LyricCountdown({
@@ -17,27 +17,30 @@ export const LyricCountdown = memo(function LyricCountdown({
   className?: string;
   ref?: Ref<HTMLDivElement>;
 }) {
+  const shown = visible && countdownVisible(gap, time);
   return (
     <div
       ref={ref}
-      aria-hidden={!visible}
+      aria-hidden={!shown}
       className={`lyric-wait ${className} ${gap.opposite ? "opposite" : ""}`}
       role="status"
       aria-label="Instrumental break"
     >
-      {countdownDots(gap, time, reduceMotion).map((dot, index) => (
-        <i
-          key={index}
-          style={
-            {
-              "--dot-opacity": dot.opacity,
-              "--dot-lift": dot.lift,
-              "--dot-scale": dot.scale,
-              "--dot-glow": dot.glow,
-            } as CSSProperties
-          }
-        />
-      ))}
+      <span className="lyric-wait-dots">
+        {countdownDots(gap, time, reduceMotion).map((dot, index) => (
+          <i
+            key={index}
+            style={
+              {
+                "--dot-opacity": dot.opacity,
+                "--dot-lift": dot.lift,
+                "--dot-scale": dot.scale,
+                "--dot-glow": dot.glow,
+              } as CSSProperties
+            }
+          />
+        ))}
+      </span>
     </div>
   );
 });

@@ -1,5 +1,9 @@
 # Third-party notices
 
+## Spicy Lyrics behavior and motion reference
+
+Countdown motion and pinned-footer options reference [Spicy Lyrics](https://github.com/spikerko/spicy-lyrics) and [iPixelGalaxy's fork](https://github.com/iPixelGalaxy/spicy-lyrics), reviewed at fork commit `a53a4f5aab4aa052754f9b55c3e4665f4a5e30a2`. The fork is distributed under GNU AGPL-3.0; SpotiFlex uses the same license. Its motion curves and settings behavior inform SpotiFlex's own implementation. Upstream extensions and assets are not bundled.
+
 Local speech recognition uses [whisper-rs](https://codeberg.org/tazz4843/whisper-rs) (Unlicense), [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT), and [OpenAI Whisper](https://github.com/openai/whisper) model weights (MIT). The pinned quantized English model is distributed by [the whisper.cpp model repository](https://huggingface.co/ggerganov/whisper.cpp). Model weights are downloaded into application data, verified against a pinned SHA-256, and are not tracked in this repository. Microphone audio is processed locally.
 
 ## whisper.cpp

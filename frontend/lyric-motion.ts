@@ -18,28 +18,47 @@ export interface VocalGap {
   after: number;
 }
 
-/** Each dot grows and lights, holds its lift, then settles without shrinking.
+// Natural arcs follow the fork's dot tuning; normalized to a dormant dot's
+// diameter. Unlike a stepped envelope, these keep changing throughout a turn.
+const DOT_MOTION = {
+  scale: naturalSpline([
+    [0, 1],
+    [0.7, 1.4],
+    [1, 4 / 3],
+  ]),
+  lift: naturalSpline([
+    [0, 0],
+    [0.9, 0.36],
+    [1, 0],
+  ]),
+  opacity: naturalSpline([
+    [0, 0.35],
+    [0.6, 1],
+    [1, 1],
+  ]),
+};
+/** The fork finishes dots before the next vocal, leaving time to contract. */
+export const COUNTDOWN_TAIL_MS = 550;
+export const countdownVisible = (gap: VocalGap, time: number) =>
+  time >= gap.start && time < gap.end - 500;
+
+/** Each dot gradually swells, traces a smooth arc and settles slightly smaller.
  * All phases follow song time, including pauses and seeks. */
 export function countdownDots(
   gap: VocalGap,
   time: number,
   reduceMotion = false,
 ) {
-  const progress = (time - gap.start) / Math.max(1, gap.end - gap.start);
-  const ease = (value: number) => {
-    const phase = Math.max(0, Math.min(1, value));
-    return phase * phase * (3 - 2 * phase);
-  };
+  const progress =
+    (time - gap.start) / Math.max(1, gap.end - gap.start - COUNTDOWN_TAIL_MS);
   return [0, 1, 2].map((index) => {
     const phase = Math.max(0, Math.min(1, progress * 3 - index));
-    const fill = ease(phase / 0.25);
+    const opacity = Math.min(1, DOT_MOTION.opacity(phase));
     return {
-      opacity: 0.35 + fill * 0.65,
-      scale: 1 + fill * 0.35,
-      glow: fill,
-      lift: reduceMotion
-        ? 0
-        : ease(phase / 0.22) * (1 - ease((phase - 0.55) / 0.45)),
+      opacity,
+      scale: DOT_MOTION.scale(phase),
+      glow: (opacity - 0.35) / 0.65,
+      lift: reduceMotion ? 0 : DOT_MOTION.lift(phase),
     };
   });
 }

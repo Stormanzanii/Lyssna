@@ -272,9 +272,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Spotify's album grid: the duration column flexes, which sets Plays
+   in from the edge rather than beside the duration. */
 .album-table .track-row,
 .album-table .track-table-head {
-  grid-template-columns: 32px minmax(180px, 6fr) minmax(110px, 2fr) 96px;
+  grid-template-columns: 32px minmax(180px, 4fr) minmax(110px, 2fr) minmax(96px, 1fr);
 }
 .album-table .track-cell > .cover {
   display: none;
@@ -330,6 +332,9 @@
 .track-streams {
   font-size: 14px;
   color: var(--text-subdued);
+  /* The interface font has no tabular digits; Inter's keep counts in
+     even columns, as in Spotify. */
+  font-family: "Inter Variable", "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
 }
 .row-end {

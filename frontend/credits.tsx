@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
  *  first. Avatars and profiles come from GitHub. */
 export const PEOPLE = [
   { login: "Stormanzanii", name: "Arashii", role: "Creator of SpotiFlex" },
-  { login: "iPixelGalaxy", name: "Pixel", role: "Spotify+ and the Spicy Lyrics fork" },
+  { login: "iPixelGalaxy", name: "iPixelGalaxy", role: "Spotify+ and the Spicy Lyrics fork" },
   { login: "Spikerko", name: "Spikerko", role: "Creator of Spicy Lyrics" },
 ] as const;
 
@@ -13,14 +13,14 @@ export const PEOPLE = [
 export const CREDITS = [
   {
     name: "Spotify+",
-    by: "Pixel (iPixelGalaxy)",
+    by: "iPixelGalaxy",
     note: "Interface options and menus are reimplemented from its feature descriptions. No source is copied; the project declares no licence.",
     url: "https://github.com/iPixelGalaxy/spotify-plus",
   },
   {
     name: "Spicy Lyrics",
-    by: "Spikerko, with Pixel's fork",
-    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to Pixel for the fork SpotiFlex follows. AGPL-3.0.",
+    by: "Spikerko, with iPixelGalaxy's fork",
+    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows. AGPL-3.0.",
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
   },
   {

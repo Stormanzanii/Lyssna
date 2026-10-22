@@ -36,50 +36,68 @@ export function AboutDialog({
         aria-label="About SpotiFlex"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          className="icon-button about-close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <X size={22} />
-        </button>
         <header className="about-brand">
-          <Logo size={56} />
-          <span className="about-wordmark">SpotiFlex</span>
-        </header>
-        <div className="about-version">
+          <Logo size={48} />
           <div>
-            <p>SpotiFlex for {PLATFORM_LABEL}</p>
-            <p>
-              {__APP_VERSION__} · {build}
-            </p>
+            <span className="about-wordmark">SpotiFlex</span>
+            <span className="about-platform">
+              SpotiFlex for {PLATFORM_LABEL}
+            </span>
           </div>
           <button
-            className="about-copy"
-            title="Copy version details"
-            aria-label="Copy version details"
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(details)
-                .then(() => onNotice("Version details copied."))
-                .catch(() => onNotice("Could not copy.", true))
-            }
+            className="icon-button about-close"
+            aria-label="Close"
+            onClick={onClose}
           >
-            <ClipboardCopy size={22} />
+            <X size={20} />
           </button>
-        </div>
-        <p className="about-update">
-          {ready && updateVersion ? (
-            <>
-              SpotiFlex has been updated to version {updateVersion}.{" "}
-              <button className="text-link" onClick={onUpdate}>
-                Restart to install.
+        </header>
+        <dl className="about-details">
+          <div>
+            <dt>Version</dt>
+            <dd>
+              {__APP_VERSION__}
+              <button
+                className="icon-button about-copy"
+                title="Copy version details"
+                aria-label="Copy version details"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(details)
+                    .then(() => onNotice("Version details copied."))
+                    .catch(() => onNotice("Could not copy.", true))
+                }
+              >
+                <ClipboardCopy size={15} />
               </button>
-            </>
-          ) : (
-            updateStatus || "SpotiFlex is up to date."
-          )}
-        </p>
+            </dd>
+          </div>
+          <div>
+            <dt>Build</dt>
+            <dd>{build[0].toUpperCase() + build.slice(1)}</dd>
+          </div>
+          <div>
+            <dt>Updates</dt>
+            <dd>
+              {ready && updateVersion ? (
+                <>
+                  <span className="about-status ready">
+                    Version {updateVersion} ready
+                  </span>
+                  <button className="pill about-restart" onClick={onUpdate}>
+                    Restart to install
+                  </button>
+                </>
+              ) : (
+                <span
+                  className={`about-status ${updateStatus === "Up to date" ? "current" : ""}`}
+                >
+                  {updateStatus || "Up to date"}
+                </span>
+              )}
+            </dd>
+          </div>
+        </dl>
         <footer className="about-legal">
           <p>Copyright © {new Date().getFullYear()} Arashii.</p>
           <p>

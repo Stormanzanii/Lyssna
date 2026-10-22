@@ -123,6 +123,7 @@ export interface Settings {
   now_playing_open?: boolean;
   song_sorts?: Record<string, string>;
   lyrics_background?: "animated" | "static" | "color";
+  lyrics_pinned_footer?: "off" | "no_writers" | "full";
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];
   ui_font?: string;

@@ -224,6 +224,28 @@ export function LyricsSettings({
             <option value="color">Cover colour</option>
           </select>
         </SettingRow>,
+        <SettingRow
+          key="pinned-footer"
+          label="Pinned Lyrics Footer"
+          help="Keep source and community credits visible. Full also pins writers."
+          keywords="pinned footer written by writers credits source community"
+        >
+          <select
+            className="settings-select"
+            aria-label="Pinned Lyrics Footer"
+            value={settings.lyrics_pinned_footer ?? "off"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_pinned_footer: event.target
+                  .value as Settings["lyrics_pinned_footer"],
+              })
+            }
+          >
+            <option value="off">Off</option>
+            <option value="no_writers">No Writers</option>
+            <option value="full">Full</option>
+          </select>
+        </SettingRow>,
         flag(
           "lyrics_hide_year",
           "Hide release year",

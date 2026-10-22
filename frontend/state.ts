@@ -148,6 +148,7 @@ export const emptyState: AppState = {
     now_playing_open: true,
     song_sorts: {},
     lyrics_background: "animated",
+    lyrics_pinned_footer: "off",
     lyrics_source_order: [
       "spicy",
       "apple",

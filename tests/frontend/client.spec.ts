@@ -3093,6 +3093,121 @@ for (const route of [
   });
 }
 
+test("Appearance pins the lyrics footer with Off, No Writers and Full modes", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "spicy_lyrics",
+        synced: true,
+        instrumental: false,
+        songwriters: ["Writer One", "Writer Two"],
+        attribution: { maker: { username: "TestMaker" } },
+        lines: Array.from({ length: 30 }, (_, index) => ({
+          text: `Footer lyric ${index + 1}`,
+          start_ms: 10000 + index * 3000,
+          end_ms: 13000 + index * 3000,
+          words: [],
+          background: false,
+          opposite: false,
+        })),
+      },
+    });
+  }, track.uri);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const mode = async (value: string) => {
+    await page.getByTitle("Lyrics settings", { exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Lyrics settings" });
+    await expect(
+      dialog.getByRole("tab", { name: "Appearance" }),
+    ).toHaveAttribute("aria-selected", "true");
+    const select = dialog.getByLabel("Pinned Lyrics Footer", { exact: true });
+    await expect(select.locator("option")).toHaveText([
+      "Off",
+      "No Writers",
+      "Full",
+    ]);
+    await select.selectOption(value);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).__clientTest.commands
+              .filter((entry: any) => entry.command === "save_settings")
+              .at(-1)?.args.settings.lyrics_pinned_footer,
+        ),
+      )
+      .toBe(value);
+    await page.keyboard.press("Escape");
+  };
+  const display = page.locator(".lyrics-page .lyrics-display"),
+    flow = display.locator(".lyric-scroll"),
+    pinned = display.getByRole("region", { name: "Pinned lyrics footer" });
+  await expect(pinned).toHaveCount(0);
+  await mode("no_writers");
+  await expect(pinned).toContainText("Community lyrics");
+  await expect(pinned).toContainText("@TestMaker");
+  await expect(pinned).not.toContainText("Written by");
+  await expect(flow.locator(".lyric-end-credits")).toContainText(
+    "Written by: Writer One, Writer Two",
+  );
+  await expect(flow.locator(".lyric-source")).toHaveCount(0);
+  const before = (await pinned.boundingBox())!;
+  await flow.hover();
+  await page.mouse.wheel(0, 1400);
+  await expect(display).toHaveAttribute("data-following", "false");
+  await flow.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  expect(Math.abs((await pinned.boundingBox())!.y - before.y)).toBeLessThan(1);
+  const button = (await display
+    .getByRole("button", { name: "Return to current lyric" })
+    .boundingBox())!;
+  expect(button.y + button.height).toBeLessThan(before.y);
+  await mode("full");
+  await expect(pinned).toContainText("Written by: Writer One, Writer Two");
+  await expect(pinned).toContainText("@TestMaker");
+  await expect(flow.locator(".lyric-end-credits")).toHaveCount(0);
+  await page.screenshot({ path: "target/diagnostics/pinned-lyrics-full.png" });
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 40_500,
+        playing: false,
+        observed_at: Date.now(),
+      }),
+    track.uri,
+  );
+  await display
+    .getByRole("button", { name: "Return to current lyric" })
+    .click();
+  await expect
+    .poll(() =>
+      flow.evaluate((node) => {
+        const box = node.getBoundingClientRect(),
+          line = node
+            .querySelector(".lyric-line.active")!
+            .getBoundingClientRect();
+        return Math.abs(line.top + line.height / 2 - box.top - box.height / 2);
+      }),
+    )
+    .toBeLessThan(4);
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await expect(pinned).toBeVisible();
+  expect((await flow.boundingBox())!.height).toBeGreaterThan(100);
+  await mode("off");
+  await expect(pinned).toHaveCount(0);
+  await expect(flow.locator(".lyric-end-credits")).toContainText("Writer One");
+  await expect(flow.locator(".lyric-end-credits")).toContainText("@TestMaker");
+});
+
 test("stacked lyrics centre the active line in the lyric view", async ({
   page,
 }) => {

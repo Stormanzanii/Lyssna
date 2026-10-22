@@ -381,6 +381,14 @@ export function LyricsDisplay({
   const [following, setFollowing] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
   const [returnDirection, setReturnDirection] = useState<"up" | "down">("down");
+  const footerMode = compact ? "off" : (settings.lyrics_pinned_footer ?? "off");
+  const writerCredits = (
+    <p>
+      Written by:{" "}
+      {(lyrics.songwriters?.length ? lyrics.songwriters : writers).join(", ") ||
+        "Songwriter credits unavailable"}
+    </p>
+  );
   // Browsing stays paused until the user returns or selects a lyric.
   const glide = useRef<{ from: number; start: number }>(undefined);
   const browse = () => {
@@ -567,6 +575,7 @@ export function LyricsDisplay({
     settings.reduce_motion,
     settings.lyric_size,
     settings.romanized,
+    footerMode,
     gap?.start,
   ]);
   useLayoutEffect(() => {
@@ -584,8 +593,15 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""}`}
       data-following={following}
+      style={
+        compact
+          ? undefined
+          : ({
+              "--lyric-size": `${Math.round(settings.lyric_size * 1.6)}px`,
+            } as CSSProperties)
+      }
     >
       <div
         className="lyric-scroll"
@@ -617,13 +633,6 @@ export function LyricsDisplay({
           )
             browse();
         }}
-        style={
-          compact
-            ? undefined
-            : ({
-                "--lyric-size": `${Math.round(settings.lyric_size * 1.6)}px`,
-              } as CSSProperties)
-        }
       >
         <div className="lyric-spacer" />
         {gaps.has(-1) && waitingDots(gaps.get(-1)!)}
@@ -658,16 +667,23 @@ export function LyricsDisplay({
             </Fragment>
           );
         })}
-        <div className="lyric-end-credits">
-          <p>
-            Written by:{" "}
-            {(lyrics.songwriters?.length ? lyrics.songwriters : writers).join(
-              ", ",
-            ) || "Songwriter credits unavailable"}
-          </p>
+        {footerMode !== "full" && (
+          <div className="lyric-end-credits">
+            {writerCredits}
+            {footerMode === "off" && <LyricCredits lyrics={lyrics} expanded />}
+          </div>
+        )}
+      </div>
+      {footerMode !== "off" && (
+        <div
+          className="lyric-end-credits lyric-pinned-footer"
+          role="region"
+          aria-label="Pinned lyrics footer"
+        >
+          {footerMode === "full" && writerCredits}
           <LyricCredits lyrics={lyrics} expanded />
         </div>
-      </div>
+      )}
       {!following && lyrics.synced && (
         <button
           type="button"

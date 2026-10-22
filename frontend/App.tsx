@@ -1894,6 +1894,10 @@ function App() {
           fontFamily: fontFamily(state.settings.ui_font),
           "--lyric-font":
             fontFamily(state.settings.lyric_font) || DEFAULT_LYRIC_FONT,
+          // Song details beside the lyrics follow a chosen lyrics font, and
+          // otherwise keep the app font (Metropolis).
+          "--lyric-detail-font":
+            fontFamily(state.settings.lyric_font) || undefined,
         } as CSSProperties
       }
       onDragOver={(event) => event.preventDefault()}

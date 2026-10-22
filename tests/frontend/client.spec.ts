@@ -2196,6 +2196,12 @@ test("timed syllables lift independently and font choices apply separately", asy
     .poll(async () => (await motion(letter)).scale)
     .toBeGreaterThan(1.02);
   expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
+  // With no lyrics font chosen, song details keep the app font.
+  expect(
+    await page
+      .locator(".lyrics-page .lyrics-title")
+      .evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Metropolis");
   await openSettings(page);
   await page.getByLabel("App font", { exact: true }).fill("Georgia");
   await openLyricsSettings(page, "Appearance");
@@ -2210,6 +2216,11 @@ test("timed syllables lift independently and font choices apply separately", asy
   expect(
     await page
       .locator(".lyrics-page .lyric-line")
+      .evaluate((element) => getComputedStyle(element).fontFamily),
+  ).toContain("Consolas");
+  expect(
+    await page
+      .locator(".lyrics-page .lyrics-title")
       .evaluate((element) => getComputedStyle(element).fontFamily),
   ).toContain("Consolas");
 });

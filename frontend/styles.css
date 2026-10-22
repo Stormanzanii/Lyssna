@@ -5063,7 +5063,7 @@ input[type="range"]:hover {
 .lyrics-artists,
 .lyric-source,
 .lyric-end-credits {
-  font-family: var(--lyric-font, inherit);
+  font-family: var(--lyric-detail-font, inherit);
 }
 
 /* Side-by-side lyrics in a tight panel: cap large lyric sizes to the

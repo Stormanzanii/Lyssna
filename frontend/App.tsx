@@ -21,6 +21,7 @@ import {
   Clock3,
   FolderPlus,
   Heart,
+  Code,
   Home,
   ImagePlus,
   Pencil,
@@ -148,6 +149,12 @@ import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
 import { coverJpeg } from "./playlist-cover";
+import {
+  embedCode,
+  inChosenFolders,
+  songAndArtist,
+  trackIds,
+} from "./spotify-plus";
 import { LyricsSettings } from "./lyrics-settings";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
@@ -200,6 +207,29 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
+  const plus = state.settings.spotify_plus ?? {};
+  const copyText = (text: string, done: string) =>
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => notify(done))
+      .catch(() => notify("Could not copy that.", true));
+  // Like Spotify, the window title names the playing song so external
+  // tools can read it; Spotify+ can keep it fixed.
+  const windowTitle =
+    !plus.fixed_window_title &&
+    state.profile &&
+    state.playback.is_playing &&
+    state.playback.item
+      ? `${state.playback.item.name} - ${state.playback.item.artists
+          .map((artist) => artist.name)
+          .join(", ")}`
+      : "SpotiFlex";
+  useEffect(() => {
+    document.title = windowTitle;
+    void windowHandle()
+      .setTitle(windowTitle)
+      .catch(() => {});
+  }, [windowTitle]);
   // The profile on screen, and the profiles visited before it for Back.
   const [profileView, setProfileView] = useState<{
     user: string;
@@ -1731,6 +1761,14 @@ function App() {
           <ProfileMenu
             name={profileName}
             image={profileImage}
+            hidden={(
+              [
+                ["account", plus.hide_account],
+                ["profile", plus.hide_profile],
+                ["recents", plus.hide_recents],
+                ["sign-out", plus.hide_sign_out],
+              ] as const
+            ).flatMap(([action, hide]) => (hide ? [action] : []))}
             onAction={(action) => {
               if (action === "account")
                 void call("open_link", {
@@ -2360,6 +2398,22 @@ function App() {
                   >
                     <Plus size={15} />
                     Add to playlist
+                  </button>
+                  <button
+                    className="pill"
+                    onClick={() =>
+                      copyText(
+                        trackIds(
+                          displayTracks.filter((track) =>
+                            selected.has(track.uri),
+                          ),
+                        ),
+                        `${selected.size === 1 ? "ID" : "IDs"} copied.`,
+                      )
+                    }
+                  >
+                    <Copy size={15} />
+                    Copy IDs
                   </button>
                   <button
                     className="text-link"
@@ -3262,14 +3316,38 @@ function App() {
               [
                 "Copy clean link",
                 Copy,
-                () => {
-                  void navigator.clipboard
-                    .writeText(
-                      `https://open.spotify.com/track/${songMenu.track.id}`,
-                    )
-                    .then(() => notify("Song link copied."))
-                    .catch(() => notify("Could not copy the link.", true));
-                },
+                () =>
+                  copyText(
+                    `https://open.spotify.com/track/${songMenu.track.id}`,
+                    "Song link copied.",
+                  ),
+              ],
+              [
+                "Copy song & artist name",
+                Copy,
+                () =>
+                  copyText(songAndArtist(songMenu.track), "Song and artist copied."),
+              ],
+              [
+                "Copy song ID",
+                Copy,
+                () =>
+                  copyText(
+                    songMenu.track.id || songMenu.track.uri.split(":")[2],
+                    "Song ID copied.",
+                  ),
+              ],
+              [
+                "Copy embed code",
+                Code,
+                () =>
+                  copyText(
+                    embedCode(
+                      "track",
+                      songMenu.track.id || songMenu.track.uri.split(":")[2],
+                    ),
+                    "Embed code copied.",
+                  ),
               ],
             ].map(([label, Icon, action]) => {
               const ItemIcon = Icon as typeof Play;
@@ -3400,12 +3478,16 @@ function App() {
               });
             actions.push({
               label: `Copy link to ${menu.kind}`,
-              run: () => {
-                void navigator.clipboard
-                  .writeText(`https://open.spotify.com/${menu.kind}/${menu.id}`)
-                  .then(() => notify("Link copied."))
-                  .catch(() => notify("Could not copy the link.", true));
-              },
+              run: () =>
+                copyText(
+                  `https://open.spotify.com/${menu.kind}/${menu.id}`,
+                  "Link copied.",
+                ),
+            });
+            const kind = menu.kind;
+            actions.push({
+              label: "Copy embed code",
+              run: () => copyText(embedCode(kind, menu.id), "Embed code copied."),
             });
           }
           return (
@@ -3476,10 +3558,13 @@ function App() {
             key={`${picker.x}:${picker.y}`}
             x={picker.x}
             y={picker.y}
-            playlists={state.playlists.filter(
-              (playlist) =>
-                playlist.owner.id === state.profile?.id ||
-                playlist.collaborative,
+            playlists={inChosenFolders(
+              state.playlists.filter(
+                (playlist) =>
+                  playlist.owner.id === state.profile?.id ||
+                  playlist.collaborative,
+              ),
+              plus.playlist_folders,
             )}
             onPick={(playlist) => {
               void call("add_tracks", { playlist, tracks: picker.tracks });
@@ -3716,6 +3801,7 @@ function App() {
             if (immersive) void fullscreen(false);
             setCenter("settings");
           }}
+          onOpen={(url) => void call("open_link", { url })}
           onClose={() => setLyricsSettings(false)}
         />
       )}
@@ -4240,13 +4326,15 @@ function PlayerBar({
             onHold={onDJRequest}
           />
         )}
-        <button
-          className={`icon-button ${lyricsActive ? "active" : ""}`}
-          title="Lyrics"
-          onClick={onLyrics}
-        >
-          <Mic2 size={20} />
-        </button>
+        {!state.settings.spotify_plus?.hide_lyrics_button && (
+          <button
+            className={`icon-button ${lyricsActive ? "active" : ""}`}
+            title="Lyrics"
+            onClick={onLyrics}
+          >
+            <Mic2 size={20} />
+          </button>
+        )}
         <button
           className={`icon-button ${queueActive ? "active" : ""}`}
           title="Queue"

@@ -3417,6 +3417,68 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   await expect(page.locator(".profile-hero")).toHaveCount(0);
 });
 
+test("Spotify+ options trim menus, copy details and credit contributors", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.route("https://github.com/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"/>',
+    }),
+  );
+  await startClient(page);
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+  // Song menu: copy name and ID.
+  await page.locator(".track-row .track-name").first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy song & artist name" }).click();
+  await expect.poll(clipboard).toBe("Song 1 - Test artist");
+  await page.locator(".track-row .track-name").first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy embed code" }).click();
+  await expect.poll(clipboard).toContain("open.spotify.com/embed/track/");
+  // Settings: hide items and keep a fixed window title.
+  await openSettings(page);
+  for (const label of [
+    "Hide Profile in the profile menu",
+    "Hide the Lyrics button",
+    "Keep a fixed window title",
+  ])
+    await page.getByRole("switch", { name: label, exact: true }).click();
+  const saved = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "save_settings")
+        .at(-1)?.args.settings.spotify_plus,
+  );
+  expect(saved).toMatchObject({
+    hide_profile: true,
+    hide_lyrics_button: true,
+    fixed_window_title: true,
+  });
+  await expect(page.locator("footer").getByTitle("Lyrics", { exact: true })).toHaveCount(0);
+  await expect(page).toHaveTitle("SpotiFlex");
+  // Credits list the creator first, with GitHub avatars.
+  const people = page.locator(".settings-page .credit-person");
+  await expect(people).toHaveCount(3);
+  await expect(people.first()).toContainText("Arashii");
+  await expect(people.first().locator("img")).toHaveAttribute(
+    "src",
+    "https://github.com/Stormanzanii.png?size=96",
+  );
+  await people.first().click();
+  const link = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "open_link")
+        .at(-1)?.args.url,
+  );
+  expect(link).toBe("https://github.com/Stormanzanii");
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Profile" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+});
+
 test("the avatar menu opens settings, profile and grouped recents", async ({
   page,
 }) => {

@@ -8,10 +8,13 @@ export type ProfileAction =
 export function ProfileMenu({
   name,
   image,
+  hidden = [],
   onAction,
 }: {
   name: string;
   image?: string;
+  /** Items removed through Spotify+; Settings always stays. */
+  hidden?: ProfileAction[];
   onAction: (action: ProfileAction) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -31,7 +34,8 @@ export function ProfileMenu({
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  const item = (action: ProfileAction, label: ReactNode, end?: ReactNode) => (
+  const item = (action: ProfileAction, label: ReactNode, end?: ReactNode) =>
+    !hidden.includes(action) && (
     <button
       role="menuitem"
       onClick={() => {
@@ -42,7 +46,7 @@ export function ProfileMenu({
       <span>{label}</span>
       {end}
     </button>
-  );
+    );
   return (
     <div className="profile-menu-root" ref={root}>
       <button
@@ -65,7 +69,7 @@ export function ProfileMenu({
           {item("profile", "Profile")}
           {item("recents", "Recents")}
           {item("settings", "Settings")}
-          <hr />
+          {!hidden.includes("sign-out") && <hr />}
           {item("sign-out", "Log out")}
         </div>
       )}

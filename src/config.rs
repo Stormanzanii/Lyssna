@@ -36,6 +36,24 @@ pub struct Settings {
     pub audio_output: Option<String>,
     pub auto_download_updates: bool,
     pub folders: Vec<PlaylistFolder>,
+    /// Interface options modelled on the Spotify+ extension.
+    pub spotify_plus: SpotifyPlus,
+}
+
+/// Spotify+ interface options. Everything defaults to Spotify's own layout.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SpotifyPlus {
+    pub hide_account: bool,
+    pub hide_profile: bool,
+    pub hide_recents: bool,
+    pub hide_sign_out: bool,
+    pub hide_lyrics_button: bool,
+    /// Keep the window title "SpotiFlex" instead of the playing song.
+    pub fixed_window_title: bool,
+    /// Spotify folder IDs whose playlists Add to playlist offers; empty
+    /// offers every editable playlist.
+    pub playlist_folders: Vec<String>,
 }
 
 impl Default for Settings {
@@ -64,6 +82,7 @@ impl Default for Settings {
             audio_output: None,
             auto_download_updates: true,
             folders: Vec::new(),
+            spotify_plus: SpotifyPlus::default(),
         }
     }
 }

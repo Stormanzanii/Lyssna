@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ExternalLink, Info, LogOut, Search, X } from "lucide-react";
 import type { AppState } from "./state";
-import type { Settings } from "./types";
+import type { Settings, SpotifyPlus } from "./types";
 import { FontSettings } from "./custom-fonts";
 import { SettingRow, SettingsQuery } from "./setting-row";
+import { Credits } from "./credits";
 
 export function Toggle({
   label,
@@ -73,6 +74,10 @@ export function SettingsPage({
     if (searching) searchField.current?.focus();
   }, [searching]);
   const settings = state.settings;
+  const plus = settings.spotify_plus ?? {};
+  const setPlus = (change: Partial<SpotifyPlus>) =>
+    onSettings({ spotify_plus: { ...plus, ...change } });
+  const chosenFolders = new Set(plus.playlist_folders ?? []);
   const lyricSize = settings.lyric_size;
   return (
     <SettingsQuery.Provider value={query}>
@@ -281,6 +286,82 @@ export function SettingsPage({
                 checked={settings.compact_library}
                 onChange={(compact_library) => onSettings({ compact_library })}
               />
+            </SettingRow>
+          </section>
+
+          <section className="settings-section">
+            <h2>Spotify+</h2>
+            {(
+              [
+                ["hide_account", "Hide Account in the profile menu"],
+                ["hide_profile", "Hide Profile in the profile menu"],
+                ["hide_recents", "Hide Recents in the profile menu"],
+                [
+                  "hide_sign_out",
+                  "Hide Log out in the profile menu",
+                  "You can still sign out from Account above.",
+                ],
+                [
+                  "hide_lyrics_button",
+                  "Hide the Lyrics button",
+                  "Lyrics stay available from the Now playing panel.",
+                ],
+                [
+                  "fixed_window_title",
+                  "Keep a fixed window title",
+                  "Show “SpotiFlex” instead of the playing song, for tools that read the window name.",
+                ],
+              ] as const
+            ).map(([key, label, help]) => (
+              <SettingRow
+                key={key}
+                label={label}
+                help={help}
+                keywords="spotify plus hide menu"
+              >
+                <Toggle
+                  label={label}
+                  checked={!!plus[key]}
+                  onChange={(checked) => setPlus({ [key]: checked })}
+                />
+              </SettingRow>
+            ))}
+            <SettingRow
+              stacked
+              label="Add to playlist folders"
+              help={
+                state.library_folders?.length
+                  ? "Offer only playlists directly inside the folders you choose. Choose none to offer every playlist you can edit."
+                  : "Your library has no folders."
+              }
+              keywords="spotify plus add playlist folders menu"
+            >
+              <div className="settings-folder-picks">
+                {(state.library_folders ?? []).map((folder) => (
+                  <label key={folder.id}>
+                    <input
+                      type="checkbox"
+                      checked={chosenFolders.has(folder.id)}
+                      onChange={(event) => {
+                        const next = new Set(chosenFolders);
+                        if (event.target.checked) next.add(folder.id);
+                        else next.delete(folder.id);
+                        setPlus({ playlist_folders: [...next] });
+                      }}
+                    />
+                    <span>
+                      {[...folder.parents.map(
+                        (parent) =>
+                          state.library_folders?.find(
+                            (item) => item.id === parent,
+                          )?.name ?? "",
+                      ), folder.name]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </SettingRow>
           </section>
 
@@ -501,11 +582,7 @@ export function SettingsPage({
           <section className="settings-section">
             <h2>About SpotiFlex</h2>
             <SettingRow
-              label={
-                state.update_version
-                  ? `Version ${state.update_version}`
-                  : "Version 0.1.0"
-              }
+              label={`Version ${__APP_VERSION__}`}
               help={state.update_status}
               keywords="updates version check install"
             >
@@ -536,6 +613,19 @@ export function SettingsPage({
                 onChange={(auto_download_updates) =>
                   onSettings({ auto_download_updates })
                 }
+              />
+            </SettingRow>
+          </section>
+
+          <section className="settings-section">
+            <h2>Credits and licences</h2>
+            <SettingRow
+              stacked
+              label="Built with thanks to"
+              keywords="about credits licence license spicy lyrics spotify plus pixel spikerko librespot"
+            >
+              <Credits
+                onOpen={(url) => void onCall("open_link", { url })}
               />
             </SettingRow>
           </section>

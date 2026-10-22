@@ -2629,24 +2629,42 @@ fn creator_profile_url(username: &str) -> Result<url::Url> {
         .push(name);
     Ok(url)
 }
+/// Spotify and lyrics pages, plus the credited projects' repositories.
+fn allowed_link(url: &url::Url) -> bool {
+    /// Profiles and repositories named in Settings > Credits and licences.
+    const CREDITED: [&str; 8] = [
+        "/Stormanzanii",
+        "/iPixelGalaxy",
+        "/Spikerko",
+        "/iPixelGalaxy/spotify-plus",
+        "/iPixelGalaxy/spicy-lyrics",
+        "/librespot-org/librespot",
+        "/Fraktality/spr",
+        "/Stormanzanii/SpotiFlex",
+    ];
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port().is_none()
+        && match url.host_str() {
+            Some(
+                "open.spotify.com"
+                | "www.spotify.com"
+                | "developer.spotify.com"
+                | "developers.spicylyrics.org"
+                | "spicylyrics.org"
+                | "lyrprep.spicylyrics.org",
+            ) => true,
+            Some("github.com") => {
+                CREDITED.contains(&url.path()) && url.query().is_none() && url.fragment().is_none()
+            }
+            _ => false,
+        }
+}
 #[tauri::command]
 fn open_link(url: String) -> std::result::Result<(), String> {
     let parsed = url::Url::parse(&url).map_err(|_| "Invalid link")?;
-    if parsed.scheme() != "https"
-        || !matches!(
-            parsed.host_str(),
-            Some(
-                "open.spotify.com"
-                    | "www.spotify.com"
-                    | "developer.spotify.com"
-                    | "developers.spicylyrics.org"
-                    | "spicylyrics.org"
-                    | "lyrprep.spicylyrics.org"
-            )
-        )
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-    {
+    if !allowed_link(&parsed) {
         return Err("Link is not an allowed Spotify or lyrics page".into());
     }
     webbrowser::open(parsed.as_str())
@@ -3032,6 +3050,23 @@ mod tests {
             Some("session-id"),
             &speaker
         ));
+    }
+    #[test]
+    fn links_open_only_spotify_lyrics_and_credited_repositories() {
+        let allowed = |url: &str| allowed_link(&url::Url::parse(url).unwrap());
+        assert!(allowed("https://open.spotify.com/track/abc"));
+        assert!(allowed("https://github.com/iPixelGalaxy/spotify-plus"));
+        assert!(allowed("https://github.com/Stormanzanii/SpotiFlex"));
+        assert!(allowed("https://github.com/Spikerko"));
+        assert!(!allowed("https://github.com/someone/else"));
+        assert!(!allowed(
+            "https://github.com/iPixelGalaxy/spotify-plus/releases"
+        ));
+        assert!(!allowed("http://github.com/iPixelGalaxy/spotify-plus"));
+        assert!(!allowed(
+            "https://user@github.com/iPixelGalaxy/spotify-plus"
+        ));
+        assert!(!allowed("https://example.com/"));
     }
     #[test]
     fn routes_reject_arbitrary_urls_and_malformed_ids() {

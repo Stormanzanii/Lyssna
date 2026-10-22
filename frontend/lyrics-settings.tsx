@@ -9,6 +9,7 @@ import {
   AppWindow,
   FileText,
   FlaskConical,
+  Info,
   Search,
   SlidersHorizontal,
   Type,
@@ -20,6 +21,7 @@ import type { AppState } from "./state";
 import type { Settings } from "./types";
 import { SettingRow, SettingsQuery } from "./setting-row";
 import { Toggle } from "./settings-page";
+import { CREDITS, Credits } from "./credits";
 
 const TABS = [
   ["Appearance", Type],
@@ -28,6 +30,7 @@ const TABS = [
   ["Interface", AppWindow],
   ["Sources", FileText],
   ["Advanced", SlidersHorizontal],
+  ["About", Info],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -44,6 +47,7 @@ export function LyricsSettings({
   onLoadTtml,
   onDatabase,
   onAllSettings,
+  onOpen,
   onClose,
 }: {
   state: AppState;
@@ -51,6 +55,7 @@ export function LyricsSettings({
   onLoadTtml: () => void;
   onDatabase: () => void;
   onAllSettings: () => void;
+  onOpen: (url: string) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("Appearance");
@@ -97,7 +102,7 @@ export function LyricsSettings({
   );
   const lyricSize = settings.lyric_size || 40;
   const provider = state.provider_builtin
-    ? "Spicy Lyrics is built in and ready."
+    ? "The built-in lyrics provider is ready."
     : state.provider_configured
       ? "Your lyrics provider is configured."
       : "No lyrics provider is set up yet.";
@@ -275,6 +280,20 @@ export function LyricsSettings({
         </SettingRow>,
       ],
     ],
+    [
+      "About",
+      "About",
+      [
+        <SettingRow
+          key="credits"
+          stacked
+          label="Credits and licences"
+          keywords={`about credits licence license ${CREDITS.map((credit) => `${credit.name} ${credit.by}`).join(" ")}`}
+        >
+          <Credits onOpen={onOpen} />
+        </SettingRow>,
+      ],
+    ],
   ];
   const visible = sections.filter(([key]) => searching || key === tab);
   const status =
@@ -391,12 +410,7 @@ export function LyricsSettings({
             </div>
             <span className="lyrics-settings-build">
               {import.meta.env.DEV ? "Development build" : "Release build"}
-              {(state.provider_builtin || state.provider_kind === "spicy") && (
-                <>
-                  <br />
-                  Lyrics by Spicy Lyrics
-                </>
-              )}
+
             </span>
           </footer>
         </div>

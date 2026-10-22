@@ -38,4 +38,5 @@ pub mod track_facts;
 #[cfg(feature = "legacy-ui")]
 pub mod ui;
 pub mod updater;
+pub mod user_profile;
 pub mod worker;

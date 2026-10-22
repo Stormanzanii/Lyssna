@@ -2483,6 +2483,31 @@ async fn open_creator_profile(
     };
     result().map_err(error)
 }
+/// A Spotify user's profile page, read through this account's native session.
+#[tauri::command]
+async fn user_profile(
+    state: State<'_, Desktop>,
+    user: String,
+) -> std::result::Result<crate::user_profile::UserProfilePage, String> {
+    if !crate::user_profile::valid_user(&user) {
+        return Err("Invalid Spotify profile".into());
+    }
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::user_profile::fetch(session, &user).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|_| "Profile unavailable. Try again shortly.".to_owned())
+}
 #[tauri::command]
 async fn resolve_album(
     state: State<'_, Desktop>,
@@ -2753,6 +2778,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             open_link,
             open_creator_profile,
             resolve_album,
+            user_profile,
             app_update,
             media_state
         ])

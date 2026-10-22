@@ -2465,7 +2465,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
     .toBeCloseTo(48, 0);
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
-  ).toContainText("Spicy Lyrics");
+  ).toContainText("Community lyrics");
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Uploaded by @Uploader");

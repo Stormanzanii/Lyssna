@@ -253,6 +253,14 @@ impl Playback {
             && self.device.name == native_name
             && incoming.item.is_none()
     }
+    /// The song played to its end and stopped there; Play should restart it.
+    pub fn finished(&self) -> bool {
+        !self.is_playing
+            && self.item.as_ref().is_some_and(|track| {
+                track.duration_ms > 0
+                    && self.progress_ms.unwrap_or_default() + 1500 >= track.duration_ms
+            })
+    }
     /// Apply a local player event only to the matching track and device.
     pub fn apply_native_position(
         &mut self,
@@ -349,6 +357,25 @@ pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_song_stopped_at_its_end_counts_as_finished() {
+        let mut playback = Playback {
+            item: Some(Track {
+                duration_ms: 188_000,
+                ..Track::default()
+            }),
+            progress_ms: Some(187_200),
+            ..Playback::default()
+        };
+        assert!(playback.finished());
+        playback.is_playing = true;
+        assert!(!playback.finished(), "still playing out the last second");
+        playback.is_playing = false;
+        playback.progress_ms = Some(120_000);
+        assert!(!playback.finished(), "paused mid-song resumes in place");
+        assert!(!Playback::default().finished());
+    }
+
     #[test]
     fn same_song_takeover_accepts_actual_decoder_position() {
         let track = Track {

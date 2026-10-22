@@ -1790,9 +1790,12 @@ fn player(
         {
             action = restored;
         }
+        // A song that played to its end is stopped, not paused, so the
+        // player cannot resume it; Play loads it again from the start.
+        let finished = snapshot.playback.finished();
         if local
             && matches!(action, PlayerAction::Play(None))
-            && !state.0.controls.has_track()
+            && (!state.0.controls.has_track() || finished)
             && let Some(track) = snapshot.playback.item.as_ref()
         {
             let queue = snapshot
@@ -1812,7 +1815,11 @@ fn player(
             action = crate::resume::restore_action(
                 &track.uri,
                 &queue,
-                snapshot.playback.progress_ms.unwrap_or_default(),
+                if finished {
+                    0
+                } else {
+                    snapshot.playback.progress_ms.unwrap_or_default()
+                },
             );
         }
         // After a restart the player shows the saved song without loading it;

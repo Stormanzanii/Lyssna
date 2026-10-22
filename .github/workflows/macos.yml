@@ -2,10 +2,6 @@ name: Build macOS app
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, "feat/macos-*"]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read

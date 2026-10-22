@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SpotiFlex",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "theme": "Dark",
+        "backgroundColor": "#08080c",
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 27, "y": 32 },
+        "dragDropEnabled": false
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app"],
+    "icon": [
+      "assets/spotiflex.icns",
+      "assets/spotiflex.png",
+      "assets/spotiflex.ico"
+    ],
+    "category": "Music",
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "infoPlist": "Info.macos.plist",
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.macos.plist"
+    }
+  }
+}

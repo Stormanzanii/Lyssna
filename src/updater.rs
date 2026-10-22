@@ -19,6 +19,9 @@ use crate::config::data_dir;
 
 pub const BASE_URL: &str = "https://updates.clypdat.xyz";
 pub const TARGET: &str = "windows-x86_64";
+pub const SUPPORTED: bool = cfg!(all(target_os = "windows", target_arch = "x86_64"));
+pub const UNSUPPORTED_MESSAGE: &str =
+    "Automatic updates are unavailable on this platform. Install new builds manually.";
 pub const PUBLIC_KEY: &str = include_str!("../config/update-public-key.base64");
 const MAX_ARTIFACT: u64 = 512 * 1024 * 1024;
 
@@ -257,10 +260,7 @@ fn download(
 }
 
 fn install(update: ReadyUpdate) -> Result<()> {
-    ensure!(
-        cfg!(all(target_os = "windows", target_arch = "x86_64")),
-        "Automatic installation currently supports Windows x86_64"
-    );
+    ensure!(SUPPORTED, UNSUPPORTED_MESSAGE);
     let manifest = verify(&update.envelope, &public_key(PUBLIC_KEY)?)?;
     ensure!(
         Version::parse(&manifest.version)? > Version::parse(env!("CARGO_PKG_VERSION"))?,
@@ -290,6 +290,18 @@ impl Updater {
                 let _ = sender.send(event);
                 context.request_repaint();
             };
+            // The signed update service publishes Windows executables only.
+            // Never query that channel or stage an executable on macOS.
+            if !SUPPORTED {
+                emit(Event::Error(UNSUPPORTED_MESSAGE.into()));
+                for command in receiver {
+                    if matches!(command, Command::Shutdown) {
+                        break;
+                    }
+                    emit(Event::Error(UNSUPPORTED_MESSAGE.into()));
+                }
+                return;
+            }
             let Ok(client) = client() else {
                 emit(Event::Error("Cannot initialize update service".into()));
                 return;

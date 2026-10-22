@@ -1,6 +1,5 @@
-//! Windows media integration: Previous, Play/Pause and Next buttons under the
-//! taskbar thumbnail, and the system media session behind the media flyout,
-//! media keys and lock screen. Button presses are forwarded to the frontend,
+//! Native media integration: Windows taskbar buttons and system media controls
+//! on Windows and macOS, including media keys and the lock screen. Button presses are forwarded to the frontend,
 //! which owns the playback intent; the frontend reports what is playing back.
 
 use serde::Deserialize;
@@ -19,6 +18,18 @@ pub struct MediaState {
     pub playing: bool,
     /// False when nothing is loaded; the controls then show as disabled.
     pub loaded: bool,
+}
+
+#[cfg(any(target_os = "macos", test))]
+impl MediaState {
+    fn same_metadata(&self, other: &Self) -> bool {
+        self.loaded == other.loaded
+            && self.title == other.title
+            && self.artists == other.artists
+            && self.album == other.album
+            && self.cover == other.cover
+            && self.duration_ms == other.duration_ms
+    }
 }
 
 /// A press from the taskbar, media keys or the media flyout.
@@ -98,9 +109,12 @@ pub fn glyph(kind: Glyph, size: usize) -> Vec<u8> {
 #[cfg(windows)]
 pub use windows_impl::Session;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub use macos_impl::Session;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub struct Session;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl Session {
     pub fn start(
         _app: &tauri::AppHandle,
@@ -109,6 +123,107 @@ impl Session {
         Self
     }
     pub fn update(&self, _app: &tauri::AppHandle, _state: MediaState) {}
+}
+
+#[cfg(target_os = "macos")]
+mod macos_impl {
+    use super::{MediaAction, MediaState};
+    use souvlaki::{
+        MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition,
+        PlatformConfig, SeekDirection,
+    };
+    use std::{cell::RefCell, time::Duration};
+
+    // AppKit media objects must stay on the application's main thread.
+    thread_local! {
+        static CONTROLS: RefCell<Option<Controls>> = const { RefCell::new(None) };
+    }
+
+    struct Controls {
+        native: MediaControls,
+        metadata: Option<MediaState>,
+    }
+
+    pub struct Session;
+    impl Session {
+        pub fn start(
+            _app: &tauri::AppHandle,
+            on_action: impl Fn(MediaAction) + Send + Sync + 'static,
+        ) -> Self {
+            let config = PlatformConfig {
+                dbus_name: "spotiflex",
+                display_name: "SpotiFlex",
+                hwnd: None,
+            };
+            if let Ok(mut controls) = MediaControls::new(config) {
+                let attached = controls.attach(move |event| {
+                    let action = match event {
+                        MediaControlEvent::Toggle => MediaAction::Toggle,
+                        MediaControlEvent::Play => MediaAction::Play,
+                        MediaControlEvent::Pause | MediaControlEvent::Stop => MediaAction::Pause,
+                        MediaControlEvent::Next
+                        | MediaControlEvent::Seek(SeekDirection::Forward) => MediaAction::Next,
+                        MediaControlEvent::Previous
+                        | MediaControlEvent::Seek(SeekDirection::Backward) => MediaAction::Previous,
+                        MediaControlEvent::SetPosition(MediaPosition(position)) => {
+                            MediaAction::Seek(position.as_millis() as u64)
+                        }
+                        _ => return,
+                    };
+                    on_action(action);
+                });
+                if attached.is_ok() {
+                    CONTROLS.with_borrow_mut(|slot| {
+                        *slot = Some(Controls {
+                            native: controls,
+                            metadata: None,
+                        });
+                    });
+                }
+            }
+            Self
+        }
+
+        pub fn update(&self, app: &tauri::AppHandle, state: MediaState) {
+            let _ = app.run_on_main_thread(move || {
+                CONTROLS.with_borrow_mut(|slot| {
+                    let Some(controls) = slot else { return };
+                    let progress = Some(MediaPosition(Duration::from_millis(state.position_ms)));
+                    let playback = if !state.loaded {
+                        MediaPlayback::Stopped
+                    } else if state.playing {
+                        MediaPlayback::Playing { progress }
+                    } else {
+                        MediaPlayback::Paused { progress }
+                    };
+                    // Souvlaki downloads artwork whenever metadata is set. Clock
+                    // and pause updates must not start another artwork request.
+                    if controls
+                        .metadata
+                        .as_ref()
+                        .is_none_or(|last| !last.same_metadata(&state))
+                    {
+                        let result = controls.native.set_metadata(MediaMetadata {
+                            title: Some(state.title.as_str())
+                                .filter(|text| state.loaded && !text.is_empty()),
+                            artist: Some(state.artists.as_str())
+                                .filter(|text| state.loaded && !text.is_empty()),
+                            album: Some(state.album.as_str())
+                                .filter(|text| state.loaded && !text.is_empty()),
+                            cover_url: (state.loaded && state.cover.starts_with("https://"))
+                                .then_some(state.cover.as_str()),
+                            duration: (state.loaded && state.duration_ms > 0)
+                                .then(|| Duration::from_millis(state.duration_ms)),
+                        });
+                        if result.is_ok() {
+                            controls.metadata = Some(state);
+                        }
+                    }
+                    let _ = controls.native.set_playback(playback);
+                });
+            });
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -469,6 +584,28 @@ mod tests {
         }
         // Corners stay transparent.
         assert_eq!(alpha(&next, size, 0, 0), 0);
+    }
+
+    #[test]
+    fn clock_and_pause_updates_reuse_artwork_but_track_changes_do_not() {
+        let state = MediaState {
+            loaded: true,
+            title: "Song".into(),
+            cover: "https://example.com/cover".into(),
+            ..Default::default()
+        };
+        let mut next = state.clone();
+        next.position_ms = 10_000;
+        next.playing = true;
+        assert!(state.same_metadata(&next));
+        next.title = "Another song".into();
+        assert!(!state.same_metadata(&next));
+        next = state.clone();
+        next.cover = "https://example.com/another-cover".into();
+        assert!(!state.same_metadata(&next));
+        next = state.clone();
+        next.loaded = false;
+        assert!(!state.same_metadata(&next));
     }
 
     #[test]

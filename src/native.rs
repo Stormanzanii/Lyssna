@@ -1,3 +1,4 @@
+use crate::credential as keyring;
 use std::{
     sync::{
         Arc, Mutex,
@@ -1339,8 +1340,8 @@ pub fn device_name() -> String {
     }
 }
 
-// librespot's reusable credentials, kept in the OS credential store per
-// account. They never enter logs or files.
+// Reusable credentials are protected by the platform credential backend.
+// macOS stores only authenticated ciphertext on disk; credentials never enter logs.
 pub(crate) fn load_credentials(account: &str) -> Result<Option<Credentials>> {
     let _guard = CREDENTIAL_LOCK
         .lock()
@@ -1359,9 +1360,7 @@ pub(crate) fn load_credentials(account: &str) -> Result<Option<Credentials>> {
             Ok(None)
         }
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => anyhow::bail!(
-            "Cannot read saved audio login from the operating system credential store"
-        ),
+        Err(_) => anyhow::bail!("Cannot read saved audio login from the secure credential store"),
     }
 }
 
@@ -1389,7 +1388,7 @@ fn save_credentials(
     );
     keyring::Entry::new(CREDENTIAL_SERVICE, account)?
         .set_password(&serde_json::to_string(credentials)?)
-        .context("Cannot save audio login to the operating system credential store")
+        .context("Cannot save audio login to the secure credential store")
 }
 
 fn forget_audio_credentials(account: &str) -> Result<()> {
@@ -1422,9 +1421,7 @@ pub fn forget_credentials(account: &str) -> Result<()> {
     }
     match keyring::Entry::new(CREDENTIAL_SERVICE, account)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => anyhow::bail!(
-            "Cannot remove saved audio login from the operating system credential store"
-        ),
+        Err(_) => anyhow::bail!("Cannot remove saved audio login from the secure credential store"),
     }
 }
 

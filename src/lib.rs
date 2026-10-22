@@ -14,6 +14,7 @@ pub mod canvas;
 pub mod catalogue;
 pub mod collection;
 pub mod config;
+pub mod credential;
 #[cfg(feature = "desktop")]
 pub mod desktop;
 pub mod dj;

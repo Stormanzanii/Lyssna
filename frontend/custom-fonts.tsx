@@ -157,7 +157,7 @@ export function FontSettings({
           <SettingRow
             key={key}
             label={label}
-            help={`${help} Type an installed Windows font name to apply immediately.`}
+            help={`${help} Type an installed font name to apply immediately.`}
             keywords="font typeface"
           >
             <div className="font-control">

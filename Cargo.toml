@@ -9,7 +9,7 @@ publish = false
 default-run = "spotiflex"
 
 [workspace]
-members = ["vendor/librespot-playback","vendor/librespot-connect"]
+members = ["vendor/librespot-playback", "vendor/librespot-connect"]
 default-members = ["."]
 
 [features]
@@ -31,7 +31,6 @@ tauri = { version = "2", optional = true, features = ["image-ico"] }
 tauri-plugin-window-state = { version = "2", optional = true }
 getrandom = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-keyring = { version = "3.6", features = ["windows-native", "apple-native", "sync-secret-service"] }
 librespot-connect = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-metadata = { version = "0.8", default-features = false }
@@ -45,7 +44,7 @@ self-replace = "1.5"
 semver = "1"
 sha2 = "0.10"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
-time = {version="0.3",features=["formatting","parsing"]}
+time = {version="0.3",features= ["formatting", "parsing"] }
 url = "2"
 webbrowser = "1"
 ttf-parser = { version = "0.25.1", optional = true }
@@ -53,12 +52,23 @@ tiny-skia = { version = "0.11", optional = true, default-features = false, featu
 librespot-protocol = "0.8"
 protobuf = "3.7"
 
-# Taskbar thumbnail buttons and the system media session.
-[target.'cfg(windows)'.dependencies]
+# Native microphone capture, local recognition and system media controls.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+keyring = { version = "3.6", features = ["windows-native", "sync-secret-service"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+ring = "0.17"
+zeroize = "1"
+
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 cpal = "0.16"
 webrtc-vad = "0.4"
 whisper-rs = "0.16"
 souvlaki = { version = "0.8", default-features = false }
+
+# Taskbar thumbnail buttons and WebView2 integration.
+[target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Media_Audio", "Win32_Media_Speech", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
@@ -69,6 +79,9 @@ tauri-build = { version = "2", features = [] }
 # Experimental DJ session paging and narration; upstream PR #1797.
 # Pin the reviewed implementation so dependency resolution cannot follow branch changes.
 [patch.crates-io]
+# Restore custom macOS traffic lights after title changes and fullscreen exit.
+# Upstream fix: https://github.com/tauri-apps/tao/pull/1254
+tao = { git = "https://github.com/tauri-apps/tao", rev = "2ada91bf6372cd9fd3071377a1da90edee601f39" }
 librespot-audio = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-connect = { path = "vendor/librespot-connect" }
 librespot-core = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }

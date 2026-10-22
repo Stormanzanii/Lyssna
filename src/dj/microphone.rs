@@ -199,7 +199,7 @@ where
             },
             None,
         )
-        .context("Cannot open Windows Default microphone. Check microphone permissions")
+        .context("Cannot open default microphone. Check microphone permissions")
 }
 
 pub(super) fn capture(
@@ -212,10 +212,10 @@ pub(super) fn capture(
     );
     let device = cpal::default_host()
         .default_input_device()
-        .context("Windows Default microphone unavailable")?;
+        .context("default microphone unavailable")?;
     let supported = device
         .default_input_config()
-        .context("Windows Default microphone format unavailable")?;
+        .context("default microphone format unavailable")?;
     let config: cpal::StreamConfig = supported.clone().into();
     ensure!(
         config.channels > 0
@@ -237,7 +237,7 @@ pub(super) fn capture(
         cpal::SampleFormat::U16 => stream::<u16>(&device, &config, send, failed.clone()),
         cpal::SampleFormat::U32 => stream::<u32>(&device, &config, send, failed.clone()),
         cpal::SampleFormat::U64 => stream::<u64>(&device, &config, send, failed.clone()),
-        _ => anyhow::bail!("Unsupported Windows microphone sample format"),
+        _ => anyhow::bail!("Unsupported microphone sample format"),
     }?;
     stream.play().context("Microphone could not start")?;
     let started = Instant::now();
@@ -305,6 +305,12 @@ pub(super) fn from_samples(samples: &[f32], rate: u32) -> Result<Vec<f32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn silent_pcm_and_invalid_sample_rates_cannot_start_a_request() {
+        assert!(from_samples(&vec![0.0; 16_000], 16_000).is_err());
+        assert!(from_samples(&[], 0).is_err());
+        assert!(from_samples(&[], 192_001).is_err());
+    }
     #[test]
     fn silence_and_short_clicks_cannot_start_a_request() {
         let mut endpoint = Endpoint::default();

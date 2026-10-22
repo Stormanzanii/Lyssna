@@ -5,6 +5,7 @@ import type { Settings, SpotifyPlus } from "./types";
 import { FontSettings } from "./custom-fonts";
 import { SettingRow, SettingsQuery } from "./setting-row";
 import { Credits } from "./credits";
+import { IS_MAC } from "./platform";
 
 export function Toggle({
   label,
@@ -395,7 +396,9 @@ export function SettingsPage({
             >
               <button
                 className="pill outline"
-                disabled={state.update_status.startsWith("Downloading update")}
+                disabled={
+                  IS_MAC || state.update_status.startsWith("Downloading update")
+                }
                 onClick={() =>
                   void onCall("app_update", {
                     action:
@@ -414,19 +417,21 @@ export function SettingsPage({
                     : "Check for updates"}
               </button>
             </SettingRow>
-            <SettingRow
-              label="Download updates automatically"
-              help="New versions are verified before they install."
-              keywords="updates auto"
-            >
-              <Toggle
+            {!IS_MAC && (
+              <SettingRow
                 label="Download updates automatically"
-                checked={settings.auto_download_updates}
-                onChange={(auto_download_updates) =>
-                  onSettings({ auto_download_updates })
-                }
-              />
-            </SettingRow>
+                help="New versions are verified before they install."
+                keywords="updates auto"
+              >
+                <Toggle
+                  label="Download updates automatically"
+                  checked={settings.auto_download_updates}
+                  onChange={(auto_download_updates) =>
+                    onSettings({ auto_download_updates })
+                  }
+                />
+              </SettingRow>
+            )}
           </section>
 
           <section className="settings-section">

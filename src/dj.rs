@@ -1,8 +1,8 @@
 //! Independently implemented DJ prompt wire format. See THIRD_PARTY_NOTICES.md.
 mod context;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod local_speech;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod microphone;
 pub mod requests;
 pub mod transport;

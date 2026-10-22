@@ -1,4 +1,5 @@
 //! Deployment configuration stays in the OS credential store, separate from source.
+use crate::credential as keyring;
 use std::io::Read;
 
 use anyhow::{Context, Result, bail, ensure};

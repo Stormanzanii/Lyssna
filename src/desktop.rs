@@ -2731,6 +2731,7 @@ fn open_link(url: String) -> std::result::Result<(), String> {
 #[tauri::command]
 fn app_update(action: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
+        ensure!(updater::SUPPORTED, updater::UNSUPPORTED_MESSAGE);
         let command = match action.as_str() {
             "check" => updater::Command::Check,
             "download" => updater::Command::Download(
@@ -2817,6 +2818,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_menu(tauri::menu::Menu::default(app.handle())?)?;
             if let Some(window) = app.get_webview_window("main") {
                 window.set_icon(tauri::image::Image::new_owned(
                     crate::app_icon::icon_rgba(64),

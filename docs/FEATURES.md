@@ -4,6 +4,10 @@ The reference projects are [Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-
 
 See [implementation batches](ROADMAP.md) for the order of the remaining work. The Remaining column includes missing features and live checks; it does not imply that every item has a supported implementation path.
 
+macOS support includes Apple Silicon and Intel build configurations, native window controls and menus, Command shortcuts, media keys and Now Playing, local microphone recognition, and WebKit rendering adjustments. Manual **Rust checks** runs validate both architectures without packaging or publishing an app. The separate **Build macOS app** workflow remains manual. macOS updates require manual installation; the Windows signed-update channel is disabled on other platforms. Developer ID signing and notarization for public Mac distribution remain outstanding. The PR author reported successful Apple Silicon sign-in, playback and session restoration; these runtime checks have not been independently repeated by the Windows integration environment.
+
+Windows credentials remain in Windows Credential Manager. macOS uses AES-256-GCM records with authenticated service/account identities, fresh nonces, atomic replacement and owner-only permissions. Its encryption key sits beside those records; anyone able to read the whole directory can decrypt them. Tests use temporary directories to verify restoration, deletion, nonce changes, tamper rejection, service/account isolation, missing-key preservation, symlink rejection and size limits. App sign-in does not access or migrate old macOS Keychain entries.
+
 | Area | Implemented | Remaining |
 | --- | --- | --- |
 | Login | Mandatory setup modal; Premium notice; developer Client ID; separate audio PKCE; browser callbacks; state validation; cancellation before browser launch; refresh; account-bound OS credential storage; sign-out; persistent recovery messages, retry saved sign-in and fresh sign-in actions; cancellation releases pending state without unlocking the client | Live revoked-account confirmation |

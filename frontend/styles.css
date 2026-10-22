@@ -488,6 +488,10 @@ small {
   z-index: 25;
   background: #000000;
 }
+/* Reserve space for native traffic lights inside the 60 px toolbar. */
+.application.macos .topbar {
+  padding-left: 104px;
+}
 /* Until sign-in completes there is nothing to browse or search, and no
    account; keep only the logo, the drag area and the window controls.
    Hidden in place so the window controls keep their position. */
@@ -2769,6 +2773,19 @@ small {
 .lyric-line.active .lyric-syllable,
 .lyric-line.active .lyric-letter {
   will-change: transform;
+}
+/* Avoid retaining one compositing layer per animated glyph over live video. */
+.application.macos .lyric-line.active :is(.lyric-syllable, .lyric-letter) {
+  will-change: auto;
+}
+/* Filtered, moving text over video can retain stale WebKit tiles. Keep word
+   timing, gradients and motion, using opacity for inactive lines on macOS. */
+.application.macos .lyric-line {
+  filter: none;
+  transition: opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1);
+}
+.application.macos .lyrics-display {
+  caret-color: transparent;
 }
 .lyric-wait {
   transition:

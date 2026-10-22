@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { IS_MAC } from "./platform";
 
 /** One sharp video; its small, graded frame supplies the blurred lyrics backdrop. */
 export function LyricsCanvas({
@@ -31,7 +32,10 @@ export function LyricsCanvas({
   useEffect(() => {
     const element = video.current,
       canvas = backdrop.current,
-      context = canvas?.getContext("2d", { alpha: false });
+      context = canvas?.getContext("2d", {
+        alpha: false,
+        willReadFrequently: IS_MAC,
+      });
     if (!element || !canvas || !context) return;
     const root = element.closest<HTMLElement>(".lyrics-page"),
       cover = element.parentElement!;
@@ -44,8 +48,14 @@ export function LyricsCanvas({
         "--canvas-sharp-edge",
         `${cover.getBoundingClientRect().width}px`,
       );
-      const height = Math.max(1, Math.round((512 * box.height) / box.width));
-      if (canvas.width !== 512) canvas.width = 512;
+      // A small, smoothly scaled frame provides the Mac blur without applying
+      // WebKit's filter pipeline to a continuously changing video texture.
+      const width = IS_MAC ? 64 : 512;
+      const height = Math.max(
+        1,
+        Math.round((width * box.height) / Math.max(1, box.width)),
+      );
+      if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
     };
     resize();
@@ -77,21 +87,42 @@ export function LyricsCanvas({
       );
     };
     const draw = (now: number) => {
-      if (now - last >= 100 && element.readyState >= 2 && !document.hidden) {
+      if (
+        now - last >= 100 &&
+        element.readyState >= 2 &&
+        element.videoWidth > 0 &&
+        element.videoHeight > 0 &&
+        !document.hidden
+      ) {
         last = now;
-        context.filter = "blur(8px) saturate(1.25) brightness(0.5)";
-        if (root?.classList.contains("narrow")) fillPage();
-        else {
+        // Clear the whole opaque surface, including pixels outside the two
+        // reflected crops. Otherwise old frames accumulate along their edges.
+        context.filter = "none";
+        context.fillStyle = "#000";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        if (!IS_MAC)
+          context.filter = "blur(8px) saturate(1.25) brightness(0.5)";
+        fillPage();
+        if (!root?.classList.contains("narrow")) {
           const bounds = root?.getBoundingClientRect(),
             frame = cover.getBoundingClientRect(),
-            rootWidth = bounds?.width ?? 1,
-            rootHeight = bounds?.height ?? 1,
-            edge = (frame.width / rootWidth) * canvas.width,
+            rootWidth = Math.max(1, bounds?.width ?? 1),
+            rootHeight = Math.max(1, bounds?.height ?? 1),
+            edge = Math.max(
+              1,
+              Math.min(
+                canvas.width,
+                Math.round((frame.width / rootWidth) * canvas.width),
+              ),
+            ),
             sharpX = artworkRight ? canvas.width - edge : 0,
             boundary = artworkRight ? sharpX : edge,
             top =
               ((frame.top - (bounds?.top ?? 0)) / rootHeight) * canvas.height,
-            height = (frame.height / rootHeight) * canvas.height;
+            height = (frame.height / rootHeight) * canvas.height,
+            bleed = Math.max(2, Math.ceil((canvas.width * 24) / 512));
           const scale = Math.max(
               frame.width / element.videoWidth,
               frame.height / element.videoHeight,
@@ -120,12 +151,16 @@ export function LyricsCanvas({
             sourceY,
             sourceWidth * 0.2,
             sourceHeight,
-            artworkRight ? boundary : edge * 2 - canvas.width - 24,
+            artworkRight ? boundary - 1 : edge * 2 - canvas.width - bleed,
             top,
-            canvas.width - edge + 24,
+            canvas.width - edge + bleed + 1,
             height,
           );
           context.restore();
+        }
+        if (IS_MAC) {
+          context.fillStyle = "rgba(0, 0, 0, 0.5)";
+          context.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
       if (element.isConnected && !element.paused && !element.ended)

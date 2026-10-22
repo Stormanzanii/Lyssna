@@ -1,3 +1,5 @@
+import { IS_MAC, MODIFIER } from "./platform";
+import { useMacMenu } from "./mac-menu";
 import {
   useCallback,
   useEffect,
@@ -1183,18 +1185,22 @@ function App() {
     {
       label: "Edit",
       items: [
-        { label: "Undo", shortcut: "Ctrl+Z", onSelect: edit("undo") },
-        { label: "Redo", shortcut: "Ctrl+Y", onSelect: edit("redo") },
+        { label: "Undo", shortcut: `${MODIFIER}+Z`, onSelect: edit("undo") },
+        {
+          label: "Redo",
+          shortcut: IS_MAC ? "Cmd+Shift+Z" : "Ctrl+Y",
+          onSelect: edit("redo"),
+        },
         {
           label: "Cut",
-          shortcut: "Ctrl+X",
+          shortcut: `${MODIFIER}+X`,
           divider: true,
           onSelect: edit("cut"),
         },
-        { label: "Copy", shortcut: "Ctrl+C", onSelect: edit("copy") },
+        { label: "Copy", shortcut: `${MODIFIER}+C`, onSelect: edit("copy") },
         {
           label: "Paste",
-          shortcut: "Ctrl+V",
+          shortcut: `${MODIFIER}+V`,
           onSelect: () =>
             void navigator.clipboard
               .readText()
@@ -1204,12 +1210,12 @@ function App() {
         { label: "Delete", shortcut: "Del", onSelect: edit("delete") },
         {
           label: "Select all",
-          shortcut: "Ctrl+A",
+          shortcut: `${MODIFIER}+A`,
           onSelect: edit("selectAll"),
         },
         {
           label: "Search",
-          shortcut: "Ctrl+K",
+          shortcut: `${MODIFIER}+K`,
           divider: true,
           onSelect: () => searchInput.current?.focus(),
         },
@@ -1222,11 +1228,19 @@ function App() {
     {
       label: "View",
       items: [
-        { label: "Zoom in", shortcut: "Ctrl+=", onSelect: () => zoomBy(10) },
-        { label: "Zoom out", shortcut: "Ctrl+-", onSelect: () => zoomBy(-10) },
+        {
+          label: "Zoom in",
+          shortcut: `${MODIFIER}+=`,
+          onSelect: () => zoomBy(10),
+        },
+        {
+          label: "Zoom out",
+          shortcut: `${MODIFIER}+-`,
+          onSelect: () => zoomBy(-10),
+        },
         {
           label: "Reset zoom",
-          shortcut: "Ctrl+0",
+          shortcut: `${MODIFIER}+0`,
           onSelect: () => updateSettings({ ui_zoom_percent: 100 }),
         },
         {
@@ -1348,18 +1362,22 @@ function App() {
         },
         {
           label: "Check for updates",
+          disabled: IS_MAC,
           onSelect: () => void call("app_update", { action: "check" }),
         },
         {
           label: "Keyboard shortcuts",
           onSelect: () =>
             notify(
-              "Space play or pause · Ctrl+K search · Ctrl+= / Ctrl+- / Ctrl+0 zoom · F5 refresh · F11 full screen · Esc close menus",
+              `Space play or pause · ${MODIFIER}+K search · ${MODIFIER}+= / ${MODIFIER}+- / ${MODIFIER}+0 zoom · F5 refresh · F11 full screen · Esc close menus`,
             ),
         },
       ],
     },
   ];
+  const nativeMenuReady = useMacMenu(menuGroups, (message) =>
+    notify(message, true),
+  );
   const fullscreen = async (force?: boolean) => {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
@@ -1858,7 +1876,7 @@ function App() {
   );
   return (
     <div
-      className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
+      className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
       style={
         {
           fontFamily: fontFamily(state.settings.ui_font),
@@ -1936,7 +1954,7 @@ function App() {
         className={`topbar ${sessionScreen(state) === "client" ? "" : "signed-out"}`}
         data-tauri-drag-region
       >
-        <AppMenu groups={menuGroups} />
+        {!nativeMenuReady && <AppMenu groups={menuGroups} />}
         <div className="history-buttons">
           <button className="icon-button" title="Go back" onClick={back}>
             <ArrowLeft size={19} />
@@ -2062,27 +2080,29 @@ function App() {
             }}
           />
         </div>
-        <div className="window-controls">
-          <button
-            aria-label="Minimize window"
-            onClick={() => void windowHandle().minimize()}
-          >
-            <Minus size={15} />
-          </button>
-          <button
-            aria-label="Maximize or restore window"
-            onClick={() => void windowHandle().toggleMaximize()}
-          >
-            <Square size={13} />
-          </button>
-          <button
-            className="window-close"
-            aria-label="Close window"
-            onClick={() => void windowHandle().close()}
-          >
-            <X size={18} />
-          </button>
-        </div>
+        {!IS_MAC && (
+          <div className="window-controls">
+            <button
+              aria-label="Minimize window"
+              onClick={() => void windowHandle().minimize()}
+            >
+              <Minus size={15} />
+            </button>
+            <button
+              aria-label="Maximize or restore window"
+              onClick={() => void windowHandle().toggleMaximize()}
+            >
+              <Square size={13} />
+            </button>
+            <button
+              className="window-close"
+              aria-label="Close window"
+              onClick={() => void windowHandle().close()}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
       </header>
       <div
         className="workspace"

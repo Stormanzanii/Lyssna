@@ -11,6 +11,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  macos:
+    name: macOS checks (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: 1.98.0
+      CARGO_TERM_COLOR: always
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      GGML_NATIVE: "OFF"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-check-${{ matrix.arch }}
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: WebKit macOS interface regressions
+        run: |
+          npx playwright install webkit
+          npm run test:e2e -- tests/frontend/macos.spec.ts --browser=webkit
+      - run: cargo fmt --check
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo build --locked
   updates-worker:
     runs-on: ubuntu-latest
     timeout-minutes: 10

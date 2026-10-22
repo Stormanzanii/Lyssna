@@ -53,11 +53,11 @@ pub enum Stage {
 }
 
 pub fn release_model(dialog: &str) {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         super::local_speech::release(dialog);
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = dialog;
     }
@@ -135,7 +135,7 @@ impl Capture {
             !self.cancelled.load(Ordering::Acquire),
             "Voice capture cancelled"
         );
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             let mut report = report;
             let model =
@@ -153,10 +153,10 @@ impl Capture {
                 )
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (report, vocabulary, dialog);
-            anyhow::bail!("Native voice input is available on Windows")
+            anyhow::bail!("Native voice input is available on Windows and macOS")
         }
     }
 }

@@ -25,6 +25,13 @@
   overflow: visible;
   background: linear-gradient(transparent, #00000073), var(--hero, #535353);
 }
+/* A narrow centre panel has no room for the tall header's empty top. */
+@container (max-width: 760px) {
+  .page-hero:not(.artist-hero) {
+    min-height: 0;
+    padding-top: 28px;
+  }
+}
 .hero-cover {
   width: clamp(128px, 24cqi, 232px);
   height: auto;

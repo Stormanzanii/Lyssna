@@ -984,3 +984,74 @@
   font-size: 13px;
   color: #ffffffb3;
 }
+
+/* Help → About SpotiFlex, laid out like Spotify's About box. */
+.about-backdrop {
+  z-index: 400;
+}
+.about-dialog {
+  position: relative;
+  width: min(460px, calc(100vw - 48px));
+  padding: 28px 28px 24px;
+  border-radius: 12px;
+  background: #1f1f1f;
+  color: #ffffffcc;
+  box-shadow: 0 24px 80px #000000a6;
+}
+.about-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.about-wordmark {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #fff;
+}
+.about-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.about-copy {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #2a2a2a;
+  color: #fff;
+  box-shadow: 0 4px 12px #0006;
+}
+.about-copy:hover {
+  background: #333;
+}
+.about-update {
+  margin: 18px 0;
+  font-size: 15px;
+}
+.about-update .text-link {
+  color: #fff;
+  font-size: 14px;
+}
+.about-legal {
+  padding: 14px 16px;
+  border-radius: 6px;
+  background: #2a2a2a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.about-legal p {
+  margin: 0;
+}

@@ -159,6 +159,7 @@ import {
 } from "./spotify-plus";
 import { LyricsSettings } from "./lyrics-settings";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
+import { AboutDialog } from "./about-dialog";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
@@ -361,6 +362,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
   const [lyricsSettings, setLyricsSettings] = useState(false);
+  const [about, setAbout] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
   useEffect(
     () => startIdleTrim(() => void rpc("trim_memory").catch(() => {})),
@@ -1331,7 +1333,7 @@ function App() {
       items: [
         {
           label: "About SpotiFlex",
-          onSelect: () => setCenter("settings"),
+          onSelect: () => setAbout(true),
         },
         {
           label: "Check for updates",
@@ -4087,6 +4089,15 @@ function App() {
             </div>
           </form>
         </div>
+      )}
+      {about && (
+        <AboutDialog
+          updateStatus={state.update_status}
+          updateVersion={state.update_version}
+          onUpdate={() => void call("app_update", { action: "install" })}
+          onNotice={notify}
+          onClose={() => setAbout(false)}
+        />
       )}
       {lyricsSettings && (
         <LyricsSettings

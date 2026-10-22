@@ -6787,6 +6787,28 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
   await expect(page.getByRole("menu", { name: "Menu" })).toHaveCount(0);
 });
 
+test("Help > About SpotiFlex opens the About dialog", async ({ page }) => {
+  await startClient(page);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Help" }).click();
+  await page
+    .getByRole("menu", { name: "Help" })
+    .getByRole("menuitem", { name: "About SpotiFlex" })
+    .click();
+  const about = page.getByRole("dialog", { name: "About SpotiFlex" });
+  await expect(about).toBeVisible();
+  await expect(about).toContainText("SpotiFlex for Windows (64 bit)");
+  await expect(about.locator(".about-legal")).toContainText("Copyright");
+  await about.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(about).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Help" }).click();
+  await page.getByRole("menuitem", { name: "About SpotiFlex" }).click();
+  await expect(about).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(about).toHaveCount(0);
+});
+
 test("lyrics options live in Lyrics settings with an ordered source list", async ({
   page,
 }) => {

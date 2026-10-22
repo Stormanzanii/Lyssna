@@ -267,3 +267,10 @@
     --glass-fill-strong: #1e1e23f2;
   }
 }
+
+.liquid-glass .about-dialog {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}

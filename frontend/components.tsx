@@ -674,6 +674,72 @@ const LyricCredits = memo(function LyricCredits({
       } as Record<string, string>
     )[lyrics.source] ?? lyrics.source;
   const openCreator = useCreatorProfile();
+  const profileUrl = (url?: string) => {
+    try {
+      const parsed = new URL(url ?? "");
+      if (
+        parsed.protocol === "https:" &&
+        parsed.hostname === "spicylyrics.org" &&
+        !parsed.username &&
+        !parsed.password
+      )
+        return parsed.href;
+    } catch {
+      /* Missing profile links remain plain credit text. */
+    }
+  };
+  const community =
+    lyrics.source === "spicy_lyrics"
+      ? (["maker", "uploader"] as const).flatMap((role) => {
+          const person = lyrics.attribution?.[role];
+          return person?.username ? [{ role, person }] : [];
+        })
+      : [];
+  // Community lyrics read like the Spicy Lyrics fork:
+  // "Community lyrics · Made by (avatar) @name".
+  if (community.length)
+    return (
+      <div
+        className={`lyric-source community-credits ${expanded ? "expanded" : ""}`}
+      >
+        <span className="community-lead">Community lyrics</span>
+        {community.map(({ role, person }) => {
+          const url = profileUrl(person.url);
+          const label =
+            role === "uploader" && community[0].role === "maker"
+              ? "Uploaded by"
+              : "Made by";
+          const name = (
+            <>
+              {person.avatar?.startsWith("https://") && (
+                <img src={person.avatar} alt="" />
+              )}
+              <span className="community-name">@{person.username}</span>
+            </>
+          );
+          return (
+            <span key={role} className="community-person">
+              <span className="community-dot"> · </span>
+              {label}{" "}
+              {person.id || url ? (
+                <button
+                  className="community-profile"
+                  onClick={() =>
+                    person.id
+                      ? openCreator(person)
+                      : void rpc("open_link", { url }).catch(() => {})
+                  }
+                >
+                  {name}
+                </button>
+              ) : (
+                <span className="community-profile">{name}</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    );
   return (
     <div className={`lyric-source ${expanded ? "expanded" : ""}`}>
       Lyrics provided by: {source}

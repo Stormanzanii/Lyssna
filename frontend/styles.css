@@ -4857,3 +4857,44 @@ input[type="range"]:hover {
 .lyrics-page.colour-background {
   background: linear-gradient(var(--hero, #282828), #0b0b0b 85%);
 }
+
+/* Community lyrics credit, as in the Spicy Lyrics fork. */
+.lyric-source.community-credits {
+  font-weight: 700;
+}
+.community-credits .community-person {
+  white-space: nowrap;
+}
+.community-credits .community-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  vertical-align: bottom;
+  cursor: pointer;
+}
+.community-credits .community-profile img {
+  width: 1.4em;
+  height: 1.4em;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.community-credits .community-name {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+.community-credits
+  .community-profile:is(:hover, :focus-visible)
+  .community-name {
+  opacity: 1;
+}
+.lyric-source.community-credits.expanded > span {
+  display: inline;
+  margin-top: 0;
+}

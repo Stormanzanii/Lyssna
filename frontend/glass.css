@@ -188,13 +188,26 @@
 }
 
 /* Inputs and controls in glass. */
+/* The search box's glass lives on a layer behind its contents. If the box
+   itself had a backdrop-filter, recent searches nested inside it could not
+   see the page, and would need a solid grey fill. */
 .liquid-glass .search-box {
+  isolation: isolate;
+  background: transparent;
+}
+.liquid-glass .search-box::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
   background: #ffffff14;
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 1px 0 #ffffff1f inset;
+  pointer-events: none;
 }
-.liquid-glass .search-box:focus-within {
+.liquid-glass .search-box:focus-within::before {
   background: #ffffff1f;
 }
 .liquid-glass .playlist-flyout-search {
@@ -243,12 +256,17 @@
 .liquid-glass .recent-searches {
   position: absolute;
 }
-/* Panels nested inside another frosted panel (a submenu inside the menu,
-   recent searches inside the search box) cannot blur the page behind them,
-   so they get a near-solid fill instead of showing it through. */
-.liquid-glass .app-submenu,
-.liquid-glass .recent-searches {
+/* A submenu sits inside the frosted menu, so it cannot blur the page
+   behind it; it gets a near-solid fill instead of showing it through. */
+.liquid-glass .app-submenu {
   background: #1f1f24f5;
+}
+/* Recent searches are real frosted glass: plain blur, no refraction, so a
+   tall list over moving lyrics stays cheap. */
+.liquid-glass .recent-searches {
+  background: #16161ab8;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 /* The ::after rim scrolls away with the content of a scrolling popover,
    leaving a stray outline. Draw their rim as an inset shadow instead. */
@@ -309,8 +327,8 @@
 }
 .glass-refraction .lyrics-toolbar,
 .glass-refraction .lyrics-glass-seek,
-.glass-refraction .search-box,
-.glass-refraction .popover,
+.glass-refraction .search-box::before,
+.glass-refraction .popover:not(.recent-searches, .device-menu),
 .glass-refraction .profile-menu,
 .glass-refraction .app-menu,
 .glass-refraction .sort-menu {

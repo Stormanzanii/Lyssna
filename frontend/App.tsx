@@ -143,6 +143,7 @@ import { useArtworkColor } from "./artwork-color";
 import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
+import { SetupAmbience } from "./setup-ambience";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
@@ -4198,11 +4199,12 @@ function Setup({
   }, [state.settings.client_id]);
   return (
     <div className="setup-backdrop">
-      <div className="setup-ambience" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
+      <SetupAmbience
+        still={
+          state.settings.reduce_motion ||
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        }
+      />
       <section
         className="setup-dialog"
         role="dialog"

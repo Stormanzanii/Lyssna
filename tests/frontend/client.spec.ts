@@ -359,11 +359,28 @@ test("first-run Spotify sign-in needs no developer Client ID", async ({
   await expect(
     page.getByRole("button", { name: "Minimize window", exact: true }),
   ).toBeVisible();
+  // The ambience is drawn by the dithered WebGL shader, not CSS gradients.
+  await expect(page.locator(".setup-ambience canvas")).toHaveAttribute(
+    "data-ready",
+    "true",
+  );
   const signIn = dialog.getByRole("button", {
     name: "Sign in with Spotify",
     exact: true,
   });
   await expect(signIn).toBeEnabled();
+  // Hovering must not grow the button past the column or scroll it.
+  const before = await signIn.boundingBox();
+  await signIn.hover();
+  await page.waitForTimeout(300);
+  expect(await signIn.boundingBox()).toEqual(before);
+  expect(
+    await dialog.evaluate(
+      (node) =>
+        node.scrollWidth <= node.clientWidth &&
+        node.scrollHeight <= node.clientHeight,
+    ),
+  ).toBe(true);
   await signIn.click();
   const request = await page.evaluate(() =>
     (window as any).__clientTest.commands

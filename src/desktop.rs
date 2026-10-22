@@ -898,6 +898,13 @@ impl Desktop {
                                 &native::device_name(),
                                 volume,
                             ) {
+                                // The clicked song is already shown, but rows from
+                                // search carry no release date; fetch full details.
+                                if snapshot.playback.item.as_ref().is_some_and(|item| {
+                                    item.uri == track.uri && item.album.release_date.is_empty()
+                                }) {
+                                    let _ = pump.commands.send(Command::TrackInfo(track.uri));
+                                }
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false,"loading":true}),
                                 );

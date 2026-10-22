@@ -4593,14 +4593,14 @@ function PlayerBar({
               })
             }
           >
-            <Shuffle size={22} />
+            <Shuffle size={16} />
           </button>
           <button
             className="icon-button"
             title="Previous song"
             onClick={() => onPlayer({ command: "previous" })}
           >
-            <SkipBack size={23} fill="currentColor" />
+            <SkipBack size={16} fill="currentColor" />
           </button>
           <button
             className="play-toggle"
@@ -4610,11 +4610,11 @@ function PlayerBar({
             disabled={!track}
           >
             {state.pending ? (
-              <LoaderCircle className="spin" size={22} />
+              <LoaderCircle className="spin" size={16} />
             ) : state.playback.is_playing ? (
-              <Pause size={22} fill="currentColor" />
+              <Pause size={16} fill="currentColor" />
             ) : (
-              <Play size={22} fill="currentColor" />
+              <Play size={16} fill="currentColor" />
             )}
           </button>
           <button
@@ -4622,7 +4622,7 @@ function PlayerBar({
             title="Next song"
             onClick={() => onPlayer({ command: "next" })}
           >
-            <SkipForward size={23} fill="currentColor" />
+            <SkipForward size={16} fill="currentColor" />
           </button>
           <button
             className={`icon-button ${state.playback.repeat_state !== "off" && state.playback.repeat_state ? "active" : ""}`}
@@ -4641,9 +4641,9 @@ function PlayerBar({
             }
           >
             {state.playback.repeat_state === "track" ? (
-              <Repeat1 size={22} />
+              <Repeat1 size={16} />
             ) : (
-              <Repeat size={22} />
+              <Repeat size={16} />
             )}
           </button>
         </div>

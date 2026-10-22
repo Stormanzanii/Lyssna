@@ -3373,14 +3373,14 @@ small {
 }
 .transport-buttons {
   display: flex;
-  gap: 15px;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   margin-bottom: 6px;
 }
 .transport-buttons .icon-button {
-  width: 39px;
-  height: 39px;
+  width: 32px;
+  height: 32px;
   color: #b3b3b3;
 }
 .transport-buttons .icon-button:hover {
@@ -3389,8 +3389,8 @@ small {
   transform: scale(1.06);
 }
 .play-toggle {
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   margin: 0 4px;
   display: flex;
   align-items: center;

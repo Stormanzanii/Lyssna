@@ -696,7 +696,7 @@ small {
   position: relative;
 }
 .library-panel {
-  width: clamp(250px, 22vw, 340px);
+  width: var(--left-width, clamp(250px, 22vw, 340px));
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

@@ -289,6 +289,8 @@ function App() {
     }
   };
   const [rightWidth, setRightWidth] = useState(360);
+  // Your Library's width; null keeps the default responsive width.
+  const [leftWidth, setLeftWidth] = useState<number | null>(null);
   const [target, setTarget] = useState("native");
   const [deviceMenu, setDeviceMenu] = useState(false);
   // Controls follow the device Spotify reports active, so a failed
@@ -1917,6 +1919,26 @@ function App() {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
+  // Like Spotify: drag the library's edge to resize it; drag far enough
+  // left to collapse it to covers, and back out to expand it again.
+  const resizeLeft = (event: React.PointerEvent) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const left =
+      event.currentTarget.parentElement?.getBoundingClientRect().left ?? 0;
+    const move = (event: PointerEvent) => {
+      const width = event.clientX - left - 8;
+      const compact = width < 170;
+      if (compact !== !!stateRef.current.settings.compact_library)
+        updateSettings({ compact_library: compact });
+      if (!compact) setLeftWidth(Math.max(250, Math.min(480, width)));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const showTrackList =
     state.route !== "home" && (!entity?.artist || displayTracks.length > 0);
   const listedTracks =
@@ -2188,7 +2210,10 @@ function App() {
       <div
         className="workspace"
         style={
-          { "--right-width": `${sidebar ? rightWidth : 0}px` } as CSSProperties
+          {
+            "--right-width": `${sidebar ? rightWidth : 0}px`,
+            ...(leftWidth ? { "--left-width": `${leftWidth}px` } : {}),
+          } as CSSProperties
         }
         inert={!state.profile}
       >
@@ -2327,6 +2352,11 @@ function App() {
             )}
           </div>
         </aside>
+        <div
+          className="panel-resizer library-resizer"
+          title="Resize Your Library"
+          onPointerDown={resizeLeft}
+        />
         <main
           className={`center-panel ${center === "lyrics" ? "showing-lyrics" : ""}`}
         >

@@ -7584,3 +7584,34 @@ test("clicking empty top bar space never starts a window drag; moving does", asy
   await page.mouse.up();
   await expect.poll(drags).toBe(1);
 });
+
+test("Your Library resizes by dragging its edge and collapses like Spotify", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await startClient(page);
+  const library = page.locator(".library-panel");
+  const handle = page.locator(".library-resizer");
+  const start = (await handle.boundingBox())!;
+  const y = start.y + start.height / 2;
+  const width = async () => (await library.boundingBox())!.width;
+  await page.mouse.move(start.x + 1, y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 120, y, { steps: 6 });
+  await page.mouse.up();
+  const wider = await width();
+  expect(wider).toBeGreaterThan(start.x + 60);
+  // Far left collapses to covers; dragging back out expands it.
+  const edge = (await handle.boundingBox())!;
+  await page.mouse.move(edge.x + 1, y);
+  await page.mouse.down();
+  await page.mouse.move(60, y, { steps: 6 });
+  await page.mouse.up();
+  await expect(library).toHaveClass(/compact-library/);
+  const collapsed = (await handle.boundingBox())!;
+  await page.mouse.move(collapsed.x + 1, y);
+  await page.mouse.down();
+  await page.mouse.move(380, y, { steps: 6 });
+  await page.mouse.up();
+  await expect(library).not.toHaveClass(/compact-library/);
+});

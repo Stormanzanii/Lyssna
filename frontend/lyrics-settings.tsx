@@ -12,7 +12,7 @@ import {
   Info,
   Search,
   SlidersHorizontal,
-  Type,
+  Palette,
   WandSparkles,
   X,
   AlignLeft,
@@ -24,7 +24,7 @@ import { Toggle } from "./settings-page";
 import { CREDITS, Credits } from "./credits";
 
 const TABS = [
-  ["Appearance", Type],
+  ["Appearance", Palette],
   ["Lyrics", AlignLeft],
   ["Effects", FlaskConical],
   ["Interface", AppWindow],
@@ -379,7 +379,7 @@ export function LyricsSettings({
                 tabs.current[next]?.focus();
               }}
             >
-              <Icon size={14} />
+              <Icon size={16} />
               {label}
             </button>
           ))}

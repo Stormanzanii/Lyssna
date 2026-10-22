@@ -4110,6 +4110,8 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
   await refraction.check();
   await expect(page.locator(".application")).toHaveClass(/glass-refraction/);
   await expect(page.locator("#glass-refraction")).toHaveCount(1);
+  // The sliding Now playing panel refracts through a root-level class.
+  await expect(page.locator("html")).toHaveClass(/glass-refraction/);
   await expect
     .poll(() =>
       page.evaluate(
@@ -4137,6 +4139,7 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
   await expect(page.locator(".application")).not.toHaveClass(
     /glass-refraction/,
   );
+  await expect(page.locator("html")).not.toHaveClass(/glass-refraction/);
 });
 
 test("Liquid Glass is off by default and toggles from Settings", async ({

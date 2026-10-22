@@ -361,3 +361,13 @@
 .glass-refraction .search-box::before {
   background: #ffffff0a;
 }
+
+/* Now playing refracts only while it slides in or out: the moving layer
+   bends the page behind it, then the settled panel is plain glass again,
+   so the effect costs nothing while it rests. */
+:root.glass-refraction::view-transition-old(now-playing),
+:root.glass-refraction::view-transition-new(now-playing) {
+  border-radius: 18px;
+  -webkit-backdrop-filter: url(#glass-refraction) saturate(1.8);
+  backdrop-filter: url(#glass-refraction) saturate(1.8);
+}

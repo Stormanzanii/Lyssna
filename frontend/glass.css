@@ -315,8 +315,9 @@
   display: none;
 }
 
-/* Refraction (opt-in, flagged for its GPU cost): glass bends what's
-   behind it at the rim. */
+/* Refraction (opt-in, flagged for its GPU cost): only the lyrics toolbar
+   and the profile menu bend what's behind them. Anything bigger or moving
+   made the app crawl. */
 .glass-refraction-defs {
   position: absolute;
   width: 0;
@@ -324,47 +325,24 @@
   overflow: hidden;
   pointer-events: none;
 }
-.glass-refraction .lyrics-toolbar,
-.glass-refraction .lyrics-glass-seek,
-.glass-refraction .search-box::before,
-.glass-refraction .popover:not(.recent-searches, .device-menu),
-.glass-refraction .profile-menu,
-.glass-refraction .app-menu,
-.glass-refraction .sort-menu {
+.glass-refraction .lyrics-toolbar {
   -webkit-backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
     brightness(1.08);
   backdrop-filter: url(#glass-refraction) blur(6px) saturate(2.1)
     brightness(1.08);
-  /* A clear lens: a thin bright top rim and a soft lower shade give depth
-     without washing the colours behind it out to white. */
+}
+.glass-refraction .profile-menu {
+  /* A lighter fill lets the bent backdrop show; the blur keeps text clear. */
+  background: #14141a8c;
+  -webkit-backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
+  backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
+}
+/* A clear lens: a thin bright top rim and a soft lower shade. */
+.glass-refraction .lyrics-toolbar,
+.glass-refraction .profile-menu {
   box-shadow:
     inset 0 1px 0 #ffffff73,
     inset 0 0 0 1px #ffffff17,
     inset 0 -12px 20px -14px #00000073,
     0 10px 30px #00000059;
-}
-
-/* Refracting menus use a lighter fill so the bent backdrop shows through;
-   the extra blur keeps their text readable. */
-.glass-refraction .popover:not(.recent-searches, .device-menu),
-.glass-refraction .profile-menu,
-.glass-refraction .app-menu,
-.glass-refraction .sort-menu {
-  background: #14141a8c;
-  -webkit-backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
-  backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
-}
-
-/* The main sheets never refract: bending window-sized panels every frame
-   made the whole app crawl and fringed their edges. */
-
-.glass-refraction .search-box::before {
-  background: #ffffff0a;
-}
-
-/* Lyrics settings bend the lyrics behind them at the rim; the cost only
-   applies while the window is open. */
-.glass-refraction .lyrics-settings {
-  -webkit-backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
-  backdrop-filter: url(#glass-refraction) blur(30px) saturate(190%);
 }

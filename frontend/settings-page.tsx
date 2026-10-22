@@ -269,7 +269,7 @@ export function SettingsPage({
             {settings.liquid_glass && (
               <SettingRow
                 label="Refraction"
-                help="Bends what's behind glass controls like real curved glass. Uses noticeably more GPU."
+                help="The lyrics toolbar and profile menu bend what's behind them like curved glass. Uses more GPU."
                 keywords="liquid glass refraction lens distortion gpu"
               >
                 <Toggle

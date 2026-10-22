@@ -4124,14 +4124,14 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
     await page
       .locator(".search-box")
       .evaluate((node) => getComputedStyle(node, "::before").backdropFilter),
-  ).toContain("glass-refraction");
+  ).not.toContain("glass-refraction");
   // The main sheets never refract; it was far too slow.
   expect(
     await page
       .locator(".library-panel")
       .evaluate((node) => getComputedStyle(node).backdropFilter),
   ).not.toContain("glass-refraction");
-  // Lyrics settings refract too.
+  // Only the lyrics toolbar and profile menu refract.
   await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page
@@ -4140,9 +4140,14 @@ test("Liquid Glass refraction is an opt-in with a GPU note", async ({
     .click();
   expect(
     await page
-      .locator(".lyrics-settings")
+      .locator(".lyrics-toolbar")
       .evaluate((node) => getComputedStyle(node).backdropFilter),
   ).toContain("glass-refraction");
+  expect(
+    await page
+      .locator(".lyrics-settings")
+      .evaluate((node) => getComputedStyle(node).backdropFilter),
+  ).not.toContain("glass-refraction");
   await page.keyboard.press("Escape");
   await openSettings(page);
   // Turning Liquid Glass off hides the option and the effect.

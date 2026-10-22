@@ -47,7 +47,7 @@ The existing Spotify Web API cooldown still applies to operations using that API
 
 ## 7. Release and live verification
 
-- Publish the first signed release; verify executable replacement and restart between two published versions.
+- Signed 0.1.0 executable and source are published. A live local 0.0.1 upgrade verified automatic detection, download, executable replacement, backup and restart into 0.1.0 with sign-in retained. An upgrade between two separately published releases remains to be checked.
 - Complete DJ close/reopen, skip, multi-set, fade and text/voice-request listening checks. Text and voice requests already have implementations and controlled tests; the spoken hold-button prompt remains a gap.
 - Verify taskbar buttons, media keys and third-party software such as Stream Deck.
 - Extend remote-device checks beyond the verified Alexa and headphone handoff.

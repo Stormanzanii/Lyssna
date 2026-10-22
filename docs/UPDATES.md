@@ -41,6 +41,8 @@ Wrangler generates binding types from `wrangler.jsonc`. The Worker streams execu
 
 The deployed service responds at `/health`. The stable manifest returns 404 until a real signed version is published. An absent channel means no update is available.
 
-For the first update test, the local application uses version 0.0.1 and the shared release uses 0.1.0. Launch 0.0.1, wait for its automatic update prompt, then select **Install and restart** after the download is verified. Confirm version 0.1.0 in Settings after restart. Signature and download verification alone do not establish that replacement and restart succeeded; the final installation step remains a user check until exercised.
+The first signed release is [SpotiFlex 0.1.0 for Windows x86_64](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/spotiflex.exe), with its [corresponding source archive](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/source.zip). Each person signs in with their own Spotify Premium account.
+
+Live verification on 2026-10-22 used a local 0.0.1 baseline and the published 0.1.0 release. Startup automatically detected and downloaded the release, verified its signature and checksum, and opened the update prompt. Installation replaced the running executable and restarted into 0.1.0 with the account still signed in. The installed executable matched the published release byte for byte, the backup reported 0.0.1, and the restarted updater reported Up to date. An upgrade between two separately published releases remains untested.
 
 The fork's periodic version checks and explicit update prompt informed this flow. Its browser reload mechanism is replaced by verified native executable replacement.

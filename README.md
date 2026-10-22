@@ -6,6 +6,10 @@ This is an initial implementation of the core client. Full parity with both refe
 
 ## Run
 
+Download [SpotiFlex 0.1.0 for Windows](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/spotiflex.exe) and sign in with your own Spotify Premium account. Future releases are checked automatically at startup; an update prompt offers installation and restart after verification.
+
+To build from source:
+
 On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, CMake and LLVM (including libclang). Put CMake on PATH and set `LIBCLANG_PATH` to the directory containing `libclang.dll` if LLVM is not discoverable. Then run:
 
 ```powershell
@@ -73,4 +77,4 @@ Native migration validation: 172 Rust tests, 132 frontend unit tests, 105 browse
 
 ## App updates
 
-Native signed updates use R2 through `updates.clypdat.xyz`. New versions download automatically; **Settings > App updates > Install update and restart** applies them. Ed25519 signatures and SHA-256 hashes are verified before installation. The release workflow and maintainer instructions are in [UPDATES.md](docs/UPDATES.md).
+Native signed updates use R2 through `updates.clypdat.xyz`. New versions download automatically and open a prompt with signed release notes. **Install and restart** applies the verified executable; **Not now** defers that version until the next launch. Manual checks and installation remain under **Settings > About SpotiFlex**. Ed25519 signatures and SHA-256 hashes are verified before installation. The release workflow and maintainer instructions are in [UPDATES.md](docs/UPDATES.md).

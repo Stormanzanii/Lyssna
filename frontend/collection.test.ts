@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addedLabel, collectionTracks } from "./collection";
+import { addedLabel, collectionTracks, nextHeaderSort } from "./collection";
 import type { Track } from "./types";
 const tracks = [
   {
@@ -76,8 +76,30 @@ describe("date added", () => {
   });
   it("sorts by date added both ways", () => {
     const order = (sort: string) =>
-      collectionTracks(tracks, {}, { ...filters, sort }).map((track) => track.uri);
+      collectionTracks(tracks, {}, { ...filters, sort }).map(
+        (track) => track.uri,
+      );
     expect(order("recent")).toEqual(["a", "b", "c"]);
     expect(order("added_oldest")).toEqual(["b", "a", "c"]);
+  });
+  it("sorts by title and album both ways, ignoring case", () => {
+    const order = (sort: string) =>
+      collectionTracks(tracks, {}, { ...filters, sort }).map(
+        (track) => track.uri,
+      );
+    expect(order("title_asc")).toEqual(["a", "c", "b"]);
+    expect(order("title_desc")).toEqual(["b", "c", "a"]);
+    // Ties keep playlist order.
+    expect(order("album_asc")).toEqual(["a", "b", "c"]);
+    expect(order("album_desc")).toEqual(["b", "c", "a"]);
+  });
+  it("cycles header sorts like Spotify: ascending, descending, then off", () => {
+    expect(nextHeaderSort("title", "order")).toBe("title_asc");
+    expect(nextHeaderSort("title", "title_asc")).toBe("title_desc");
+    expect(nextHeaderSort("title", "title_desc")).toBe("order");
+    expect(nextHeaderSort("album", "title_desc")).toBe("album_asc");
+    expect(nextHeaderSort("added", "order")).toBe("added_oldest");
+    expect(nextHeaderSort("added", "added_oldest")).toBe("recent");
+    expect(nextHeaderSort("added", "recent")).toBe("order");
   });
 });

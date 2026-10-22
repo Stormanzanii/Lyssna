@@ -7427,3 +7427,41 @@ test("SpotiFlex settings combines app and lyrics options with ordered sources", 
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".lyrics-page")).toBeVisible();
 });
+
+test("Title, Album and Date added headers sort like Spotify", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  await expect(page.locator(".track-row").first()).toBeVisible();
+  const saved = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings.song_sorts?.liked ?? "order",
+    );
+  const first = () => page.locator(".track-row .track-name").first().innerText();
+  const head = page.locator(".track-table-head");
+  const title = head.getByRole("button", { name: /Sort by Title/ });
+  await title.click();
+  await expect.poll(saved).toBe("title_asc");
+  await expect(title).toHaveClass(/active/);
+  const ascending = await first();
+  await title.click();
+  await expect.poll(saved).toBe("title_desc");
+  await expect.poll(first).not.toBe(ascending);
+  await title.click();
+  await expect.poll(saved).toBe("order");
+  await expect(title).not.toHaveClass(/active/);
+  await head.getByRole("button", { name: /Sort by Album/ }).click();
+  await expect.poll(saved).toBe("album_asc");
+  const added = head.getByRole("button", { name: /Sort by Date added/ });
+  await added.click();
+  await expect.poll(saved).toBe("added_oldest");
+  await added.click();
+  await expect.poll(saved).toBe("recent");
+});

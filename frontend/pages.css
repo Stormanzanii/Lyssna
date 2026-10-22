@@ -1052,3 +1052,21 @@
 .about-legal p {
   margin: 0;
 }
+
+/* Sortable column headers, as in Spotify: the sorted column turns green
+   with a caret for its direction. */
+.column-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+.column-sort:hover {
+  color: #fff;
+}
+.column-sort.active {
+  color: #1ed760;
+}

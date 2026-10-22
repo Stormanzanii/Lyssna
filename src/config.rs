@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 pub const REDIRECT_URI: &str = "http://127.0.0.1:43821/callback";
 pub const DASHBOARD_URL: &str = "https://developer.spotify.com/dashboard";
 /// Song sort choices a playlist, album or Liked Songs page can remember.
-pub const SONG_SORTS: [&str; 5] = ["recent", "added_oldest", "newest", "oldest", "popular"];
+pub const SONG_SORTS: [&str; 9] = [
+    "recent",
+    "added_oldest",
+    "newest",
+    "oldest",
+    "popular",
+    "title_asc",
+    "title_desc",
+    "album_asc",
+    "album_desc",
+];
 pub const MAX_SONG_SORTS: usize = 500;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

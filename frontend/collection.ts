@@ -31,6 +31,34 @@ export function addedLabel(added: string | undefined, now = Date.now()) {
     year: "numeric",
   });
 }
+/** Text sorts compare like Spotify: case-insensitive, numbers in order. */
+const TEXT_SORTS: Record<string, [(track: Track) => string, 1 | -1]> = {
+  title_asc: [(track) => track.name, 1],
+  title_desc: [(track) => track.name, -1],
+  album_asc: [(track) => track.album.name, 1],
+  album_desc: [(track) => track.album.name, -1],
+};
+const collator = new Intl.Collator(undefined, {
+  sensitivity: "base",
+  numeric: true,
+});
+
+/** Clicking a column header cycles like Spotify: ascending, descending,
+ * then back to the playlist's own order. Date added ascends oldest first. */
+export function nextHeaderSort(
+  column: "title" | "album" | "added",
+  current: string,
+) {
+  const [ascending, descending] =
+    column === "added"
+      ? ["added_oldest", "recent"]
+      : [`${column}_asc`, `${column}_desc`];
+  return current === ascending
+    ? descending
+    : current === descending
+      ? "order"
+      : ascending;
+}
 export function genresFor(track: Track, facts: Record<string, TrackFacts>) {
   return facts[track.uri]?.genres?.length
     ? facts[track.uri].genres
@@ -76,6 +104,14 @@ export function collectionTracks(
       return true;
     })
     .sort((a, b) => {
+      const text = TEXT_SORTS[filters.sort];
+      if (text) {
+        const [field, direction] = text;
+        return (
+          direction * collator.compare(field(a.track), field(b.track)) ||
+          a.index - b.index
+        );
+      }
       const value = (track: Track) =>
         filters.sort === "popular"
           ? facts[track.uri]?.plays
@@ -92,8 +128,7 @@ export function collectionTracks(
       return (
         (filters.sort === "oldest" || filters.sort === "added_oldest"
           ? left! - right!
-          : right! - left!) ||
-        a.index - b.index
+          : right! - left!) || a.index - b.index
       );
     })
     .map(({ track }) => track);

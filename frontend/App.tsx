@@ -21,6 +21,7 @@ import {
   Check,
   Settings as SettingsIcon,
   ChevronDown,
+  ChevronUp,
   Clock3,
   FolderPlus,
   Heart,
@@ -158,7 +159,12 @@ import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
 import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
-import { addedLabel, collectionTracks, genresFor } from "./collection";
+import {
+  addedLabel,
+  collectionTracks,
+  genresFor,
+  nextHeaderSort,
+} from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
@@ -1649,6 +1655,29 @@ function App() {
           sort: songSort,
         })
       : state.tracks;
+  // Title, Album and Date added headers sort like Spotify's on playlists
+  // and Liked Songs: ascending, descending, then the playlist's own order.
+  const headerSort = (column: "title" | "album" | "added", label: string) => {
+    if (!collection) return label;
+    const [ascending, descending] =
+      column === "added"
+        ? ["added_oldest", "recent"]
+        : [`${column}_asc`, `${column}_desc`];
+    const direction =
+      songSort === ascending ? "up" : songSort === descending ? "down" : null;
+    return (
+      <button
+        className={`column-sort ${direction ? "active" : ""}`}
+        title={`Sort by ${label}`}
+        aria-label={`Sort by ${label}${direction === "up" ? ", ascending" : direction === "down" ? ", descending" : ""}`}
+        onClick={() => setSongSort(nextHeaderSort(column, songSort))}
+      >
+        {label}
+        {direction === "up" && <ChevronUp size={14} />}
+        {direction === "down" && <ChevronDown size={14} />}
+      </button>
+    );
+  };
   const songGenres = [
     ...new Set(state.tracks.flatMap((track) => genresFor(track, state.facts))),
   ].sort();
@@ -2723,15 +2752,17 @@ function App() {
                       >
                         <div className="track-table-head">
                           <span>#</span>
-                          <span>Title</span>
+                          <span>{headerSort("title", "Title")}</span>
                           <span>
                             {entity?.artist
                               ? "Streams"
                               : entity?.album
                                 ? "Plays"
-                                : "Album"}
+                                : headerSort("album", "Album")}
                           </span>
-                          {collection && <span>Date added</span>}
+                          {collection && (
+                            <span>{headerSort("added", "Date added")}</span>
+                          )}
                           {collectionPlays && <span>Plays</span>}
                           <span>
                             <Clock3 size={16} />

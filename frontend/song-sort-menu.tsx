@@ -3,6 +3,8 @@ import { List } from "lucide-react";
 
 const SORTS = [
   ["order", "Playlist order"],
+  ["title_asc", "Title"],
+  ["album_asc", "Album"],
   ["recent", "Recently added"],
   ["added_oldest", "Oldest added"],
   ["newest", "Newest releases"],
@@ -49,7 +51,13 @@ export function SongSortMenu({
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  const label = SORTS.find(([value]) => value === sort)?.[1] ?? "Custom order";
+  // Header clicks can also sort descending by title or album.
+  const label =
+    SORTS.find(([value]) => value === sort)?.[1] ??
+    ({ title_desc: "Title", album_desc: "Album" } as Record<string, string>)[
+      sort
+    ] ??
+    "Custom order";
   const filtered = !!(genre || age);
   return (
     <div className="sort-menu-root" ref={root}>

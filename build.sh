@@ -81,13 +81,12 @@ main() {
     fi
   fi
 
-  required_rust="$(node <<'NODE'
-const manifest = require('node:fs').readFileSync('Cargo.toml', 'utf8');
-const version = manifest.match(/^rust-version\s*=\s*"([^"]+)"/m)?.[1];
-if (!version) throw new Error('Cargo.toml is missing rust-version.');
-process.stdout.write(version.split('.').length === 2 ? `${version}.0` : version);
-NODE
-  )"
+  required_rust="$(node -e '
+    const manifest = require("node:fs").readFileSync("Cargo.toml", "utf8");
+    const version = manifest.match(/^rust-version\s*=\s*"([^"]+)"/m)?.[1];
+    if (!version) throw new Error("Cargo.toml is missing rust-version.");
+    process.stdout.write(version.split(".").length === 2 ? version + ".0" : version);
+  ')"
   export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-$required_rust}"
   if ! rustup run "$RUSTUP_TOOLCHAIN" rustc --version >/dev/null 2>&1; then
     rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal

@@ -1378,7 +1378,12 @@ function App() {
     fullscreenBusy.current = true;
     try {
       const next = force ?? !(await windowHandle().isFullscreen());
-      if (next) restoreMaximized.current = await windowHandle().isMaximized();
+      if (next) {
+        restoreMaximized.current = await windowHandle().isMaximized();
+        // Windows keeps a maximized window's work-area size (above the
+        // taskbar) when it goes full screen; leave maximized first.
+        if (restoreMaximized.current) await windowHandle().unmaximize();
+      }
       await windowHandle().setFullscreen(next);
       if (!next && restoreMaximized.current) {
         await windowHandle().unmaximize();

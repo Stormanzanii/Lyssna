@@ -2042,6 +2042,8 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
         let output_changed = settings.audio_output != snapshot.settings.audio_output;
+        let sources_changed = settings.lyrics_source_order != snapshot.settings.lyrics_source_order
+            || settings.lyrics_sources_disabled != snapshot.settings.lyrics_sources_disabled;
         if output_changed {
             ensure!(snapshot.profile.is_some(), "Sign in first");
             ensure!(
@@ -2068,6 +2070,11 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
             &settings.lyrics_source_order,
             &settings.lyrics_sources_disabled,
         );
+        // Reload the playing song's lyrics so a source change shows at once;
+        // each source keeps its own cache, so this is cheap.
+        if sources_changed && let Some(track) = snapshot.playback.item.clone() {
+            let _ = state.0.commands.send(Command::FetchLyrics(track));
+        }
         if output_changed && let Some(profile) = snapshot.profile.as_ref() {
             state
                 .0

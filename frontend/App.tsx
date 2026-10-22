@@ -157,6 +157,14 @@ import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
 import { SettingsWindow, type SettingsTab } from "./settings-window";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
+import {
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PreviousIcon,
+  RepeatIcon,
+  ShuffleIcon,
+} from "./player-icons";
 import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
 import {
@@ -4603,14 +4611,14 @@ function PlayerBar({
               })
             }
           >
-            <Shuffle size={16} />
+            <ShuffleIcon />
           </button>
           <button
             className="icon-button"
             title="Previous song"
             onClick={() => onPlayer({ command: "previous" })}
           >
-            <SkipBack size={16} fill="currentColor" />
+            <PreviousIcon />
           </button>
           <button
             className="play-toggle"
@@ -4622,9 +4630,9 @@ function PlayerBar({
             {state.pending ? (
               <LoaderCircle className="spin" size={16} />
             ) : state.playback.is_playing ? (
-              <Pause size={16} fill="currentColor" />
+              <PauseIcon />
             ) : (
-              <Play size={16} fill="currentColor" />
+              <PlayIcon />
             )}
           </button>
           <button
@@ -4632,7 +4640,7 @@ function PlayerBar({
             title="Next song"
             onClick={() => onPlayer({ command: "next" })}
           >
-            <SkipForward size={16} fill="currentColor" />
+            <NextIcon />
           </button>
           <button
             className={`icon-button ${state.playback.repeat_state !== "off" && state.playback.repeat_state ? "active" : ""}`}
@@ -4651,9 +4659,9 @@ function PlayerBar({
             }
           >
             {state.playback.repeat_state === "track" ? (
-              <Repeat1 size={16} />
+              <RepeatIcon one />
             ) : (
-              <Repeat size={16} />
+              <RepeatIcon />
             )}
           </button>
         </div>

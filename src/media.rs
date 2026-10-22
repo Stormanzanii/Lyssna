@@ -1,6 +1,5 @@
-//! Windows media integration: Previous, Play/Pause and Next buttons under the
-//! taskbar thumbnail, and the system media session behind the media flyout,
-//! media keys and lock screen. Button presses are forwarded to the frontend,
+//! Native media integration: Windows taskbar buttons and system media controls
+//! on Windows and macOS, including media keys and the lock screen. Button presses are forwarded to the frontend,
 //! which owns the playback intent; the frontend reports what is playing back.
 
 use serde::Deserialize;
@@ -98,9 +97,12 @@ pub fn glyph(kind: Glyph, size: usize) -> Vec<u8> {
 #[cfg(windows)]
 pub use windows_impl::Session;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub use macos_impl::Session;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub struct Session;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl Session {
     pub fn start(
         _app: &tauri::AppHandle,
@@ -109,6 +111,85 @@ impl Session {
         Self
     }
     pub fn update(&self, _app: &tauri::AppHandle, _state: MediaState) {}
+}
+
+#[cfg(target_os = "macos")]
+mod macos_impl {
+    use super::{MediaAction, MediaState};
+    use souvlaki::{
+        MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition,
+        PlatformConfig, SeekDirection,
+    };
+    use std::{cell::RefCell, time::Duration};
+
+    // AppKit media objects must stay on the application's main thread.
+    thread_local! {
+        static CONTROLS: RefCell<Option<MediaControls>> = const { RefCell::new(None) };
+    }
+
+    pub struct Session;
+    impl Session {
+        pub fn start(
+            _app: &tauri::AppHandle,
+            on_action: impl Fn(MediaAction) + Send + Sync + 'static,
+        ) -> Self {
+            let config = PlatformConfig {
+                dbus_name: "spotiflex",
+                display_name: "SpotiFlex",
+                hwnd: None,
+            };
+            if let Ok(mut controls) = MediaControls::new(config) {
+                let attached = controls.attach(move |event| {
+                    let action = match event {
+                        MediaControlEvent::Toggle => MediaAction::Toggle,
+                        MediaControlEvent::Play => MediaAction::Play,
+                        MediaControlEvent::Pause | MediaControlEvent::Stop => MediaAction::Pause,
+                        MediaControlEvent::Next
+                        | MediaControlEvent::Seek(SeekDirection::Forward) => MediaAction::Next,
+                        MediaControlEvent::Previous
+                        | MediaControlEvent::Seek(SeekDirection::Backward) => MediaAction::Previous,
+                        MediaControlEvent::SetPosition(MediaPosition(position)) => {
+                            MediaAction::Seek(position.as_millis() as u64)
+                        }
+                        _ => return,
+                    };
+                    on_action(action);
+                });
+                if attached.is_ok() {
+                    CONTROLS.with_borrow_mut(|slot| *slot = Some(controls));
+                }
+            }
+            Self
+        }
+
+        pub fn update(&self, app: &tauri::AppHandle, state: MediaState) {
+            let _ = app.run_on_main_thread(move || {
+                CONTROLS.with_borrow_mut(|slot| {
+                    let Some(controls) = slot else { return };
+                    let progress = Some(MediaPosition(Duration::from_millis(state.position_ms)));
+                    let playback = if !state.loaded {
+                        MediaPlayback::Stopped
+                    } else if state.playing {
+                        MediaPlayback::Playing { progress }
+                    } else {
+                        MediaPlayback::Paused { progress }
+                    };
+                    let _ = controls.set_metadata(MediaMetadata {
+                        title: Some(state.title.as_str()).filter(|text| !text.is_empty()),
+                        artist: Some(state.artists.as_str()).filter(|text| !text.is_empty()),
+                        album: Some(state.album.as_str()).filter(|text| !text.is_empty()),
+                        cover_url: state
+                            .cover
+                            .starts_with("https://")
+                            .then_some(state.cover.as_str()),
+                        duration: (state.duration_ms > 0)
+                            .then(|| Duration::from_millis(state.duration_ms)),
+                    });
+                    let _ = controls.set_playback(playback);
+                });
+            });
+        }
+    }
 }
 
 #[cfg(windows)]

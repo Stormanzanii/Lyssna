@@ -1,0 +1,61 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "feat/macos-*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: 1.98.0
+      CARGO_TERM_COLOR: always
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-${{ matrix.arch }}
+      - run: npm ci
+      - name: Build app and disk image
+        run: npm run desktop:build -- -- --locked
+      - name: Archive app with permissions and symlinks
+        run: >-
+          ditto -c -k --sequesterRsrc --keepParent
+          target/release/bundle/macos/SpotiFlex.app
+          target/release/bundle/SpotiFlex-${{ matrix.arch }}.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpotiFlex-macos-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/SpotiFlex-*.app.zip
+            target/release/bundle/dmg/*.dmg

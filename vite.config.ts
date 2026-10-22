@@ -8,7 +8,12 @@ const pkg = JSON.parse(
 
 export default defineConfig({
   root: "frontend",
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_PLATFORM__: JSON.stringify(
+      process.env.TAURI_ENV_PLATFORM ?? process.platform,
+    ),
+  },
   plugins: [
     react(),
     {
@@ -35,6 +40,10 @@ export default defineConfig({
     strictPort: true,
     watch: { ignored: ["**/target/**"] },
   },
-  build: { outDir: "../dist", emptyOutDir: true, target: "chrome110" },
+  build: {
+    outDir: "../dist",
+    emptyOutDir: true,
+    target: ["chrome110", "safari15"],
+  },
   test: { include: ["**/*.test.ts"] },
 });

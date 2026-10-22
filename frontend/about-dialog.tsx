@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ClipboardCopy, X } from "lucide-react";
 import { Logo } from "./brand";
+import { PLATFORM_LABEL } from "./platform";
 
 /** Spotify-style About box: version, build, update state and copyright. */
 export function AboutDialog({
@@ -24,7 +25,7 @@ export function AboutDialog({
     return () => window.removeEventListener("keydown", key);
   }, [onClose]);
   const build = import.meta.env.DEV ? "development build" : "release build";
-  const details = `SpotiFlex for Windows (64 bit)\n${__APP_VERSION__} (${build})`;
+  const details = `SpotiFlex for ${PLATFORM_LABEL}\n${__APP_VERSION__} (${build})`;
   const ready = updateStatus === "Ready to install";
   return (
     <div className="modal-backdrop about-backdrop" onClick={onClose}>
@@ -48,7 +49,7 @@ export function AboutDialog({
         </header>
         <div className="about-version">
           <div>
-            <p>SpotiFlex for Windows (64 bit)</p>
+            <p>SpotiFlex for {PLATFORM_LABEL}</p>
             <p>
               {__APP_VERSION__} · {build}
             </p>

@@ -28,6 +28,26 @@ cargo build --release --locked
 
 Voice recognition loads a verified 190 MB English model when microphone input is requested and releases it when Ask DJ closes. Missing weights download once and remain on disk. Recognition runs locally. The UI waits for preparation before opening Windows Default microphone and shows when it starts listening. Microphone audio stays in memory and is never uploaded; the recognized request is sent to Spotify automatically after speech ends.
 
+### macOS
+
+macOS 12 or later is supported on Apple Silicon and Intel. Install Xcode Command Line Tools, Rust 1.98 or later, Node.js 24, and CMake (`brew install cmake`). Build on a Mac:
+
+```sh
+npm ci
+npm run desktop:build -- -- --locked
+```
+
+The app is `target/release/bundle/macos/SpotiFlex.app`; the disk image is under `target/release/bundle/dmg/`. Install locally:
+
+```sh
+ditto target/release/bundle/macos/SpotiFlex.app /Applications/SpotiFlex.app
+open /Applications/SpotiFlex.app
+```
+
+macOS builds use system WebKit, native window controls, standard application menus and Command shortcuts. Credentials are saved in macOS Keychain. Media keys and Now Playing controls are supported. Ask DJ voice recognition runs locally; macOS requests microphone permission the first time you use it.
+
+The **Build macOS app** GitHub Actions workflow builds separate Apple Silicon and Intel `.app.zip` and `.dmg` artifacts on pushes, pull requests, or manual dispatch. These builds are not notarized for public distribution. If Gatekeeper blocks a downloaded build, use **System Settings > Privacy & Security > Open Anyway**. Automatic updates currently serve Windows executables only, so macOS builds must be updated manually.
+
 ## First sign-in
 
 Spotify Premium is required. First launch presents a mandatory setup modal. It has no skip or close button, and ignores Escape and outside clicks. The client unlocks after Spotify sign-in succeeds. Normal application exit remains available.
@@ -36,7 +56,7 @@ Spotify Premium is required. First launch presents a mandatory setup modal. It h
 2. Sign in with your Premium account and approve the connection.
 3. Return to SpotiFlex. The client unlocks only after Spotify authenticates the account.
 
-No developer app or Client ID is required for the default connection. Browser authorization uses PKCE with a state-checked loopback callback. Reusable native credentials and the selected account stay in Windows Credential Manager. Later launches authenticate the saved session before unlocking; network failures keep the saved login and allow retry. Existing installations can migrate their saved native audio login without opening another browser window. Sign-out removes the selected account and its saved native credentials.
+No developer app or Client ID is required for the default connection. Browser authorization uses PKCE with a state-checked loopback callback. Reusable native credentials and the selected account stay in Windows Credential Manager or macOS Keychain. Later launches authenticate the saved session before unlocking; network failures keep the saved login and allow retry. Existing installations can migrate their saved native audio login without opening another browser window. Sign-out removes the selected account and its saved native credentials.
 
 **Developer connection (optional)** retains the previous Web API login. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register `http://127.0.0.1:43821/callback`, then enter its Client ID in that optional setup section. Spotify's development-mode allowlist and quotas still apply to that connection. No client secret is needed. `SPOTIFY_CLIENT_ID` supplies this optional field only.
 

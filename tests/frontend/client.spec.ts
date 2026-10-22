@@ -3241,6 +3241,9 @@ test("the queue opens in the right panel in place of Now playing", async ({
       },
     });
   }, track);
+  // Let the page finish loading its rows (the mock serves three pages) so
+  // the count below cannot race the last page.
+  await expect(page.locator(".track-row")).toHaveCount(150);
   const rows = await page.locator(".track-row").count();
   await page
     .locator(".player-bar")

@@ -2806,6 +2806,14 @@ small {
 .application.macos .lyrics-display {
   caret-color: transparent;
 }
+/* Registered so the container-relative lyric size resolves once on the row
+   and the dots inherit plain pixels. Unregistered, every per-frame dot
+   transform re-resolved cqw, which Spicy Lyrics found drops frame rates. */
+@property --dot-lyric-size {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 32px;
+}
 /* Sized from the lyrics like Spicy Lyrics: a sung dot is about 0.42 of the
    lyric size, dots sit 0.7 apart and lift by lyric-size units. */
 .lyric-wait {

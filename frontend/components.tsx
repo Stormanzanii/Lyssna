@@ -24,8 +24,8 @@ import {
   Mic2,
   CirclePlus,
   CircleCheck,
-  ArrowUp,
-  ArrowDown,
+  ChevronUp,
+  ChevronDown,
   X,
   Pause,
   Play,
@@ -704,9 +704,9 @@ export function LyricsDisplay({
           onClick={() => setFollowing(true)}
         >
           {returnDirection === "up" ? (
-            <ArrowUp size={32} />
+            <ChevronUp size={28} strokeWidth={2.5} />
           ) : (
-            <ArrowDown size={32} />
+            <ChevronDown size={28} strokeWidth={2.5} />
           )}
         </button>
       )}
@@ -1072,11 +1072,7 @@ function SongLyricsPage({
     motionAllowed
   );
   const coverColour =
-    useArtworkColor(
-      state.settings.lyrics_background === "color"
-        ? imageOf(track?.album.images)
-        : undefined,
-    ) ?? "rgb(40 40 40)";
+    useArtworkColor(imageOf(track?.album.images)) ?? "rgb(40 40 40)";
   // Space Gravity needs word timing, including estimates for static lyrics.
   const gravity = !!(
     state.settings.space_gravity &&
@@ -1099,6 +1095,7 @@ function SongLyricsPage({
         {
           // Shared by the lyric lines and, in Space Gravity, its countdown.
           "--lyric-size": `${Math.round(state.settings.lyric_size * 1.6)}px`,
+          "--lyrics-cover-color": coverColour,
           ...(state.settings.lyrics_background === "color"
             ? { "--hero": coverColour }
             : {}),

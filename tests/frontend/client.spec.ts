@@ -2951,14 +2951,14 @@ test("lyric browsing stays put until the directional return button is clicked", 
     Math.abs((await flow.evaluate((node) => node.scrollTop)) - browsed),
   ).toBeLessThan(2);
   await expect(back).toBeVisible();
-  await expect(back.locator(".lucide-arrow-up")).toBeVisible();
+  await expect(back.locator(".lucide-chevron-up")).toBeVisible();
   await back.screenshot({
     path: "target/diagnostics/lyrics-return-arrow.png",
     animations: "disabled",
   });
   await position(95_500);
   await expect(display).toHaveAttribute("data-following", "false");
-  await expect(back.locator(".lucide-arrow-down")).toBeVisible();
+  await expect(back.locator(".lucide-chevron-down")).toBeVisible();
   await back.click();
   await expect(display).toHaveAttribute("data-following", "true");
   await expect(back).toHaveCount(0);

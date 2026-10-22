@@ -14,7 +14,7 @@ Playlist and interface behavior is informed by the feature descriptions of [iPix
 
 The Load TTML window (`frontend/load-ttml.tsx`) and its Persistent, Temporary and Session load modes, Reset TTML and saved-lyrics list (`src/lyrics.rs`) reimplement behaviour and layout read from the local pixels-spicy-lyrics fork (`UploadTTMLModal.tsx`, `LyricsManager`, AGPL-3.0). No upstream source or assets are copied.
 
-The return-to-current-lyric button reimplements the rounded square, white arrow and press feedback of the Spicy Lyrics fork's `ScrollToActiveLyric` control (`src/css/default.css`, AGPL-3.0), using SpotiFlex's existing scroll behavior and Lucide arrow icons. No upstream source or assets are copied.
+The return-to-current-lyric button reimplements the rounded square and press feedback of the Spicy Lyrics fork's `ScrollToActiveLyric` control (`src/css/default.css`, AGPL-3.0), adapted to the requested album-tinted glass appearance with SpotiFlex's existing scroll behavior and Lucide chevrons. No upstream source or assets are copied.
 
 `src/ui/motion.rs` and `frontend/lyric-motion.ts` contain ports of the analytic spring from [Fraktality/spr](https://github.com/Fraktality/spr) (MIT, Copyright (c) Fraktality), the same spring Spicy Lyrics uses. Colour emoji are rasterized at runtime from the operating system's emoji font; no emoji images are bundled. The app icon uses Lucide's MicVocal microphone glyph (also exported as Mic2), under the ISC license. Its vector geometry comes from lucide-react 0.577.0; the full upstream license is included in THIRD_PARTY_NOTICES.md.
 

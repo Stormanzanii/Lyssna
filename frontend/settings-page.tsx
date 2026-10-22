@@ -5,7 +5,7 @@ import type { Settings } from "./types";
 import { FontSettings } from "./custom-fonts";
 import { SettingRow, SettingsQuery } from "./setting-row";
 
-function Toggle({
+export function Toggle({
   label,
   checked,
   onChange,

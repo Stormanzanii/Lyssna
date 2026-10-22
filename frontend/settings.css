@@ -310,3 +310,214 @@
   .settings-empty {
   display: block;
 }
+
+/* Lyrics settings: a compact window opened from the lyrics toolbar gear.
+   Based on Spicy Lyrics' panel, tightened: one header row with search,
+   a segmented tab control and rows grouped into cards. */
+.lyrics-settings-backdrop {
+  inset: 0;
+  z-index: 80;
+}
+.lyrics-settings {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 48px));
+  /* Fixed height so switching tabs does not resize the window. */
+  height: min(600px, calc(100vh - 96px));
+  overflow: hidden;
+  border: 1px solid #ffffff1a;
+  border-radius: 16px;
+  background: #16181ceb;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: 0 24px 80px #0009;
+}
+.lyrics-settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 12px 20px;
+}
+.lyrics-settings-head h2 {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.lyrics-settings-head h2 svg {
+  color: #1ed760;
+}
+.lyrics-settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 200px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #ffffff0f;
+  color: #ffffff80;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.lyrics-settings-search:focus-within {
+  background: #ffffff17;
+  box-shadow: 0 0 0 1px #ffffff40;
+}
+.lyrics-settings-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-size: 13px;
+  color: #fff;
+}
+.lyrics-settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 20px 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #ffffff0a;
+}
+.lyrics-settings-tabs button {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ffffff99;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.lyrics-settings-tabs button:hover {
+  color: #fff;
+}
+.lyrics-settings-tabs button.active {
+  color: #fff;
+  background: #ffffff1f;
+  box-shadow: 0 1px 2px #0006;
+}
+.lyrics-settings-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+}
+.lyrics-settings [role="tabpanel"] {
+  margin-bottom: 24px;
+}
+.lyrics-settings-section {
+  margin-top: 16px;
+}
+.lyrics-settings-section:not(:has(.setting-row)) {
+  display: none;
+}
+.lyrics-settings-section h3 {
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff80;
+}
+.lyrics-settings-group {
+  border-radius: 12px;
+  background: #ffffff08;
+  border: 1px solid #ffffff0d;
+}
+.lyrics-settings .setting-row {
+  min-height: 56px;
+  padding: 10px 16px;
+}
+.lyrics-settings .setting-row + .setting-row {
+  border-top: 1px solid #ffffff0d;
+}
+.lyrics-settings .setting-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #fff;
+}
+.lyrics-settings .setting-help {
+  font-size: 12px;
+}
+.lyrics-settings .pill.outline {
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+.lyrics-settings-empty {
+  display: none;
+  padding: 32px 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #a7a7a7;
+}
+.lyrics-settings [role="tabpanel"]:not(:has(.setting-row)) .lyrics-settings-empty {
+  display: block;
+}
+.lyrics-settings-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1ed76014, #ffffff05 60%);
+  border: 1px solid #ffffff0d;
+}
+.lyrics-settings-wordmark {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.lyrics-settings-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #ffffffa6;
+}
+.lyrics-settings-status {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.lyrics-settings-status.latest {
+  color: #1ed760;
+  background: #1ed7601f;
+}
+.lyrics-settings-status.outdated {
+  color: #f5c451;
+  background: #f5c4511f;
+}
+.lyrics-settings-build {
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: right;
+  color: #ffffff73;
+}
+@media (max-width: 620px) {
+  .lyrics-settings-tabs button svg {
+    display: none;
+  }
+  .lyrics-settings-search {
+    width: 140px;
+  }
+}

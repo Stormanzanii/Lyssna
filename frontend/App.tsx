@@ -144,6 +144,7 @@ import { SongSortMenu } from "./song-sort-menu";
 import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
+import { LyricsSettings } from "./lyrics-settings";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
@@ -308,7 +309,10 @@ function App() {
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [ttmlOpen, setTtmlOpen] = useState(false);
+  const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(
+    false,
+  );
+  const [lyricsSettings, setLyricsSettings] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
   useEffect(
     () => startIdleTrim(() => void rpc("trim_memory").catch(() => {})),
@@ -1874,7 +1878,7 @@ function App() {
               onPlayer={play}
               onAlbum={openAlbum}
               onArtist={openArtist}
-              onImport={() => setTtmlOpen(true)}
+              onImport={() => setTtmlOpen("load")}
               onRetry={() => void call("retry_lyrics")}
             >
               <div
@@ -1929,7 +1933,7 @@ function App() {
                   className="icon-button"
                   title="Load TTML"
                   data-icon="upload"
-                  onClick={() => setTtmlOpen(true)}
+                  onClick={() => setTtmlOpen("load")}
                 >
                   <UploadIcon />
                 </button>
@@ -1953,10 +1957,7 @@ function App() {
                   className="icon-button"
                   title="Lyrics settings"
                   data-icon="settings"
-                  onClick={() => {
-                    if (immersive) void fullscreen(false);
-                    setCenter("settings");
-                  }}
+                  onClick={() => setLyricsSettings(true)}
                 >
                   <SettingsIcon size={18} />
                 </button>
@@ -3643,8 +3644,29 @@ function App() {
           </form>
         </div>
       )}
+      {lyricsSettings && (
+        <LyricsSettings
+          state={state}
+          onSettings={updateSettings}
+          onLoadTtml={() => {
+            setLyricsSettings(false);
+            setTtmlOpen("load");
+          }}
+          onDatabase={() => {
+            setLyricsSettings(false);
+            setTtmlOpen("database");
+          }}
+          onAllSettings={() => {
+            setLyricsSettings(false);
+            if (immersive) void fullscreen(false);
+            setCenter("settings");
+          }}
+          onClose={() => setLyricsSettings(false)}
+        />
+      )}
       {ttmlOpen && (
         <LoadTtml
+          initialView={ttmlOpen}
           song={state.playback.item?.name ?? "No song playing"}
           onLoad={(file, mode) => importFile(file, mode)}
           onReset={() => {

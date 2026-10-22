@@ -58,7 +58,9 @@ export function LoadTtml({
   onPlay,
   onDownload,
   onClose,
+  initialView = "load",
 }: {
+  initialView?: "load" | "database";
   song: string;
   onLoad: (file: File, mode: LoadMode) => Promise<void>;
   onReset: () => void;
@@ -69,7 +71,7 @@ export function LoadTtml({
   onDownload: (item: SavedLyrics) => void;
   onClose: () => void;
 }) {
-  const [view, setView] = useState<"load" | "database">("load");
+  const [view, setView] = useState<"load" | "database">(initialView);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<SavedLyrics[] | null>(null);
   const [filter, setFilter] = useState("");

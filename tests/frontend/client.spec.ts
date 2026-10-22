@@ -3859,6 +3859,32 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await toolbar.getByTitle("Compact lyrics", { exact: true }).click();
   await expect(page.locator(".lyrics-page")).toHaveClass(/narrow/);
   await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Lyrics settings" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("tab", { name: "Appearance" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(dialog).toContainText(`v${"0.1.0"}`);
+  await expect(dialog.getByRole("button", { name: /Website|Discord|Ko-fi/ })).toHaveCount(0);
+  // Search reaches settings on other tabs.
+  await dialog.getByLabel("Search lyrics settings").fill("gravity");
+  await expect(dialog.getByRole("switch", { name: "Space Gravity" })).toBeVisible();
+  await dialog.getByRole("switch", { name: "Space Gravity" }).click();
+  await expect.poll(() => saved("space_gravity")).toBe(true);
+  await dialog.getByLabel("Search lyrics settings").fill("nothing like this");
+  await expect(dialog).toContainText("No settings match.");
+  await dialog.getByLabel("Search lyrics settings").fill("");
+  await dialog.getByRole("tab", { name: "Sources" }).click();
+  await dialog.getByRole("button", { name: "Browse", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "TTML Database" })).toBeVisible();
+  await page.getByRole("dialog", { name: "TTML Database" }).getByRole("button", { name: /close/i }).first().click();
+  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await toolbar.getByTitle("Lyrics settings", { exact: true }).click();
+  await dialog.getByRole("tab", { name: "Advanced" }).click();
+  await dialog.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".settings-page")).toBeVisible();
 });
 

@@ -134,12 +134,6 @@ export interface Settings {
 }
 /** Interface options modelled on the Spotify+ extension. */
 export interface SpotifyPlus {
-  hide_account?: boolean;
-  hide_profile?: boolean;
-  hide_recents?: boolean;
-  hide_sign_out?: boolean;
-  hide_lyrics_button?: boolean;
-  fixed_window_title?: boolean;
   /** Folders whose playlists Add to playlist offers; empty offers all. */
   playlist_folders?: string[];
 }

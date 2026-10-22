@@ -3482,7 +3482,7 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   await expect(page.locator(".profile-hero")).toHaveCount(0);
 });
 
-test("Spotify+ options trim menus, copy details and credit contributors", async ({
+test("Spotify+ copy actions, folder choice and contributor credits", async ({
   page,
   context,
 }) => {
@@ -3508,29 +3508,16 @@ test("Spotify+ options trim menus, copy details and credit contributors", async 
     .click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy embed code" }).click();
   await expect.poll(clipboard).toContain("open.spotify.com/embed/track/");
-  // Settings: hide items and keep a fixed window title.
+  // The hide-menu toggles are gone; folder choice lives under Your Library.
   await openSettings(page);
-  for (const label of [
-    "Hide Profile in the profile menu",
-    "Hide the Lyrics button",
-    "Keep a fixed window title",
-  ])
-    await page.getByRole("switch", { name: label, exact: true }).click();
-  const saved = await page.evaluate(
-    () =>
-      (window as any).__clientTest.commands
-        .filter((entry: any) => entry.command === "save_settings")
-        .at(-1)?.args.settings.spotify_plus,
+  await expect(page.getByText("Hide Profile in the profile menu")).toHaveCount(
+    0,
   );
-  expect(saved).toMatchObject({
-    hide_profile: true,
-    hide_lyrics_button: true,
-    fixed_window_title: true,
-  });
   await expect(
-    page.locator("footer").getByTitle("Lyrics", { exact: true }),
-  ).toHaveCount(0);
-  await expect(page).toHaveTitle("SpotiFlex");
+    page
+      .locator(".settings-section", { hasText: "Your Library" })
+      .getByText("Add to playlist folders"),
+  ).toBeVisible();
   // Credits list the creator first, with GitHub avatars.
   const people = page.locator(".settings-page .credit-person");
   await expect(people).toHaveCount(3);
@@ -3548,7 +3535,7 @@ test("Spotify+ options trim menus, copy details and credit contributors", async 
   );
   expect(link).toBe("https://github.com/Stormanzanii");
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Profile" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
 });
 

@@ -55,17 +55,10 @@ pub struct Settings {
     pub spotify_plus: SpotifyPlus,
 }
 
-/// Spotify+ interface options. Everything defaults to Spotify's own layout.
+/// Spotify+ options. Older hide-menu fields in saved settings are ignored.
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SpotifyPlus {
-    pub hide_account: bool,
-    pub hide_profile: bool,
-    pub hide_recents: bool,
-    pub hide_sign_out: bool,
-    pub hide_lyrics_button: bool,
-    /// Keep the window title "SpotiFlex" instead of the playing song.
-    pub fixed_window_title: bool,
     /// Spotify folder IDs whose playlists Add to playlist offers; empty
     /// offers every editable playlist.
     pub playlist_folders: Vec<String>,

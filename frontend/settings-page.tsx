@@ -290,45 +290,6 @@ export function SettingsPage({
                 onChange={(compact_library) => onSettings({ compact_library })}
               />
             </SettingRow>
-          </section>
-
-          <section className="settings-section">
-            <h2>Spotify+</h2>
-            {(
-              [
-                ["hide_account", "Hide Account in the profile menu"],
-                ["hide_profile", "Hide Profile in the profile menu"],
-                ["hide_recents", "Hide Recents in the profile menu"],
-                [
-                  "hide_sign_out",
-                  "Hide Log out in the profile menu",
-                  "You can still sign out from Account above.",
-                ],
-                [
-                  "hide_lyrics_button",
-                  "Hide the Lyrics button",
-                  "Lyrics stay available from the Now playing panel.",
-                ],
-                [
-                  "fixed_window_title",
-                  "Keep a fixed window title",
-                  "Show “SpotiFlex” instead of the playing song, for tools that read the window name.",
-                ],
-              ] as const
-            ).map(([key, label, help]) => (
-              <SettingRow
-                key={key}
-                label={label}
-                help={help}
-                keywords="spotify plus hide menu"
-              >
-                <Toggle
-                  label={label}
-                  checked={!!plus[key]}
-                  onChange={(checked) => setPlus({ [key]: checked })}
-                />
-              </SettingRow>
-            ))}
             <SettingRow
               stacked
               label="Add to playlist folders"
@@ -337,7 +298,7 @@ export function SettingsPage({
                   ? "Offer only playlists directly inside the folders you choose. Choose none to offer every playlist you can edit."
                   : "Your library has no folders."
               }
-              keywords="spotify plus add playlist folders menu"
+              keywords="add playlist folders menu"
             >
               <div className="settings-folder-picks">
                 {(state.library_folders ?? []).map((folder) => (

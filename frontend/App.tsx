@@ -230,12 +230,9 @@ function App() {
       .then(() => notify(done))
       .catch(() => notify("Could not copy that.", true));
   // Like Spotify, the window title names the playing song so external
-  // tools can read it; Spotify+ can keep it fixed.
+  // tools can read it.
   const windowTitle =
-    !plus.fixed_window_title &&
-    state.profile &&
-    state.playback.is_playing &&
-    state.playback.item
+    state.profile && state.playback.is_playing && state.playback.item
       ? `${state.playback.item.name} - ${state.playback.item.artists
           .map((artist) => artist.name)
           .join(", ")}`
@@ -2041,14 +2038,6 @@ function App() {
           <ProfileMenu
             name={profileName}
             image={profileImage}
-            hidden={(
-              [
-                ["account", plus.hide_account],
-                ["profile", plus.hide_profile],
-                ["recents", plus.hide_recents],
-                ["sign-out", plus.hide_sign_out],
-              ] as const
-            ).flatMap(([action, hide]) => (hide ? [action] : []))}
             onAction={(action) => {
               if (action === "account")
                 void call("open_link", {
@@ -4680,15 +4669,13 @@ function PlayerBar({
             onHold={onDJRequest}
           />
         )}
-        {!state.settings.spotify_plus?.hide_lyrics_button && (
-          <button
-            className={`icon-button ${lyricsActive ? "active" : ""}`}
-            title="Lyrics"
-            onClick={onLyrics}
-          >
-            <Mic2 size={20} />
-          </button>
-        )}
+        <button
+          className={`icon-button ${lyricsActive ? "active" : ""}`}
+          title="Lyrics"
+          onClick={onLyrics}
+        >
+          <Mic2 size={20} />
+        </button>
         <button
           className={`icon-button ${queueActive ? "active" : ""}`}
           title="Queue"

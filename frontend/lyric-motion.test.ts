@@ -20,12 +20,36 @@ it("fills countdown dots in order and rewinds from song time", () => {
     0.35, 0.35, 0.35,
   ]);
   expect(countdownDots(gap, 4000).map((dot) => dot.opacity)).toEqual([
-    1, 0.675, 0.35,
+    1, 1, 0.35,
   ]);
   expect(countdownDots(gap, 8000).map((dot) => dot.opacity)).toEqual([1, 1, 1]);
   expect(countdownDots(gap, 1000).map((dot) => dot.opacity)).toEqual([
     0.35, 0.35, 0.35,
   ]);
+});
+it("grows each countdown dot, holds its lift, then settles at its lit size", () => {
+  const gap = { start: 1000, end: 7000, after: 0 };
+  const start = countdownDots(gap, 1000),
+    rising = countdownDots(gap, 1200),
+    held = countdownDots(gap, 1800),
+    settled = countdownDots(gap, 3000);
+  expect(start[0]).toMatchObject({ scale: 1, lift: 0, glow: 0 });
+  expect(rising[0].lift).toBeGreaterThan(0);
+  expect(held[0]).toMatchObject({ opacity: 1, scale: 1.35, lift: 1, glow: 1 });
+  expect(settled[0]).toMatchObject({
+    opacity: 1,
+    scale: 1.35,
+    lift: 0,
+    glow: 1,
+  });
+  expect(settled[1]).toMatchObject({
+    opacity: 0.35,
+    scale: 1,
+    lift: 0,
+    glow: 0,
+  });
+  expect(countdownDots(gap, 1800)).toEqual(held);
+  expect(countdownDots(gap, 1000)).toEqual(start);
 });
 it("keeps countdown progress with reduced motion while removing the lift", () => {
   const gap = { start: 1000, end: 7000, after: 0 };
@@ -34,6 +58,8 @@ it("keeps countdown progress with reduced motion while removing the lift", () =>
   expect(still.map((dot) => dot.opacity)).toEqual(
     moving.map((dot) => dot.opacity),
   );
+  expect(still.map((dot) => dot.scale)).toEqual(moving.map((dot) => dot.scale));
+  expect(still.map((dot) => dot.glow)).toEqual(moving.map((dot) => dot.glow));
   expect(still.every((dot) => dot.lift === 0)).toBe(true);
   expect(moving[1].lift).toBeGreaterThan(0);
 });

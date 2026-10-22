@@ -319,29 +319,70 @@
 .lyrics-settings-backdrop {
   inset: 0;
   z-index: 80;
-  background: #0000004d;
+  background: #0000002e;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 .lyrics-settings {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   width: min(840px, calc(100vw - 48px));
   /* Fixed height so switching tabs does not resize the window. */
   height: min(720px, calc(100vh - 96px));
   overflow: hidden;
-  border: 1px solid #ffffff24;
+  border: 1px solid #ffffff1f;
   border-radius: 20px;
-  background: linear-gradient(160deg, #ffffff14, #ffffff05 45%), #16161a8c;
-  -webkit-backdrop-filter: blur(36px) saturate(180%);
-  backdrop-filter: blur(36px) saturate(180%);
+  background:
+    linear-gradient(135deg, #ffffff17, #ffffff03 45%, #ffffff0a),
+    var(--glass-fill, #16161a52);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  backdrop-filter: blur(30px) saturate(190%);
   box-shadow:
-    0 24px 80px #0008,
-    0 1px 0 #ffffff26 inset;
+    0 24px 80px #0006,
+    0 6px 24px #0003,
+    0 1px 0 #ffffff40 inset,
+    0 -1px 0 #ffffff12 inset;
+}
+.lyrics-settings > * {
+  position: relative;
+  z-index: 1;
+}
+/* Static sheen and a curved specular rim match the app's glass panels. */
+.lyrics-settings::before,
+.lyrics-settings::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.lyrics-settings::before {
+  background: radial-gradient(ellipse at 0 0, #ffffff14, transparent 60%);
+}
+.lyrics-settings::after {
+  z-index: 2;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    #ffffff80,
+    #ffffff1a 25%,
+    #ffffff05 50%,
+    #ffffff40 78%,
+    #ffffff17
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }
 @media (prefers-reduced-transparency: reduce) {
   .lyrics-settings {
     background: #1e1e23f2;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
 .lyrics-settings-head {
@@ -397,7 +438,8 @@
   margin: 0 20px 4px;
   padding: 3px;
   border-radius: 10px;
-  background: #ffffff0a;
+  background: #00000017;
+  box-shadow: 0 1px 0 #ffffff17 inset;
 }
 .lyrics-settings-tabs button {
   display: inline-flex;
@@ -433,8 +475,10 @@
   bottom: 3px;
   left: 0;
   border-radius: 7px;
-  background: #ffffff1f;
-  box-shadow: 0 1px 2px #0006;
+  background: linear-gradient(135deg, #ffffff30, #ffffff17);
+  box-shadow:
+    0 1px 0 #ffffff33 inset,
+    0 2px 8px #0003;
   transition:
     transform 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
     width 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
@@ -470,8 +514,9 @@
 }
 .lyrics-settings-group {
   border-radius: 12px;
-  background: #ffffff08;
-  border: 1px solid #ffffff0d;
+  background: linear-gradient(135deg, #ffffff0d, #ffffff04);
+  border: 1px solid #ffffff17;
+  box-shadow: 0 1px 0 #ffffff0a inset;
 }
 .lyrics-settings .setting-row {
   min-height: 56px;
@@ -512,8 +557,9 @@
   margin-top: auto;
   padding: 14px 16px;
   border-radius: 12px;
-  background: #ffffff08;
-  border: 1px solid #ffffff0d;
+  background: linear-gradient(135deg, #ffffff0d, #ffffff04);
+  border: 1px solid #ffffff17;
+  box-shadow: 0 1px 0 #ffffff0a inset;
 }
 .lyrics-settings-wordmark {
   display: block;

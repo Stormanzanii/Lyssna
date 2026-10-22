@@ -507,15 +507,15 @@ export function LyricsDisplay({
       const stacked = container
         .closest(".lyrics-page")
         ?.classList.contains("narrow");
-      // Wide lyrics keep the line's top at a fixed reading position. Stacked
-      // lyrics retain their centred line; neither anchor depends on artwork.
+      // Playback follows the line's centre, independent of artwork. Wide
+      // lyrics still begin above centre and stop at the padded credits.
       const focus = compact
         ? Math.min(72, container.clientHeight * 0.25)
-        : container.clientHeight * (stacked ? 0.5 : 0.28);
-      const centred = !compact && stacked;
+        : container.clientHeight / 2;
+      const centred = !compact;
       container.style.setProperty(
         "--lead-top",
-        `${Math.max(0, focus - (centred ? (lines.current[0]?.offsetHeight ?? 0) / 2 : 0))}px`,
+        `${centred && !stacked ? container.clientHeight * 0.28 : Math.max(0, focus - (centred ? (lines.current[0]?.offsetHeight ?? 0) / 2 : 0))}px`,
       );
       spring.current.target = Math.max(
         0,

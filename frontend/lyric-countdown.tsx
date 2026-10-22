@@ -32,6 +32,8 @@ export const LyricCountdown = memo(function LyricCountdown({
             {
               "--dot-opacity": dot.opacity,
               "--dot-lift": dot.lift,
+              "--dot-scale": dot.scale,
+              "--dot-glow": dot.glow,
             } as CSSProperties
           }
         />

@@ -2570,7 +2570,7 @@ test("lyrics wrap at narrow widths; countdown and unsung syllables follow song t
     (window as any).__clientTest.emit({
       type: "native_position",
       uri,
-      position_ms: 5000,
+      position_ms: 3500,
       observed_at: Date.now(),
       playing: false,
     });
@@ -2893,7 +2893,9 @@ test("lyric browsing stays put until the directional return button is clicked", 
           line = node
             .querySelector(".lyric-line.active")!
             .getBoundingClientRect();
-        return Math.abs(line.top - view.top - view.height * 0.28);
+        return Math.abs(
+          line.top + line.height / 2 - view.top - view.height / 2,
+        );
       }),
     )
     .toBeLessThan(3);
@@ -2919,7 +2921,7 @@ test("lyric browsing stays put until the directional return button is clicked", 
     .toBeGreaterThan(browsed + 100);
 });
 
-test("wide lyrics start at a fixed upper anchor and end above padded credits", async ({
+test("wide lyrics start above centre, centre playback and end above padded credits", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -2941,17 +2943,19 @@ test("wide lyrics start at a fixed upper anchor and end above padded credits", a
   await position(10_500);
   await page.getByTitle("Lyrics", { exact: true }).click();
   const flow = page.locator(".lyrics-page .lyric-scroll");
-  const anchor = () =>
-    flow.evaluate((node) => {
+  const anchor = (centre = false) =>
+    flow.evaluate((node, centre) => {
       const view = node.getBoundingClientRect(),
         line = node
           .querySelector(".lyric-line.active")!
           .getBoundingClientRect();
-      return (line.top - view.top) / view.height;
-    });
-  await expect.poll(anchor).toBeCloseTo(0.28, 1);
+      return (
+        (line.top + (centre ? line.height / 2 : 0) - view.top) / view.height
+      );
+    }, centre);
+  await expect.poll(() => anchor()).toBeCloseTo(0.28, 1);
   await position(40_500);
-  await expect.poll(anchor).toBeCloseTo(0.28, 1);
+  await expect.poll(() => anchor(true)).toBeCloseTo(0.5, 2);
   await position(98_500);
   await expect
     .poll(() =>

@@ -2789,6 +2789,7 @@ small {
   caret-color: transparent;
 }
 .lyric-wait {
+  --dot-size: 20px;
   transition:
     opacity 0.3s ease,
     height 0.45s cubic-bezier(0.2, 0.7, 0.25, 1),
@@ -2796,9 +2797,9 @@ small {
   overflow: visible;
   display: flex;
   justify-content: flex-start;
-  gap: 16px;
+  gap: var(--dot-size);
   align-items: center;
-  height: 48px;
+  height: 72px;
   padding: 8px 4px;
 }
 .lyric-wait[aria-hidden="true"] {
@@ -2813,19 +2814,20 @@ small {
 }
 .lyric-wait i {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  flex-shrink: 0;
   border-radius: 50%;
   background: #fff;
   opacity: var(--dot-opacity);
-  transform: translateY(calc(var(--dot-lift) * -6px))
-    scale(calc(1 + var(--dot-lift) * 0.15));
-  /* Glow like sung words: brighter and wider as each dot lights up. */
+  transform: translateY(calc(var(--dot-lift) * var(--dot-size) * -1))
+    scale(var(--dot-scale));
+  /* Lit dots keep their larger size and soft glow after settling. */
   box-shadow:
-    0 0 calc(6px + var(--dot-lift) * 14px)
-      rgb(255 255 255 / calc(0.3 + var(--dot-lift) * 0.45)),
-    0 0 calc(18px + var(--dot-lift) * 22px)
-      rgb(255 255 255 / calc(0.12 + var(--dot-lift) * 0.25));
+    0 0 calc(4px + var(--dot-glow) * 8px)
+      rgb(255 255 255 / calc(0.05 + var(--dot-glow) * 0.35)),
+    0 0 calc(12px + var(--dot-glow) * 12px)
+      rgb(255 255 255 / calc(0.02 + var(--dot-glow) * 0.14));
 }
 .reduce-motion .lyric-wait i {
   animation: none;
@@ -3271,13 +3273,10 @@ small {
   mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
 }
 .compact .lyric-wait {
-  height: 36px;
+  --dot-size: 14px;
+  height: 48px;
   padding: 6px 4px;
   gap: 12px;
-}
-.compact .lyric-wait i {
-  width: 11px;
-  height: 11px;
 }
 .compact .lyric-wait[aria-hidden="true"] {
   height: 0;

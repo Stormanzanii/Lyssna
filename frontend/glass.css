@@ -287,3 +287,12 @@
   backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-shadow);
 }
+
+/* Full screen lyrics fill the window: no sheet corners, shadow or rim. */
+.liquid-glass.immersive .center-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+.liquid-glass.immersive .center-panel::after {
+  display: none;
+}

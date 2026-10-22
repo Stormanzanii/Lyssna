@@ -4138,6 +4138,29 @@ input[type="range"]:hover {
   width: 48px;
   height: 48px;
 }
+/* Full screen Canvas: the controls take the bottom corner where the song
+   details sit over the video, and the details move up above them. */
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
+  position: absolute;
+  left: 2%;
+  bottom: 28px;
+  z-index: 3;
+  width: min(36%, 460px);
+  margin: 0;
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-buttons {
+  justify-content: flex-start;
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-artists {
+  bottom: 118px;
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-title {
+  bottom: 152px;
+}
+.immersive .canvas-lyrics.artwork-right:not(.narrow) .lyrics-fullscreen-controls {
+  left: auto;
+  right: 2%;
+}
 .immersive .lyrics-page {
   padding: 0 5%;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

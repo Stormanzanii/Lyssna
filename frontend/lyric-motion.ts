@@ -18,6 +18,8 @@ export interface VocalGap {
   after: number;
 }
 
+/** A dot waiting its turn, as measured from the recording. */
+export const DORMANT_DOT_OPACITY = 0.3;
 // Natural arcs follow the fork's dot tuning; normalized to a dormant dot's
 // diameter. Unlike a stepped envelope, these keep changing throughout a turn.
 const DOT_MOTION = {
@@ -32,7 +34,7 @@ const DOT_MOTION = {
     [1, 0],
   ]),
   opacity: naturalSpline([
-    [0, 0.35],
+    [0, DORMANT_DOT_OPACITY],
     [0.6, 1],
     [1, 1],
   ]),
@@ -57,7 +59,7 @@ export function countdownDots(
     return {
       opacity,
       scale: DOT_MOTION.scale(phase),
-      glow: (opacity - 0.35) / 0.65,
+      glow: (opacity - DORMANT_DOT_OPACITY) / (1 - DORMANT_DOT_OPACITY),
       lift: reduceMotion ? 0 : DOT_MOTION.lift(phase),
     };
   });

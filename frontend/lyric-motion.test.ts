@@ -36,16 +36,16 @@ it.each([
 it("fills countdown dots in order and rewinds from song time", () => {
   const gap = { start: 1000, end: 7000, after: 0 };
   expect(countdownDots(gap, 0).map((dot) => dot.opacity)).toEqual([
-    0.35, 0.35, 0.35,
+    0.3, 0.3, 0.3,
   ]);
   const middle = countdownDots(gap, 3500);
   expect(middle[0].opacity).toBe(1);
   expect(middle[1].opacity).toBeGreaterThan(0.8);
   expect(middle[1].opacity).toBeLessThan(1);
-  expect(middle[2].opacity).toBe(0.35);
+  expect(middle[2].opacity).toBe(0.3);
   expect(countdownDots(gap, 8000).map((dot) => dot.opacity)).toEqual([1, 1, 1]);
   expect(countdownDots(gap, 1000).map((dot) => dot.opacity)).toEqual([
-    0.35, 0.35, 0.35,
+    0.3, 0.3, 0.3,
   ]);
 });
 it("swells continuously through an arc and settles below its peak size", () => {

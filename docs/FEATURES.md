@@ -186,3 +186,5 @@ Interlude dots use natural cubic arcs from the fork's tuning: gradual brightness
 
 
 Pinned Lyrics Footer is under SpotiFlex settings > Lyrics, with the fork's Off, No Writers and Full choices. No Writers pins source/community credits while songwriter credits remain at the end of the scrolling lyrics. Full pins both sections. The footer reserves space below the lyric viewport, keeps profile links clickable, and follows the selected lyrics font. The choice persists across restarts; older or unknown saved modes default to Off. Compact preview and Space Gravity retain their existing footer layouts, matching the fork's exclusions. Browser checks cover all three modes, settings persistence requests, scrolling, the return arrow, centred playback and narrow layouts; Rust tests cover restoring saved modes.
+
+Gap, parked 2026-10-23: community lyric credits show the name the Spicy Lyrics developer API supplies, which is often a Discord display name ("Jane") rather than the account username ("@jane_doe"). A username option was prototyped and removed; see [Discord usernames in lyric credits](DISCORD_USERNAMES.md) for the research and the conditions for adding it back.

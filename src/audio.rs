@@ -12,12 +12,14 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const CHANNELS: u16 = 2;
 const SAMPLE_RATE: u32 = 44_100;
 const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000;
+/// How long a playing output may take no samples before it counts as stuck.
+const OUTPUT_STALL: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Default)]
 pub struct AudioBuffer {
@@ -194,9 +196,23 @@ impl Sink for AudioSink {
             self.awaiting_seek = false;
             let _ = self.seek_ready.send(());
         }
+        // An output that opens but never pulls samples (seen on a cold start)
+        // would block the player thread for good. Fail the write instead:
+        // the player pauses, and Play reopens the output.
+        let mut drained = (self.queued.load(Ordering::Relaxed), Instant::now());
         while self.queued.load(Ordering::Relaxed) > MAX_SAMPLES {
             self.prepare_output()?;
             self.discard_old_audio();
+            let queued = self.queued.load(Ordering::Relaxed);
+            let paused = self.sink.as_ref().is_some_and(rodio::Sink::is_paused);
+            if queued < drained.0 || paused {
+                drained = (queued, Instant::now());
+            } else if drained.1.elapsed() >= OUTPUT_STALL {
+                if let Some(revision) = self.applied_output {
+                    self.buffer.output.invalidate(revision);
+                }
+                return Err(SinkError::OnWrite("Audio output stopped responding".into()));
+            }
             thread::sleep(Duration::from_millis(2));
         }
         Ok(())
@@ -562,6 +578,25 @@ mod tests {
         assert!(buffer.narrating());
         music.next();
         assert!(!buffer.narrating());
+    }
+    #[test]
+    fn an_output_that_never_drains_fails_the_write_instead_of_hanging() {
+        let buffer = AudioBuffer::default();
+        let (sink, _output) = rodio::Sink::new();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        audio.install_test_sink(sink);
+        let started = std::time::Instant::now();
+        let result = audio.write(
+            AudioPacket::Samples(vec![0.25; MAX_SAMPLES * 2]),
+            &mut Converter::new(None),
+        );
+        assert!(result.is_err());
+        assert!(started.elapsed() < OUTPUT_STALL + Duration::from_secs(1));
+        assert_eq!(
+            buffer.output.take_issue(),
+            Some(crate::audio_output::OutputIssue::Unavailable)
+        );
     }
     #[test]
     fn volume_changes_affect_already_buffered_audio() {

@@ -76,7 +76,7 @@ impl OutputChoice {
             selection.reported = Some(revision);
         }
     }
-    fn invalidate(&self, revision: u64) {
+    pub(crate) fn invalidate(&self, revision: u64) {
         if let Ok(mut selection) = self.0.lock()
             && selection.revision == revision
         {

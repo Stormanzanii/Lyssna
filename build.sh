@@ -66,10 +66,14 @@ main() {
       git pull --ff-only origin main
     else
       [[ "$target" != -* ]] || fail 'Unknown option. Run ./build.sh --help.'
-      if git show-ref --verify --quiet "refs/heads/$target" \
-        || git show-ref --verify --quiet "refs/remotes/origin/$target"; then
+      if git check-ref-format "refs/heads/$target" >/dev/null 2>&1 \
+        && git ls-remote --exit-code --heads origin "refs/heads/$target" >/dev/null 2>&1; then
+        # On origin: build its latest commit.
         git fetch --no-tags origin "refs/heads/$target"
         commit="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+      elif git show-ref --verify --quiet "refs/heads/$target"; then
+        # Only local: build the local branch as it is.
+        commit="$(git rev-parse --verify "refs/heads/$target^{commit}")"
       elif commit="$(git rev-parse --verify --quiet --end-of-options "${target}^{commit}")"; then
         :
       else

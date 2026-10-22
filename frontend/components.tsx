@@ -587,7 +587,7 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover === false ? "" : "lyrics-line-hover"} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""}`}
       data-following={following}
     >
       <div

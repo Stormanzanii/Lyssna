@@ -94,7 +94,7 @@ impl Default for Settings {
             lyrics_flip_duet: false,
             lyrics_wide_duet: true,
             lyrics_simple: false,
-            lyrics_line_hover: true,
+            lyrics_line_hover: false,
             lyrics_early_scroll: false,
             lyrics_hide_year: false,
             lyrics_hide_npv: false,

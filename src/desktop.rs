@@ -994,6 +994,11 @@ impl Desktop {
                                 json!({"type":"native","ready":true,"status":snapshot.native_status}),
                             );
                             if let Some(track) = snapshot.playback.item.clone() {
+                                // A song restored from last session may lack its date.
+                                if track.album.release_date.is_empty() {
+                                    let _ =
+                                        pump.commands.send(Command::TrackInfo(track.uri.clone()));
+                                }
                                 let _ = pump.commands.send(Command::FetchLyrics(track.clone()));
                                 let _ = pump.commands.send(Command::PlayingDetails(track));
                             }

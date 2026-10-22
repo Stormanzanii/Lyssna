@@ -1,13 +1,13 @@
 // App mark and DJ artwork, drawn locally so no Spotify assets are bundled.
 
-// Mirrors src/ui/icon_pixels.rs so the window icon and in-app mark match.
-const BARS: [number, number][] = [
-  [0.2, 0.17],
-  [0.4, 0.37],
-  [0.6, 0.25],
-  [0.8, 0.31],
+// Mirrors src/ui/icon_pixels.rs so the window icon and in-app mark match:
+// Lucide's MicVocal (ISC) in black on a Spotify-green disc, with strokes
+// thickened from 2 to 2.8 units and the glyph centred at 56% of the height.
+const MIC_PATHS = [
+  "m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12",
+  "M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5",
 ];
-const BAR_HALF_WIDTH = 0.078;
+const MIC_SCALE = 0.56 / 23;
 
 export function Logo({ size = 28 }: { size?: number }) {
   return (
@@ -15,20 +15,23 @@ export function Logo({ size = 28 }: { size?: number }) {
       className="logo"
       width={size}
       height={size}
-      viewBox="0 0 100 100"
+      viewBox="0 0 1 1"
       aria-hidden="true"
     >
-      {BARS.map(([x, half]) => (
-        <rect
-          key={x}
-          x={(x - BAR_HALF_WIDTH) * 100}
-          y={(0.5 - half) * 100}
-          width={BAR_HALF_WIDTH * 200}
-          height={half * 200}
-          rx={BAR_HALF_WIDTH * 100}
-          fill="#fff"
-        />
-      ))}
+      <circle cx={0.5} cy={0.5} r={0.5} fill="#1ed760" />
+      <g
+        transform={`translate(0.5 0.5) scale(${MIC_SCALE}) translate(-13.41 -11.52)`}
+        fill="none"
+        stroke="#000"
+        strokeWidth={2.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {MIC_PATHS.map((d) => (
+          <path key={d} d={d} />
+        ))}
+        <circle cx={16} cy={7} r={5} />
+      </g>
     </svg>
   );
 }

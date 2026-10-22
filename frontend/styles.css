@@ -2475,7 +2475,7 @@ small {
   text-align: center;
 }
 .lyrics-title:not(.scrolling) .marquee-content,
-.lyrics-artists:not(.scrolling) .marquee-content {
+.lyrics-artists .marquee:not(.scrolling) .marquee-content {
   margin-inline: auto;
 }
 .lyrics-title .song-title {
@@ -2484,10 +2484,22 @@ small {
   letter-spacing: -0.8px;
 }
 .lyrics-artists {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  min-width: 0;
   font-size: clamp(14px, 1.8cqw, 21px);
   margin-top: 10px;
   color: #ecececcf;
   text-align: center;
+}
+.lyrics-year {
+  flex: none;
+  white-space: pre;
+}
+.lyrics-artists .marquee {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .lyrics-album-name {
   font-size: 14px;
@@ -2531,13 +2543,14 @@ small {
   align-self: end;
 }
 .lyrics-page.narrow .lyrics-title:not(.scrolling) .marquee-content,
-.lyrics-page.narrow .lyrics-artists:not(.scrolling) .marquee-content {
+.lyrics-page.narrow .lyrics-artists .marquee:not(.scrolling) .marquee-content {
   margin-inline: 0;
 }
 .lyrics-page.narrow .lyrics-title .song-title {
   font-size: 20px;
 }
 .lyrics-page.narrow .lyrics-artists {
+  justify-content: flex-start;
   font-size: 14px;
   margin: 2px 0 0;
   align-self: start;
@@ -4343,11 +4356,12 @@ input[type="range"]:hover {
   right: auto;
   max-width: 36%;
   margin: 0;
+  justify-content: flex-start;
   text-align: left;
   z-index: 3;
 }
 .canvas-lyrics .lyrics-title:not(.scrolling) .marquee-content,
-.canvas-lyrics .lyrics-artists:not(.scrolling) .marquee-content {
+.canvas-lyrics .lyrics-artists .marquee:not(.scrolling) .marquee-content {
   margin-inline: 0;
 }
 .canvas-lyrics .lyrics-body {

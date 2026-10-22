@@ -986,16 +986,20 @@ function SongLyricsPage({
               reduceMotion={state.settings.reduce_motion}
               className="lyrics-title"
             />
-            <Marquee
-              text={`${track.album.release_date?.slice(0, 4) && !state.settings.lyrics_hide_year ? track.album.release_date.slice(0, 4) + " · " : ""}${artistNames(track)}`}
-              reduceMotion={state.settings.reduce_motion}
-              className="lyrics-artists"
-            >
+            {/* The year stays put; only the artist names scroll. */}
+            <div className="lyrics-artists">
               {track.album.release_date && !state.settings.lyrics_hide_year && (
-                <span>{track.album.release_date.slice(0, 4)} · </span>
+                <span className="lyrics-year">
+                  {track.album.release_date.slice(0, 4)} ·{" "}
+                </span>
               )}
-              <ArtistLinks artists={track.artists} onArtist={onArtist} />
-            </Marquee>
+              <Marquee
+                text={artistNames(track)}
+                reduceMotion={state.settings.reduce_motion}
+              >
+                <ArtistLinks artists={track.artists} onArtist={onArtist} />
+              </Marquee>
+            </div>
           </div>
           <div className="lyrics-body">
             {lyrics && gravity ? (

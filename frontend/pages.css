@@ -1070,3 +1070,9 @@
 .column-sort.active {
   color: #1ed760;
 }
+
+/* Player transport at Spotify's size: a 36px play circle with 18px icons. */
+.transport-buttons .play-toggle {
+  width: 36px;
+  height: 36px;
+}

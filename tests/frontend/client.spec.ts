@@ -5337,19 +5337,29 @@ test("Spotify folders group the sidebar and open in place", async ({
   );
   const sidebar = page.locator(".library-list");
   const folder = sidebar.locator(".spotify-folder").first();
-  await expect(folder.locator(":scope > summary")).toContainText("Road & Rain");
-  await expect(folder.locator(":scope > summary")).toContainText(
-    "Folder · 2 playlists",
-  );
+  await expect(folder).toContainText("Road & Rain");
+  await expect(folder).toContainText("Folder · 2 playlists");
   await expect(sidebar.getByText("List 1")).toBeHidden();
-  await folder.locator(":scope > summary").click();
+  // Like Spotify, a folder opens as its own list with a back button.
+  await folder.click();
+  const header = sidebar.locator(".library-folder-header");
+  await expect(header).toContainText("Road & Rain");
   await expect(sidebar.getByText("List 1")).toBeVisible();
-  const inner = folder.locator(".spotify-folder");
-  await expect(inner.locator(":scope > summary")).toContainText("Night");
-  await inner.locator(":scope > summary").click();
+  await expect(sidebar.getByText("List 3")).toBeHidden();
+  await expect(sidebar.getByText("Liked Songs")).toBeHidden();
+  const inner = sidebar.locator(".spotify-folder");
+  await expect(inner).toContainText("Night");
+  await inner.click();
+  await expect(header).toContainText("Night");
   await expect(sidebar.getByText("List 2")).toBeVisible();
+  await expect(sidebar.getByText("List 1")).toBeHidden();
   await sidebar.getByText("List 2").click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("List 2");
+  await header.getByRole("button", { name: "Back" }).click();
+  await expect(header).toContainText("Road & Rain");
+  await header.getByRole("button", { name: "Back" }).click();
+  await expect(header).toHaveCount(0);
+  await expect(sidebar.getByText("List 3")).toBeVisible();
   // Searching the library lists matching playlists without folders.
   await page.getByLabel("Search library").fill("List 2");
   await expect(sidebar.locator(".spotify-folder")).toHaveCount(0);
@@ -5381,9 +5391,7 @@ test("Create folder adds a Spotify folder that shows while empty", async ({
     }),
   );
   const folder = page.locator(".library-list .spotify-folder");
-  await expect(folder.locator(":scope > summary")).toContainText(
-    "Folder · 0 playlists",
-  );
+  await expect(folder).toContainText("Folder · 0 playlists");
 });
 
 test("folders rename from their right-click menu", async ({ page }) => {
@@ -5395,7 +5403,7 @@ test("folders rename from their right-click menu", async ({ page }) => {
     }),
   );
   await page
-    .locator(".library-list .spotify-folder > summary")
+    .locator(".library-list .spotify-folder")
     .click({ button: "right" });
   await page.getByRole("menuitem", { name: "Rename" }).click();
   const dialog = page.locator("form.edit-playlist");
@@ -5484,8 +5492,8 @@ test("playlists move into and out of folders from their menu", async ({
       }),
     id,
   );
-  await page.locator(".spotify-folder > summary").first().click();
-  await page.locator(".spotify-folder .spotify-folder > summary").click();
+  await page.locator(".spotify-folder").first().click();
+  await page.locator(".spotify-folder").first().click();
   await page
     .locator(".library-row", { hasText: "Road trip" })
     .click({ button: "right" });
@@ -5844,7 +5852,7 @@ test("lyric clock frames reuse click handlers and keep seeking functional", asyn
 
 async function openFolderDeletion(page: Page) {
   await page
-    .locator(".library-list .spotify-folder > summary")
+    .locator(".library-list .spotify-folder")
     .filter({ hasText: "Road" })
     .click({ button: "right" });
   await page
@@ -5895,7 +5903,7 @@ test("folder deletion confirms, cancels and preserves playlists through refresh"
     { command: "delete_folder", args: { id: "road" } },
   ]);
   // Keep the current tree until the backend has confirmed and refreshed it.
-  const summaries = page.locator(".library-list .spotify-folder > summary");
+  const summaries = page.locator(".library-list .spotify-folder");
   await expect(summaries.filter({ hasText: "Road" })).toContainText(
     "2 playlists",
   );
@@ -5940,13 +5948,20 @@ test("failed folder deletion reports the backend error and keeps the library", a
     "Spotify did not confirm the folder removal",
   );
   await expect(
-    page
-      .locator(".library-list .spotify-folder > summary")
-      .filter({ hasText: "Road" }),
+    page.locator(".library-list .spotify-folder").filter({ hasText: "Road" }),
   ).toContainText("2 playlists");
+  // The folder still holds its playlists.
+  await page
+    .locator(".library-list .spotify-folder")
+    .filter({ hasText: "Road" })
+    .click();
   await expect(
     page.locator(".library-row", { hasText: "Road trip" }),
   ).toHaveCount(1);
+  await page
+    .locator(".library-list .spotify-folder")
+    .filter({ hasText: "Night" })
+    .click();
   await expect(
     page.locator(".library-row", { hasText: "Shared nights" }),
   ).toHaveCount(1);

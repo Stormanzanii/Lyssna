@@ -835,16 +835,22 @@ small {
   float: right;
   color: var(--muted);
 }
-/* Spotify folders: a folder row that opens in place, like a playlist row. */
-.spotify-folder {
-  padding: 0;
+/* Spotify folders: a row like a playlist's that opens the folder's own
+   list, with its name and a back button on top. */
+.library-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 8px;
+  min-width: 0;
 }
-.spotify-folder > summary {
-  list-style: none;
-  padding: 7px;
-  font-size: inherit;
+.library-folder-header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
 }
-.spotify-folder > summary::-webkit-details-marker {
+.compact-library .library-folder-header strong {
   display: none;
 }
 .folder-cover {
@@ -857,12 +863,6 @@ small {
   background: #282828;
   color: #b3b3b3;
 }
-.spotify-folder[open] > summary .folder-cover {
-  color: #fff;
-}
-.folder-entries {
-  padding-left: 14px;
-}
 .folder-picker {
   max-height: 340px;
   overflow-y: auto;
@@ -870,9 +870,6 @@ small {
 .folder-picker > button:disabled {
   opacity: 0.45;
   cursor: default;
-}
-.compact-library .folder-entries {
-  padding-left: 0;
 }
 .compact-library {
   width: 84px;

@@ -257,6 +257,8 @@ function App() {
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
+  // The Spotify folders opened in Your Library, outermost first.
+  const [folderPath, setFolderPath] = useState<string[]>([]);
   // Now playing stays open or closed across restarts.
   const sidebar = state.settings.now_playing_open !== false;
   const setSidebar = (open: boolean) =>
@@ -1758,37 +1760,57 @@ function App() {
         )}
     </div>
   );
-  // Spotify folders open in place; their playlists use the same rows.
+  // Searching or filtering lists matching playlists flat, without folders.
+  const libraryEntries: LibraryEntry[] =
+    libraryQuery || libraryFilter !== "all"
+      ? visibleLibrary.map((playlist) => ({ kind: "playlist", playlist }))
+      : libraryTree(
+          visibleLibrary,
+          state.playlists,
+          accountOrder(state).pinned,
+          state.library_folders,
+        );
+  type FolderEntry = Extract<LibraryEntry, { kind: "folder" }>;
+  let openFolder: FolderEntry | undefined;
+  if (!libraryQuery && libraryFilter === "all")
+    for (const id of folderPath) {
+      const next = (openFolder?.entries ?? libraryEntries).find(
+        (entry): entry is FolderEntry =>
+          entry.kind === "folder" && entry.folder.id === id,
+      );
+      if (!next) break;
+      openFolder = next;
+    }
+  // Like Spotify, a folder opens as its own list of playlists.
   const libraryEntry = (entry: LibraryEntry): ReactNode =>
     entry.kind === "playlist" ? (
       playlistRow(entry.playlist)
     ) : (
-      <details className="library-folder spotify-folder" key={entry.folder.id}>
-        <summary
-          className="library-item"
-          onContextMenu={(event) => {
-            event.preventDefault();
-            setSongMenu(null);
-            setEntityMenu(null);
-            setFolderMenu({
-              folder: entry.folder,
-              x: event.clientX,
-              y: event.clientY,
-            });
-          }}
-        >
-          <div className="folder-cover">
-            <Folder size={22} />
-          </div>
-          <div>
-            <strong>{entry.folder.name}</strong>
-            <small>
-              Folder · {entry.count} playlist{entry.count === 1 ? "" : "s"}
-            </small>
-          </div>
-        </summary>
-        <div className="folder-entries">{entry.entries.map(libraryEntry)}</div>
-      </details>
+      <button
+        className="library-item spotify-folder"
+        key={entry.folder.id}
+        onClick={() => setFolderPath((path) => [...path, entry.folder.id])}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setSongMenu(null);
+          setEntityMenu(null);
+          setFolderMenu({
+            folder: entry.folder,
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
+      >
+        <div className="folder-cover">
+          <Folder size={22} />
+        </div>
+        <div>
+          <strong>{entry.folder.name}</strong>
+          <small>
+            Folder · {entry.count} playlist{entry.count === 1 ? "" : "s"}
+          </small>
+        </div>
+      </button>
     );
   const loadMore = useCallback(() => {
     const current = stateRef.current;
@@ -2153,7 +2175,20 @@ function App() {
             />
           </label>
           <div className="library-list">
-            <div className="library-liked">
+            {openFolder && (
+              <div className="library-folder-header">
+                <button
+                  className="icon-button"
+                  title="Back"
+                  aria-label="Back"
+                  onClick={() => setFolderPath((path) => path.slice(0, -1))}
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <strong>{openFolder.folder.name}</strong>
+              </div>
+            )}
+            <div className="library-liked" hidden={!!openFolder}>
               <button
                 className={`library-item ${state.route === "liked" ? "current" : ""}`}
                 data-context-route="liked"
@@ -2171,49 +2206,48 @@ function App() {
               </button>
               {coverPlay("Liked Songs", playLiked)}
             </div>
-            {(libraryQuery || libraryFilter !== "all"
-              ? visibleLibrary.map((playlist): LibraryEntry => ({
-                  kind: "playlist",
-                  playlist,
-                }))
-              : libraryTree(
-                  visibleLibrary,
-                  state.playlists,
-                  accountOrder(state).pinned,
-                  state.library_folders,
-                )
-            ).map(libraryEntry)}
-            {state.settings.folders.map((folder, index) => (
-              <details
-                className="library-folder"
-                key={`${folder.name}-${index}`}
-              >
-                <summary>
-                  {folder.name}
-                  <span>{folder.playlist_ids.length}</span>
-                </summary>
-                {state.playlists
-                  .filter((playlist) =>
-                    folder.playlist_ids.includes(playlist.id),
-                  )
-                  .map((playlist) => (
-                    <button
-                      className="library-item"
-                      key={playlist.id}
-                      data-context-route={`playlist:${playlist.id}`}
-                      data-context-name={playlist.name}
-                      onClick={() => navigate(`playlist:${playlist.id}`)}
-                      {...prefetchOn(`playlist:${playlist.id}`)}
-                    >
-                      <Cover images={playlist.images} />
-                      <div>
-                        <strong>{playlist.name}</strong>
-                        <small>Playlist</small>
-                      </div>
-                    </button>
-                  ))}
-              </details>
-            ))}
+            {openFolder ? (
+              <>
+                {openFolder.entries.map(libraryEntry)}
+                {!openFolder.entries.length && (
+                  <p className="empty-library">This folder is empty.</p>
+                )}
+              </>
+            ) : (
+              libraryEntries.map(libraryEntry)
+            )}
+            {!openFolder &&
+              state.settings.folders.map((folder, index) => (
+                <details
+                  className="library-folder"
+                  key={`${folder.name}-${index}`}
+                >
+                  <summary>
+                    {folder.name}
+                    <span>{folder.playlist_ids.length}</span>
+                  </summary>
+                  {state.playlists
+                    .filter((playlist) =>
+                      folder.playlist_ids.includes(playlist.id),
+                    )
+                    .map((playlist) => (
+                      <button
+                        className="library-item"
+                        key={playlist.id}
+                        data-context-route={`playlist:${playlist.id}`}
+                        data-context-name={playlist.name}
+                        onClick={() => navigate(`playlist:${playlist.id}`)}
+                        {...prefetchOn(`playlist:${playlist.id}`)}
+                      >
+                        <Cover images={playlist.images} />
+                        <div>
+                          <strong>{playlist.name}</strong>
+                          <small>Playlist</small>
+                        </div>
+                      </button>
+                    ))}
+                </details>
+              ))}
             {!visibleLibrary.length && state.playlists.length > 0 && (
               <p className="empty-library">No playlists match.</p>
             )}

@@ -44,6 +44,7 @@ export function Shelf({
   play,
   ready,
   defaultExpanded = false,
+  noteBelow = false,
 }: {
   section: HomeSection;
   /** Opens a route; cards pass themselves so the page can show at once. */
@@ -51,6 +52,8 @@ export function Shelf({
   play: (item: HomeItem) => void;
   ready: boolean;
   defaultExpanded?: boolean;
+  /** Show the subtitle under the title, as Spotify does on profiles. */
+  noteBelow?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [clipped, setClipped] = useState(false);
@@ -71,12 +74,15 @@ export function Shelf({
     <section className="home-shelf" aria-label={section.title}>
       <div className="home-shelf-heading">
         <div>
-          {heading.label && (
+          {heading.label && !noteBelow && (
             <p>
               <SpotifyText text={heading.label} navigate={navigate} />
             </p>
           )}
           <h2>{heading.title}</h2>
+          {heading.label && noteBelow && (
+            <p className="home-shelf-note">{heading.label}</p>
+          )}
         </div>
         <button
           className="home-show-all"
@@ -91,7 +97,7 @@ export function Shelf({
       >
         {section.items.map((item) => (
           <article
-            className={`home-card ${item.kind === "artist" ? "artist-card" : ""}`}
+            className={`home-card ${item.kind === "artist" || item.kind === "user" ? "artist-card" : ""}`}
             key={item.uri}
             data-context-route={item.route}
             data-context-name={item.name}

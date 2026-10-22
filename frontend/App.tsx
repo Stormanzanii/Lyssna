@@ -94,6 +94,7 @@ import type {
   Track,
   HomeItem,
   AppEvent,
+  Profile,
 } from "./types";
 import {
   Ambience,
@@ -193,6 +194,18 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
+  // The profile on screen, and the profiles visited before it for Back.
+  const [profileView, setProfileView] = useState<{
+    user: string;
+    hint?: Profile;
+  }>();
+  const profileTrail = useRef<{ user: string; hint?: Profile }[]>([]);
+  // Another account never sees the previous one's profile trail.
+  useEffect(() => {
+    profileTrail.current = [];
+    setProfileView(undefined);
+    setCenter((current) => (current === "profile" ? "browse" : current));
+  }, [state.profile?.id]);
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
@@ -1006,6 +1019,12 @@ function App() {
     [],
   );
   const back = () => {
+    const previous =
+      center === "profile" ? profileTrail.current.pop() : undefined;
+    if (previous) {
+      setProfileView(previous);
+      return;
+    }
     if (center !== "browse") {
       setCenter("browse");
       return;
@@ -1680,7 +1699,11 @@ function App() {
                 void call("open_link", {
                   url: "https://www.spotify.com/account/overview/",
                 });
-              else if (action === "profile") setCenter("profile");
+              else if (action === "profile" && state.profile) {
+                profileTrail.current = [];
+                setProfileView({ user: state.profile.id, hint: state.profile });
+                setCenter("profile");
+              }
               else if (action === "recents") navigate("recent");
               else if (action === "settings") setCenter("settings");
               else void call("sign_out");
@@ -1943,13 +1966,21 @@ function App() {
               onNotice={notify}
             />
           ) : center === "profile" ? (
-            <ProfilePage
-              profile={state.profile}
-              playlists={state.playlists}
-              onPlaylist={(playlist) => navigate(`playlist:${playlist.id}`)}
-              onRecents={() => navigate("recent")}
-              onOpen={(url) => void call("open_link", { url })}
-            />
+            profileView && (
+              <ProfilePage
+                user={profileView.user}
+                hint={profileView.hint}
+                ready={state.native_ready}
+                onNavigate={homeNavigate}
+                onPlay={homePlay}
+                onUser={(user, hint) => {
+                  profileTrail.current.push(profileView);
+                  setProfileView({ user, hint });
+                }}
+                onOpen={(url) => void call("open_link", { url })}
+                onNotice={notify}
+              />
+            )
           ) : state.route === "recent" ? (
             <div className="browse-scroll" ref={mainScroll}>
               <RecentsPage

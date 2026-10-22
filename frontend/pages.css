@@ -588,9 +588,99 @@
   object-fit: cover;
 }
 .profile-empty {
-  padding: 0 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 0 36px 32px;
   color: var(--text-subdued);
   font-size: 14px;
+}
+.profile-empty p {
+  margin: 0;
+}
+/* Spotify's profile header: a round photo beside a huge name, in the
+   photo's colour, with the counts as links underneath. */
+.profile-hero .profile-avatar {
+  width: clamp(150px, 17vw, 232px);
+  box-shadow: 0 4px 60px #00000080;
+}
+.profile-hero .hero-copy h1 {
+  margin-bottom: 18px;
+}
+.profile-counts {
+  gap: 0;
+}
+.profile-counts > :first-child::before {
+  content: none;
+}
+.profile-counts > * + *::before {
+  content: "•";
+  margin: 0 6px;
+  color: #ffffffb3;
+}
+.profile-counts button {
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+}
+.profile-counts button:hover,
+.profile-counts button:focus-visible {
+  text-decoration: underline;
+}
+.profile-actions {
+  padding: 24px 36px 8px;
+}
+.profile-more {
+  position: relative;
+}
+.profile-more > .icon-button {
+  color: #ffffffb3;
+}
+.profile-more > .icon-button:hover,
+.profile-more > .icon-button.active {
+  color: #fff;
+}
+.profile-more .profile-menu {
+  left: 0;
+  right: auto;
+}
+.profile-sticky strong {
+  padding-left: 12px;
+}
+.profile-sections {
+  padding: 0 36px 32px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.profile-sections .home-shelf-items:not(.expanded) {
+  margin-right: -36px;
+}
+.home-shelf-heading .home-shelf-note {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.profile-skeleton-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 24px;
+  height: 230px;
+  margin: 56px 0 28px;
+  overflow: hidden;
+}
+.profile-skeleton-row span {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffffff0f;
+  animation: profile-pulse 1.4s ease-in-out infinite;
+}
+@keyframes profile-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.reduce-motion .profile-skeleton-row span {
+  animation: none;
 }
 
 /* Recents: history grouped by day. */

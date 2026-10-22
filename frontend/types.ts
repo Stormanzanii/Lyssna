@@ -261,6 +261,17 @@ export type HomeSection = {
   /** The section's own picture, such as the artist of a new release. */
   header_images?: Artwork[];
 };
+/** A Spotify user's profile page, as the desktop client shows it. */
+export type UserProfilePage = {
+  id: string;
+  name: string;
+  images: Artwork[];
+  public_playlists: number;
+  followers: number;
+  following: number;
+  is_current_user: boolean;
+  sections: HomeSection[];
+};
 export type HomePage = {
   account: string;
   greeting: string;

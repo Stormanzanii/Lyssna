@@ -585,6 +585,12 @@ async function startClient(
             return new Promise<void>((resolve) => {
               host.__clientTest.resolveDJRequest = resolve;
             });
+          if (command === "user_profile") {
+            const profile = host.__clientTest.userProfiles?.[args.user];
+            return profile
+              ? structuredClone(profile)
+              : Promise.reject("Profile unavailable");
+          }
           if (command === "resolve_album")
             return {
               ...track.album,
@@ -3232,6 +3238,110 @@ test("a left click anywhere outside the song menu closes it", async ({
     await page.mouse.click(box.x + 8, box.y + box.height / 2);
     await expect(page.getByRole("menu")).toHaveCount(0);
   }
+});
+
+test("profiles follow Spotify's layout and open people, artists and playlists", async ({
+  page,
+}) => {
+  await startClient(page);
+  const item = (
+    kind: string,
+    id: string,
+    name: string,
+    subtitle: string,
+  ) => ({
+    uri: `spotify:${kind}:${id}`,
+    route: `${kind}:${id}`,
+    name,
+    subtitle,
+    images: [{ url: "https://artwork.example.test/cover.svg" }],
+    kind,
+    playable: kind !== "user",
+    format: "",
+  });
+  const make = item;
+  const profiles = {
+        "test-user": {
+          id: "test-user",
+          name: "Test Listener",
+          images: [{ url: "https://artwork.example.test/cover.svg" }],
+          public_playlists: 1,
+          followers: 1,
+          following: 2,
+          is_current_user: true,
+          sections: [
+            {
+              uri: "spotify:user:test-user:top-artists",
+              title: "Top artists this month",
+              subtitle: "Only visible to you",
+              items: [make("artist", "0123456789abcdefghijkl", "Top Artist", "Artist")],
+            },
+            {
+              uri: "spotify:user:test-user:playlists",
+              title: "Public Playlists",
+              subtitle: "",
+              items: [make("playlist", "1123456789abcdefghijkl", "Road Trip", "By Test Listener")],
+            },
+            {
+              uri: "spotify:user:test-user:followers",
+              title: "Followers",
+              subtitle: "",
+              items: [make("user", "friend", "Friend", "Profile")],
+            },
+          ],
+        },
+        friend: {
+          id: "friend",
+          name: "Friend",
+          images: [],
+          public_playlists: 0,
+          followers: 3,
+          following: 0,
+          is_current_user: false,
+          sections: [],
+        },
+      };
+  await page.evaluate((profiles) => {
+    (window as any).__clientTest.userProfiles = profiles;
+  }, profiles);
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Profile" }).click();
+  const hero = page.locator(".profile-hero");
+  await expect(hero.locator("h1")).toHaveText("Test Listener");
+  await expect(hero.locator(".profile-counts > *")).toHaveText([
+    "1 Public Playlist",
+    "1 Follower",
+    "2 Following",
+  ]);
+  const top = page.locator('section[aria-label="Top artists this month"]');
+  await expect(top.locator(".home-shelf-note")).toHaveText("Only visible to you");
+  await expect(top.locator(".home-card.artist-card")).toHaveCount(1);
+  await expect(
+    page.locator('section[aria-label="Public Playlists"] .home-card'),
+  ).toContainText("By Test Listener");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.screenshot({ path: "target/diagnostics/profile-page.png" });
+  const friend = page.locator('section[aria-label="Followers"] .home-card');
+  await expect(friend).toHaveClass(/artist-card/);
+  await expect(friend.locator(".home-card-play")).toBeDisabled();
+  await friend.getByRole("button", { name: "Friend", exact: true }).click();
+  await expect(hero.locator("h1")).toHaveText("Friend");
+  await expect(page.locator(".profile-empty")).toHaveText(
+    "This profile has nothing public yet.",
+  );
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(hero.locator("h1")).toHaveText("Test Listener");
+  await page
+    .locator('section[aria-label="Top artists this month"]')
+    .getByRole("button", { name: "Top Artist", exact: true })
+    .click();
+  const browse = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1),
+  );
+  expect(browse.args.key).toBe("artist:0123456789abcdefghijkl");
+  await expect(page.locator(".profile-hero")).toHaveCount(0);
 });
 
 test("the avatar menu opens settings, profile and grouped recents", async ({

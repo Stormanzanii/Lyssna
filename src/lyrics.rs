@@ -791,7 +791,12 @@ fn forget_local_in(directory: &Path, track: &Track) {
     }
 }
 
-pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
+pub fn fetch(
+    client: &Client,
+    track: &Track,
+    access_token: &str,
+    native: &crate::native::NativeControls,
+) -> Result<Lyrics> {
     let root = data_dir()?.join("lyrics");
     let key = track_key(track);
     if let Some(lyrics) = SESSION
@@ -804,43 +809,57 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
     if let Some(lyrics) = load_local_in(&root.join("local"), track) {
         return Ok(lyrics);
     }
-    // Try each enabled source in the order chosen in Lyrics settings.
-    let mut failure = None;
-    for source in crate::lyric_sources::enabled() {
-        let attempt = (|| -> Result<Lyrics> {
-            let namespace = match source.as_str() {
-                "lrclib" => "lrclib".to_owned(),
-                _ => crate::provider::cache_namespace()?,
-            };
-            let cache = root.join("cache").join(namespace);
-            let file = cache.join(format!("{key}.json"));
-            let fresh = fs::metadata(&file)
-                .and_then(|metadata| metadata.modified())
-                .ok()
-                .and_then(|modified| modified.elapsed().ok())
-                .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
-            if fresh
-                && let Ok(bytes) = fs::read(&file)
-                && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
-            {
-                return Ok(lyrics);
-            }
-            let lyrics = match source.as_str() {
-                "lrclib" => crate::lyric_sources::lrclib(client, track)?,
-                _ => crate::provider::fetch(client, track, access_token)?,
-            };
-            if fs::create_dir_all(&cache).is_ok() {
-                let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
-            }
-            Ok(lyrics)
-        })();
-        match attempt {
-            Ok(lyrics) if lyrics.instrumental || !lyrics.lines.is_empty() => return Ok(lyrics),
-            Ok(_) => {}
-            Err(error) => failure = Some(error),
+    // Every enabled source is asked at once; the best answer in the chosen
+    // order wins. Each source keeps its own three-day cache.
+    let cached = |namespace: &str, fetch: &dyn Fn() -> Result<Lyrics>| -> Result<Lyrics> {
+        let cache = root.join("cache").join(namespace);
+        let file = cache.join(format!("{key}.json"));
+        let fresh = fs::metadata(&file)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
+        if fresh
+            && let Ok(bytes) = fs::read(&file)
+            && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
+        {
+            return Ok(lyrics);
         }
-    }
-    Err(failure.unwrap_or_else(|| anyhow::anyhow!("No lyrics source found lyrics for this song")))
+        let lyrics = fetch()?;
+        if fs::create_dir_all(&cache).is_ok() {
+            let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
+        }
+        Ok(lyrics)
+    };
+    // Spicy Lyrics and Apple Music share one provider request.
+    let provider: std::sync::OnceLock<std::result::Result<Lyrics, String>> =
+        std::sync::OnceLock::new();
+    let from_provider = |source: &str| -> Result<Lyrics> {
+        let answer = provider.get_or_init(|| {
+            crate::provider::cache_namespace()
+                .and_then(|namespace| {
+                    cached(&namespace, &|| {
+                        crate::provider::fetch(client, track, access_token)
+                    })
+                })
+                .map_err(|error| error.to_string())
+        });
+        let lyrics = answer
+            .as_ref()
+            .map_err(|error| anyhow::anyhow!(error.clone()))?;
+        crate::lyric_sources::split_provider(lyrics, source)
+            .with_context(|| format!("No {source} lyrics from the provider"))
+    };
+    crate::lyric_sources::fetch_best(&crate::lyric_sources::enabled(), &|source| match source {
+        "spicy" | "apple" => from_provider(source),
+        "musixmatch" => cached("musixmatch", &|| {
+            crate::lyric_sources::musixmatch(client, track)
+        }),
+        "spotify" => cached("spotify", &|| crate::lyric_sources::spotify(native, track)),
+        "lrclib" => cached("lrclib", &|| crate::lyric_sources::lrclib(client, track)),
+        "netease" => cached("netease", &|| crate::lyric_sources::netease(client, track)),
+        _ => Err(anyhow::anyhow!("Unknown lyrics source")),
+    })
 }
 #[cfg(test)]
 mod tests {

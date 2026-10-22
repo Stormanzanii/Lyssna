@@ -628,6 +628,25 @@ impl NativeControls {
         )?)
         .map_err(anyhow::Error::from)
     }
+    /// Spotify's own lyrics for a track (color-lyrics JSON).
+    pub fn lyrics(&self, track_id: &str) -> Result<Vec<u8>> {
+        anyhow::ensure!(
+            track_id.len() == 22 && track_id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+            "Invalid track ID"
+        );
+        let session = self.session()?;
+        let id = librespot_core::SpotifyId::from_base62(track_id)?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                tokio::time::timeout(Duration::from_secs(10), session.spclient().get_lyrics(&id))
+                    .await
+                    .map_err(|_| anyhow::anyhow!("Spotify lyrics timed out"))?
+                    .map(|body| body.to_vec())
+                    .map_err(|_| anyhow::anyhow!("Spotify has no lyrics for this song"))
+            })
+    }
     pub fn metadata(
         &self,
         uri: &str,

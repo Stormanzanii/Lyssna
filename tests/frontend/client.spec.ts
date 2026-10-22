@@ -6807,14 +6807,25 @@ test("lyrics options live in Lyrics settings with an ordered source list", async
     );
   await openLyricsSettings(page, "Sources");
   const sources = page.locator(".lyric-sources li");
-  await expect(sources).toHaveText([/Spicy Lyrics/, /LRCLIB/]);
+  await expect(sources).toHaveText([
+    /Spicy Lyrics/,
+    /Musixmatch/,
+    /Apple Music/,
+    /Spotify/,
+    /LRCLIB/,
+    /Netease/,
+  ]);
+  await expect(
+    page.getByRole("switch", { name: "Musixmatch", exact: true }),
+  ).toBeChecked();
   await page.getByRole("switch", { name: "LRCLIB", exact: true }).check();
-  await expect.poll(() => saved("lyrics_sources_disabled")).toEqual([]);
-  await page.getByTitle("Move LRCLIB up", { exact: true }).click();
+  await expect
+    .poll(() => saved("lyrics_sources_disabled"))
+    .toEqual(["netease"]);
+  await page.getByTitle("Move Spotify up", { exact: true }).click();
   await expect
     .poll(() => saved("lyrics_source_order"))
-    .toEqual(["lrclib", "spicy"]);
-  await expect(sources.first()).toContainText("LRCLIB");
+    .toEqual(["spicy", "musixmatch", "spotify", "apple", "lrclib", "netease"]);
   await page.getByRole("tab", { name: "Lyrics", exact: true }).click();
   await page.getByRole("switch", { name: "Right align lyrics" }).check();
   await page.getByRole("switch", { name: "Simple lyrics mode" }).check();

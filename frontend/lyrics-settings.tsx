@@ -28,15 +28,41 @@ import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { LyricsProvider } from "./lyrics-provider";
 
+/** The Spicy Lyrics fork's source order; LRCLIB and Netease start off. */
+const DEFAULT_SOURCES = [
+  "spicy",
+  "musixmatch",
+  "apple",
+  "spotify",
+  "lrclib",
+  "netease",
+];
+const DEFAULT_SOURCES_OFF = ["lrclib", "netease"];
 /** Lyric sources SpotiFlex can use, as listed in Sources. */
 const SOURCES: Record<string, { name: string; help: string }> = {
   spicy: {
     name: "Spicy Lyrics",
-    help: "Word-synced lyrics, including Apple Music and community TTML.",
+    help: "Community-contributed lyrics from Spicy Lyrics.",
+  },
+  musixmatch: {
+    name: "Musixmatch",
+    help: "Synced or word-timed lyrics through Musixmatch's desktop-app service (unofficial). Receives the title, artists, album, length and track ID.",
+  },
+  apple: {
+    name: "Apple Music",
+    help: "Apple Music lyrics through the Spicy Lyrics provider.",
+  },
+  spotify: {
+    name: "Spotify",
+    help: "Spotify's own lyrics, through your signed-in session.",
   },
   lrclib: {
     name: "LRCLIB",
     help: "Free open lyrics database. Receives the title, artist, album and length.",
+  },
+  netease: {
+    name: "Netease",
+    help: "Netease community lyrics through a third-party proxy. Receives the title and artist.",
   },
 };
 
@@ -127,8 +153,10 @@ export function LyricsSettings({
   const lyricSize = settings.lyric_size || 40;
   const order = settings.lyrics_source_order?.length
     ? settings.lyrics_source_order
-    : ["spicy", "lrclib"];
-  const disabled = new Set(settings.lyrics_sources_disabled ?? ["lrclib"]);
+    : DEFAULT_SOURCES;
+  const disabled = new Set(
+    settings.lyrics_sources_disabled ?? DEFAULT_SOURCES_OFF,
+  );
   const move = (id: string, step: -1 | 1) => {
     const next = [...order];
     const index = next.indexOf(id);
@@ -390,8 +418,8 @@ export function LyricsSettings({
             className="text-link lyric-sources-reset"
             onClick={() =>
               onSettings({
-                lyrics_source_order: ["spicy", "lrclib"],
-                lyrics_sources_disabled: ["lrclib"],
+                lyrics_source_order: DEFAULT_SOURCES,
+                lyrics_sources_disabled: DEFAULT_SOURCES_OFF,
               })
             }
           >

@@ -104,7 +104,10 @@ impl Default for Settings {
                 .iter()
                 .map(|id| (*id).into())
                 .collect(),
-            lyrics_sources_disabled: vec!["lrclib".into()],
+            lyrics_sources_disabled: crate::lyric_sources::DEFAULT_DISABLED
+                .iter()
+                .map(|id| (*id).into())
+                .collect(),
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),
@@ -156,11 +159,10 @@ impl Settings {
         if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
             settings.lyrics_background = "animated".into();
         }
-        settings.lyrics_source_order =
-            crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
-        settings
-            .lyrics_sources_disabled
-            .retain(|id| crate::lyric_sources::DEFAULT_ORDER.contains(&id.as_str()));
+        settings.lyrics_source_order = crate::lyric_sources::migrate(
+            &settings.lyrics_source_order,
+            &mut settings.lyrics_sources_disabled,
+        );
         settings.audio_output = settings
             .audio_output
             .filter(|name| crate::audio_output::valid_name(name));

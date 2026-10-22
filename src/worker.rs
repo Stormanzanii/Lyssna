@@ -451,6 +451,8 @@ impl Worker {
                 }
             }
         });
+        // Spotify's own lyrics come through the native session.
+        let lyric_native = native_controls.clone();
         thread::spawn(move || {
             let Ok(client) = auth::http_client() else {
                 return;
@@ -467,7 +469,7 @@ impl Worker {
                         (track, result)
                     }
                     LyricCommand::Fetch(track, token) => {
-                        let result = lyrics::fetch(&client, &track, &token);
+                        let result = lyrics::fetch(&client, &track, &token, &lyric_native);
                         (track, result)
                     }
                     LyricCommand::Import(track, path) => {

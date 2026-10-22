@@ -146,8 +146,15 @@ export const emptyState: AppState = {
     lyrics_hide_npv: false,
     lyrics_hide_npv_empty: false,
     lyrics_background: "animated",
-    lyrics_source_order: ["spicy", "lrclib"],
-    lyrics_sources_disabled: ["lrclib"],
+    lyrics_source_order: [
+      "spicy",
+      "musixmatch",
+      "apple",
+      "spotify",
+      "lrclib",
+      "netease",
+    ],
+    lyrics_sources_disabled: ["lrclib", "netease"],
     ui_font: "",
     lyric_font: "",
     audio_output: null,
@@ -405,7 +412,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "search_more": {
       // A further page of one category; stale when the search changed.
       if (action.key !== state.route) return state;
-      const add = <T,>(current: T[], next: T[], key: (item: T) => string) => {
+      const add = <T>(current: T[], next: T[], key: (item: T) => string) => {
         const seen = new Set(current.map(key));
         return [...current, ...next.filter((item) => !seen.has(key(item)))];
       };

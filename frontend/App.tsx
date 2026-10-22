@@ -158,6 +158,7 @@ import {
   trackIds,
 } from "./spotify-plus";
 import { LyricsSettings } from "./lyrics-settings";
+import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { RecentsPage } from "./recents-page";
 import { addedLabel, collectionTracks, genresFor } from "./collection";
 import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
@@ -1121,6 +1122,231 @@ function App() {
       navigate(key, false);
     }
   };
+  // Spotify's "⋯" menu. Edit actions act on the field that had focus.
+  const edit = (command: string) => () => document.execCommand(command);
+  const zoomBy = (step: number) =>
+    updateSettings({
+      ui_zoom_percent: Math.min(
+        200,
+        Math.max(75, (state.settings.ui_zoom_percent ?? 100) + step),
+      ),
+    });
+  const songPosition = () =>
+    (state.playback.progress_ms ?? 0) +
+    (state.playback.is_playing ? Date.now() - state.observed_at : 0);
+  const volume = state.playback.device.volume_percent ?? 100;
+  const signedIn = !!state.profile;
+  const menuGroups: AppMenuGroup[] = [
+    {
+      label: "File",
+      items: [
+        {
+          label: "New playlist",
+          disabled: !signedIn,
+          onSelect: () =>
+            void call("create_playlist", {
+              name: `My Playlist #${
+                state.playlists.filter(
+                  (playlist) => playlist.owner.id === state.profile?.id,
+                ).length + 1
+              }`,
+              tracks: [],
+            }),
+        },
+        {
+          label: "New playlist folder",
+          disabled: !signedIn,
+          onSelect: () => setFolderDialog(true),
+        },
+        {
+          label: "Log out",
+          divider: true,
+          disabled: !signedIn,
+          onSelect: () => void call("sign_out"),
+        },
+        { label: "Exit", onSelect: () => void windowHandle().close() },
+      ],
+    },
+    {
+      label: "Edit",
+      items: [
+        { label: "Undo", shortcut: "Ctrl+Z", onSelect: edit("undo") },
+        { label: "Redo", shortcut: "Ctrl+Y", onSelect: edit("redo") },
+        {
+          label: "Cut",
+          shortcut: "Ctrl+X",
+          divider: true,
+          onSelect: edit("cut"),
+        },
+        { label: "Copy", shortcut: "Ctrl+C", onSelect: edit("copy") },
+        {
+          label: "Paste",
+          shortcut: "Ctrl+V",
+          onSelect: () =>
+            void navigator.clipboard
+              .readText()
+              .then((text) => document.execCommand("insertText", false, text))
+              .catch(() => notify("Clipboard is unavailable.", true)),
+        },
+        { label: "Delete", shortcut: "Del", onSelect: edit("delete") },
+        {
+          label: "Select all",
+          shortcut: "Ctrl+A",
+          onSelect: edit("selectAll"),
+        },
+        {
+          label: "Search",
+          shortcut: "Ctrl+K",
+          divider: true,
+          onSelect: () => searchInput.current?.focus(),
+        },
+        {
+          label: "Settings",
+          onSelect: () => setCenter("settings"),
+        },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Zoom in", shortcut: "Ctrl+=", onSelect: () => zoomBy(10) },
+        { label: "Zoom out", shortcut: "Ctrl+-", onSelect: () => zoomBy(-10) },
+        {
+          label: "Reset zoom",
+          shortcut: "Ctrl+0",
+          onSelect: () => updateSettings({ ui_zoom_percent: 100 }),
+        },
+        {
+          label: state.settings.compact_library
+            ? "Expand Your Library"
+            : "Compact Your Library",
+          divider: true,
+          onSelect: () =>
+            updateSettings({
+              compact_library: !state.settings.compact_library,
+            }),
+        },
+        {
+          label: sidebar ? "Hide Now playing view" : "Show Now playing view",
+          onSelect: () => {
+            setSidebar(!sidebar);
+            setPanel("now");
+          },
+        },
+        {
+          label: center === "lyrics" ? "Hide lyrics" : "Lyrics",
+          disabled: !signedIn,
+          onSelect: () => setCenter(center === "lyrics" ? "browse" : "lyrics"),
+        },
+        { label: "Queue", disabled: !signedIn, onSelect: toggleQueue },
+        {
+          label: "Full screen",
+          shortcut: "F11",
+          onSelect: () => void fullscreen(),
+        },
+      ],
+    },
+    {
+      label: "Playback",
+      items: [
+        {
+          label: state.playback.is_playing ? "Pause" : "Play",
+          shortcut: "Space",
+          disabled: !signedIn,
+          onSelect: toggle,
+        },
+        {
+          label: "Next",
+          disabled: !signedIn,
+          onSelect: () => play({ command: "next" }),
+        },
+        {
+          label: "Previous",
+          disabled: !signedIn,
+          onSelect: () => play({ command: "previous" }),
+        },
+        {
+          label: "Seek forward",
+          divider: true,
+          disabled: !state.playback.item,
+          onSelect: () =>
+            play({ command: "seek", positionMs: songPosition() + 10_000 }),
+        },
+        {
+          label: "Seek backward",
+          disabled: !state.playback.item,
+          onSelect: () =>
+            play({
+              command: "seek",
+              positionMs: Math.max(0, songPosition() - 10_000),
+            }),
+        },
+        {
+          label: state.playback.shuffle_state ? "Shuffle off" : "Shuffle",
+          divider: true,
+          disabled: !signedIn,
+          onSelect: () =>
+            play({
+              command: "shuffle",
+              enabled: !state.playback.shuffle_state,
+            }),
+        },
+        {
+          label:
+            state.playback.repeat_state === "track"
+              ? "Repeat off"
+              : state.playback.repeat_state === "context"
+                ? "Repeat one"
+                : "Repeat",
+          disabled: !signedIn,
+          onSelect: () =>
+            play({
+              command: "repeat",
+              repeat:
+                state.playback.repeat_state === "off" ||
+                !state.playback.repeat_state
+                  ? "context"
+                  : state.playback.repeat_state === "context"
+                    ? "track"
+                    : "off",
+            }),
+        },
+        {
+          label: "Volume up",
+          divider: true,
+          disabled: !signedIn,
+          onSelect: () =>
+            play({ command: "volume", volume: Math.min(100, volume + 10) }),
+        },
+        {
+          label: "Volume down",
+          disabled: !signedIn,
+          onSelect: () =>
+            play({ command: "volume", volume: Math.max(0, volume - 10) }),
+        },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        {
+          label: "About SpotiFlex",
+          onSelect: () => setCenter("settings"),
+        },
+        {
+          label: "Check for updates",
+          onSelect: () => void call("app_update", { action: "check" }),
+        },
+        {
+          label: "Keyboard shortcuts",
+          onSelect: () =>
+            notify(
+              "Space play or pause · Ctrl+K search · Ctrl+= / Ctrl+- / Ctrl+0 zoom · F5 refresh · F11 full screen · Esc close menus",
+            ),
+        },
+      ],
+    },
+  ];
   const fullscreen = async (force?: boolean) => {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
@@ -1678,9 +1904,7 @@ function App() {
         className={`topbar ${sessionScreen(state) === "client" ? "" : "signed-out"}`}
         data-tauri-drag-region
       >
-        <div className="brand" data-tauri-drag-region aria-label="SpotiFlex">
-          <Logo size={30} />
-        </div>
+        <AppMenu groups={menuGroups} />
         <div className="history-buttons">
           <button className="icon-button" title="Go back" onClick={back}>
             <ArrowLeft size={19} />

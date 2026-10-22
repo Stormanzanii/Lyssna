@@ -58,6 +58,8 @@
 .liquid-glass .player-bar::after,
 .liquid-glass .popover::after,
 .liquid-glass .profile-menu::after,
+.liquid-glass .app-menu::after,
+.liquid-glass .app-submenu::after,
 .liquid-glass .sort-menu::after {
   content: "";
   position: absolute;
@@ -226,6 +228,8 @@
 /* Menus become frosted popovers. */
 .liquid-glass .popover,
 .liquid-glass .profile-menu,
+.liquid-glass .app-menu,
+.liquid-glass .app-submenu,
 .liquid-glass .sort-menu {
   position: fixed;
   background: var(--glass-fill-strong);
@@ -240,6 +244,8 @@
   position: absolute;
 }
 .liquid-glass .profile-menu,
+.liquid-glass .app-menu,
+.liquid-glass .app-submenu,
 .liquid-glass .sort-menu {
   position: absolute;
 }

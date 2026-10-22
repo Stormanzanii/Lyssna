@@ -248,9 +248,9 @@ test("standby speakers are labelled and a failed transfer keeps controls on the 
   await page.getByTitle("Devices", { exact: true }).click();
   const echo = page.getByRole("button", { name: /Test Echo/ });
   await expect(echo).toContainText("Standby");
-  await expect(
-    page.getByRole("button", { name: /Test Phone/ }),
-  ).toContainText("Active device");
+  await expect(page.getByRole("button", { name: /Test Phone/ })).toContainText(
+    "Active device",
+  );
   await echo.click();
   // The backend re-sends the device list after Spotify rejects the transfer.
   await page.evaluate(
@@ -344,7 +344,6 @@ test("bundled lyrics stay ready after sign-out and another sign-in", async ({
   );
 });
 
-
 test("first-run Spotify sign-in needs no developer Client ID", async ({
   page,
 }) => {
@@ -355,7 +354,7 @@ test("first-run Spotify sign-in needs no developer Client ID", async ({
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Spotify Premium required");
   await expect(dialog.locator("#client-id")).toHaveCount(0);
-  // Signed out, the top bar keeps only the logo and window controls.
+  // Signed out, the top bar keeps only the app menu and window controls.
   await expect(page.getByPlaceholder("What do you want to play?")).toBeHidden();
   await expect(page.getByTitle("Go back", { exact: true })).toBeHidden();
   await expect(
@@ -1231,7 +1230,10 @@ test("sidebar preserves pins and changes recents only after manual playback", as
     .locator(".library-item")
     .click();
   expect((await names())[0]).toBe("DJ");
-  await page.getByRole("main").getByTitle("Play Playlist 2", { exact: true }).click();
+  await page
+    .getByRole("main")
+    .getByTitle("Play Playlist 2", { exact: true })
+    .click();
   await expect(page.locator(".library-row strong").first()).toHaveText(
     "Playlist 2",
   );
@@ -2009,7 +2011,9 @@ test("Canvas and its toolbar move together without restarting the video", async 
   await page.getByTitle("Lyrics", { exact: true }).click();
   const toolbarBox = () =>
     page.evaluate(() => {
-      const box = document.querySelector(".lyrics-toolbar")!.getBoundingClientRect();
+      const box = document
+        .querySelector(".lyrics-toolbar")!
+        .getBoundingClientRect();
       return { x: Math.round(box.left), y: Math.round(box.top) };
     });
   await expect(page.locator(".lyrics-album")).toBeVisible();
@@ -2169,9 +2173,7 @@ test("timed syllables lift independently and font choices apply separately", asy
   ).toContain("Consolas");
 });
 
-test("typed Windows font names apply immediately", async ({
-  page,
-}) => {
+test("typed Windows font names apply immediately", async ({ page }) => {
   await startClient(page);
   await openSettings(page);
   const appFont = page.getByLabel("App font", { exact: true });
@@ -2191,7 +2193,9 @@ test("typed Windows font names apply immediately", async ({
   expect(
     await page
       .locator(".application")
-      .evaluate((node) => getComputedStyle(node).getPropertyValue("--lyric-font")),
+      .evaluate((node) =>
+        getComputedStyle(node).getPropertyValue("--lyric-font"),
+      ),
   ).toContain("Bahnschrift");
   await expect
     .poll(() =>
@@ -2207,7 +2211,9 @@ test("typed Windows font names apply immediately", async ({
   expect(
     await page
       .locator(".application")
-      .evaluate((node) => getComputedStyle(node).getPropertyValue("--lyric-font")),
+      .evaluate((node) =>
+        getComputedStyle(node).getPropertyValue("--lyric-font"),
+      ),
   ).toContain("Inter");
   await appFont.clear();
   expect(
@@ -3309,12 +3315,7 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   page,
 }) => {
   await startClient(page);
-  const item = (
-    kind: string,
-    id: string,
-    name: string,
-    subtitle: string,
-  ) => ({
+  const item = (kind: string, id: string, name: string, subtitle: string) => ({
     uri: `spotify:${kind}:${id}`,
     route: `${kind}:${id}`,
     name,
@@ -3326,48 +3327,57 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   });
   const make = item;
   const profiles = {
-        "test-user": {
-          id: "test-user",
-          name: "Test Listener",
-          images: [{ url: "https://artwork.example.test/cover.svg" }],
-          public_playlists: 1,
-          followers: 1,
-          following: 2,
-          is_current_user: true,
-          sections: [
-            {
-              uri: "spotify:user:test-user:top-artists",
-              title: "Top artists this month",
-              subtitle: "Only visible to you",
-              items: [make("artist", "0123456789abcdefghijkl", "Top Artist", "Artist")],
-            },
-            {
-              uri: "spotify:user:test-user:playlists",
-              title: "Public Playlists",
-              subtitle: "",
-              items: [make("playlist", "1123456789abcdefghijkl", "Road Trip", "By Test Listener")],
-            },
-            {
-              uri: "spotify:user:test-user:followers",
-              title: "Followers",
-              subtitle: "",
-              items: [make("user", "friend", "Friend", "Profile")],
-            },
+    "test-user": {
+      id: "test-user",
+      name: "Test Listener",
+      images: [{ url: "https://artwork.example.test/cover.svg" }],
+      public_playlists: 1,
+      followers: 1,
+      following: 2,
+      is_current_user: true,
+      sections: [
+        {
+          uri: "spotify:user:test-user:top-artists",
+          title: "Top artists this month",
+          subtitle: "Only visible to you",
+          items: [
+            make("artist", "0123456789abcdefghijkl", "Top Artist", "Artist"),
           ],
         },
-        friend: {
-          id: "friend",
-          name: "Friend",
-          images: [],
-          public_playlists: 0,
-          followers: 3,
-          following: 0,
-          is_current_user: false,
-          is_following: false,
-          allow_follows: true,
-          sections: [],
+        {
+          uri: "spotify:user:test-user:playlists",
+          title: "Public Playlists",
+          subtitle: "",
+          items: [
+            make(
+              "playlist",
+              "1123456789abcdefghijkl",
+              "Road Trip",
+              "By Test Listener",
+            ),
+          ],
         },
-      };
+        {
+          uri: "spotify:user:test-user:followers",
+          title: "Followers",
+          subtitle: "",
+          items: [make("user", "friend", "Friend", "Profile")],
+        },
+      ],
+    },
+    friend: {
+      id: "friend",
+      name: "Friend",
+      images: [],
+      public_playlists: 0,
+      followers: 3,
+      following: 0,
+      is_current_user: false,
+      is_following: false,
+      allow_follows: true,
+      sections: [],
+    },
+  };
   await page.evaluate((profiles) => {
     (window as any).__clientTest.userProfiles = profiles;
   }, profiles);
@@ -3381,7 +3391,9 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
     "2 Following",
   ]);
   const top = page.locator('section[aria-label="Top artists this month"]');
-  await expect(top.locator(".home-shelf-note")).toHaveText("Only visible to you");
+  await expect(top.locator(".home-shelf-note")).toHaveText(
+    "Only visible to you",
+  );
   await expect(top.locator(".home-card.artist-card")).toHaveCount(1);
   await expect(
     page.locator('section[aria-label="Public Playlists"] .home-card'),
@@ -3439,10 +3451,16 @@ test("Spotify+ options trim menus, copy details and credit contributors", async 
   await startClient(page);
   const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
   // Song menu: copy name and ID.
-  await page.locator(".track-row .track-name").first().click({ button: "right" });
+  await page
+    .locator(".track-row .track-name")
+    .first()
+    .click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy song & artist name" }).click();
   await expect.poll(clipboard).toBe("Song 1 - Test artist");
-  await page.locator(".track-row .track-name").first().click({ button: "right" });
+  await page
+    .locator(".track-row .track-name")
+    .first()
+    .click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy embed code" }).click();
   await expect.poll(clipboard).toContain("open.spotify.com/embed/track/");
   // Settings: hide items and keep a fixed window title.
@@ -3464,7 +3482,9 @@ test("Spotify+ options trim menus, copy details and credit contributors", async 
     hide_lyrics_button: true,
     fixed_window_title: true,
   });
-  await expect(page.locator("footer").getByTitle("Lyrics", { exact: true })).toHaveCount(0);
+  await expect(
+    page.locator("footer").getByTitle("Lyrics", { exact: true }),
+  ).toHaveCount(0);
   await expect(page).toHaveTitle("SpotiFlex");
   // Credits list the creator first, with GitHub avatars.
   const people = page.locator(".settings-page .credit-person");
@@ -4382,7 +4402,9 @@ test("search finds profiles and loads further pages of a category", async ({
   });
   await results.getByRole("tab", { name: "Songs", exact: true }).click();
   await expect(results.getByText("Song 20", { exact: true })).toBeVisible();
-  await results.getByRole("button", { name: "Load more songs", exact: true }).click();
+  await results
+    .getByRole("button", { name: "Load more songs", exact: true })
+    .click();
   await expect(results.getByText("Song 25", { exact: true })).toBeVisible();
   await expect(
     results.getByRole("button", { name: "Load more songs", exact: true }),
@@ -4396,7 +4418,9 @@ test("search finds profiles and loads further pages of a category", async ({
   await results.getByRole("tab", { name: "Profiles", exact: true }).click();
   const card = results.locator(".home-card.artist-card");
   await expect(card).toContainText("Friend Person");
-  await card.getByRole("button", { name: "Friend Person", exact: true }).click();
+  await card
+    .getByRole("button", { name: "Friend Person", exact: true })
+    .click();
   await expect(page.locator(".profile-hero h1")).toHaveText("Friend Person");
 });
 
@@ -4724,9 +4748,7 @@ test("Space after clicking a player button only plays or pauses", async ({
   await expect.poll(player).toEqual(["shuffle", "next", "pause"]);
 });
 
-test("owners edit playlist name and description", async ({
-  page,
-}) => {
+test("owners edit playlist name and description", async ({ page }) => {
   await startClient(page);
   const id = "4123456789abcdefghijkl";
   await page.evaluate(
@@ -4787,7 +4809,10 @@ test("owners edit playlist name and description", async ({
   // JPEG data starts with FF D8 FF, "/9j/" in base64.
   expect(saved.cover).toMatch(/^\/9j\//);
   // The saved cover shows at once, and the cover itself reopens the editor.
-  const heroCover = page.getByRole("button", { name: "Choose photo", exact: true });
+  const heroCover = page.getByRole("button", {
+    name: "Choose photo",
+    exact: true,
+  });
   await expect(heroCover.locator("img")).toHaveAttribute(
     "src",
     /^data:image\/jpeg;base64,/,
@@ -4797,9 +4822,7 @@ test("owners edit playlist name and description", async ({
   await dialog.getByRole("button", { name: "Cancel" }).click();
 });
 
-test("songs drag into place in an editable playlist", async ({
-  page,
-}) => {
+test("songs drag into place in an editable playlist", async ({ page }) => {
   await startClient(page);
   const id = "4123456789abcdefghijkl";
   await page.evaluate(
@@ -4832,16 +4855,16 @@ test("songs drag into place in an editable playlist", async ({
 
   // Drop on the lower half of the third row: the first song lands third.
   const third = await rows.nth(2).boundingBox();
-  await rows
-    .nth(0)
-    .dragTo(rows.nth(2), {
-      targetPosition: { x: 40, y: third!.height - 4 },
-    });
-  await expect.poll(() => last("move_playlist_song")).toMatchObject({
-    from: 0,
-    to: 2,
-    uri: "spotify:track:item0",
+  await rows.nth(0).dragTo(rows.nth(2), {
+    targetPosition: { x: 40, y: third!.height - 4 },
   });
+  await expect
+    .poll(() => last("move_playlist_song"))
+    .toMatchObject({
+      from: 0,
+      to: 2,
+      uri: "spotify:track:item0",
+    });
   await expect(rows.nth(0)).toContainText("Song 2");
   await expect(rows.nth(2)).toContainText("Song 1");
 });
@@ -4863,16 +4886,14 @@ test("Spotify folders group the sidebar and open in place", async ({
   await page.evaluate(
     (playlists) =>
       (window as any).__clientTest.emit({ type: "library", playlists }),
-    [
-      playlist(1, [road]),
-      playlist(2, [road, night]),
-      playlist(3),
-    ],
+    [playlist(1, [road]), playlist(2, [road, night]), playlist(3)],
   );
   const sidebar = page.locator(".library-list");
   const folder = sidebar.locator(".spotify-folder").first();
   await expect(folder.locator(":scope > summary")).toContainText("Road & Rain");
-  await expect(folder.locator(":scope > summary")).toContainText("Folder · 2 playlists");
+  await expect(folder.locator(":scope > summary")).toContainText(
+    "Folder · 2 playlists",
+  );
   await expect(sidebar.getByText("List 1")).toBeHidden();
   await folder.locator(":scope > summary").click();
   await expect(sidebar.getByText("List 1")).toBeVisible();
@@ -4899,10 +4920,11 @@ test("Create folder adds a Spotify folder that shows while empty", async ({
     .getByRole("button", { name: "Create folder", exact: true })
     .click();
   expect(
-    await page.evaluate(() =>
-      (window as any).__clientTest.commands
-        .filter((entry: any) => entry.command === "create_folder")
-        .at(-1)?.args,
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "create_folder")
+          .at(-1)?.args,
     ),
   ).toEqual({ name: "Workouts" });
   await page.evaluate(() =>
@@ -4935,10 +4957,11 @@ test("folders rename from their right-click menu", async ({ page }) => {
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
   expect(
-    await page.evaluate(() =>
-      (window as any).__clientTest.commands
-        .filter((entry: any) => entry.command === "rename_folder")
-        .at(-1)?.args,
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "rename_folder")
+          .at(-1)?.args,
     ),
   ).toEqual({ id: "workouts", name: "Gym" });
 });
@@ -5284,9 +5307,7 @@ test("playlist artwork loads near the viewport and still loads after scrolling",
     )
     .toBe(true);
   expect(requests.has(count - 1)).toBe(true);
-  await expect(last.locator(".track-number > span")).toHaveText(
-    String(count),
-  );
+  await expect(last.locator(".track-number > span")).toHaveText(String(count));
 });
 
 test("lyric clock frames reuse click handlers and keep seeking functional", async ({
@@ -5390,7 +5411,9 @@ test("folder deletion confirms, cancels and preserves playlists through refresh"
 }) => {
   const { playlists } = await startFolderDeletionClient(page);
   const dialog = await openFolderDeletion(page);
-  await expect(dialog).toContainText('Delete "Road" from your Spotify library?');
+  await expect(dialog).toContainText(
+    'Delete "Road" from your Spotify library?',
+  );
   await expect(dialog).toContainText(
     "Playlists and subfolders inside will move up one level",
   );
@@ -5539,7 +5562,8 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
         const host = (window as any).__clientTest;
         const generation = host.commands
           .filter(
-            (entry: any) => entry.command === "browse" && entry.args.key === key,
+            (entry: any) =>
+              entry.command === "browse" && entry.args.key === key,
           )
           .at(-1).args.generation;
         host.emit({
@@ -5562,7 +5586,11 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
           },
         });
       },
-      { key: `artist:${track.artists[0].id}`, track, pick: withPick ? pick : undefined },
+      {
+        key: `artist:${track.artists[0].id}`,
+        track,
+        pick: withPick ? pick : undefined,
+      },
     );
   // No liked songs and no pick: nothing beside Popular.
   await page.locator(".player-bar .artist-link").first().click();
@@ -5591,10 +5619,11 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
   await page.getByRole("button", { name: "3 songs" }).click();
   await expect
     .poll(() =>
-      page.evaluate(() =>
-        (window as any).__clientTest.commands
-          .filter((entry: any) => entry.command === "browse")
-          .at(-1)?.args.key,
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1)?.args.key,
       ),
     )
     .toBe(`liked-artist:${track.artists[0].id}`);
@@ -5657,7 +5686,9 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
               "https://artwork.example.test/artist/one.svg",
               "https://artwork.example.test/artist/two.svg",
             ],
-            top_cities: [{ city: "London", country: "GB", listeners: 1_076_135 }],
+            top_cities: [
+              { city: "London", country: "GB", listeners: 1_076_135 },
+            ],
             popular: [{ track, streams: 3_271_340_476 }],
             sections,
             source_url: "",
@@ -5694,9 +5725,9 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   for (const heading of await page
     .locator(".artist-shelf .home-shelf-heading h2")
     .all())
-    expect(
-      Math.abs((await heading.boundingBox())!.x - aboutLeft),
-    ).toBeLessThan(1);
+    expect(Math.abs((await heading.boundingBox())!.x - aboutLeft)).toBeLessThan(
+      1,
+    );
   // Popular rows carry badges, not artist names, like Spotify.
   await expect(
     page.locator(".artist-top .track-row .track-artists .artist-link"),
@@ -5737,7 +5768,9 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   await expect(dialog).toHaveCount(0);
 
   // The sticky bar appears once the header scrolls away, in both themes.
-  await page.locator(".browse-scroll").evaluate((node) => node.scrollTo(0, 900));
+  await page
+    .locator(".browse-scroll")
+    .evaluate((node) => node.scrollTo(0, 900));
   await expect(sticky).toHaveClass(/shown/);
   await expect(sticky).toContainText("Test artist");
   await page.evaluate(() =>
@@ -5788,7 +5821,9 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   await expect(dialog).toContainText("For: Timing test");
   // The title sits level with the close button.
   const heading = (await dialog.locator(".load-ttml-head h2").boundingBox())!;
-  const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
+  const close = (await dialog
+    .getByRole("button", { name: "Close" })
+    .boundingBox())!;
   expect(
     Math.abs(heading.y + heading.height / 2 - (close.y + close.height / 2)),
   ).toBeLessThan(2);
@@ -5807,15 +5842,21 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
     );
   const chooser = page.waitForEvent("filechooser");
   await dialog.getByRole("button", { name: /Session Load/ }).click();
-  await (await chooser).setFiles({
+  await (
+    await chooser
+  ).setFiles({
     name: "song.ttml",
     mimeType: "application/ttml+xml",
-    buffer: Buffer.from("<tt><body><div><p begin=\"1s\" end=\"2s\">Hi</p></div></body></tt>"),
+    buffer: Buffer.from(
+      '<tt><body><div><p begin="1s" end="2s">Hi</p></div></body></tt>',
+    ),
   });
-  await expect.poll(() => last("import_lyrics")).toMatchObject({
-    filename: "song.ttml",
-    mode: "session",
-  });
+  await expect
+    .poll(() => last("import_lyrics"))
+    .toMatchObject({
+      filename: "song.ttml",
+      mode: "session",
+    });
   await expect(dialog).toHaveCount(0);
 
   await page.getByTitle("Load TTML", { exact: true }).click();
@@ -5830,9 +5871,13 @@ test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async 
   };
   const title = await middle(database.locator(".load-ttml-head h2"));
   expect(
-    Math.abs(title - (await middle(database.getByRole("button", { name: "Close" })))),
+    Math.abs(
+      title - (await middle(database.getByRole("button", { name: "Close" }))),
+    ),
   ).toBeLessThan(2);
-  const back = await middle(database.getByRole("button", { name: "Back to Load TTML" }));
+  const back = await middle(
+    database.getByRole("button", { name: "Back to Load TTML" }),
+  );
   for (const control of [
     database.getByLabel("Search saved lyrics"),
     database.getByRole("button", { name: "Reset TTML" }),
@@ -5876,8 +5921,18 @@ test("playlists show Date added and sort by oldest added", async ({ page }) => {
         offset: 0,
         more: false,
         tracks: [
-          { ...track, uri: "spotify:track:new", name: "Newer", added_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
-          { ...track, uri: "spotify:track:old", name: "Older", added_at: "2024-03-13T00:54:46Z" },
+          {
+            ...track,
+            uri: "spotify:track:new",
+            name: "Newer",
+            added_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+          },
+          {
+            ...track,
+            uri: "spotify:track:old",
+            name: "Older",
+            added_at: "2024-03-13T00:54:46Z",
+          },
         ],
       });
     },
@@ -5920,7 +5975,9 @@ test("song row covers load a small Spotify size without sizes=auto", async ({
             ...track,
             album: {
               ...track.album,
-              images: [{ url: `https://i.scdn.co/image/ab67616d0000b273${id}` }],
+              images: [
+                { url: `https://i.scdn.co/image/ab67616d0000b273${id}` },
+              ],
             },
           },
         ],
@@ -6121,15 +6178,17 @@ test("long playlists render only the rows near the viewport", async ({
   expect(await rows.count()).toBeLessThan(120);
   // Rows keep their place in the list for playback and selection.
   await expect(
-    page.locator(".track-row", { hasText: "Long song 800" }).locator(".track-number"),
+    page
+      .locator(".track-row", { hasText: "Long song 800" })
+      .locator(".track-number"),
   ).toContainText("800");
 });
 
-test("Settings shows the song cache size and clears it", async ({
-  page,
-}) => {
+test("Settings shows the song cache size and clears it", async ({ page }) => {
   await startClient(page);
-  await page.evaluate(() => ((window as any).__clientTest.cacheBytes = 734_003_200));
+  await page.evaluate(
+    () => ((window as any).__clientTest.cacheBytes = 734_003_200),
+  );
   await openSettings(page);
   await expect(page.getByText("Cache: 700 MB")).toBeVisible();
   await page.getByRole("button", { name: "Clear cache" }).click();
@@ -6271,7 +6330,9 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
           .at(-1)?.args.key,
     );
   const before = await route();
-  const row = page.locator('.library-row[data-playlist-id="4123456789abcdefghijkl"]');
+  const row = page.locator(
+    '.library-row[data-playlist-id="4123456789abcdefghijkl"]',
+  );
   const playRoadTrip = row.getByRole("button", { name: "Play Road trip" });
   await expect(playRoadTrip).toHaveCSS("opacity", "0");
   await row.hover();
@@ -6289,7 +6350,9 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
   await page.locator(".home-button").click();
   await expect.poll(route).toBe("home");
   await page.locator(".library-liked").hover();
-  await page.locator(".library-cover-play[aria-label='Play Liked Songs']").click();
+  await page
+    .locator(".library-cover-play[aria-label='Play Liked Songs']")
+    .click();
   await expect.poll(route).toBe("liked");
   await expect.poll(lastPlayer).toMatchObject({ command: "play_uris" });
 });
@@ -6315,9 +6378,11 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
         toolbarRight: toolbar.left > page.left + page.width / 2,
         // Stays over the artwork column, not the lyrics.
         overArtwork:
-          toolbar.left >= page.left + (toolbar.left > page.left + page.width / 2
-            ? page.width / 2
-            : 0) &&
+          toolbar.left >=
+            page.left +
+              (toolbar.left > page.left + page.width / 2
+                ? page.width / 2
+                : 0) &&
           (toolbar.left > page.left + page.width / 2
             ? toolbar.left >= album.left - 40
             : toolbar.right <= album.right + 40),
@@ -6325,7 +6390,12 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
     });
   await expect
     .poll(layout)
-    .toEqual({ albumRight: false, oneRow: true, toolbarRight: false, overArtwork: true });
+    .toEqual({
+      albumRight: false,
+      oneRow: true,
+      toolbarRight: false,
+      overArtwork: true,
+    });
   // The flip animates: the browser's transition starts and is not skipped.
   await page.evaluate(() => {
     const original = (document as any).startViewTransition.bind(document);
@@ -6350,7 +6420,12 @@ test("lyrics toolbar sits over the cover art and follows it when flipped", async
   ).toEqual(["ran"]);
   await expect
     .poll(layout)
-    .toEqual({ albumRight: true, oneRow: true, toolbarRight: true, overArtwork: true });
+    .toEqual({
+      albumRight: true,
+      oneRow: true,
+      toolbarRight: true,
+      overArtwork: true,
+    });
 });
 
 test("Home artist cards open with their name and photo at once and prefetch on hover", async ({
@@ -6375,7 +6450,9 @@ test("Home artist cards open with their name and photo at once and prefetch on h
                 route: "artist:3123456789abcdefghijkl",
                 name: "Card artist",
                 subtitle: "Artist",
-                images: [{ url: "https://artwork.example.test/card-artist.svg" }],
+                images: [
+                  { url: "https://artwork.example.test/card-artist.svg" },
+                ],
                 kind: "artist",
                 playable: true,
                 format: "",
@@ -6449,7 +6526,10 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
       .locator(".load-ttml-saved")
       .evaluate((list) => getComputedStyle(list).maskImage),
   ).toContain("linear-gradient");
-  await expect(rows.first().locator("img")).toHaveAttribute("src", /saved\.svg/);
+  await expect(rows.first().locator("img")).toHaveAttribute(
+    "src",
+    /saved\.svg/,
+  );
   // A song without known art keeps a placeholder of the same size.
   await expect(rows.nth(1).locator(".load-ttml-art")).toBeVisible();
   await database.getByRole("button", { name: "Play Saved song" }).click();
@@ -6462,7 +6542,10 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
             .at(-1)?.args.request,
       ),
     )
-    .toMatchObject({ command: "play", uri: "spotify:track:0123456789abcdefghijk1" });
+    .toMatchObject({
+      command: "play",
+      uri: "spotify:track:0123456789abcdefghijk1",
+    });
   const download = page.waitForEvent("download");
   await database
     .getByRole("button", { name: "Download lyrics for Saved song" })
@@ -6477,9 +6560,7 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   await expect(rows.first()).toContainText("Other tune");
 });
 
-test("compact lyrics run the toolbar down the right edge", async ({
-  page,
-}) => {
+test("compact lyrics run the toolbar down the right edge", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
@@ -6494,7 +6575,9 @@ test("compact lyrics run the toolbar down the right edge", async ({
       const toolbar = box(".lyrics-toolbar");
       const album = box(".lyrics-album");
       const page = box(".lyrics-page");
-      const lines = document.querySelector(".lyrics-body")!.getBoundingClientRect();
+      const lines = document
+        .querySelector(".lyrics-body")!
+        .getBoundingClientRect();
       return {
         // A column at the right edge, top to bottom.
         vertical: toolbar.height > toolbar.width * 3,
@@ -6568,7 +6651,9 @@ test("closing and opening Now playing animates the panel", async ({ page }) => {
       return transition;
     };
   });
-  const toggle = page.locator(".player-bar").getByTitle("Now playing", { exact: true });
+  const toggle = page
+    .locator(".player-bar")
+    .getByTitle("Now playing", { exact: true });
   await expect(page.locator("aside.now-playing")).toHaveCount(1);
   await toggle.click();
   await expect(page.locator("aside.now-playing")).toHaveCount(0);
@@ -6628,4 +6713,61 @@ test("lyrics toolbar icons animate their parts on hover", async ({ page }) => {
       )
       .toBeGreaterThan(0);
   }
+});
+
+test("the top-left menu opens File, Edit, View, Playback and Help", async ({
+  page,
+}) => {
+  await startClient(page);
+  await expect(page.locator(".topbar .logo")).toHaveCount(0);
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  await menu.click();
+  const groups = page.getByRole("menu", { name: "Menu", exact: true });
+  await expect(groups.getByRole("menuitem")).toHaveText([
+    "File",
+    "Edit",
+    "View",
+    "Playback",
+    "Help",
+  ]);
+  const commands = (name: string) =>
+    page.evaluate(
+      (name) =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === name,
+        ),
+      name,
+    );
+  await groups.getByRole("menuitem", { name: "View" }).hover();
+  await page
+    .getByRole("menu", { name: "View" })
+    .getByRole("menuitem", { name: "Zoom in" })
+    .click();
+  await expect(groups).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        (await commands("save_settings")).at(-1)?.args.settings.ui_zoom_percent,
+    )
+    .toBe(110);
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Playback" }).click();
+  await page
+    .getByRole("menu", { name: "Playback" })
+    .getByRole("menuitem", { name: "Next" })
+    .click();
+  await expect
+    .poll(async () => (await commands("player")).at(-1)?.args.request.command)
+    .toBe("next");
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await page
+    .getByRole("menu", { name: "Edit" })
+    .getByRole("menuitem", { name: "Settings" })
+    .click();
+  await expect(page.locator(".settings-page")).toBeVisible();
+  // Clicking elsewhere closes it.
+  await menu.click();
+  await page.locator(".center-panel").click({ position: { x: 300, y: 300 } });
+  await expect(page.getByRole("menu", { name: "Menu" })).toHaveCount(0);
 });

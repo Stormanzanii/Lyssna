@@ -2137,44 +2137,27 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
     })
 }
 
+/// The account of the saved native sign-in, for ignored live tests.
+#[cfg(test)]
+pub(crate) fn live_account() -> String {
+    saved_profile()
+        .expect("Cannot read saved native sign-in")
+        .expect("Saved native sign-in required")
+        .id
+}
+
 /// Runs `check` on a fresh native session from the saved sign-in. For
 /// ignored live tests only; never starts playback.
 #[cfg(test)]
 pub(crate) fn with_live_session<T>(check: impl AsyncFnOnce(&Session) -> T) -> T {
-    let settings = crate::config::Settings::load().expect("Settings unavailable");
-    let tokens = crate::auth::Tokens::load(&settings.client_id)
-        .ok()
-        .flatten()
-        .expect("Saved sign-in required");
-    let account = tokens
-        .profile
-        .as_ref()
-        .expect("Saved profile required")
-        .id
-        .clone();
-    let credentials = load_credentials(&account)
-        .expect("Cannot read saved native sign-in")
+    // Same restore path as the app: the saved native sign-in in the OS
+    // credential store, without the old developer tokens.
+    let client = crate::auth::http_client().expect("HTTP client unavailable");
+    let login = crate::native_login::authenticate(&client, true, &AtomicBool::new(false))
+        .expect("Native sign-in failed")
         .expect("Saved native sign-in required");
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let session = Session::new(
-                SessionConfig {
-                    client_id: crate::auth::AUDIO_CLIENT_ID.into(),
-                    ..SessionConfig::default()
-                },
-                None,
-            );
-            tokio::time::timeout(Duration::from_secs(30), session.connect(credentials, false))
-                .await
-                .expect("Native connection timed out")
-                .expect("Native connection failed");
-            let result = check(&session).await;
-            session.shutdown();
-            result
-        })
+    let session = login.connection.0.clone();
+    login.runtime.block_on(check(&session))
 }
 
 #[cfg(test)]
@@ -2385,17 +2368,7 @@ mod tests {
     #[test]
     #[ignore = "Uses saved native sign-in for read-only playlist search; never starts playback"]
     fn live_playlist_search_without_playback() {
-        let settings = crate::config::Settings::load().expect("Settings unavailable");
-        let tokens = crate::auth::Tokens::load(&settings.client_id)
-            .ok()
-            .flatten()
-            .expect("Saved sign-in required");
-        let account = tokens
-            .profile
-            .as_ref()
-            .expect("Saved profile required")
-            .id
-            .clone();
+        let account = live_account();
         let credentials = load_credentials(&account)
             .expect("Cannot read saved native sign-in")
             .expect("Saved native sign-in required");
@@ -2608,17 +2581,7 @@ mod tests {
 
     fn measure_live_track_starts(use_skips: bool, median_budget_ms: u128) {
         use std::time::Instant;
-        let settings = crate::config::Settings::load().expect("Settings unavailable");
-        let tokens = crate::auth::Tokens::load(&settings.client_id)
-            .ok()
-            .flatten()
-            .expect("Saved sign-in required");
-        let account = tokens
-            .profile
-            .as_ref()
-            .expect("Saved profile required")
-            .id
-            .clone();
+        let account = live_account();
         let saved = crate::resume::load(&account).expect("Saved listening queue required");
         let mut uris = Vec::new();
         for uri in saved.queue.iter().chain(std::iter::once(&saved.track.uri)) {
@@ -2779,17 +2742,7 @@ mod tests {
     #[test]
     #[ignore = "Uses saved sign-in and briefly plays and pauses the selected song"]
     fn live_selected_song_resumes_without_reconnecting() {
-        let settings = crate::config::Settings::load().unwrap();
-        let tokens = crate::auth::Tokens::load(&settings.client_id)
-            .ok()
-            .flatten()
-            .expect("Saved sign-in required");
-        let account = tokens
-            .profile
-            .as_ref()
-            .expect("Saved profile required")
-            .id
-            .clone();
+        let account = live_account();
         let saved = crate::resume::load(&account).expect("Saved selection required");
         let controls = NativeControls::default();
         let (events, receive) = mpsc::channel();
@@ -2875,10 +2828,7 @@ mod tests {
     fn live_native_queue_write_and_device_discovery() {
         use std::time::Instant;
         let settings = crate::config::Settings::load().unwrap();
-        let tokens = crate::auth::Tokens::load(&settings.client_id)
-            .unwrap()
-            .expect("Saved sign-in required");
-        let account = tokens.profile.expect("Saved profile required").id;
+        let account = live_account();
         assert!(
             load_credentials(&account).unwrap().is_some(),
             "Saved native sign-in required"
@@ -3020,17 +2970,7 @@ mod tests {
     #[test]
     #[ignore = "Uses saved sign-in and deliberately disconnects one native session"]
     fn live_reconnect_recovers_without_another_browser_login() {
-        let settings = crate::config::Settings::load().unwrap();
-        let tokens = crate::auth::Tokens::load(&settings.client_id)
-            .ok()
-            .flatten()
-            .expect("Saved sign-in required");
-        let account = tokens
-            .profile
-            .as_ref()
-            .expect("Saved profile required")
-            .id
-            .clone();
+        let account = live_account();
         assert!(
             load_credentials(&account).ok().flatten().is_some(),
             "Saved audio sign-in required"

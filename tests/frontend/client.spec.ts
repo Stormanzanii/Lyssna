@@ -350,6 +350,15 @@ test("first-run Spotify sign-in needs no developer Client ID", async ({
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Spotify Premium required");
   await expect(dialog.locator("#client-id")).toHaveCount(0);
+  // Signed out, the top bar keeps only the logo and window controls.
+  await expect(page.getByPlaceholder("What do you want to play?")).toBeHidden();
+  await expect(page.getByTitle("Go back", { exact: true })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Account menu", exact: true }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Minimize window", exact: true }),
+  ).toBeVisible();
   const signIn = dialog.getByRole("button", {
     name: "Sign in with Spotify",
     exact: true,

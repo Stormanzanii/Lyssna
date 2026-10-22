@@ -24,7 +24,6 @@ import {
   Home,
   Library,
   LoaderCircle,
-  Lock,
   Maximize2,
   PanelRight,
   CirclePlus,
@@ -1587,7 +1586,10 @@ function App() {
           reduceMotion={state.settings.reduce_motion}
         />
       )}
-      <header className="topbar" data-tauri-drag-region>
+      <header
+        className={`topbar ${sessionScreen(state) === "client" ? "" : "signed-out"}`}
+        data-tauri-drag-region
+      >
         <div className="brand" data-tauri-drag-region aria-label="SpotiFlex">
           <Logo size={30} />
         </div>
@@ -4206,16 +4208,13 @@ function Setup({
         }}
       >
         <div className="setup-logo">
-          <Logo size={44} />
+          <Logo size={40} />
         </div>
-        <span className="premium-badge">Spotify Premium required</span>
         <h1 id="setup-title">
-          {state.login_issue ? "Reconnect Spotify" : "Make yourself at home."}
+          {state.login_issue ? "Reconnect Spotify" : "Log in to SpotiFlex"}
         </h1>
-        <p>
-          Connect your Spotify account to play your music and bring your lyrics
-          to life.
-        </p>
+        <p>Use your Spotify account to play your music.</p>
+        <p className="setup-premium">Spotify Premium required</p>
         {state.login_issue && (
           <div className="setup-recovery" role="alert">
             <p>{state.login_issue.message}</p>
@@ -4295,13 +4294,9 @@ function Setup({
             {developerMode
               ? "Use Spotify account sign-in"
               : "Developer connection (optional)"}
-            <ChevronDown size={14} aria-hidden="true" />
           </button>
         )}
-        <small>
-          <Lock size={12} aria-hidden="true" />
-          No password or client secret is stored in SpotiFlex.
-        </small>
+        <small>No password or client secret is stored in SpotiFlex.</small>
       </section>
     </div>
   );

@@ -2824,7 +2824,9 @@ small {
   padding: calc(var(--dot-lyric-size) * 0.2) 4px;
 }
 .lyric-wait[aria-hidden="true"] {
-  overflow: hidden;
+  /* No clipping: the exit swell and glow would be cut off as the row
+     closes. The dots end at scale 0, so nothing is left to show. */
+  overflow: visible;
   opacity: 0;
   pointer-events: none;
   height: 0;

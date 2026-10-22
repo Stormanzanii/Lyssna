@@ -72,6 +72,9 @@ tauri-build = { version = "2", features = [] }
 # Experimental DJ session paging and narration; upstream PR #1797.
 # Pin the reviewed implementation so dependency resolution cannot follow branch changes.
 [patch.crates-io]
+# Restore custom macOS traffic lights after title changes and fullscreen exit.
+# Upstream fix: https://github.com/tauri-apps/tao/pull/1254
+tao = { git = "https://github.com/tauri-apps/tao", rev = "2ada91bf6372cd9fd3071377a1da90edee601f39" }
 librespot-audio = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-connect = { path = "vendor/librespot-connect" }
 librespot-core = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }

@@ -43,7 +43,7 @@ jobs:
         with:
           key: macos-${{ matrix.arch }}
       - run: npm ci
-      - name: Build app and disk image
+      - name: Build app
         run: npm run desktop:build -- -- --locked
       - name: Archive app with permissions and symlinks
         run: >-
@@ -56,4 +56,3 @@ jobs:
           if-no-files-found: error
           path: |
             target/release/bundle/SpotiFlex-*.app.zip
-            target/release/bundle/dmg/*.dmg

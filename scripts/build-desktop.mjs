@@ -6,11 +6,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Suppress command arguments and output here: some contain signing passwords.
@@ -223,6 +224,107 @@ extendedKeyUsage = critical,codeSigning
   return identity.fingerprint;
 }
 
+async function installMacApp(args) {
+  const options = args.slice(
+    0,
+    args.includes("--") ? args.indexOf("--") : args.length,
+  );
+  if (options.includes("--no-bundle")) return;
+  const targetIndex = options.findIndex(
+    (arg) => arg === "--target" || arg === "-t",
+  );
+  const target =
+    targetIndex >= 0
+      ? options[targetIndex + 1]
+      : options
+          .find((arg) => arg.startsWith("--target="))
+          ?.slice("--target=".length);
+  const output = resolve(
+    process.env.CARGO_TARGET_DIR || "target",
+    target || "",
+    options.includes("--debug") || options.includes("-d") ? "debug" : "release",
+    "bundle",
+  );
+  const source = join(output, "macos", "SpotiFlex.app");
+  const destination = "/Applications/SpotiFlex.app";
+  if (!existsSync(source))
+    throw new Error("The build did not produce SpotiFlex.app.");
+
+  // Stage and validate before interrupting playback or replacing the installed app.
+  const staging = mkdtempSync("/Applications/.SpotiFlex-install-");
+  const stagedApp = join(staging, "SpotiFlex.app");
+  let preservePrevious = false;
+  try {
+    prepare(
+      "/usr/bin/ditto",
+      [source, stagedApp],
+      "stage SpotiFlex in Applications",
+    );
+    prepare(
+      "/usr/bin/codesign",
+      ["--verify", "--deep", "--strict", stagedApp],
+      "verify the new app signature",
+    );
+    const executables = new Set(
+      [source, destination].map((app) =>
+        join(app, "Contents", "MacOS", "spotiflex"),
+      ),
+    );
+    const running = () =>
+      prepare(
+        "/bin/ps",
+        ["-axo", "pid=,comm="],
+        "find running SpotiFlex instances",
+      )
+        .split("\n")
+        .flatMap((line) => {
+          const match = line.trim().match(/^(\d+)\s+(.+)$/);
+          return match && executables.has(match[2]) ? [Number(match[1])] : [];
+        });
+    const stop = (signal) => {
+      for (const pid of running()) {
+        try {
+          process.kill(pid, signal);
+        } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+      }
+    };
+    stop("SIGTERM");
+    const deadline = Date.now() + 5000;
+    while (running().length && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    stop("SIGKILL");
+
+    const previous = join(staging, "previous.app");
+    if (existsSync(destination)) renameSync(destination, previous);
+    try {
+      renameSync(stagedApp, destination);
+    } catch (error) {
+      if (existsSync(previous)) {
+        try {
+          renameSync(previous, destination);
+        } catch {
+          preservePrevious = true;
+          throw new Error(
+            `Could not restore the previous app. It remains at ${previous}.`,
+          );
+        }
+      }
+      throw error;
+    }
+    // Keep only the installed bundle. Old disk images are generated artifacts.
+    rmSync(source, { recursive: true, force: true });
+    rmSync(join(output, "dmg"), { recursive: true, force: true });
+    prepare("/usr/bin/open", [destination], "open SpotiFlex from Applications");
+    console.log(
+      "Installed and opened /Applications/SpotiFlex.app. Removed the build copy.",
+    );
+  } finally {
+    if (!preservePrevious) rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 try {
   const env = { ...process.env };
   if (
@@ -246,8 +348,20 @@ try {
     console.error("Could not start the desktop build. Run npm ci first.");
     process.exitCode = 1;
   });
-  child.on("exit", (code) => {
+  child.on("exit", async (code) => {
     process.exitCode = code ?? 1;
+    if (code === 0 && process.platform === "darwin" && !env.CI) {
+      try {
+        await installMacApp(process.argv.slice(2));
+      } catch (error) {
+        console.error(
+          error instanceof Error
+            ? error.message
+            : "Could not install SpotiFlex.",
+        );
+        process.exitCode = 1;
+      }
+    }
   });
 } catch (error) {
   console.error(

@@ -20,7 +20,7 @@
     ]
   },
   "bundle": {
-    "targets": ["app", "dmg"],
+    "targets": ["app"],
     "icon": [
       "assets/spotiflex.icns",
       "assets/spotiflex.png",

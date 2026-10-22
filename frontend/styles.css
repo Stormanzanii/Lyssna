@@ -2759,6 +2759,10 @@ small {
 .lyric-line.active .lyric-letter {
   will-change: transform;
 }
+/* Avoid retaining one compositing layer per animated glyph over live video. */
+.application.macos .lyric-line.active :is(.lyric-syllable, .lyric-letter) {
+  will-change: auto;
+}
 .lyric-wait {
   transition:
     opacity 0.3s ease,

@@ -5,6 +5,8 @@
   "windows": ["main"],
   "permissions": [
     "core:event:default",
+    "core:menu:default",
+    "core:resources:allow-close",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen",

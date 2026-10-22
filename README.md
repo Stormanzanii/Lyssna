@@ -44,7 +44,7 @@ ditto target/release/bundle/macos/SpotiFlex.app /Applications/SpotiFlex.app
 open /Applications/SpotiFlex.app
 ```
 
-macOS builds use system WebKit, native window controls, standard application menus and Command shortcuts. Credentials are saved in macOS Keychain. Media keys and Now Playing controls are supported. Ask DJ voice recognition runs locally; macOS requests microphone permission the first time you use it.
+macOS builds use system WebKit, native window controls integrated into the navigation toolbar, standard application menus in the macOS menu bar, and Command shortcuts. Credentials are saved in macOS Keychain. Media keys and Now Playing controls are supported. Ask DJ voice recognition runs locally; macOS requests microphone permission the first time you use it.
 
 The **Build macOS app** GitHub Actions workflow builds separate Apple Silicon and Intel `.app.zip` and `.dmg` artifacts on pushes, pull requests, or manual dispatch. These builds are not notarized for public distribution. If Gatekeeper blocks a downloaded build, use **System Settings > Privacy & Security > Open Anyway**. Automatic updates currently serve Windows executables only, so macOS builds must be updated manually.
 

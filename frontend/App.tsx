@@ -1,4 +1,5 @@
 import { IS_MAC, MODIFIER } from "./platform";
+import { useMacMenu } from "./mac-menu";
 import {
   useCallback,
   useEffect,
@@ -1363,6 +1364,9 @@ function App() {
       ],
     },
   ];
+  const nativeMenuReady = useMacMenu(menuGroups, (message) =>
+    notify(message, true),
+  );
   const fullscreen = async (force?: boolean) => {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
@@ -1842,7 +1846,7 @@ function App() {
   );
   return (
     <div
-      className={`application ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
+      className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""}`}
       style={
         {
           fontFamily: fontFamily(state.settings.ui_font),
@@ -1920,7 +1924,7 @@ function App() {
         className={`topbar ${sessionScreen(state) === "client" ? "" : "signed-out"}`}
         data-tauri-drag-region
       >
-        <AppMenu groups={menuGroups} />
+        {!nativeMenuReady && <AppMenu groups={menuGroups} />}
         <div className="history-buttons">
           <button className="icon-button" title="Go back" onClick={back}>
             <ArrowLeft size={19} />

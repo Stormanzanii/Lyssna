@@ -488,6 +488,10 @@ small {
   z-index: 25;
   background: #000000;
 }
+/* Reserve space for native traffic lights inside the 60 px toolbar. */
+.application.macos .topbar {
+  padding-left: 104px;
+}
 /* Until sign-in completes there is nothing to browse or search, and no
    account; keep only the logo, the drag area and the window controls.
    Hidden in place so the window controls keep their position. */

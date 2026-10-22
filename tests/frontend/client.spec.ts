@@ -4113,7 +4113,7 @@ test("the avatar menu opens settings, profile and grouped recents", async ({
   await expect(page.locator(".recents-tracks li")).toHaveCount(2);
 });
 
-test("Liquid Glass refracts only the lyrics toolbar and profile menu", async ({
+test("Liquid Glass refracts the lyrics toolbar, profile menu and right-click menus", async ({
   page,
 }) => {
   await startClient(page);
@@ -4130,6 +4130,13 @@ test("Liquid Glass refracts only the lyrics toolbar and profile menu", async ({
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   expect(await backdrop(".profile-menu")).toContain("glass-refraction");
+  await page.keyboard.press("Escape");
+  // Right-click menus refract too.
+  await page
+    .locator(".track-row .track-name")
+    .first()
+    .click({ button: "right" });
+  expect(await backdrop(".song-menu")).toContain("glass-refraction");
   await page.keyboard.press("Escape");
   await page.getByTitle("Lyrics", { exact: true }).click();
   expect(await backdrop(".lyrics-toolbar")).toContain("glass-refraction");

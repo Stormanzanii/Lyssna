@@ -315,8 +315,9 @@
   display: none;
 }
 
-/* Liquid Glass refraction: only the lyrics toolbar and the profile menu
-   bend what's behind them. Anything bigger or moving made the app crawl. */
+/* Liquid Glass refraction: only the lyrics toolbar, the profile menu and
+   right-click menus bend what's behind them. Anything bigger or moving
+   made the app crawl. */
 .glass-refraction-defs {
   position: absolute;
   width: 0;
@@ -336,7 +337,8 @@
 .glass-refraction .lyrics-toolbar:hover {
   background: #08080bb8;
 }
-.glass-refraction .profile-menu {
+.glass-refraction .profile-menu,
+.glass-refraction .song-menu {
   /* A lighter fill lets the bent backdrop show; the blur keeps text clear. */
   background: #14141a8c;
   -webkit-backdrop-filter: url(#glass-refraction) blur(14px) saturate(2.1);
@@ -344,7 +346,8 @@
 }
 /* A clear lens: a thin bright top rim and a soft lower shade. */
 .glass-refraction .lyrics-toolbar,
-.glass-refraction .profile-menu {
+.glass-refraction .profile-menu,
+.glass-refraction .song-menu {
   box-shadow:
     inset 0 1px 0 #ffffff73,
     inset 0 0 0 1px #ffffff17,

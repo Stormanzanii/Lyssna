@@ -8000,6 +8000,74 @@ test("transport buttons brighten without moving and icons sit centred", async ({
   });
 });
 
+test("the playing playlist turns green with a speaker and its cover pauses", async ({
+  page,
+}) => {
+  await startClient(page);
+  const id = "0123456789abcdefghijkl";
+  const playback = (is_playing: boolean) =>
+    page.evaluate(
+      ({ base, track, id, is_playing }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...base,
+            item: track,
+            is_playing,
+            context: `spotify:playlist:${id}`,
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { base: emptyState.playback, track, id, is_playing },
+    );
+  await page.evaluate(
+    (id) =>
+      (window as any).__clientTest.emit({
+        type: "library",
+        playlists: [
+          {
+            id,
+            name: "Certified Jammers",
+            images: [],
+            owner: { id: "someone", display_name: "iPixelGalaxy" },
+            collaborative: false,
+          },
+        ],
+      }),
+    id,
+  );
+  await playback(true);
+  const row = page.locator(`[data-playlist-id="${id}"]`);
+  await expect(row).toHaveClass(/playing/);
+  await expect(row.locator(".library-item strong")).toHaveCSS(
+    "color",
+    "rgb(30, 215, 96)",
+  );
+  await expect(row.getByLabel("Playing")).toBeVisible();
+  await row.screenshot({ path: "target/diagnostics/library-playing.png" });
+  await row.hover();
+  await row.screenshot({
+    path: "target/diagnostics/library-playing-hover.png",
+  });
+  const cover = row.getByRole("button", { name: "Pause Certified Jammers" });
+  await cover.click();
+  const last = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((c: any) => c.command === "player")
+          .at(-1)?.args.request.command,
+    );
+  expect(await last()).toBe("pause");
+  // Paused: still green, no speaker, and the cover resumes.
+  await playback(false);
+  await expect(row.getByLabel("Playing")).toHaveCount(0);
+  await row.getByRole("button", { name: "Play Certified Jammers" }).click();
+  expect(await last()).toBe("play");
+  await expect(page.locator(".library-liked")).not.toHaveClass(/playing/);
+});
+
 test("volume bar turns Spotify green with a knob on hover", async ({
   page,
 }) => {

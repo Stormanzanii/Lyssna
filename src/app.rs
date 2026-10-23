@@ -578,7 +578,10 @@ impl SpotiFlex {
                         });
                     }
                 }
-                NativeEvent::Track(_) | NativeEvent::Narration(_) | NativeEvent::DJContext(_) => {}
+                NativeEvent::Track(_)
+                | NativeEvent::Narration(_)
+                | NativeEvent::DJContext(_)
+                | NativeEvent::Context(_) => {}
                 NativeEvent::QueueChanged => {
                     if let Some(track) = self.playback.item.clone() {
                         self.send(Command::PlayingDetails(track));

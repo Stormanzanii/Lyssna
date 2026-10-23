@@ -81,6 +81,7 @@ import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
 import { Logo } from "./brand";
+import { playingRoute } from "./playing-context";
 import {
   emptyState,
   reducer,
@@ -1718,19 +1719,39 @@ function App() {
     return () => observer.disconnect();
   }, [state.route, center]);
   // Play straight from the sidebar cover, like Spotify's Your Library.
-  const coverPlay = (name: string, start: () => void) => (
-    <button
-      className="library-cover-play"
-      aria-label={`Play ${name}`}
-      title={`Play ${name}`}
-      onClick={(event) => {
-        event.stopPropagation();
-        start();
-      }}
-    >
-      <Play size={20} fill="currentColor" />
-    </button>
+  // Like Spotify's library, the playing row is green with a speaker, and
+  // its cover button pauses or resumes instead of starting over.
+  const nowPlayingRoute = playingRoute(
+    state.playback.context,
+    !!state.dj_context,
   );
+  const playingMark = (route: string) =>
+    nowPlayingRoute === route &&
+    state.playback.is_playing && (
+      <Volume2 className="library-playing" size={16} aria-label="Playing" />
+    );
+  const coverPlay = (name: string, start: () => void, route: string) => {
+    const active = nowPlayingRoute === route,
+      pausing = active && state.playback.is_playing;
+    return (
+      <button
+        className="library-cover-play"
+        aria-label={`${pausing ? "Pause" : "Play"} ${name}`}
+        title={`${pausing ? "Pause" : "Play"} ${name}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (active) play({ command: pausing ? "pause" : "play" });
+          else start();
+        }}
+      >
+        {pausing ? (
+          <PauseIcon size={18} />
+        ) : (
+          <Play size={20} fill="currentColor" />
+        )}
+      </button>
+    );
+  };
   const playLiked = () => {
     if (stateRef.current.route === "liked" && stateRef.current.tracks[0])
       playTrack(stateRef.current.tracks[0], 0);
@@ -1753,7 +1774,7 @@ function App() {
   }, [state.route, state.tracks, playTrack]);
   const playlistRow = (playlist: Playlist) => (
     <div
-      className="library-row"
+      className={`library-row ${nowPlayingRoute === `playlist:${playlist.id}` ? "playing" : ""}`}
       key={playlist.id}
       data-playlist-id={playlist.id}
       data-context-route={`playlist:${playlist.id}`}
@@ -1798,12 +1819,16 @@ function App() {
       >
         <Pin size={14} />
       </button>
+      {playingMark(`playlist:${playlist.id}`)}
       {playlist.id !== DJ_ID &&
-        coverPlay(playlist.name, () =>
-          play({
-            command: "play_home",
-            context: `spotify:playlist:${playlist.id}`,
-          }),
+        coverPlay(
+          playlist.name,
+          () =>
+            play({
+              command: "play_home",
+              context: `spotify:playlist:${playlist.id}`,
+            }),
+          `playlist:${playlist.id}`,
         )}
     </div>
   );
@@ -2286,7 +2311,10 @@ function App() {
                 <strong>{openFolder.folder.name}</strong>
               </div>
             )}
-            <div className="library-liked" hidden={!!openFolder}>
+            <div
+              className={`library-liked ${nowPlayingRoute === "liked" ? "playing" : ""}`}
+              hidden={!!openFolder}
+            >
               <button
                 className={`library-item ${state.route === "liked" ? "current" : ""}`}
                 data-context-route="liked"
@@ -2302,7 +2330,8 @@ function App() {
                   <small>Playlist · Pinned</small>
                 </div>
               </button>
-              {coverPlay("Liked Songs", playLiked)}
+              {playingMark("liked")}
+              {coverPlay("Liked Songs", playLiked, "liked")}
             </div>
             {openFolder ? (
               <>

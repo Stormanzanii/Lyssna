@@ -179,6 +179,26 @@ pub struct Playback {
     pub repeat_state: String,
     #[serde(default)]
     pub device: Device,
+    /// URI of the playlist, album, artist or Liked Songs collection playing.
+    /// The Web API sends `{"uri": ...}` or null; snapshots carry the string.
+    #[serde(default, deserialize_with = "context_uri")]
+    pub context: Option<String>,
+}
+
+fn context_uri<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Context {
+        Uri(String),
+        Object { uri: Option<String> },
+    }
+    Ok(match Option::<Context>::deserialize(deserializer)? {
+        Some(Context::Uri(uri)) | Some(Context::Object { uri: Some(uri) }) => Some(uri),
+        _ => None,
+    }
+    .filter(|uri| !uri.is_empty()))
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -357,6 +377,21 @@ pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn playback_context_reads_web_api_objects_and_snapshot_strings() {
+        let context = |json: &str| serde_json::from_str::<Playback>(json).unwrap().context;
+        assert_eq!(
+            context(r#"{"context":{"uri":"spotify:playlist:abc","type":"playlist"}}"#),
+            Some("spotify:playlist:abc".into())
+        );
+        assert_eq!(
+            context(r#"{"context":"spotify:album:abc"}"#),
+            Some("spotify:album:abc".into())
+        );
+        assert_eq!(context(r#"{"context":null}"#), None);
+        assert_eq!(context(r#"{"context":{"uri":""}}"#), None);
+        assert_eq!(context("{}"), None);
+    }
     #[test]
     fn a_song_stopped_at_its_end_counts_as_finished() {
         let mut playback = Playback {

@@ -56,6 +56,8 @@ export interface Playback {
   shuffle_state: boolean;
   repeat_state: string;
   device: Device;
+  /** URI of the playlist, album, artist or Liked Songs playing. */
+  context?: string | null;
 }
 export interface Profile {
   images?: Artwork[];

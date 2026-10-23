@@ -309,6 +309,7 @@ fn playback_from_state(
             "off"
         }
         .into(),
+        context: (!state.context_uri.is_empty()).then(|| state.context_uri.clone()),
     }
 }
 

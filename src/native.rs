@@ -109,6 +109,8 @@ pub enum NativeEvent {
     QueueChanged,
     /// Whether the current context is a DJ session.
     DJContext(bool),
+    /// The playlist, album, artist or collection URI now playing.
+    Context(String),
     Track(Box<crate::model::Track>),
     Transport {
         shuffle: Option<bool>,
@@ -2022,6 +2024,7 @@ async fn run(
                         }
                         if let PlayerEvent::SetQueue { context_uri, .. } = &event {
                             emit(NativeEvent::DJContext(is_dj_context(context_uri)));
+                            emit(NativeEvent::Context(context_uri.clone()));
                         }
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);

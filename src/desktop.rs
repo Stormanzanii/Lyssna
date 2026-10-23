@@ -683,6 +683,10 @@ impl Desktop {
                                 playback.repeat_state = snapshot.playback.repeat_state.clone();
                                 playback.device.volume_percent =
                                     snapshot.playback.device.volume_percent;
+                                // The Web API can lag a context this player just loaded.
+                                if snapshot.playback.context.is_some() {
+                                    playback.context = snapshot.playback.context.clone();
+                                }
                             }
                             snapshot.playback = *playback;
                             snapshot.observed_at = now_ms();
@@ -1069,6 +1073,14 @@ impl Desktop {
                         }
                         NativeEvent::DJContext(active) => {
                             emit(json!({"type": "dj_context", "active": active}));
+                        }
+                        // Only this computer's player loads queues, so its
+                        // context is the one playing; the track may follow.
+                        NativeEvent::Context(uri) => {
+                            snapshot.playback.context = (!uri.is_empty()).then_some(uri);
+                            emit(
+                                json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                            );
                         }
                         NativeEvent::QueueChanged => {
                             if let Some(track) = snapshot.playback.item.clone() {

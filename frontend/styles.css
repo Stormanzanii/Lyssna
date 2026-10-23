@@ -384,6 +384,28 @@ small {
 .library-liked {
   position: relative;
 }
+/* The playing playlist: green title and a speaker where the pin sits,
+   which hands its place back to the pin on hover. */
+:is(.library-row, .library-liked).playing .library-item strong {
+  color: #1ed760;
+}
+.library-liked.playing .library-item {
+  padding-right: 36px;
+}
+.library-playing {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  translate: 0 -50%;
+  color: #1ed760;
+  pointer-events: none;
+}
+.library-row:is(:hover, :focus-within) .library-playing {
+  opacity: 0;
+}
+.compact-library .library-playing {
+  display: none;
+}
 .library-row:hover .library-cover-play,
 .library-liked:hover .library-cover-play,
 .library-cover-play:focus-visible {

@@ -7716,6 +7716,21 @@ test("NPV uses album artwork while Canvas plays on the lyrics page", async ({
   await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
   await expect(page.locator(".now-playing video")).toHaveCount(0);
   await expect(page.locator(".now-playing .now-artwork img")).toBeVisible();
+  // Pausing leaves the Canvas frame on the lyrics page; the NPV keeps the
+  // album artwork instead of showing a second, frozen Canvas.
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, item: track, is_playing: false },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  await page.waitForTimeout(300);
+  await expect(page.locator(".now-playing video")).toHaveCount(0);
+  await expect(page.locator(".now-playing .now-artwork img")).toBeVisible();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".now-playing video")).toBeVisible();
 });

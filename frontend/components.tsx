@@ -1097,8 +1097,13 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
+  // Pausing stops the video but leaves its frame on this page, so the NPV
+  // keeps the album artwork; only a Canvas that fails while playing hands
+  // it back.
   const visibleCanvas =
-    canvas && canvasPlaying && !state.settings.lyrics_hide_artwork;
+    canvas &&
+    (canvasPlaying || !state.playback.is_playing) &&
+    !state.settings.lyrics_hide_artwork;
   useEffect(() => {
     onCanvasActive?.(visibleCanvas);
     return () => onCanvasActive?.(false);

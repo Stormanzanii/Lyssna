@@ -7846,6 +7846,16 @@ for (const canvas of [false, true]) {
         .boundingBox())!;
       expect(buttons.y).toBeGreaterThan(cover.y);
       expect(buttons.y + buttons.height).toBeLessThan(cover.y + cover.height);
+      // The like heart sits in the middle of the cover.
+      const heart = (await controls
+        .locator(".lyrics-fullscreen-like")
+        .boundingBox())!;
+      expect(
+        Math.abs(heart.y + heart.height / 2 - (cover.y + cover.height / 2)),
+      ).toBeLessThan(4);
+      expect(
+        Math.abs(heart.x + heart.width / 2 - (cover.x + cover.width / 2)),
+      ).toBeLessThan(4);
       const toolbar = (await section.locator(".lyrics-toolbar").boundingBox())!;
       expect(toolbar.y).toBeGreaterThan(cover.y);
       // Both time labels reserve the duration's width, so the seek bar

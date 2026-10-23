@@ -125,7 +125,9 @@
 .immersive .lyrics-media .lyrics-fullscreen-buttons .lyrics-fullscreen-like {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 9cqw);
+  /* Centred on the square cover: the controls sit 6% above its bottom
+     edge, so 29cqw more puts the 30cqw heart's middle at 50cqw. */
+  bottom: 29cqw;
   translate: -50% 0;
   width: 30cqw;
   height: 30cqw;

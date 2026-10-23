@@ -234,6 +234,7 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
+  const [canvasInLyrics, setCanvasInLyrics] = useState(false);
   const plus = state.settings.spotify_plus ?? {};
   const copyText = (text: string, done: string) =>
     void navigator.clipboard
@@ -2363,6 +2364,7 @@ function App() {
           {center === "lyrics" ? (
             <LyricsPage
               state={state}
+              onCanvasActive={setCanvasInLyrics}
               onPlayer={play}
               onAlbum={openAlbum}
               onArtist={openArtist}
@@ -3518,6 +3520,7 @@ function App() {
             ) : (
               <NowPlaying
                 state={state}
+                canvasInLyrics={center === "lyrics" && canvasInLyrics}
                 onPlayer={play}
                 onAlbum={openAlbum}
                 onArtist={openArtist}

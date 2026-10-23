@@ -7695,6 +7695,31 @@ test("custom font lyric fill covers tall letters at every sweep position", async
   expect(before.equals(expanded)).toBe(true);
 });
 
+test("NPV uses album artwork while Canvas plays on the lyrics page", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  await emitCanvas(page);
+  await expect(page.locator(".now-playing video")).toBeVisible();
+  await showLyrics(page);
+  await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
+  await expect(page.locator(".now-playing video")).toHaveCount(0);
+  await expect(page.locator(".now-playing .now-artwork img")).toBeVisible();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".now-playing video")).toBeVisible();
+});
+
 for (const viewportWidth of [1200, 1500, 2000]) {
   test(`Your Library resizes by dragging its edge and collapses like Spotify at ${viewportWidth}px`, async ({
     page,

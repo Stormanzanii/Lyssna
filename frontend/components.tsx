@@ -989,6 +989,7 @@ function SongLyricsPage({
   onImport,
   onRetry,
   onSave,
+  onCanvasActive,
   children,
 }: {
   state: AppState;
@@ -996,6 +997,7 @@ function SongLyricsPage({
   onImport: () => void;
   onRetry: () => void;
   onSave: (track: Track) => void;
+  onCanvasActive?: (active: boolean) => void;
   children?: ReactNode;
 } & Links) {
   const songTime = usePosition(state),
@@ -1071,6 +1073,12 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
+  const visibleCanvas =
+    canvas && canvasPlaying && !state.settings.lyrics_hide_artwork;
+  useEffect(() => {
+    onCanvasActive?.(visibleCanvas);
+    return () => onCanvasActive?.(false);
+  }, [visibleCanvas, onCanvasActive]);
   const coverColour =
     useArtworkColor(imageOf(track?.album.images)) ?? "rgb(40 40 40)";
   // Space Gravity needs word timing, including estimates for static lyrics.
@@ -1424,6 +1432,7 @@ export function NowPlaying({
   onFollow,
   onSave,
   showLyricsPreview,
+  canvasInLyrics = false,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
@@ -1432,6 +1441,7 @@ export function NowPlaying({
   onFollow: (artist: Artist) => void;
   onSave: (track: Track) => void;
   showLyricsPreview: boolean;
+  canvasInLyrics?: boolean;
 } & Links) {
   const track = state.playback.item;
   const artist = state.details.artists[0] ?? track?.artists[0],
@@ -1467,7 +1477,11 @@ export function NowPlaying({
     );
   // Spotify's Canvas layout: the video fills the panel top edge to edge with
   // the header and title laid over it.
-  const canvas = !!track && !!state.canvas_url && !state.settings.reduce_motion;
+  const canvas =
+    !!track &&
+    !!state.canvas_url &&
+    !state.settings.reduce_motion &&
+    !canvasInLyrics;
   const heading = (
     <div className={`section-heading ${canvas ? "canvas-hero-head" : ""}`}>
       <h2>{canvas && track ? track.name : "Now playing"}</h2>
@@ -1504,7 +1518,7 @@ export function NowPlaying({
               <CanvasArtwork
                 key={track.uri}
                 track={track}
-                url={state.canvas_url}
+                url={canvasInLyrics ? undefined : state.canvas_url}
                 playing={state.playback.is_playing}
                 reduceMotion={state.settings.reduce_motion}
                 onOpen={() => onAlbum(track.album)}

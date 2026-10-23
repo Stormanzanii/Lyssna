@@ -990,6 +990,7 @@ function SongLyricsPage({
   onRetry,
   onSave,
   onCanvasActive,
+  immersive = false,
   children,
 }: {
   state: AppState;
@@ -998,6 +999,7 @@ function SongLyricsPage({
   onRetry: () => void;
   onSave: (track: Track) => void;
   onCanvasActive?: (active: boolean) => void;
+  immersive?: boolean;
   children?: ReactNode;
 } & Links) {
   const songTime = usePosition(state),
@@ -1009,6 +1011,7 @@ function SongLyricsPage({
     if (seeking === null) return;
     onPlayer({ command: "seek", positionMs: seeking });
     setSeeking(null);
+    wakeTools();
   };
   // This page renders every frame; stable click handlers stop React from
   // rewriting them each time.
@@ -1054,7 +1057,7 @@ function SongLyricsPage({
     clearTimeout(toolsTimer.current);
     toolsTimer.current = setTimeout(() => {
       delete element.dataset.tools;
-    }, 1000);
+    }, 750);
   };
   const sleepTools = () => {
     clearTimeout(toolsTimer.current);
@@ -1095,6 +1098,87 @@ function SongLyricsPage({
     state.settings.romanized,
     track?.duration_ms,
   );
+  const fullscreenControls = track ? (
+    <div className="lyrics-fullscreen-controls">
+      {/* A frosted glass track with a glowing fill; a transparent
+                  range on top handles dragging and the keyboard. */}
+      <div
+        className="lyrics-glass-seek"
+        style={
+          {
+            "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
+          } as CSSProperties
+        }
+      >
+        <span className="lyrics-glass-fill" />
+        <input
+          type="range"
+          aria-label="Seek position"
+          min="0"
+          max={track.duration_ms || 1}
+          value={Math.min(seeking ?? songTime, track.duration_ms || 1)}
+          onChange={(event) => setSeeking(Number(event.target.value))}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setSeeking(songTime);
+            wakeTools();
+          }}
+          onPointerUp={commitSeek}
+          onKeyUp={commitSeek}
+          onPointerCancel={() => setSeeking(null)}
+          onBlur={commitSeek}
+        />
+      </div>
+      <div className="lyrics-fullscreen-times">
+        <time>{formatTime(seeking ?? songTime)}</time>
+        <time>{formatTime(track.duration_ms)}</time>
+      </div>
+      <div className="lyrics-fullscreen-buttons">
+        <button
+          className={`icon-button lyrics-fullscreen-like ${saved ? "is-saved" : ""}`}
+          title={saved ? "Remove from Liked Songs" : "Save to Liked Songs"}
+          onClick={toggleSaved}
+        >
+          <Heart size={26} fill={saved ? "currentColor" : "none"} />
+        </button>
+        <button
+          className={`icon-button ${state.playback.shuffle_state ? "active" : ""}`}
+          title="Shuffle"
+          onClick={toggleShuffle}
+        >
+          <Shuffle size={20} />
+        </button>
+        <button
+          className="icon-button"
+          title="Previous song"
+          onClick={previousSong}
+        >
+          <Rewind size={26} fill="currentColor" />
+        </button>
+        <button
+          className="icon-button lyrics-fullscreen-play"
+          aria-label={state.playback.is_playing ? "Pause" : "Play"}
+          onClick={togglePlay}
+        >
+          {state.playback.is_playing ? (
+            <Pause size={34} fill="currentColor" />
+          ) : (
+            <Play size={34} fill="currentColor" />
+          )}
+        </button>
+        <button className="icon-button" title="Next song" onClick={nextSong}>
+          <FastForward size={26} fill="currentColor" />
+        </button>
+        <button
+          className={`icon-button ${repeat !== "off" ? "active" : ""}`}
+          title="Repeat"
+          onClick={cycleRepeat}
+        >
+          {repeat === "track" ? <Repeat1 size={20} /> : <Repeat size={20} />}
+        </button>
+      </div>
+    </div>
+  ) : null;
   return (
     <section
       ref={page}
@@ -1109,10 +1193,13 @@ function SongLyricsPage({
             : {}),
         } as CSSProperties
       }
+      data-seeking={seeking !== null || undefined}
       onMouseMove={wakeTools}
+      onKeyDownCapture={wakeTools}
       onMouseLeave={sleepTools}
     >
-      {children}
+      {(!immersive || canvas || narrow || state.settings.lyrics_hide_artwork) &&
+        children}
       {(!canvas || !canvasPlaying) &&
         state.settings.lyrics_background !== "color" && (
           <Ambience
@@ -1150,10 +1237,19 @@ function SongLyricsPage({
                 artworkRight={!!state.settings.lyrics_artwork_right}
               />
             ) : (
-              <Cover
-                images={track.album.images}
-                onClick={() => onAlbum(track.album)}
-              />
+              <div className="lyrics-media">
+                <Cover
+                  images={track.album.images}
+                  onClick={() => onAlbum(track.album)}
+                />
+                {immersive &&
+                  !narrow &&
+                  !state.settings.lyrics_hide_artwork &&
+                  children}
+                {!narrow &&
+                  !state.settings.lyrics_hide_artwork &&
+                  fullscreenControls}
+              </div>
             )}
             <TrackTitle
               track={track}
@@ -1175,95 +1271,8 @@ function SongLyricsPage({
                 <ArtistLinks artists={track.artists} onArtist={onArtist} />
               </Marquee>
             </div>
-            {/* Full screen hides the player bar, so the page carries its own
-                controls, like Spicy Lyrics' full screen view. */}
-            <div className="lyrics-fullscreen-controls">
-              {/* A frosted glass track with a glowing fill; a transparent
-                  range on top handles dragging and the keyboard. */}
-              <div
-                className="lyrics-glass-seek"
-                style={
-                  {
-                    "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
-                  } as CSSProperties
-                }
-              >
-                <span className="lyrics-glass-fill" />
-                <input
-                  type="range"
-                  aria-label="Seek position"
-                  min="0"
-                  max={track.duration_ms || 1}
-                  value={Math.min(seeking ?? songTime, track.duration_ms || 1)}
-                  onChange={(event) => setSeeking(Number(event.target.value))}
-                  onPointerDown={(event) =>
-                    event.currentTarget.setPointerCapture(event.pointerId)
-                  }
-                  onPointerUp={commitSeek}
-                  onKeyUp={commitSeek}
-                  onPointerCancel={() => setSeeking(null)}
-                  onBlur={commitSeek}
-                />
-              </div>
-              <div className="lyrics-fullscreen-times">
-                <time>{formatTime(seeking ?? songTime)}</time>
-                <time>{formatTime(track.duration_ms)}</time>
-              </div>
-              <div className="lyrics-fullscreen-buttons">
-                <button
-                  className={`icon-button lyrics-fullscreen-like ${saved ? "is-saved" : ""}`}
-                  title={
-                    saved ? "Remove from Liked Songs" : "Save to Liked Songs"
-                  }
-                  onClick={toggleSaved}
-                >
-                  <Heart size={26} fill={saved ? "currentColor" : "none"} />
-                </button>
-                <button
-                  className={`icon-button ${state.playback.shuffle_state ? "active" : ""}`}
-                  title="Shuffle"
-                  onClick={toggleShuffle}
-                >
-                  <Shuffle size={20} />
-                </button>
-                <button
-                  className="icon-button"
-                  title="Previous song"
-                  onClick={previousSong}
-                >
-                  <Rewind size={26} fill="currentColor" />
-                </button>
-                <button
-                  className="icon-button lyrics-fullscreen-play"
-                  aria-label={state.playback.is_playing ? "Pause" : "Play"}
-                  onClick={togglePlay}
-                >
-                  {state.playback.is_playing ? (
-                    <Pause size={34} fill="currentColor" />
-                  ) : (
-                    <Play size={34} fill="currentColor" />
-                  )}
-                </button>
-                <button
-                  className="icon-button"
-                  title="Next song"
-                  onClick={nextSong}
-                >
-                  <FastForward size={26} fill="currentColor" />
-                </button>
-                <button
-                  className={`icon-button ${repeat !== "off" ? "active" : ""}`}
-                  title="Repeat"
-                  onClick={cycleRepeat}
-                >
-                  {repeat === "track" ? (
-                    <Repeat1 size={20} />
-                  ) : (
-                    <Repeat size={20} />
-                  )}
-                </button>
-              </div>
-            </div>
+            {(canvas || narrow || state.settings.lyrics_hide_artwork) &&
+              fullscreenControls}
           </div>
           <div className="lyrics-body">
             {lyrics && gravity ? (

@@ -10,6 +10,7 @@ import "@fontsource/metropolis/latin-800.css";
 import "@fontsource/metropolis/latin-900.css";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "./fullscreen-lyrics.css";
 import { CreatorProfiles } from "./creator-profile";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

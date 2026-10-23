@@ -2365,6 +2365,7 @@ function App() {
             <LyricsPage
               state={state}
               onCanvasActive={setCanvasInLyrics}
+              immersive={immersive}
               onPlayer={play}
               onAlbum={openAlbum}
               onArtist={openArtist}

@@ -3439,7 +3439,7 @@ test("compact lyrics centre the title and artists against cover and Canvas thumb
     page.evaluate(() => {
       const root = document.querySelector(".lyrics-page")!;
       const cover = root
-        .querySelector(".lyrics-album > .cover")!
+        .querySelector(".lyrics-album .cover")!
         .getBoundingClientRect();
       const title = root
         .querySelector(".lyrics-title")!
@@ -7748,6 +7748,94 @@ test("Canvas title and release year share the same left edge", async ({
     .boundingBox())!;
   const year = (await page.locator(".lyrics-year").boundingBox())!;
   expect(Math.abs(title.x - year.x)).toBeLessThanOrEqual(1);
+});
+
+for (const canvas of [false, true]) {
+  test(`fullscreen controls follow ${canvas ? "Canvas dock" : "album artwork"} and disappear on idle`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await startClient(page);
+    await showLyrics(page);
+    await page.evaluate(() =>
+      (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+    );
+    if (canvas) await emitCanvas(page);
+    await page.keyboard.press("F11");
+    await expect(page.locator(".application")).toHaveClass(/immersive/);
+    const section = page.locator(".lyrics-page");
+    const controls = section.locator(".lyrics-fullscreen-controls");
+    const title = section.locator(".lyrics-title");
+    await page.mouse.move(900, 300);
+    await expect(controls).toHaveCSS("opacity", "1");
+    const awakeTitle = (await title.boundingBox())!;
+    if (!canvas) {
+      const cover = (await section
+        .locator(".lyrics-media > .cover")
+        .boundingBox())!;
+      const buttons = (await controls
+        .locator(".lyrics-fullscreen-buttons")
+        .boundingBox())!;
+      expect(buttons.y).toBeGreaterThan(cover.y);
+      expect(buttons.y + buttons.height).toBeLessThan(cover.y + cover.height);
+      const toolbar = (await section.locator(".lyrics-toolbar").boundingBox())!;
+      expect(toolbar.y).toBeGreaterThan(cover.y);
+    }
+    await page.screenshot({
+      path: `target/diagnostics/fullscreen-${canvas ? "canvas" : "album"}-awake.png`,
+    });
+    await expect(controls).toHaveCSS("opacity", "0");
+    await expect(controls).toHaveCSS("pointer-events", "none");
+    if (canvas)
+      await expect
+        .poll(async () => (await title.boundingBox())!.y - awakeTitle.y)
+        .toBeGreaterThan(80);
+    else
+      expect(
+        Math.abs((await title.boundingBox())!.y - awakeTitle.y),
+      ).toBeLessThan(1);
+    await page.screenshot({
+      path: `target/diagnostics/fullscreen-${canvas ? "canvas" : "album"}-idle.png`,
+    });
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  });
+}
+
+test("fullscreen seek stays usable through idle and commits once on release", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  const controls = page.locator(".lyrics-fullscreen-controls");
+  const seek = controls.getByRole("slider", { name: "Seek position" });
+  const bounds = (await seek.boundingBox())!;
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.5,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.waitForTimeout(1100);
+  await expect(controls).toHaveCSS("opacity", "1");
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.85,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.filter(
+            (c: any) =>
+              c.command === "player" && c.args.request.command === "seek",
+          ).length,
+      ),
+    )
+    .toBe(1);
+  await page.keyboard.press("Tab");
+  await expect(controls).toHaveCSS("opacity", "1");
 });
 
 for (const viewportWidth of [1200, 1500, 2000]) {

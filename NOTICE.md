@@ -21,3 +21,5 @@ The return-to-current-lyric button reimplements the rounded square and press fee
 Playback uses [librespot](https://github.com/librespot-org/librespot), published under MIT. UI uses [egui/eframe](https://github.com/emilk/egui), published under MIT or Apache-2.0; colour emoji use [ttf-parser](https://github.com/harfbuzz/ttf-parser) and [tiny-skia](https://github.com/linebender/tiny-skia), MIT or Apache-2.0 and BSD-3-Clause respectively. Other Rust dependencies retain their own licenses; the exact dependency graph is recorded in `Cargo.lock`.
 
 Spotify is a trademark of Spotify AB. SpotiFlex is an independent client and is not affiliated with Spotify AB.
+
+Fullscreen lyrics behavior references the local pixels-spicy-lyrics fork (`src/components/Utils/Fullscreen.ts`, `src/css/CanvasImmersive.css`, `src/css/ContentBox.css`, AGPL-3.0): its 750 ms idle delay, artwork control overlay and Canvas dock movement. SpotiFlex implements these with its own React controls and CSS. No fork source or assets are copied.

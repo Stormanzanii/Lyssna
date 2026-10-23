@@ -3445,10 +3445,14 @@ small {
   height: 32px;
   color: #b3b3b3;
 }
-.transport-buttons .icon-button:hover {
+/* As in Spotify, side buttons only brighten; the play button alone grows. */
+.transport-buttons .icon-button:is(:hover, :active) {
   color: #fff;
   background: none;
-  transform: scale(1.06);
+  transform: none;
+}
+.transport-buttons .icon-button:active {
+  color: #b3b3b3;
 }
 .play-toggle {
   width: 32px;
@@ -3462,9 +3466,15 @@ small {
   color: #111111;
   background: #fff;
 }
+.play-toggle {
+  transition: transform 0.1s;
+}
 .play-toggle:hover {
-  transform: scale(1.07);
+  transform: scale(1.06);
   background: #fff;
+}
+.play-toggle:active {
+  transform: scale(0.98);
 }
 .play-toggle > svg:not(.spin) {
   position: relative;

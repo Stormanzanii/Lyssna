@@ -36,8 +36,8 @@ export const PreviousIcon = ({ size = 16 }: IconProps) =>
   solid(
     size,
     <>
-      <rect x="2.6" y="2.4" width="1.9" height="11.2" rx="0.7" />
-      <path d="M13.9 3.06v9.88a.8.8 0 0 1-1.23.67L5.9 8.67a.8.8 0 0 1 0-1.34l6.77-4.94a.8.8 0 0 1 1.23.67Z" />
+      <rect x="2" y="1.5" width="2.2" height="13" rx="0.7" />
+      <path d="M14 2.3v11.4a.8.8 0 0 1-1.22.68L4.6 8.68a.8.8 0 0 1 0-1.36l8.18-5.7A.8.8 0 0 1 14 2.3Z" />
     </>,
   );
 
@@ -45,23 +45,25 @@ export const NextIcon = ({ size = 16 }: IconProps) =>
   solid(
     size,
     <>
-      <rect x="11.5" y="2.4" width="1.9" height="11.2" rx="0.7" />
-      <path d="M2.1 3.06v9.88a.8.8 0 0 0 1.23.67l6.77-4.94a.8.8 0 0 0 0-1.34L3.33 2.39a.8.8 0 0 0-1.23.67Z" />
+      <rect x="11.8" y="1.5" width="2.2" height="13" rx="0.7" />
+      <path d="M2 2.3v11.4a.8.8 0 0 0 1.22.68l8.18-5.7a.8.8 0 0 0 0-1.36L3.22 1.62A.8.8 0 0 0 2 2.3Z" />
     </>,
   );
 
 export const PlayIcon = ({ size = 16 }: IconProps) =>
   solid(
     size,
-    <path d="M4.2 2.4v11.2a.8.8 0 0 0 1.2.69l9.4-5.6a.8.8 0 0 0 0-1.38l-9.4-5.6a.8.8 0 0 0-1.2.69Z" />,
+    // Spans x 3 to 13.6: a touch right of the box centre, the optical
+    // middle of a triangle, so it looks centred in the round button.
+    <path d="M3 2.2v11.6a.8.8 0 0 0 1.22.68l9.02-5.8a.8.8 0 0 0 0-1.36L4.22 1.52A.8.8 0 0 0 3 2.2Z" />,
   );
 
 export const PauseIcon = ({ size = 16 }: IconProps) =>
   solid(
     size,
     <>
-      <rect x="3.2" y="2.2" width="3.2" height="11.6" rx="0.8" />
-      <rect x="9.6" y="2.2" width="3.2" height="11.6" rx="0.8" />
+      <rect x="2.75" y="1.5" width="3.5" height="13" rx="0.9" />
+      <rect x="9.75" y="1.5" width="3.5" height="13" rx="0.9" />
     </>,
   );
 

@@ -7956,6 +7956,50 @@ test("fullscreen seek stays usable through idle and commits once on release", as
   await expect(controls).toHaveCSS("opacity", "1");
 });
 
+test("transport buttons brighten without moving and icons sit centred", async ({
+  page,
+}) => {
+  await startClient(page);
+  const bar = page.locator("footer.player-bar .transport-buttons");
+  const previous = bar.getByTitle("Previous song");
+  const before = (await previous.boundingBox())!;
+  await previous.hover();
+  await expect(previous).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(previous).toHaveCSS("transform", "none");
+  const after = (await previous.boundingBox())!;
+  expect(Math.abs(after.width - before.width)).toBeLessThan(0.5);
+  // Each glyph's drawn shape is centred in its button: within half a pixel
+  // for the symmetric icons, and at most a pixel right for the triangle.
+  for (const name of ["Previous song", "Next song"]) {
+    const offset = await bar.getByTitle(name).evaluate((button) => {
+      const shape = button.querySelector("svg")!;
+      const box = shape.getBoundingClientRect(),
+        drawn = (shape as SVGSVGElement).getBBox(),
+        scale = box.width / 16;
+      return drawn.x * scale + (drawn.width * scale) / 2 - box.width / 2;
+    });
+    expect(Math.abs(offset)).toBeLessThan(0.5);
+  }
+  const play = await bar.locator(".play-toggle").evaluate((button) => {
+    const shape = button.querySelector("svg")!;
+    const box = shape.getBoundingClientRect(),
+      drawn = (shape as SVGSVGElement).getBBox(),
+      scale = box.width / 16,
+      outer = button.getBoundingClientRect();
+    return (
+      box.left +
+      drawn.x * scale +
+      (drawn.width * scale) / 2 -
+      (outer.left + outer.width / 2)
+    );
+  });
+  expect(play).toBeGreaterThanOrEqual(0);
+  expect(play).toBeLessThan(1);
+  await page.locator("footer.player-bar").screenshot({
+    path: "target/diagnostics/transport.png",
+  });
+});
+
 test("volume bar turns Spotify green with a knob on hover", async ({
   page,
 }) => {

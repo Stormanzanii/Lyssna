@@ -7716,20 +7716,33 @@ test("NPV uses album artwork while Canvas plays on the lyrics page", async ({
   await expect(page.locator(".lyrics-canvas-cover video")).toBeVisible();
   await expect(page.locator(".now-playing video")).toHaveCount(0);
   await expect(page.locator(".now-playing .now-artwork img")).toBeVisible();
-  // Pausing leaves the Canvas frame on the lyrics page; the NPV keeps the
-  // album artwork instead of showing a second, frozen Canvas.
-  await page.evaluate(
-    ({ base, track }) =>
-      (window as any).__clientTest.emit({
-        type: "playback",
-        playback: { ...base, item: track, is_playing: false },
-        observed_at: Date.now(),
-        changed: false,
-      }),
-    { base: emptyState.playback, track },
-  );
-  await page.waitForTimeout(300);
-  await expect(page.locator(".now-playing video")).toHaveCount(0);
+  // Pausing leaves the Canvas frame on the lyrics page: neither the NPV nor
+  // the lyrics backdrop swaps, on pause or on resume.
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__canvasFlicker = 0;
+    new MutationObserver(() => {
+      if (
+        document.querySelector(".now-playing video") ||
+        document.querySelector(".lyrics-page .ambience")
+      )
+        w.__canvasFlicker++;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  for (const is_playing of [false, true, false])
+    await page
+      .evaluate(
+        ({ base, track, is_playing }) =>
+          (window as any).__clientTest.emit({
+            type: "playback",
+            playback: { ...base, item: track, is_playing },
+            observed_at: Date.now(),
+            changed: false,
+          }),
+        { base: emptyState.playback, track, is_playing },
+      )
+      .then(() => page.waitForTimeout(300));
+  expect(await page.evaluate(() => (window as any).__canvasFlicker)).toBe(0);
   await expect(page.locator(".now-playing .now-artwork img")).toBeVisible();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".now-playing video")).toBeVisible();

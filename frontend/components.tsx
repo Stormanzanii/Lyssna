@@ -1087,7 +1087,7 @@ function SongLyricsPage({
   useEffect(() => () => clearTimeout(toolsTimer.current), []);
   // The toolbar's compact toggle forces the stacked layout.
   const narrow = measuredNarrow || !!state.settings.lyrics_compact;
-  const [canvasPlaying, setCanvasPlaying] = useState(false);
+  const [canvasShown, setCanvasShown] = useState(false);
   const motionAllowed =
     !state.settings.reduce_motion &&
     !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1097,13 +1097,8 @@ function SongLyricsPage({
     state.settings.canvas_lyrics &&
     motionAllowed
   );
-  // Pausing stops the video but leaves its frame on this page, so the NPV
-  // keeps the album artwork; only a Canvas that fails while playing hands
-  // it back.
   const visibleCanvas =
-    canvas &&
-    (canvasPlaying || !state.playback.is_playing) &&
-    !state.settings.lyrics_hide_artwork;
+    canvas && canvasShown && !state.settings.lyrics_hide_artwork;
   useEffect(() => {
     onCanvasActive?.(visibleCanvas);
     return () => onCanvasActive?.(false);
@@ -1235,7 +1230,7 @@ function SongLyricsPage({
     >
       {(!immersive || canvas || narrow || state.settings.lyrics_hide_artwork) &&
         children}
-      {(!canvas || !canvasPlaying) &&
+      {(!canvas || !canvasShown) &&
         state.settings.lyrics_background !== "color" && (
           <Ambience
             track={track}
@@ -1268,7 +1263,7 @@ function SongLyricsPage({
                 poster={imageOf(track.album.images)}
                 playing={state.playback.is_playing}
                 backdrop={backdrop}
-                onActive={setCanvasPlaying}
+                onActive={setCanvasShown}
                 artworkRight={!!state.settings.lyrics_artwork_right}
               />
             ) : (

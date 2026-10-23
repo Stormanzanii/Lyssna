@@ -7937,6 +7937,20 @@ test("fullscreen seek stays usable through idle and commits once on release", as
   await expect(controls).toHaveCSS("opacity", "1");
 });
 
+test("volume bar turns Spotify green with a knob on hover", async ({
+  page,
+}) => {
+  await startClient(page);
+  const volume = page.getByRole("slider", { name: "Volume" });
+  await volume.hover();
+  await expect(volume).toHaveCSS("background-image", /rgb\(30, 215, 96\)/);
+  expect(
+    await volume.evaluate(
+      (node) => getComputedStyle(node, "::-webkit-slider-thumb").opacity,
+    ),
+  ).toBe("1");
+});
+
 test("fullscreen seek clicks while playing send whole milliseconds", async ({
   page,
 }) => {

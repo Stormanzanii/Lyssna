@@ -3551,6 +3551,23 @@ input[type="range"]:hover {
   width: 104px;
   margin: 0 6px 0 2px;
 }
+/* Spotify's volume bar: green fill and a white knob with a soft shadow
+   while hovered or dragged. */
+input.volume-range:is(:hover, :active, :focus-visible) {
+  background: linear-gradient(
+    90deg,
+    #1ed760 var(--range, 0%),
+    #ffffff4d var(--range, 0%)
+  );
+}
+input.volume-range::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 2px 4px #00000080;
+}
+input.volume-range:active::-webkit-slider-thumb {
+  opacity: 1;
+}
 .spin {
   animation: spin 1s linear infinite;
 }

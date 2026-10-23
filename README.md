@@ -10,7 +10,17 @@ Download [SpotiFlex 0.1.0 for Windows](https://updates.clypdat.xyz/releases/0.1.
 
 To build from source:
 
-On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, CMake and LLVM (including libclang). Put CMake on PATH and set `LIBCLANG_PATH` to the directory containing `libclang.dll` if LLVM is not discoverable. Then run:
+On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, CMake and LLVM (including libclang). The build script finds the CMake bundled with Visual Studio and LLVM in its default folder; otherwise put CMake on PATH and set `LIBCLANG_PATH` to the directory containing `libclang.dll`. To build and install the latest commit:
+
+```powershell
+.\build.ps1
+```
+
+By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, builds a release executable, installs it to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe` and starts it. A running copy from that folder is closed first. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or commit is restored afterward, including on failure. Nothing is pushed, and credentials and app data are left alone.
+
+Use `.\build.ps1 local` to build the current checkout, including uncommitted changes. `.\build.ps1 <branch>` fetches that branch from `origin`, or builds it as is when it only exists locally; `.\build.ps1 <commit>` builds a locally available commit. Add `-NoLaunch` to install without starting it. If PowerShell blocks the script, run `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
+
+To build by hand instead:
 
 ```powershell
 npm ci

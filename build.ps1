@@ -1,0 +1,280 @@
+<#
+.SYNOPSIS
+Builds SpotiFlex from source and installs it for the current Windows user.
+
+.DESCRIPTION
+No target: update main from origin, then build and install the latest commit.
+local:     build the current checkout, including uncommitted changes.
+branch:    fetch that branch from origin and build its latest commit.
+commit:    build a commit already available in this repository.
+
+The original branch or commit is restored afterward, including on failure.
+Nothing is pushed. The build is installed to
+%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe and started, unless
+-NoLaunch is given. Credentials and application data are not touched.
+#>
+param(
+    [Parameter(Position = 0, HelpMessage = 'Optional target: local, branch, or commit hash.')]
+    [string]$Target,
+
+    [switch]$NoLaunch
+)
+
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = $PSScriptRoot
+$installDirectory = Join-Path $env:LOCALAPPDATA 'Programs\SpotiFlex'
+$installedExe = Join-Path $installDirectory 'spotiflex.exe'
+
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory)][string]$Command,
+        [Parameter(ValueFromRemainingArguments)][string[]]$Arguments
+    )
+
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Command $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Invoke-Git {
+    param([Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
+
+    $output = & git @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+    }
+    return $output
+}
+
+function Get-GitPosition {
+    $branch = & git symbolic-ref --quiet --short HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $branch) {
+        return [PSCustomObject]@{ Branch = $branch.Trim(); Commit = $null }
+    }
+    $commit = (Invoke-Git rev-parse --verify HEAD | Select-Object -First 1).Trim()
+    return [PSCustomObject]@{ Branch = $null; Commit = $commit }
+}
+
+function Restore-GitPosition {
+    param([Parameter(Mandatory)]$Position)
+
+    if ($Position.Branch) {
+        Invoke-Git switch --quiet $Position.Branch | Out-Null
+    }
+    else {
+        Invoke-Git switch --quiet --detach $Position.Commit | Out-Null
+    }
+}
+
+function Find-CMake {
+    if ($env:CMAKE -and (Test-Path -LiteralPath $env:CMAKE)) {
+        return $env:CMAKE
+    }
+    $onPath = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($onPath) {
+        return $onPath.Source
+    }
+    # Visual Studio's C++ workload ships CMake without putting it on PATH.
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere)) {
+        return $null
+    }
+    foreach ($installation in @(& $vswhere -products * -property installationPath)) {
+        $bundled = Join-Path $installation 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+        if (Test-Path -LiteralPath $bundled) {
+            return $bundled
+        }
+    }
+    return $null
+}
+
+function Assert-Prerequisites {
+    foreach ($tool in 'git', 'node', 'npm', 'rustup', 'cargo') {
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+            throw "Missing $tool. See the Windows build prerequisites in README.md."
+        }
+    }
+
+    $cmake = Find-CMake
+    if (-not $cmake) {
+        throw 'Missing CMake. Install it or the Visual Studio C++ CMake tools.'
+    }
+    # The cmake crate reads CMAKE before searching PATH.
+    $env:CMAKE = $cmake
+
+    $nodeMajor = [int](& node -p 'process.versions.node.split(".")[0]')
+    if ($nodeMajor -lt 24) {
+        throw 'Node.js 24 or later is required.'
+    }
+
+    # bindgen needs libclang. Use LIBCLANG_PATH when set, otherwise a standard
+    # LLVM install or the copy the repository's diagnostics tooling downloads.
+    if ($env:LIBCLANG_PATH) {
+        if (-not (Test-Path -LiteralPath (Join-Path $env:LIBCLANG_PATH 'libclang.dll'))) {
+            throw "LIBCLANG_PATH does not contain libclang.dll: $env:LIBCLANG_PATH"
+        }
+        return
+    }
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'LLVM\bin'),
+        (Join-Path $repoRoot 'target\diagnostics\build-tools\clang\native')
+    )
+    $found = $candidates | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'libclang.dll') } | Select-Object -First 1
+    if (-not $found) {
+        throw 'libclang.dll not found. Install LLVM or set LIBCLANG_PATH to the folder containing libclang.dll.'
+    }
+    $env:LIBCLANG_PATH = $found
+}
+
+function Get-RequiredRust {
+    $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'Cargo.toml') -Raw
+    if ($manifest -notmatch '(?m)^rust-version\s*=\s*"([^"]+)"') {
+        throw 'Cargo.toml is missing rust-version.'
+    }
+    $version = $Matches[1]
+    if ($version.Split('.').Count -eq 2) {
+        $version = "$version.0"
+    }
+    return $version
+}
+
+function Stop-InstalledSpotiFlex {
+    $prefix = "$([IO.Path]::GetFullPath($installDirectory).TrimEnd('\'))\"
+    $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'spotiflex.exe'" | Where-Object {
+        $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($processes.Count -eq 0) {
+        return
+    }
+
+    # Ask the window to close first so SpotiFlex can save its state.
+    foreach ($process in $processes) {
+        $running = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+        if ($running) {
+            Write-Host "Closing installed SpotiFlex (PID $($process.ProcessId))."
+            [void]$running.CloseMainWindow()
+        }
+    }
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        $remaining = @($processes | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
+        if ($remaining.Count -eq 0) {
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    } while ((Get-Date) -lt $deadline)
+
+    foreach ($process in $remaining) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Milliseconds 500
+}
+
+if ($Target -in '-h', '--help', 'help') {
+    Get-Help $PSCommandPath -Detailed
+    return
+}
+
+Push-Location $repoRoot
+$originalGitPosition = $null
+$restoreGitPosition = $false
+try {
+    Assert-Prerequisites
+
+    if ($Target -eq 'local') {
+        Write-Host 'Building current checkout without Git changes.'
+    }
+    else {
+        $changes = @(Invoke-Git status --porcelain=v1 --untracked-files=normal)
+        if ($changes.Count -gt 0) {
+            throw 'Commit or stash changes first, or use ./build.ps1 local.'
+        }
+        $originalGitPosition = Get-GitPosition
+        $restoreGitPosition = $true
+
+        if ([string]::IsNullOrWhiteSpace($Target)) {
+            Write-Host 'Updating main from origin.'
+            Invoke-Git switch --quiet main | Out-Null
+            Invoke-Git pull --ff-only origin main | Out-Null
+        }
+        else {
+            if ($Target.StartsWith('-')) {
+                throw 'Unknown option. Run ./build.ps1 --help.'
+            }
+            & git check-ref-format "refs/heads/$Target" 2>$null | Out-Null
+            $validBranch = $LASTEXITCODE -eq 0
+            $onOrigin = $false
+            if ($validBranch) {
+                & git ls-remote --exit-code --heads origin "refs/heads/$Target" 2>$null | Out-Null
+                $onOrigin = $LASTEXITCODE -eq 0
+            }
+
+            if ($onOrigin) {
+                # On origin: build its latest commit.
+                Invoke-Git fetch --no-tags origin "refs/heads/$Target" | Out-Null
+                $commit = (Invoke-Git rev-parse --verify 'FETCH_HEAD^{commit}' | Select-Object -First 1).Trim()
+            }
+            else {
+                # Only local: build the branch or commit as it is.
+                $commit = & git rev-parse --verify --quiet --end-of-options "$Target^{commit}" 2>$null
+                if ($LASTEXITCODE -ne 0 -or -not $commit) {
+                    throw "'$Target' is not a branch on origin, a local branch or a commit."
+                }
+                $commit = ($commit | Select-Object -First 1).Trim()
+            }
+            Write-Host "Switching to $commit."
+            Invoke-Git switch --quiet --detach $commit | Out-Null
+        }
+    }
+
+    if (-not $env:RUSTUP_TOOLCHAIN) {
+        $env:RUSTUP_TOOLCHAIN = Get-RequiredRust
+    }
+    & rustup run $env:RUSTUP_TOOLCHAIN rustc --version *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Invoke-Checked rustup toolchain install $env:RUSTUP_TOOLCHAIN --profile minimal --no-self-update
+    }
+
+    $shortCommit = (Invoke-Git rev-parse --short HEAD | Select-Object -First 1).Trim()
+    Write-Host "Building $shortCommit with Rust $env:RUSTUP_TOOLCHAIN."
+    Invoke-Checked npm ci --no-audit --no-fund
+    Invoke-Checked npm run build
+    Invoke-Checked cargo build --release --locked --bin spotiflex
+
+    $builtExe = Join-Path $repoRoot 'target\release\spotiflex.exe'
+    if (-not (Test-Path -LiteralPath $builtExe)) {
+        throw "Build finished without $builtExe."
+    }
+
+    # Stage beside the install so the swap is a rename on the same volume.
+    New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+    $staged = Join-Path $installDirectory ('.spotiflex-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    Copy-Item -LiteralPath $builtExe -Destination $staged
+    try {
+        Stop-InstalledSpotiFlex
+        Move-Item -LiteralPath $staged -Destination $installedExe -Force
+    }
+    finally {
+        if (Test-Path -LiteralPath $staged) {
+            Remove-Item -LiteralPath $staged -Force
+        }
+    }
+    Write-Host "Installed $shortCommit to $installedExe"
+
+    if (-not $NoLaunch) {
+        Write-Host 'Starting SpotiFlex.'
+        Start-Process -FilePath $installedExe -WorkingDirectory $installDirectory
+    }
+}
+finally {
+    try {
+        if ($restoreGitPosition) {
+            Restore-GitPosition $originalGitPosition
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}

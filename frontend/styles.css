@@ -4548,6 +4548,12 @@ input[type="range"]:hover {
   text-align: left;
   z-index: 3;
 }
+.canvas-lyrics:not(.narrow) .lyrics-title .marquee-content {
+  padding-inline: 0.4rem;
+}
+.canvas-lyrics:not(.narrow) .lyrics-artists {
+  padding-inline: 0.4rem;
+}
 .canvas-lyrics .lyrics-title:not(.scrolling) .marquee-content,
 .canvas-lyrics .lyrics-artists .marquee:not(.scrolling) .marquee-content {
   margin-inline: 0;

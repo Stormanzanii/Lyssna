@@ -7720,6 +7720,36 @@ test("NPV uses album artwork while Canvas plays on the lyrics page", async ({
   await expect(page.locator(".now-playing video")).toBeVisible();
 });
 
+test("Canvas title and release year share the same left edge", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            album: { ...track.album, release_date: "2026-01-01" },
+          },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  await showLyrics(page);
+  await emitCanvas(page);
+  const title = (await page
+    .locator(".lyrics-title .song-title")
+    .boundingBox())!;
+  const year = (await page.locator(".lyrics-year").boundingBox())!;
+  expect(Math.abs(title.x - year.x)).toBeLessThanOrEqual(1);
+});
+
 for (const viewportWidth of [1200, 1500, 2000]) {
   test(`Your Library resizes by dragging its edge and collapses like Spotify at ${viewportWidth}px`, async ({
     page,

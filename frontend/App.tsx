@@ -717,6 +717,13 @@ function App() {
   }, [state.profile?.id, state.native_ready, metadataSignature]);
   const play = useCallback(
     (request: PlayerRequest) => {
+      // The native side takes whole milliseconds; seek bars and the
+      // interpolated song clock report fractions.
+      if (request.positionMs !== undefined)
+        request = {
+          ...request,
+          positionMs: Math.max(0, Math.round(request.positionMs)),
+        };
       const current = stateRef.current,
         item = playlistForManualPlay(current, request);
       if (item && current.profile)

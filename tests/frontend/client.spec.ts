@@ -7878,6 +7878,49 @@ test("fullscreen seek stays usable through idle and commits once on release", as
   await expect(controls).toHaveCSS("opacity", "1");
 });
 
+test("fullscreen seek clicks while playing send whole milliseconds", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          progress_ms: 40_000,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { track, base: emptyState.playback },
+  );
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  const seek = page
+    .locator(".lyrics-fullscreen-controls")
+    .getByRole("slider", { name: "Seek position" });
+  // A press and release without movement fires no change event, so the
+  // seek commits the interpolated song clock, which has fractions.
+  for (let i = 0; i < 5; i++) {
+    await seek.dispatchEvent("pointerdown", { pointerId: 1, isPrimary: true });
+    await seek.dispatchEvent("pointerup", { pointerId: 1, isPrimary: true });
+    await page.waitForTimeout(37);
+  }
+  const positions: number[] = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter(
+        (c: any) => c.command === "player" && c.args.request.command === "seek",
+      )
+      .map((c: any) => c.args.request.positionMs),
+  );
+  expect(positions.length).toBeGreaterThan(0);
+  for (const position of positions)
+    expect(Number.isInteger(position)).toBe(true);
+});
+
 for (const viewportWidth of [1200, 1500, 2000]) {
   test(`Your Library resizes by dragging its edge and collapses like Spotify at ${viewportWidth}px`, async ({
     page,

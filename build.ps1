@@ -241,7 +241,15 @@ try {
     Write-Host "Building $shortCommit with Rust $env:RUSTUP_TOOLCHAIN."
     Invoke-Checked npm ci --no-audit --no-fund
     Invoke-Checked npm run build
-    Invoke-Checked cargo build --release --locked --bin spotiflex
+    # Marks the executable as a local build, so the updater never replaces
+    # it with a release. Rebuild with this script to update.
+    $env:SPOTIFLEX_LOCAL_BUILD = '1'
+    try {
+        Invoke-Checked cargo build --release --locked --bin spotiflex
+    }
+    finally {
+        Remove-Item Env:SPOTIFLEX_LOCAL_BUILD -ErrorAction SilentlyContinue
+    }
 
     $builtExe = Join-Path $repoRoot 'target\release\spotiflex.exe'
     if (-not (Test-Path -LiteralPath $builtExe)) {

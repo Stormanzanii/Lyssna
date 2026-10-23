@@ -16,7 +16,7 @@ On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, C
 .\build.ps1
 ```
 
-By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, builds a release executable, installs it to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe` and starts it. A running copy from that folder is closed first. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or commit is restored afterward, including on failure. Nothing is pushed, and credentials and app data are left alone.
+By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, builds a release executable, installs it to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe` and starts it. A running copy from that folder is closed first. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or commit is restored afterward, including on failure. Nothing is pushed, and credentials and app data are left alone. Builds from this script turn automatic updates off, so a release never replaces them; run the script again to update.
 
 Use `.\build.ps1 local` to build the current checkout, including uncommitted changes. `.\build.ps1 <branch>` fetches that branch from `origin`, or builds it as is when it only exists locally; `.\build.ps1 <commit>` builds a locally available commit. Add `-NoLaunch` to install without starting it. If PowerShell blocks the script, run `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
 

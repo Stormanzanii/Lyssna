@@ -22,6 +22,13 @@ pub const TARGET: &str = "windows-x86_64";
 pub const SUPPORTED: bool = cfg!(all(target_os = "windows", target_arch = "x86_64"));
 pub const UNSUPPORTED_MESSAGE: &str =
     "Automatic updates are unavailable on this platform. Install new builds manually.";
+/// Set by `build.ps1`. A build from source must never be replaced by a
+/// release; it is updated by rebuilding.
+pub const LOCAL_BUILD: bool = option_env!("SPOTIFLEX_LOCAL_BUILD").is_some();
+pub const LOCAL_BUILD_MESSAGE: &str =
+    "Local build: automatic updates are off. Run build.ps1 to update.";
+/// Why automatic updates are off, if they are.
+pub const DISABLED: Option<&str> = disabled(SUPPORTED, LOCAL_BUILD);
 pub const PUBLIC_KEY: &str = include_str!("../config/update-public-key.base64");
 const MAX_ARTIFACT: u64 = 512 * 1024 * 1024;
 
@@ -73,6 +80,16 @@ pub enum Event {
 pub struct Updater {
     pub commands: mpsc::Sender<Command>,
     pub events: mpsc::Receiver<Event>,
+}
+
+const fn disabled(supported: bool, local_build: bool) -> Option<&'static str> {
+    if local_build {
+        Some(LOCAL_BUILD_MESSAGE)
+    } else if !supported {
+        Some(UNSUPPORTED_MESSAGE)
+    } else {
+        None
+    }
 }
 
 fn public_key(encoded: &str) -> Result<VerifyingKey> {
@@ -188,6 +205,9 @@ fn download(
     update: &Update,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<ReadyUpdate> {
+    if let Some(message) = DISABLED {
+        anyhow::bail!(message);
+    }
     let manifest = verify(&update.envelope, &public_key(PUBLIC_KEY)?)?;
     ensure!(
         Version::parse(&manifest.version)? > Version::parse(env!("CARGO_PKG_VERSION"))?,
@@ -260,7 +280,9 @@ fn download(
 }
 
 fn install(update: ReadyUpdate) -> Result<()> {
-    ensure!(SUPPORTED, UNSUPPORTED_MESSAGE);
+    if let Some(message) = DISABLED {
+        anyhow::bail!(message);
+    }
     let manifest = verify(&update.envelope, &public_key(PUBLIC_KEY)?)?;
     ensure!(
         Version::parse(&manifest.version)? > Version::parse(env!("CARGO_PKG_VERSION"))?,
@@ -290,15 +312,16 @@ impl Updater {
                 let _ = sender.send(event);
                 context.request_repaint();
             };
-            // The signed update service publishes Windows executables only.
-            // Never query that channel or stage an executable on macOS.
-            if !SUPPORTED {
-                emit(Event::Error(UNSUPPORTED_MESSAGE.into()));
+            // The signed update service publishes Windows executables only,
+            // and a local build must not be replaced by a release. Never query
+            // that channel or stage an executable in either case.
+            if let Some(message) = DISABLED {
+                emit(Event::Error(message.into()));
                 for command in receiver {
                     if matches!(command, Command::Shutdown) {
                         break;
                     }
-                    emit(Event::Error(UNSUPPORTED_MESSAGE.into()));
+                    emit(Event::Error(message.into()));
                 }
                 return;
             }
@@ -411,6 +434,14 @@ mod tests {
         bad.artifact = "https://elsewhere.example.com/app.exe".into();
         let (bytes, key) = signed(&bad);
         assert!(verify(&bytes, &key).is_err());
+    }
+
+    #[test]
+    fn local_builds_never_update() {
+        assert_eq!(disabled(true, true), Some(LOCAL_BUILD_MESSAGE));
+        assert_eq!(disabled(false, true), Some(LOCAL_BUILD_MESSAGE));
+        assert_eq!(disabled(false, false), Some(UNSUPPORTED_MESSAGE));
+        assert_eq!(disabled(true, false), None);
     }
 
     #[test]

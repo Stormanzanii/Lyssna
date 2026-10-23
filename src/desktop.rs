@@ -2731,7 +2731,9 @@ fn open_link(url: String) -> std::result::Result<(), String> {
 #[tauri::command]
 fn app_update(action: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
-        ensure!(updater::SUPPORTED, updater::UNSUPPORTED_MESSAGE);
+        if let Some(message) = updater::DISABLED {
+            anyhow::bail!(message);
+        }
         let command = match action.as_str() {
             "check" => updater::Command::Check,
             "download" => updater::Command::Download(

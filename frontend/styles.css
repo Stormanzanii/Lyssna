@@ -2885,6 +2885,8 @@ small {
    Gradient stops stay relative to the original text width, excluding bleed. */
 .lyric-paint {
   --glyph-bleed: 0.35em;
+  /* Paint bleed must not intercept clicks on adjacent lyric rows. */
+  pointer-events: none;
   padding: 1em var(--glyph-bleed);
   margin: -1em calc(-1 * var(--glyph-bleed));
   box-decoration-break: clone;

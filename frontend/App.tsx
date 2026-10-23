@@ -1069,6 +1069,13 @@ function App() {
     },
     [call],
   );
+  const likedCollection = useCallback(
+    (current: AppState) =>
+      target === "native" && current.profile
+        ? `spotify:user:${current.profile.id}:collection`
+        : undefined,
+    [target],
+  );
   const playTrack = useCallback(
     (track: Track, index?: number) => {
       const current = stateRef.current;
@@ -1082,6 +1089,16 @@ function App() {
         play({
           command: "play_context",
           context: `spotify:${current.route}`,
+          uri: track.uri,
+          track: complete,
+        });
+      // This computer plays Liked Songs as Spotify does, from the collection,
+      // so the whole list follows and the library row shows it playing.
+      // Speakers are driven through the Web API, which takes song lists.
+      else if (current.route === "liked" && likedCollection(current))
+        play({
+          command: "play_context",
+          context: likedCollection(current),
           uri: track.uri,
           track: complete,
         });
@@ -1104,7 +1121,7 @@ function App() {
         });
       } else play({ command: "play", uri: track.uri, track: complete });
     },
-    [play],
+    [play, likedCollection],
   );
   const importFile = async (file: File, mode: LoadMode = "persistent") => {
     if (file.size > 2_000_000) {
@@ -1753,7 +1770,9 @@ function App() {
     );
   };
   const playLiked = () => {
-    if (stateRef.current.route === "liked" && stateRef.current.tracks[0])
+    const collection = likedCollection(stateRef.current);
+    if (collection) play({ command: "play_context", context: collection });
+    else if (stateRef.current.route === "liked" && stateRef.current.tracks[0])
       playTrack(stateRef.current.tracks[0], 0);
     else {
       likedPlay.current = true;

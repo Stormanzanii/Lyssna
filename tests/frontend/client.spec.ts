@@ -6355,6 +6355,46 @@ test("a single click on a song selects nothing; a double click plays it", async 
     .toBeTruthy();
 });
 
+test("Liked Songs plays from the collection and its row turns green", async ({
+  page,
+}) => {
+  await startClient(page);
+  const row = page.locator(".track-row").nth(1);
+  const uri = await row.getAttribute("data-uri");
+  await row.locator(".track-name").dblclick();
+  const request = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "player")
+          .at(-1)?.args.request,
+    );
+  await expect.poll(request).toMatchObject({
+    command: "play_context",
+    context: expect.stringMatching(/^spotify:user:[^:]+:collection$/),
+  });
+  if (uri) expect((await request()).uri).toBe(uri);
+  const context = (await request()).context;
+  await page.evaluate(
+    ({ base, track, context }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, item: track, is_playing: true, context },
+        observed_at: Date.now(),
+        changed: true,
+        loading: true,
+      }),
+    { base: emptyState.playback, track, context },
+  );
+  const liked = page.locator(".library-liked");
+  await expect(liked).toHaveClass(/playing/);
+  await expect(liked.locator(".library-item strong")).toHaveCSS(
+    "color",
+    "rgb(30, 215, 96)",
+  );
+  await expect(liked.getByLabel("Playing")).toBeVisible();
+});
+
 test("clicking an artist in a song row opens it without selecting the song", async ({
   page,
 }) => {
@@ -6906,15 +6946,19 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
   expect(await route()).toBe(before);
   // DJ starts from its own row; it has no cover play button.
   await expect(page.getByRole("button", { name: "Play DJ" })).toHaveCount(0);
-  // From another page, Liked Songs opens and starts its first song.
+  // Liked Songs plays on this computer from Spotify's collection, without
+  // leaving the current page, like a playlist.
   await page.locator(".home-button").click();
   await expect.poll(route).toBe("home");
   await page.locator(".library-liked").hover();
   await page
     .locator(".library-cover-play[aria-label='Play Liked Songs']")
     .click();
-  await expect.poll(route).toBe("liked");
-  await expect.poll(lastPlayer).toMatchObject({ command: "play_uris" });
+  await expect.poll(lastPlayer).toMatchObject({
+    command: "play_context",
+    context: expect.stringMatching(/^spotify:user:[^:]+:collection$/),
+  });
+  expect(await route()).toBe("home");
 });
 
 test("lyrics toolbar sits over the cover art and follows it when flipped", async ({

@@ -7631,6 +7631,70 @@ test("compact library play overlays stay inside their artwork", async ({
     .screenshot({ path: "target/diagnostics/compact-library.png" });
 });
 
+test("custom font lyric fill covers tall letters at every sweep position", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(
+    ({ settings, uri }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "settings",
+        settings: { ...settings, lyric_font: "hemi head", reduce_motion: true },
+      });
+      host.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "Test",
+          synced: true,
+          instrumental: false,
+          lines: [
+            {
+              text: "But please",
+              start_ms: 0,
+              end_ms: 1000,
+              background: false,
+              opposite: false,
+              words: [
+                { text: "But", start_ms: 0, end_ms: 400 },
+                { text: " please", start_ms: 400, end_ms: 1000 },
+              ],
+            },
+          ],
+        },
+      });
+      host.emit({
+        type: "native_position",
+        uri,
+        position_ms: 600,
+        playing: false,
+        observed_at: Date.now(),
+      });
+    },
+    { settings: emptyState.settings, uri: track.uri },
+  );
+  await page.evaluate(() => document.fonts.ready);
+  const line = page.locator(".lyrics-page .lyric-line");
+  await expect(line).toHaveCount(1);
+  await page.addStyleTag({
+    content:
+      ".lyric-line { text-shadow:none !important; filter:none !important; transition:none !important } .lyric-syllable { text-shadow:none !important; translate:none !important; scale:none !important }",
+  });
+  await line.screenshot({
+    path: "target/diagnostics/custom-font-fill-before.png",
+  });
+  // Expanding the paint vertically must not uncover additional glyph pixels.
+  const before = await line.screenshot();
+  await page.addStyleTag({
+    content: ".lyric-paint { padding-block:2em; margin-block:-2em }",
+  });
+  const expanded = await line.screenshot();
+  expect(before.equals(expanded)).toBe(true);
+});
+
 for (const viewportWidth of [1200, 1500, 2000]) {
   test(`Your Library resizes by dragging its edge and collapses like Spotify at ${viewportWidth}px`, async ({
     page,

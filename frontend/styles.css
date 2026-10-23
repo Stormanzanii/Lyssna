@@ -2885,8 +2885,8 @@ small {
    Gradient stops stay relative to the original text width, excluding bleed. */
 .lyric-paint {
   --glyph-bleed: 0.35em;
-  padding: 0.2em var(--glyph-bleed);
-  margin: -0.2em calc(-1 * var(--glyph-bleed));
+  padding: 1em var(--glyph-bleed);
+  margin: -1em calc(-1 * var(--glyph-bleed));
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   background-image: linear-gradient(

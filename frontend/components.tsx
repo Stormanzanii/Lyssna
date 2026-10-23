@@ -27,16 +27,17 @@ import {
   ChevronUp,
   ChevronDown,
   X,
-  Pause,
-  Play,
-  Rewind,
-  FastForward,
   Heart,
-  Shuffle,
-  Repeat,
-  Repeat1,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
+import {
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PreviousIcon,
+  RepeatIcon,
+  ShuffleIcon,
+} from "./player-icons";
 import type {
   Album,
   Artist,
@@ -1176,14 +1177,14 @@ function SongLyricsPage({
           title="Shuffle"
           onClick={toggleShuffle}
         >
-          <Shuffle size={20} />
+          <ShuffleIcon size={20} />
         </button>
         <button
           className="icon-button"
           title="Previous song"
           onClick={previousSong}
         >
-          <Rewind size={26} fill="currentColor" />
+          <PreviousIcon size={24} />
         </button>
         <button
           className="icon-button lyrics-fullscreen-play"
@@ -1191,20 +1192,20 @@ function SongLyricsPage({
           onClick={togglePlay}
         >
           {state.playback.is_playing ? (
-            <Pause size={34} fill="currentColor" />
+            <PauseIcon size={30} />
           ) : (
-            <Play size={34} fill="currentColor" />
+            <PlayIcon size={30} />
           )}
         </button>
         <button className="icon-button" title="Next song" onClick={nextSong}>
-          <FastForward size={26} fill="currentColor" />
+          <NextIcon size={24} />
         </button>
         <button
           className={`icon-button ${repeat !== "off" ? "active" : ""}`}
           title="Repeat"
           onClick={cycleRepeat}
         >
-          {repeat === "track" ? <Repeat1 size={20} /> : <Repeat size={20} />}
+          <RepeatIcon size={20} one={repeat === "track"} />
         </button>
       </div>
     </div>

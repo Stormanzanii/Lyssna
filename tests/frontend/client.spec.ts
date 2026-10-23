@@ -7868,6 +7868,13 @@ for (const canvas of [false, true]) {
         .toBeLessThan(40);
       expect(dock.y).toBeGreaterThan(artists.y);
     }
+    // Solid Spotify-style transport icons, not stroked and filled Lucide
+    // shapes that blur into thick outlines when scaled up.
+    await expect(
+      controls.locator(
+        ":is(.lucide-rewind, .lucide-fast-forward, .lucide-play, .lucide-pause)",
+      ),
+    ).toHaveCount(0);
     // Same dark frosted toolbar as outside full screen.
     await expect(section.locator(".lyrics-toolbar")).not.toHaveCSS(
       "background-color",

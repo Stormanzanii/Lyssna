@@ -2728,6 +2728,149 @@ fn open_link(url: String) -> std::result::Result<(), String> {
         .map(|_| ())
         .map_err(|_| "Cannot open browser".into())
 }
+/// The window's restore rectangle from before full screen, when it was
+/// maximized; `Some(None)` off Windows. `None` when full screen did not start
+/// from a maximized window.
+static FULLSCREEN_RESTORE: Mutex<Option<Option<[i32; 4]>>> = Mutex::new(None);
+
+/// Enters or leaves full screen. tao keeps a maximized borderless window
+/// inside the work area, so a maximized window has to be restored first,
+/// which shrank it to its restore size and grew it again. On Windows the
+/// restore rectangle is set to the work area for the switch, so restoring
+/// and maximizing do not move the window; it only grows over the taskbar.
+#[tauri::command]
+async fn window_fullscreen(
+    enabled: bool,
+    window: tauri::WebviewWindow,
+) -> std::result::Result<(), String> {
+    let result = || -> Result<()> {
+        if enabled == window.is_fullscreen()? {
+            return Ok(());
+        }
+        if enabled {
+            let restore = if window.is_maximized()? {
+                #[cfg(windows)]
+                let previous = Some(fullscreen_placement::restore_to_work_area(&window)?);
+                #[cfg(not(windows))]
+                let previous = None;
+                window.unmaximize()?;
+                Some(previous)
+            } else {
+                None
+            };
+            *lock(&FULLSCREEN_RESTORE)? = restore;
+            window.set_fullscreen(true)?;
+        } else {
+            window.set_fullscreen(false)?;
+            if let Some(previous) = lock(&FULLSCREEN_RESTORE)?.take() {
+                window.maximize()?;
+                #[cfg(windows)]
+                if let Some(rect) = previous {
+                    // Queued behind the maximize, so it lands once the window
+                    // is maximized again and only changes where Restore goes.
+                    let target = window.clone();
+                    window.run_on_main_thread(move || {
+                        let _ = fullscreen_placement::set_restore(&target, rect);
+                    })?;
+                }
+                #[cfg(not(windows))]
+                let _ = previous;
+            }
+        }
+        Ok(())
+    };
+    result().map_err(error)
+}
+
+#[cfg(windows)]
+mod fullscreen_placement {
+    use anyhow::Result;
+    use windows::Win32::{
+        Foundation::{HWND, RECT},
+        Graphics::Gdi::{
+            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        },
+        UI::WindowsAndMessaging::{GetWindowPlacement, SetWindowPlacement, WINDOWPLACEMENT},
+    };
+
+    fn placement(window: &tauri::WebviewWindow) -> Result<(HWND, WINDOWPLACEMENT)> {
+        let hwnd = HWND(window.hwnd()?.0 as _);
+        let mut placement = WINDOWPLACEMENT {
+            length: size_of::<WINDOWPLACEMENT>() as u32,
+            ..Default::default()
+        };
+        unsafe { GetWindowPlacement(hwnd, &mut placement)? };
+        Ok((hwnd, placement))
+    }
+
+    /// Makes the work area the restore rectangle; returns the previous one.
+    pub fn restore_to_work_area(window: &tauri::WebviewWindow) -> Result<[i32; 4]> {
+        let (hwnd, mut placement) = placement(window)?;
+        let previous = placement.rcNormalPosition;
+        let mut info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        unsafe {
+            GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut info).ok()?
+        };
+        placement.rcNormalPosition = work_area_in_workspace(info.rcWork, info.rcMonitor);
+        unsafe { SetWindowPlacement(hwnd, &placement)? };
+        Ok([previous.left, previous.top, previous.right, previous.bottom])
+    }
+
+    pub fn set_restore(window: &tauri::WebviewWindow, rect: [i32; 4]) -> Result<()> {
+        let (hwnd, mut placement) = placement(window)?;
+        let [left, top, right, bottom] = rect;
+        placement.rcNormalPosition = RECT {
+            left,
+            top,
+            right,
+            bottom,
+        };
+        unsafe { SetWindowPlacement(hwnd, &placement)? };
+        Ok(())
+    }
+
+    /// Window placements use workspace coordinates, which are screen
+    /// coordinates shifted by the space toolbars take from the monitor's
+    /// top-left corner.
+    pub(super) fn work_area_in_workspace(work: RECT, monitor: RECT) -> RECT {
+        let (dx, dy) = (work.left - monitor.left, work.top - monitor.top);
+        RECT {
+            left: work.left - dx,
+            top: work.top - dy,
+            right: work.right - dx,
+            bottom: work.bottom - dy,
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn work_area_converts_to_workspace_coordinates() {
+            let rect = |left, top, right, bottom| RECT {
+                left,
+                top,
+                right,
+                bottom,
+            };
+            // Bottom taskbar: workspace and screen coordinates agree.
+            assert_eq!(
+                work_area_in_workspace(rect(0, 0, 2560, 1392), rect(0, 0, 2560, 1440)),
+                rect(0, 0, 2560, 1392)
+            );
+            // Top taskbar on a second monitor: the toolbar offset is removed.
+            assert_eq!(
+                work_area_in_workspace(rect(2560, 48, 4480, 1080), rect(2560, 0, 4480, 1080)),
+                rect(2560, 0, 4480, 1032)
+            );
+        }
+    }
+}
+
 #[tauri::command]
 fn app_update(action: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
@@ -2891,6 +3034,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            window_fullscreen,
             dj_request,
             dj_prepare,
             dj_voice,

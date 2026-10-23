@@ -376,8 +376,7 @@ function App() {
     y: number;
   } | null>(null);
   const [immersive, setImmersive] = useState(false);
-  const restoreMaximized = useRef(false),
-    fullscreenBusy = useRef(false);
+  const fullscreenBusy = useRef(false);
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
@@ -1406,17 +1405,9 @@ function App() {
     fullscreenBusy.current = true;
     try {
       const next = force ?? !(await windowHandle().isFullscreen());
-      if (next) {
-        restoreMaximized.current = await windowHandle().isMaximized();
-        // Windows keeps a maximized window's work-area size (above the
-        // taskbar) when it goes full screen; leave maximized first.
-        if (restoreMaximized.current) await windowHandle().unmaximize();
-      }
-      await windowHandle().setFullscreen(next);
-      if (!next && restoreMaximized.current) {
-        await windowHandle().unmaximize();
-        await windowHandle().maximize();
-      }
+      // The backend leaves and restores maximized without the window
+      // shrinking to its restore size on the way.
+      await rpc("window_fullscreen", { enabled: next });
       setImmersive(next);
       if (next) setCenter("lyrics");
     } catch (error) {

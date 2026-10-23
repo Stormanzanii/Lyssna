@@ -2744,6 +2744,15 @@ test("fullscreen moves lyrics right and Escape restores normal layout", async ({
     .first()
     .click();
   await expect(page.locator(".application")).toHaveClass(/immersive/);
+  // The backend switches full screen, so a maximized window is not first
+  // restored to its smaller size by the page.
+  const windowCalls = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .map((c: any) => c.command)
+      .filter((c: string) => /window/.test(c)),
+  );
+  expect(windowCalls).toContain("window_fullscreen");
+  expect(windowCalls.join(" ")).not.toMatch(/unmaximize|set_fullscreen/);
   // Full screen shows only the lyrics page, with its own controls.
   await expect(page.locator(".topbar")).toBeHidden();
   await expect(page.locator("footer.player-bar")).toBeHidden();

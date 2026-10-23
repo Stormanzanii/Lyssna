@@ -513,6 +513,20 @@ fn requested_context_index(context: &Context, track: &PlayingTrack) -> Option<us
             }),
     }
 }
+/// Whether the requested track, moved on by `offset`, lies past the pages
+/// loaded so far. A track picked deep in a long playlist from another client
+/// is not in the first page Spotify resolves.
+fn requested_track_unloaded(context: &Context, track: &PlayingTrack, offset: usize) -> bool {
+    let length = context
+        .pages
+        .iter()
+        .map(|page| page.tracks.len())
+        .sum::<usize>();
+    requested_context_index(context, track)
+        .is_none_or(|index| index.saturating_add(offset) >= length)
+}
+/// Pages fetched at most to find a requested track: 10,000 tracks.
+const MAX_REQUESTED_TRACK_PAGES: usize = 100;
 fn automatic_restore_allowed(enabled: bool, cluster: &Cluster, session_id: &str) -> bool {
     enabled
         && cluster.active_device_id.is_empty()
@@ -2010,11 +2024,26 @@ impl SpircTask {
                         || ctx.metadata.contains_key("spotiflex.dj_request")
                 });
 
+        // The loaded part of the playing context may not hold the track
+        // another client picked; resolve it again to page through.
+        let requested_track_missing = options.playing_track.as_ref().is_some_and(|track| {
+            self.connect_state
+                .get_context(update_context)
+                .is_ok_and(|ctx| match track {
+                    PlayingTrack::Index(index) => *index as usize >= ctx.tracks.len(),
+                    PlayingTrack::Uri(uri) => !ctx.tracks.iter().any(|t| &t.uri == uri),
+                    PlayingTrack::Uid(uid) => !ctx.tracks.iter().any(|t| &t.uid == uid),
+                    PlayingTrack::UidOrUri { uid, uri } => {
+                        !ctx.tracks.iter().any(|t| &t.uid == uid || &t.uri == uri)
+                    }
+                })
+        });
         if saved_context.is_none()
             && resumed
             && current_context_uri == &context_uri
             && fallback == context_uri
             && !new_set
+            && !requested_track_missing
         {
             debug!("context <{current_context_uri}> didn't change, no resolving required")
         } else {
@@ -2044,21 +2073,10 @@ impl SpircTask {
                 );
             }
             let mut context = self.context_resolver.get_next_context(Vec::new).await?;
-            if resumed && options.relative_offset > 0 {
-                for _ in 0..8 {
-                    let Some(index) = options
-                        .playing_track
-                        .as_ref()
-                        .and_then(|track| requested_context_index(&context, track))
-                    else {
-                        break;
-                    };
-                    let length = context
-                        .pages
-                        .iter()
-                        .map(|page| page.tracks.len())
-                        .sum::<usize>();
-                    if index.saturating_add(options.relative_offset as usize) < length {
+            if resumed && let Some(track) = options.playing_track.as_ref() {
+                let offset = options.relative_offset.max(0) as usize;
+                for _ in 0..MAX_REQUESTED_TRACK_PAGES {
+                    if !requested_track_unloaded(&context, track, offset) {
                         break;
                     }
                     let Some(url) = context
@@ -2592,6 +2610,43 @@ mod startup_tests {
             ),
             Some(2)
         );
+    }
+    #[test]
+    fn a_track_past_the_loaded_pages_asks_for_more() {
+        use crate::protocol::context_track::ContextTrack;
+        let track = |uri: &str| ContextTrack {
+            uri: Some(uri.into()),
+            ..ContextTrack::default()
+        };
+        let mut context = Context {
+            pages: vec![ContextPage {
+                tracks: vec![track("first"), track("second")],
+                ..ContextPage::default()
+            }],
+            ..Context::default()
+        };
+        let picked = PlayingTrack::Uri("deep".into());
+        assert!(requested_track_unloaded(&context, &picked, 0));
+        assert!(!requested_track_unloaded(
+            &context,
+            &PlayingTrack::Uri("second".into()),
+            0
+        ));
+        assert!(requested_track_unloaded(
+            &context,
+            &PlayingTrack::Uri("second".into()),
+            1
+        ));
+        assert!(requested_track_unloaded(
+            &context,
+            &PlayingTrack::Index(5),
+            0
+        ));
+        context.pages.push(ContextPage {
+            tracks: vec![track("deep")],
+            ..ContextPage::default()
+        });
+        assert!(!requested_track_unloaded(&context, &picked, 0));
     }
     #[test]
     fn passive_startup_does_not_claim_a_restorable_session() {

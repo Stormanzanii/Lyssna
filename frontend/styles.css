@@ -393,8 +393,8 @@ small {
   scale: 1.08;
 }
 .compact-library .library-cover-play {
-  /* The cover is centred between the left padding and the pin space. */
-  left: calc(50% - 38px);
+  left: 50%;
+  translate: -50% -50%;
 }
 .pinned-mark {
   color: #1ed760;
@@ -886,8 +886,15 @@ small {
   display: none;
 }
 .compact-library .library-item {
-  padding: 8px;
+  padding: 8px 0;
   justify-content: center;
+}
+.compact-library .library-pin {
+  display: none;
+}
+.compact-library .library-list {
+  padding-inline: 4px;
+  scrollbar-gutter: auto;
 }
 .center-panel {
   position: relative;

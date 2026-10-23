@@ -7592,6 +7592,45 @@ test("clicking empty top bar space never starts a window drag; moving does", asy
   await expect.poll(drags).toBe(1);
 });
 
+test("compact library play overlays stay inside their artwork", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate((settings) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "settings",
+      settings: { ...settings, compact_library: true },
+    });
+    host.emit({
+      type: "library",
+      playlists: [
+        {
+          id: "compact-playlist",
+          name: "Compact playlist",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    });
+  }, emptyState.settings);
+  for (const row of [
+    page.locator(".library-liked"),
+    page.locator('[data-playlist-id="compact-playlist"]'),
+  ]) {
+    await row.hover();
+    const cover = (await row.locator(".liked-cover, .cover").boundingBox())!;
+    const play = (await row.locator(".library-cover-play").boundingBox())!;
+    expect(Math.abs(play.x - cover.x)).toBeLessThan(1);
+    expect(Math.abs(play.y - cover.y)).toBeLessThan(1);
+    expect(cover.width).toBe(48);
+  }
+  await page
+    .locator(".library-panel")
+    .screenshot({ path: "target/diagnostics/compact-library.png" });
+});
+
 for (const viewportWidth of [1200, 1500, 2000]) {
   test(`Your Library resizes by dragging its edge and collapses like Spotify at ${viewportWidth}px`, async ({
     page,

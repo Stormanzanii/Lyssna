@@ -1120,7 +1120,16 @@ function SongLyricsPage({
     track?.duration_ms,
   );
   const fullscreenControls = track ? (
-    <div className="lyrics-fullscreen-controls">
+    <div
+      className="lyrics-fullscreen-controls"
+      style={
+        {
+          // Both time labels reserve the duration's width, so the seek bar
+          // between them keeps its length as the elapsed time changes.
+          "--time-chars": formatTime(track.duration_ms).length,
+        } as CSSProperties
+      }
+    >
       {/* A frosted glass track with a glowing fill; a transparent
                   range on top handles dragging and the keyboard. */}
       <div

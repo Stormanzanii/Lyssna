@@ -7820,7 +7820,31 @@ for (const canvas of [false, true]) {
       expect(buttons.y + buttons.height).toBeLessThan(cover.y + cover.height);
       const toolbar = (await section.locator(".lyrics-toolbar").boundingBox())!;
       expect(toolbar.y).toBeGreaterThan(cover.y);
+      // Both time labels reserve the duration's width, so the seek bar
+      // keeps its length while the elapsed time changes.
+      const times = controls.locator(".lyrics-fullscreen-times time");
+      const elapsed = (await times.first().boundingBox())!.width;
+      const total = (await times.last().boundingBox())!.width;
+      expect(Math.abs(elapsed - total)).toBeLessThan(0.5);
+    } else {
+      // The song details sit just above the docked controls.
+      const artists = (await section.locator(".lyrics-artists").boundingBox())!;
+      const dock = (await controls.boundingBox())!;
+      await expect
+        .poll(async () => {
+          const lifted = (await section
+            .locator(".lyrics-artists")
+            .boundingBox())!;
+          return dock.y - (lifted.y + lifted.height);
+        })
+        .toBeLessThan(40);
+      expect(dock.y).toBeGreaterThan(artists.y);
     }
+    // Same dark frosted toolbar as outside full screen.
+    await expect(section.locator(".lyrics-toolbar")).not.toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
     await page.screenshot({
       path: `target/diagnostics/fullscreen-${canvas ? "canvas" : "album"}-awake.png`,
     });

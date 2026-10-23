@@ -28,27 +28,13 @@
     :has(:focus-visible)
   ) {
   --lyrics-controls-opacity: 1;
-  --lyrics-dock-lift: 136px;
+  --lyrics-dock-lift: 104px;
 }
 .immersive .lyrics-page .lyrics-fullscreen-controls,
 .immersive .lyrics-page .lyrics-toolbar {
   opacity: var(--lyrics-controls-opacity);
   pointer-events: none;
   transition: opacity 250ms ease;
-}
-.immersive .lyrics-toolbar {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  backdrop-filter: none;
-}
-.immersive .lyrics-toolbar .icon-button {
-  width: 44px;
-  height: 44px;
-  border: 1px solid #ffffff25;
-  border-radius: 50%;
-  background: #ffffff0d;
-  backdrop-filter: blur(12px);
 }
 .immersive
   .lyrics-page:is(
@@ -84,12 +70,18 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: #000;
-  opacity: calc(var(--lyrics-controls-opacity) * 0.35);
+  /* Darkest under the transport and seek bar, where the controls sit. */
+  background: linear-gradient(
+    #0000004d,
+    #00000026 35%,
+    #00000040 60%,
+    #000000a6
+  );
+  opacity: var(--lyrics-controls-opacity);
   transition: opacity 250ms ease;
 }
 .immersive .lyrics-media > .lyrics-toolbar {
-  top: 6cqw;
+  top: 4cqw;
   left: 50%;
   right: auto;
   translate: -50% 0;
@@ -98,10 +90,6 @@
   width: max-content;
   max-width: calc(100% - 32px);
 }
-.immersive .lyrics-media .lyrics-toolbar .icon-button {
-  width: 44px;
-  height: 44px;
-}
 .immersive .lyrics-media .lyrics-fullscreen-controls {
   position: absolute;
   z-index: 3;
@@ -109,7 +97,9 @@
   width: 80%;
   max-width: none;
   margin: 0;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns:
+    calc((var(--time-chars, 4) + 0.5) * 1ch) minmax(0, 1fr)
+    calc((var(--time-chars, 4) + 0.5) * 1ch);
   gap: 12px;
 }
 .immersive .lyrics-media .lyrics-fullscreen-buttons {
@@ -135,11 +125,12 @@
 .immersive .lyrics-media .lyrics-fullscreen-buttons .lyrics-fullscreen-like {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 7cqw);
+  bottom: calc(100% + 9cqw);
   translate: -50% 0;
-  width: 43cqw;
-  height: 43cqw;
+  width: 30cqw;
+  height: 30cqw;
   margin: 0;
+  filter: drop-shadow(0 4px 18px #0000008c);
 }
 .immersive .lyrics-media .lyrics-glass-seek {
   grid-row: 2;
@@ -159,6 +150,7 @@
 }
 .immersive .lyrics-media .lyrics-fullscreen-times time:first-child {
   grid-column: 1;
+  text-align: right;
 }
 .immersive .lyrics-media .lyrics-fullscreen-times time:last-child {
   grid-column: 3;

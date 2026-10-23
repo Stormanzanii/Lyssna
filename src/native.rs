@@ -1901,13 +1901,47 @@ async fn run(
         session.shutdown();
         return Outcome::Stopped;
     }
+    // Creating Spirc authenticates the session; its task still has to register
+    // the Connect sender with Spotify. Remote commands before that acknowledgement
+    // can be rejected with PermissionDenied. Drive the task while waiting.
+    tokio::pin!(task);
+    let registration = async {
+        loop {
+            if cancelled.load(Ordering::Acquire) {
+                return false;
+            }
+            if spirc
+                .devices()
+                .snapshot()
+                .iter()
+                .any(|device| device.id == session.device_id())
+            {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    let registered = tokio::select! {
+        result = tokio::time::timeout(Duration::from_secs(20), registration) => result.ok(),
+        _ = &mut *stopped => Some(false),
+        _ = &mut task => None,
+    };
+    if registered != Some(true) {
+        session.shutdown();
+        return if registered == Some(false) {
+            Outcome::Stopped
+        } else {
+            Outcome::Failed(Failure::transient(
+                "Spotify Connect registration did not complete",
+            ))
+        };
+    }
     if let Ok(mut shared) = shared_session.lock() {
         *shared = Some(session.clone());
     }
     ready.store(true, Ordering::Release);
     emit(NativeEvent::Ready(session.device_id().to_owned()));
     let _ = spirc.prewarm_dj();
-    tokio::pin!(task);
     let mut active = false;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
@@ -2184,6 +2218,42 @@ pub(crate) fn with_live_session<T>(check: impl AsyncFnOnce(&Session) -> T) -> T 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "Saved sign-in; register an idle Connect device without starting playback"]
+    fn live_native_ready_requires_connect_registration() {
+        use super::*;
+        let account = live_account();
+        let controls = NativeControls::default();
+        let (events, receive) = mpsc::channel();
+        let player = NativePlayer::start(account, 1, events, Default::default(), controls.clone());
+        let deadline = std::time::Instant::now() + Duration::from_secs(45);
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Native readiness timed out"
+            );
+            if let Ok(NativeMessage {
+                event: NativeEvent::Ready(id),
+                ..
+            }) = receive.recv_timeout(Duration::from_millis(20))
+            {
+                assert!(
+                    controls.connect_cluster().unwrap().is_some(),
+                    "Native Ready arrived before Spotify registered the Connect sender"
+                );
+                assert!(
+                    controls
+                        .devices()
+                        .unwrap()
+                        .iter()
+                        .any(|device| device.id.as_deref() == Some(&id)),
+                    "Ready sender missing from Spotify device list"
+                );
+                break;
+            }
+        }
+        drop(player);
+    }
     #[test]
     fn playing_position_matches_audible_audio() {
         assert_eq!(super::playing_position(10_000, 400, None), 9_600);

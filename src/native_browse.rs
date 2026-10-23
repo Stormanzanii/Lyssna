@@ -19,6 +19,8 @@ struct Listing {
 type Key = (String, String);
 static LISTINGS: OnceLock<tokio::sync::Mutex<HashMap<Key, Listing>>> = OnceLock::new();
 static TRACKS: OnceLock<std::sync::Mutex<HashMap<Key, Track>>> = OnceLock::new();
+type CachedCover = (Instant, Vec<crate::model::Artwork>);
+static PLAYLIST_COVERS: OnceLock<std::sync::Mutex<HashMap<Key, CachedCover>>> = OnceLock::new();
 /// Playlist contexts already checked for Spotify's hidden Liked Songs
 /// playlist, so each is looked up once per run.
 static LIKED_PLAYLISTS: OnceLock<std::sync::Mutex<HashMap<Key, bool>>> = OnceLock::new();
@@ -39,6 +41,11 @@ pub async fn playlist_info(session: &Session, id: &str) -> Result<crate::model::
         "Playlist name unavailable"
     );
     let mut info = playlist_header(id, &playlist);
+    if info.images.is_empty() {
+        info.images = default_playlist_artwork(session, &playlist)
+            .await
+            .unwrap_or_default();
+    }
     if let Some(details) = &mut info.playlist
         && details.owner != session.username()
     {
@@ -183,11 +190,126 @@ pub async fn library_with_folders(
         from += count;
         let total = usize::try_from(page.length()).unwrap_or_default();
         if count == 0 || (from >= total && count < ROOTLIST_PAGE) {
+            hydrate_playlist_artwork(session, &mut playlists).await;
             name_owners(session, &mut playlists).await;
             return Ok((playlists, folders));
         }
     }
     anyhow::bail!("Spotify library has too many pages")
+}
+
+/// Spotify omits picture attributes for playlists that use album artwork.
+/// Resolve a bounded sample of their songs rather than leaving a blank tile.
+async fn default_playlist_artwork(
+    session: &Session,
+    playlist: &Playlist,
+) -> Result<Vec<crate::model::Artwork>> {
+    let uris: Vec<_> = playlist
+        .tracks()
+        .filter(|uri| matches!(uri, SpotifyUri::Track { .. }))
+        .take(20)
+        .map(|uri| uri.to_uri())
+        .collect();
+    if uris.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(album_mosaic(&resolve_tracks(session, &uris).await?))
+}
+
+fn album_mosaic(tracks: &[Track]) -> Vec<crate::model::Artwork> {
+    let mut seen = HashSet::new();
+    let covers: Vec<_> = tracks
+        .iter()
+        .filter_map(|track| {
+            let image = track
+                .album
+                .images
+                .iter()
+                .find(|image| image.url.starts_with("https://"))?;
+            seen.insert(image.url.as_str()).then_some(image.clone())
+        })
+        .take(4)
+        .collect();
+    if covers.len() == 4 {
+        let ids: Option<Vec<_>> = covers
+            .iter()
+            .map(|image| {
+                image
+                    .url
+                    .strip_prefix("https://i.scdn.co/image/")
+                    .filter(|id| id.len() == 40 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            })
+            .collect();
+        if let Some(ids) = ids {
+            return vec![crate::model::Artwork {
+                url: format!("https://mosaic.scdn.co/640/{}", ids.concat()),
+                width: Some(640),
+            }];
+        }
+    }
+    covers.into_iter().take(1).collect()
+}
+
+async fn playlist_artwork(session: &Session, id: &str) -> Result<Vec<crate::model::Artwork>> {
+    let key = (session.username(), id.to_owned());
+    if let Some(images) = PLAYLIST_COVERS
+        .get_or_init(Default::default)
+        .lock()
+        .ok()
+        .and_then(|cache| {
+            cache
+                .get(&key)
+                .filter(|(when, _)| when.elapsed() < Duration::from_secs(300))
+                .map(|(_, images)| images.clone())
+        })
+    {
+        return Ok(images);
+    }
+    let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+    let playlist = Playlist::get(session, &uri).await?;
+    let mut images = playlist_header(id, &playlist).images;
+    if images.is_empty() {
+        images = default_playlist_artwork(session, &playlist).await?;
+    }
+    if !images.is_empty()
+        && let Ok(mut cache) = PLAYLIST_COVERS.get_or_init(Default::default).lock()
+    {
+        if cache.len() >= 2048 {
+            cache.clear();
+        }
+        cache.insert(key, (Instant::now(), images.clone()));
+    }
+    Ok(images)
+}
+
+async fn hydrate_playlist_artwork(session: &Session, playlists: &mut [crate::model::Playlist]) {
+    let mut pending: VecDeque<_> = playlists
+        .iter()
+        .enumerate()
+        .filter(|(_, playlist)| playlist.images.is_empty())
+        .map(|(index, playlist)| (index, playlist.id.clone()))
+        .collect();
+    let mut tasks = tokio::task::JoinSet::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+    loop {
+        while tasks.len() < 4 {
+            let Some((index, id)) = pending.pop_front() else {
+                break;
+            };
+            let session = session.clone();
+            tasks.spawn(async move { (index, playlist_artwork(&session, &id).await) });
+        }
+        if tasks.is_empty() {
+            break;
+        }
+        match tokio::time::timeout_at(deadline, tasks.join_next()).await {
+            Ok(Some(Ok((index, Ok(images))))) => playlists[index].images = images,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+    // Dropping JoinSet cancels unfinished work; no late results can replace a
+    // later library snapshot or a different account's artwork.
 }
 
 /// The latest 50 played contexts, newest first, each as the song last heard
@@ -1392,6 +1514,35 @@ async fn warm_tracks(session: &Session, uris: &[String]) {
 #[cfg(test)]
 mod rootlist_tests {
     use super::*;
+    #[test]
+    fn default_covers_use_distinct_albums_and_keep_empty_playlists_empty() {
+        let tracks: Vec<_> = [1, 1, 2, 3, 4, 5]
+            .into_iter()
+            .map(|album| Track {
+                album: crate::model::Album {
+                    images: vec![crate::model::Artwork {
+                        url: format!("https://i.scdn.co/image/ab67616d0000b273{album:024x}"),
+                        width: Some(640),
+                    }],
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .collect();
+        let expected: String = (1..=4)
+            .map(|album| format!("ab67616d0000b273{album:024x}"))
+            .collect();
+        assert_eq!(
+            album_mosaic(&tracks)[0].url,
+            format!("https://mosaic.scdn.co/640/{expected}")
+        );
+        assert_eq!(
+            album_mosaic(&tracks[..3])[0].url,
+            tracks[0].album.images[0].url
+        );
+        assert!(album_mosaic(&[]).is_empty());
+        assert!(album_mosaic(&[Track::default()]).is_empty());
+    }
     use librespot_protocol::playlist4_external::{
         Item, ListAttributes, ListItems, MetaItem, SelectedListContent,
     };
@@ -1673,6 +1824,58 @@ mod playlist_header_tests {
 #[cfg(test)]
 mod owner_name_tests {
     use super::*;
+    #[test]
+    #[ignore = "Read-only native library and default playlist artwork verification"]
+    fn live_playlist_artwork() {
+        crate::native::with_live_session(async |session| {
+            use protobuf::Message;
+            let bytes = session
+                .spclient()
+                .get_rootlist(0, Some(ROOTLIST_PAGE))
+                .await
+                .unwrap();
+            let page =
+                librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(
+                    &bytes,
+                )
+                .unwrap();
+            let rows = page.contents.as_ref().unwrap();
+            let mut sample = None;
+            for (item, meta) in rows.items.iter().zip(&rows.meta_items) {
+                let Some(id) = item.uri().strip_prefix("spotify:playlist:") else {
+                    continue;
+                };
+                if !list_images(meta.attributes.get_or_default()).is_empty() {
+                    continue;
+                }
+                let tracks = read(session, &format!("playlist:{id}"), 0).await.unwrap();
+                if tracks.iter().any(|track| !track.album.images.is_empty()) {
+                    sample = Some(id.to_owned());
+                    break;
+                }
+            }
+            let id = sample.expect("Account needs a nonempty playlist with a default album cover");
+            let playlists = library(session).await.unwrap();
+            let playlist = playlists.iter().find(|playlist| playlist.id == id).unwrap();
+            assert!(
+                !playlist.images.is_empty(),
+                "Library dropped artwork for a nonempty playlist without an uploaded cover"
+            );
+            let client = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap();
+            let response = client.get(&playlist.images[0].url).send().await.unwrap();
+            assert!(
+                response.status().is_success(),
+                "Default playlist cover must load from Spotify CDN"
+            );
+            let image = image::load_from_memory(&response.bytes().await.unwrap()).unwrap();
+            assert!(image.width() > 0);
+            println!("Default playlist artwork available and decodes successfully");
+        });
+    }
     #[test]
     fn owner_profile_identity_and_artwork_are_validated() {
         let profile = crate::native_login::profile_from_response("friend", br#"{"uri":"spotify:user:friend","name":" Friend ","image_url":"https://artwork.example.test/avatar"}"#).unwrap();

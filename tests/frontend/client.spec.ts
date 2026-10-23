@@ -7750,6 +7750,46 @@ test("Canvas title and release year share the same left edge", async ({
   expect(Math.abs(title.x - year.x)).toBeLessThanOrEqual(1);
 });
 
+test("playlist artwork recovers when an inferred Spotify size does not exist", async ({
+  page,
+}) => {
+  await startClient(page);
+  const original =
+    "https://i.scdn.co/image/ab67706c0000bebb0123456789abcdef01234567";
+  await page.route("https://i.scdn.co/image/**", (route) =>
+    route.request().url() === original
+      ? route.fulfill({
+          contentType: "image/svg+xml",
+          body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640"><rect width="640" height="640" fill="#9670a7"/></svg>',
+        })
+      : route.fulfill({ status: 404, body: "Missing variant" }),
+  );
+  await page.evaluate(
+    (url) =>
+      (window as any).__clientTest.emit({
+        type: "library",
+        playlists: [
+          {
+            id: "cover-playlist",
+            name: "Cover playlist",
+            images: [{ url }],
+            owner: { id: "test-user" },
+            collaborative: false,
+          },
+        ],
+      }),
+    original,
+  );
+  const image = page.locator('[data-playlist-id="cover-playlist"] img');
+  await expect
+    .poll(() =>
+      image.evaluate(
+        (node: HTMLImageElement) => node.complete && node.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+});
+
 for (const canvas of [false, true]) {
   test(`fullscreen controls follow ${canvas ? "Canvas dock" : "album artwork"} and disappear on idle`, async ({
     page,

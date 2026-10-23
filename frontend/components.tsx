@@ -104,11 +104,15 @@ export function Cover({
 }) {
   const src = imageOf(images);
   const picture = useRef<HTMLImageElement>(null);
+  const attempted = useRef(new Set<string>());
+  const [failed, setFailed] = useState(false);
   const sources = images?.map((image) => image.url).join(" ");
   // Load the smallest Spotify size that fills the laid-out cover. Set here,
   // not through srcset/sizes="auto": Chromium keeps every image with
   // sizes="auto" (and its page) alive after it leaves the page.
   useLayoutEffect(() => {
+    attempted.current.clear();
+    setFailed(false);
     const element = picture.current;
     if (!element) return;
     const width = element.parentElement?.clientWidth ?? 0;
@@ -116,16 +120,33 @@ export function Cover({
       images,
       width ? Math.ceil(width * devicePixelRatio) : undefined,
     );
-    if (url) setSourceSoon(element, url);
+    if (url) {
+      attempted.current.add(url);
+      setSourceSoon(element, url);
+    }
   }, [sources]);
   const inner = src ? (
-    <img
-      ref={picture}
-      alt=""
-      draggable={false}
-      loading="lazy"
-      decoding="async"
-    />
+    <>
+      <img
+        ref={picture}
+        alt=""
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+        style={failed ? { display: "none" } : undefined}
+        onError={(event) => {
+          const next = images?.find(
+            (image) =>
+              usableImage(image.url) && !attempted.current.has(image.url),
+          )?.url;
+          if (next) {
+            attempted.current.add(next);
+            event.currentTarget.src = next;
+          } else setFailed(true);
+        }}
+      />
+      {failed && <Music2 aria-hidden="true" />}
+    </>
   ) : (
     <Music2 aria-hidden="true" />
   );

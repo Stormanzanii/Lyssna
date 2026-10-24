@@ -748,7 +748,11 @@ impl SpotiFlex {
                 offset: Some(track.uri.clone()),
             });
         } else if let Some((uris, offset)) = model::play_window(&self.tracks, index, 100) {
-            self.action(PlayerAction::PlayUris { uris, offset });
+            self.action(PlayerAction::PlayUris {
+                uris,
+                offset,
+                context: None,
+            });
         } else {
             self.action(PlayerAction::Play(Some(track.uri.clone())));
         }

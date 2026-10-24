@@ -261,7 +261,7 @@ fn command_body(action: &PlayerAction) -> Result<Value> {
                 json!({"skip_to":{"track_uri":offset}}),
             )
         }
-        PlayerAction::PlayUris { uris, offset } => {
+        PlayerAction::PlayUris { uris, offset, .. } => {
             ensure!(
                 !uris.is_empty() && uris.len() <= 5000 && *offset < uris.len(),
                 "Invalid Spotify track selection"
@@ -367,6 +367,7 @@ mod tests {
             PlayerAction::PlayUris {
                 uris: vec![uri.into()],
                 offset: 0,
+                context: None,
             },
         ] {
             let value = command_body(&action).unwrap();

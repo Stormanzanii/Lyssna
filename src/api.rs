@@ -464,7 +464,7 @@ impl Spotify {
             PlayerAction::RestoreDJ { .. } | PlayerAction::PreparedDJ { .. } => {
                 anyhow::bail!("DJ session restore requires native playback")
             }
-            PlayerAction::PlayUris { uris, offset } => (
+            PlayerAction::PlayUris { uris, offset, .. } => (
                 Method::PUT,
                 "play",
                 Some(json!({"uris": uris, "offset": {"position": offset}})),
@@ -649,6 +649,9 @@ pub enum PlayerAction {
     PlayUris {
         uris: Vec<String>,
         offset: usize,
+        /// The playlist, album or collection these songs are, already loaded:
+        /// this computer plays them under it without asking Spotify for it.
+        context: Option<String>,
     },
     Pause,
     Next,

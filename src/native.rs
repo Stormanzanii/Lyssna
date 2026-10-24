@@ -824,7 +824,7 @@ fn selected_track(action: &PlayerAction) -> Option<String> {
             relative_offset: 0,
             ..
         } => Some(track.clone()),
-        PlayerAction::PlayUris { uris, offset } | PlayerAction::Resume { uris, offset, .. } => {
+        PlayerAction::PlayUris { uris, offset, .. } | PlayerAction::Resume { uris, offset, .. } => {
             uris.get(*offset).cloned()
         }
         _ => None,
@@ -834,7 +834,7 @@ fn selected_track(action: &PlayerAction) -> Option<String> {
 fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUri, u32)> {
     let (uri, position) = match action {
         PlayerAction::Play(Some(uri)) => (uri.as_str(), 0),
-        PlayerAction::PlayUris { uris, offset } => (uris.get(*offset)?.as_str(), 0),
+        PlayerAction::PlayUris { uris, offset, .. } => (uris.get(*offset)?.as_str(), 0),
         PlayerAction::Resume {
             uris,
             offset,
@@ -1002,6 +1002,27 @@ mod dj_queue_tests {
     }
 }
 
+/// A context holding `uris` as one page, as Spotify would resolve it.
+fn listed_context(uri: &str, uris: &[String]) -> librespot_protocol::context::Context {
+    use librespot_protocol::{
+        context::Context, context_page::ContextPage, context_track::ContextTrack,
+    };
+    Context {
+        uri: Some(uri.into()),
+        pages: vec![ContextPage {
+            tracks: uris
+                .iter()
+                .map(|uri| ContextTrack {
+                    uri: Some(uri.clone()),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    }
+}
+
 fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
     let options = |playing_track| LoadRequestOptions {
         start_playing: true,
@@ -1052,7 +1073,23 @@ fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
             context.clone(),
             options(offset.clone().map(PlayingTrack::Uri)),
         ),
-        PlayerAction::PlayUris { uris, offset } => LoadRequest::from_tracks(
+        // Songs already loaded from a playlist, album or Liked Songs play
+        // under that context straight away: Spotify Connect and the library
+        // see what is playing, and nothing waits on resolving the context.
+        PlayerAction::PlayUris {
+            uris,
+            offset,
+            context: Some(context),
+        } => LoadRequest::from_context_uri(
+            context.clone(),
+            LoadRequestOptions {
+                prepared_context: Some(Box::new(listed_context(context, uris))),
+                ..options(Some(PlayingTrack::Index(
+                    (*offset).min(u32::MAX as usize) as u32
+                )))
+            },
+        ),
+        PlayerAction::PlayUris { uris, offset, .. } => LoadRequest::from_tracks(
             uris.clone(),
             options(Some(PlayingTrack::Index(
                 (*offset).min(u32::MAX as usize) as u32
@@ -2310,6 +2347,38 @@ mod tests {
         assert!(load_request(&PlayerAction::Pause).is_none());
     }
     #[test]
+    fn listed_songs_load_under_their_context_without_resolving_it() {
+        let uris: Vec<String> = vec!["spotify:track:a".into(), "spotify:track:b".into()];
+        let request = load_request(&PlayerAction::PlayUris {
+            uris: uris.clone(),
+            offset: 1,
+            context: Some("spotify:playlist:abc".into()),
+        })
+        .unwrap();
+        assert!(request.start_playing);
+        assert!(matches!(
+            request.playing_track,
+            Some(PlayingTrack::Index(1))
+        ));
+        let context = request.prepared_context.as_deref().unwrap();
+        assert_eq!(context.uri.as_deref(), Some("spotify:playlist:abc"));
+        assert_eq!(
+            context.pages[0]
+                .tracks
+                .iter()
+                .map(|track| track.uri.clone().unwrap())
+                .collect::<Vec<_>>(),
+            uris
+        );
+        let plain = load_request(&PlayerAction::PlayUris {
+            uris,
+            offset: 0,
+            context: None,
+        })
+        .unwrap();
+        assert!(plain.prepared_context.is_none());
+    }
+    #[test]
     fn resume_preparation_cannot_use_another_tracks_narration_from_a_stale_uid() {
         use librespot_protocol::{
             context::Context, context_page::ContextPage, context_track::ContextTrack,
@@ -2744,6 +2813,7 @@ mod tests {
                 PlayerAction::PlayUris {
                     uris: uris.clone(),
                     offset: index % uris.len(),
+                    context: None,
                 }
             };
             assert!(controls.send(action).is_ok());
@@ -2907,7 +2977,11 @@ mod tests {
         let expected_queue = uris[1..].to_vec();
         assert!(
             controls
-                .send(PlayerAction::PlayUris { uris, offset: 0 })
+                .send(PlayerAction::PlayUris {
+                    uris,
+                    offset: 0,
+                    context: None,
+                })
                 .is_ok()
         );
         wait(Some(true));

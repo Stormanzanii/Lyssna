@@ -1677,15 +1677,22 @@ fn record_start_time(kind: &str, elapsed: Duration) {
     }
 }
 
+/// Most songs a locally played context carries; Spotify caps playlists at
+/// 10,000.
+const LISTED_CONTEXT_LIMIT: usize = 10_000;
+
+/// Playing a page's context on this computer uses the songs the page already
+/// loaded, under that context, instead of waiting for Spotify to resolve it.
 fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
     if matches!(&action,PlayerAction::PlayContext{context,..} if context==crate::home::DJ_URI) {
         return Ok(action);
     }
-    if let PlayerAction::PlayContext { offset, .. } = &action {
+    if let PlayerAction::PlayContext { context, offset } = &action {
         let uris: Vec<_> = tracks
             .iter()
             .filter(|track| !track.is_local)
             .map(|track| track.uri.clone())
+            .take(LISTED_CONTEXT_LIMIT)
             .collect();
         ensure!(!uris.is_empty(), "Wait for the playlist tracks to load");
         let index = offset.as_ref().map_or(Ok(0), |uri| {
@@ -1693,10 +1700,10 @@ fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
                 .position(|track| track == uri)
                 .context("Selected track is not loaded")
         })?;
-        let start = index.saturating_sub(30);
         return Ok(PlayerAction::PlayUris {
-            uris: uris.into_iter().skip(start).take(100).collect(),
-            offset: index - start,
+            uris,
+            offset: index,
+            context: Some(context.clone()),
         });
     }
     Ok(action)
@@ -1705,15 +1712,36 @@ fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
 /// The context a `play_uris` request names when its songs are Liked Songs.
 const LIKED_SONGS: &str = "liked";
 
-/// On this computer Liked Songs plays from Spotify's collection, as Spotify
-/// does: the queue runs past 100 songs and the context reads as Liked Songs.
-/// Speakers, driven through the Web API, keep the song list.
-fn liked_from_collection(action: PlayerAction, context: Option<&str>, user: &str) -> PlayerAction {
+/// On this computer Liked Songs plays as Spotify's collection, as Spotify
+/// does, so Connect and the library see Liked Songs playing. The loaded
+/// page's whole list follows when it holds the chosen song; otherwise the
+/// requested list. Speakers, driven through the Web API, keep the plain list.
+fn liked_from_collection(
+    action: PlayerAction,
+    context: Option<&str>,
+    user: &str,
+    loaded: &[Track],
+) -> PlayerAction {
     match action {
-        PlayerAction::PlayUris { uris, offset } if context == Some(LIKED_SONGS) => {
-            PlayerAction::PlayContext {
-                context: format!("spotify:user:{user}:collection"),
-                offset: uris.get(offset).cloned(),
+        PlayerAction::PlayUris { uris, offset, .. } if context == Some(LIKED_SONGS) => {
+            let chosen = uris.get(offset).cloned();
+            let all: Vec<_> = loaded
+                .iter()
+                .filter(|track| !track.is_local)
+                .map(|track| track.uri.clone())
+                .take(LISTED_CONTEXT_LIMIT)
+                .collect();
+            let (uris, offset) = match chosen
+                .as_ref()
+                .and_then(|uri| all.iter().position(|track| track == uri))
+            {
+                Some(index) => (all, index),
+                None => (uris, offset),
+            };
+            PlayerAction::PlayUris {
+                uris,
+                offset,
+                context: Some(format!("spotify:user:{user}:collection")),
             }
         }
         action => action,
@@ -1770,7 +1798,11 @@ impl PlayerRequest {
                 );
                 let offset = self.offset.unwrap_or(0);
                 ensure!(offset < uris.len(), "Track offset out of range");
-                PlayerAction::PlayUris { uris, offset }
+                PlayerAction::PlayUris {
+                    uris,
+                    offset,
+                    context: None,
+                }
             }
             "seek" => PlayerAction::Seek(self.position_ms.context("Seek position missing")?),
             "volume" => PlayerAction::Volume(self.volume.context("Volume missing")?.min(100)),
@@ -1815,7 +1847,12 @@ fn player(
             &snapshot.playback.device,
         );
         if local && let Some(profile) = snapshot.profile.as_ref() {
-            action = liked_from_collection(action, request.context.as_deref(), &profile.id);
+            action = liked_from_collection(
+                action,
+                request.context.as_deref(),
+                &profile.id,
+                &snapshot.tracks,
+            );
         }
         if local
             && matches!(action, PlayerAction::Play(None))
@@ -3149,17 +3186,45 @@ mod tests {
         let list = || PlayerAction::PlayUris {
             uris: vec!["spotify:track:a".into(), "spotify:track:b".into()],
             offset: 1,
+            context: None,
         };
-        match liked_from_collection(list(), Some("liked"), "me") {
-            PlayerAction::PlayContext { context, offset } => {
-                assert_eq!(context, "spotify:user:me:collection");
-                assert_eq!(offset.as_deref(), Some("spotify:track:b"));
+        let track = |uri: &str| Track {
+            uri: uri.into(),
+            ..Track::default()
+        };
+        // The page's full list follows when it holds the chosen song.
+        let page = [
+            track("spotify:track:z"),
+            track("spotify:track:a"),
+            track("spotify:track:b"),
+        ];
+        match liked_from_collection(list(), Some("liked"), "me", &page) {
+            PlayerAction::PlayUris {
+                uris,
+                offset,
+                context,
+            } => {
+                assert_eq!(context.as_deref(), Some("spotify:user:me:collection"));
+                assert_eq!(uris.len(), 3);
+                assert_eq!(uris[offset], "spotify:track:b");
             }
-            _ => panic!("Liked Songs should play from the collection"),
+            _ => panic!("Liked Songs should play as the collection"),
+        }
+        // Otherwise the requested list, still as the collection.
+        match liked_from_collection(list(), Some("liked"), "me", &[]) {
+            PlayerAction::PlayUris {
+                uris,
+                offset,
+                context,
+            } => {
+                assert!(context.is_some());
+                assert_eq!(uris[offset], "spotify:track:b");
+            }
+            _ => panic!("Liked Songs should play as the collection"),
         }
         assert!(matches!(
-            liked_from_collection(list(), None, "me"),
-            PlayerAction::PlayUris { .. }
+            liked_from_collection(list(), None, "me", &page),
+            PlayerAction::PlayUris { context: None, .. }
         ));
     }
     #[test]
@@ -3238,11 +3303,18 @@ mod tests {
             &tracks,
         )
         .unwrap();
-        let PlayerAction::PlayUris { uris, offset } = action else {
+        let PlayerAction::PlayUris {
+            uris,
+            offset,
+            context,
+        } = action
+        else {
             panic!("Local playback must not wait on remote playlist resolution")
         };
         assert_eq!(uris[offset], tracks[110].uri);
-        assert!(uris.len() <= 100);
+        // The whole loaded playlist plays, under its own context.
+        assert_eq!(uris.len(), 150);
+        assert_eq!(context.as_deref(), Some("spotify:playlist:other-owner"));
         assert!(
             local_load(
                 PlayerAction::PlayContext {

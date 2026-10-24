@@ -1321,7 +1321,9 @@ function SongLyricsPage({
             <div className="lyrics-artists">
               {track.album.release_date && !state.settings.lyrics_hide_year && (
                 <span className="lyrics-year">
-                  {track.album.release_date.slice(0, 4)} ·{" "}
+                  {track.album.release_date.slice(0, 4)}
+                  {/* Spaced like the artist's own inset on the far side. */}
+                  <span className="lyrics-year-dot">·</span>
                 </span>
               )}
               <Marquee

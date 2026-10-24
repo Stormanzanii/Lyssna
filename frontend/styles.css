@@ -2542,6 +2542,9 @@ small {
   flex: none;
   white-space: pre;
 }
+.lyrics-year-dot {
+  margin-left: 0.4em;
+}
 .lyrics-artists .marquee {
   flex: 0 1 auto;
   min-width: 0;

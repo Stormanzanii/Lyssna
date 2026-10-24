@@ -8974,3 +8974,38 @@ test("the queue moves once on skip even when Spotify sends the queue first", asy
     expect(trace[index]).toBeLessThanOrEqual(trace[index - 1] + 0.5);
   expect(trace[0] - trace.at(-1)!).toBeGreaterThan(20);
 });
+
+test("the release year dot sits evenly between year and artist", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            album: { ...track.album, release_date: "2025-01-01" },
+          },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  const gaps = await page.locator(".lyrics-artists").evaluate((root) => {
+    const range = document.createRange();
+    const box = (node: Node) => {
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect();
+    };
+    const year = box(root.querySelector(".lyrics-year")!.firstChild!);
+    const dot = box(root.querySelector(".lyrics-year-dot")!);
+    const artist = box(root.querySelector(".lyrics-artists .text-link")!);
+    return [dot.left - year.right, artist.left - dot.right];
+  });
+  expect(Math.abs(gaps[0] - gaps[1])).toBeLessThanOrEqual(2);
+});

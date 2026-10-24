@@ -756,7 +756,12 @@
 .animator-name {
   flex: 1 1 160px;
   min-width: 0;
+  color: #fff;
   text-align: left;
+}
+.animator-name::placeholder {
+  color: #ffffffd9;
+  opacity: 1;
 }
 .animator-heading {
   margin: 16px 16px 4px;

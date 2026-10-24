@@ -223,6 +223,8 @@ pub enum LyricCommand {
     },
     /// Send lyrics already on disk for the track, if any, before a fetch.
     Cached(Track),
+    /// Fetch an upcoming song's lyrics into the cache without showing them.
+    Prefetch(Track, String),
     Fetch(Track, String),
     Import(Track, PathBuf),
     /// Drop lyrics imported for a track; a following fetch uses the provider.
@@ -482,6 +484,15 @@ impl Worker {
                     } => {
                         let result = lyrics::import_with_mode(&filename, &contents, &track, mode);
                         (track, result)
+                    }
+                    // Its own thread: an upcoming song never delays the
+                    // current one's lyrics.
+                    LyricCommand::Prefetch(track, token) => {
+                        let (client, native) = (client.clone(), lyric_native.clone());
+                        thread::spawn(move || {
+                            let _ = lyrics::fetch(&client, &track, &token, &native);
+                        });
+                        continue;
                     }
                     LyricCommand::Fetch(track, token) => {
                         let result = lyrics::fetch(&client, &track, &token, &lyric_native);
@@ -1527,6 +1538,31 @@ impl Backend {
                 } else {
                     self.api()?.queue().unwrap_or_default()
                 };
+                // Warm the next songs' lyrics and artist cards so skipping
+                // shows them at once, as Canvas below.
+                let next: Vec<Track> = queue.iter().take(2).cloned().collect();
+                if !next.is_empty() {
+                    let token = if crate::provider::requires_spotify_token() {
+                        self.api()?.provider_token().unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    let artists: Vec<String> = next
+                        .iter()
+                        .filter_map(|track| track.artists.first()?.id.clone())
+                        .collect();
+                    for track in next {
+                        let _ = self
+                            .lyrics
+                            .send(LyricCommand::Prefetch(track, token.clone()));
+                    }
+                    let client = self.client.clone();
+                    thread::spawn(move || {
+                        for id in artists {
+                            let _ = crate::artist::fetch(&client, &id);
+                        }
+                    });
+                }
                 {
                     // Warm the next tracks' Canvas so skipping shows video at once.
                     let upcoming: Vec<String> = queue

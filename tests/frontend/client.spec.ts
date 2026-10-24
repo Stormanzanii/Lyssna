@@ -3239,7 +3239,7 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   expect(footer.size).toBeGreaterThanOrEqual(13);
   expect(footer.gap).toBeGreaterThanOrEqual(30);
   await expect(flow.locator(".lyric-end-credits")).toContainText(
-    "Written by: Writer One, Writer Two",
+    "Written by Writer One, Writer Two",
   );
   await expect(flow.locator(".lyric-source")).toHaveCount(0);
   const before = (await pinned.boundingBox())!;
@@ -3255,7 +3255,7 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
     .boundingBox())!;
   expect(button.y + button.height).toBeLessThan(before.y);
   await mode("full");
-  await expect(pinned).toContainText("Written by: Writer One, Writer Two");
+  await expect(pinned).toContainText("Written by Writer One, Writer Two");
   await expect(pinned).toContainText("@TestMaker");
   await expect(flow.locator(".lyric-end-credits")).toHaveCount(0);
   await page.screenshot({ path: "target/diagnostics/pinned-lyrics-full.png" });

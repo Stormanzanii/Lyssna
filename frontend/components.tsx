@@ -329,6 +329,22 @@ export const ArtistLinks = memo(function ArtistLinks({
     </>
   );
 });
+/** Songwriter credit as Spicy Lyrics shows it: a dim label, then the
+ * names a little brighter. */
+function WriterCredits({ names }: { names: string[] }) {
+  return (
+    <p className="writer-credits">
+      {names.length ? (
+        <>
+          <span className="credit-label">Written by</span>{" "}
+          <span className="credit-names">{names.join(", ")}</span>
+        </>
+      ) : (
+        "Songwriter credits unavailable"
+      )}
+    </p>
+  );
+}
 /** The badge's E is drawn, not typed: a font's ascent and pixel rounding
  * left a typed E off centre at small sizes. */
 export const EXPLICIT_MARK = (
@@ -423,11 +439,9 @@ export function LyricsDisplay({
   const [returnDirection, setReturnDirection] = useState<"up" | "down">("down");
   const footerMode = compact ? "off" : (settings.lyrics_pinned_footer ?? "off");
   const writerCredits = (
-    <p>
-      Written by:{" "}
-      {(lyrics.songwriters?.length ? lyrics.songwriters : writers).join(", ") ||
-        "Songwriter credits unavailable"}
-    </p>
+    <WriterCredits
+      names={lyrics.songwriters?.length ? lyrics.songwriters : writers}
+    />
   );
   // Browsing stays paused until the user returns or selects a lyric.
   const glide = useRef<{ from: number; start: number }>(undefined);
@@ -1355,13 +1369,13 @@ function SongLyricsPage({
                 }
                 credits={
                   <>
-                    <p>
-                      Written by:{" "}
-                      {(lyrics.songwriters?.length
-                        ? lyrics.songwriters
-                        : (track.songwriters ?? [])
-                      ).join(", ") || "Songwriter credits unavailable"}
-                    </p>
+                    <WriterCredits
+                      names={
+                        lyrics.songwriters?.length
+                          ? lyrics.songwriters
+                          : (track.songwriters ?? [])
+                      }
+                    />
                     <LyricCredits lyrics={lyrics} expanded />
                   </>
                 }

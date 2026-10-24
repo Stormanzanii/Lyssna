@@ -5230,3 +5230,12 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyrics-page:not(.narrow) .lyric-wait {
   --lead-lyric-size: min(var(--lyric-size), 4.6cqw);
 }
+/* Song and artist links beside the lyrics dim on hover like Spicy Lyrics'
+   NowBar instead of underlining. */
+:is(.lyrics-title, .lyrics-artists) .text-link {
+  transition: opacity 0.15s ease;
+}
+:is(.lyrics-title, .lyrics-artists) .text-link:hover {
+  text-decoration: none;
+  opacity: 0.75;
+}

@@ -8644,3 +8644,18 @@ test("Settings reopen on the tab and scroll position they were left at", async (
     .poll(() => scroller.evaluate((node) => node.scrollTop))
     .toBeGreaterThan(200);
 });
+
+test("lyrics song and artist links dim on hover instead of underlining", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  const title = page.locator(".lyrics-title .song-title");
+  await title.hover();
+  await expect(title).toHaveCSS("text-decoration-line", "none");
+  await expect(title).toHaveCSS("opacity", "0.75");
+  const artist = page.locator(".lyrics-artists .artist-link").first();
+  await artist.hover();
+  await expect(artist).toHaveCSS("text-decoration-line", "none");
+  await expect(artist).toHaveCSS("opacity", "0.75");
+});

@@ -136,15 +136,34 @@ impl NativeControls {
                         "/connect-state/v1/connect/volume/from/{}/to/{target}",
                         session.device_id()
                     );
-                    let message = librespot_protocol::connect::SetVolumeCommand {
-                        volume: i32::from(volume.min(100)) * 65535 / 100,
-                        connection_type: "wlan".into(),
-                        ..Default::default()
-                    };
-                    session
+                    let level = remote_volume(volume);
+                    // Spotify's clients send this as JSON; the protobuf form
+                    // was never seen to move a speaker. Setting the same
+                    // level twice is harmless, so fall back to it if refused.
+                    let mut headers = reqwest::header::HeaderMap::new();
+                    headers.insert(
+                        reqwest::header::CONTENT_TYPE,
+                        reqwest::header::HeaderValue::from_static("application/json"),
+                    );
+                    let body = serde_json::to_vec(&json!({ "volume": level }))?;
+                    match session
                         .spclient()
-                        .request_with_protobuf(&Method::PUT, &endpoint, None, &message)
+                        .request(&Method::PUT, &endpoint, Some(headers), Some(&body))
                         .await
+                    {
+                        Ok(response) => Ok(response),
+                        Err(_) => {
+                            let message = librespot_protocol::connect::SetVolumeCommand {
+                                volume: level,
+                                connection_type: "wlan".into(),
+                                ..Default::default()
+                            };
+                            session
+                                .spclient()
+                                .request_with_protobuf(&Method::PUT, &endpoint, None, &message)
+                                .await
+                        }
+                    }
                 } else {
                     let endpoint = format!(
                         "/connect-state/v1/player/command/from/{}/to/{target}",
@@ -184,6 +203,11 @@ impl NativeControls {
                 .map_err(|_| anyhow::anyhow!("Spotify playback command timed out"))?
         })
     }
+}
+
+/// Spotify Connect volume runs from 0 to 65535.
+fn remote_volume(percent: u8) -> i32 {
+    i32::from(percent.min(100)) * 65535 / 100
 }
 
 fn encode_command(command: &Value, intent_id: &str) -> Result<Vec<u8>> {
@@ -316,6 +340,13 @@ fn playback_from_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remote_volume_spans_connect_range() {
+        assert_eq!(remote_volume(0), 0);
+        assert_eq!(remote_volume(50), 32767);
+        assert_eq!(remote_volume(100), 65535);
+        assert_eq!(remote_volume(250), 65535);
+    }
     #[test]
     fn commands_match_librespot_dealer_protocol() {
         let uri = "spotify:track:0123456789abcdefghijkl";

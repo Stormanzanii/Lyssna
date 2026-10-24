@@ -9201,3 +9201,35 @@ test("the explicit badge centres its E", async ({ page }) => {
     ).toBeLessThanOrEqual(slack);
   }
 });
+
+test("pinned lyric credits line up with the writers above", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, lyrics_pinned_footer: "no_writers" },
+      }),
+    emptyState.settings,
+  );
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  const display = page.locator(".lyrics-page .lyrics-display");
+  await display.locator(".lyric-scroll").evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  const lefts = await display.evaluate((root) => {
+    const range = document.createRange();
+    const start = (node: Element) => {
+      range.selectNodeContents(node);
+      return range.getClientRects()[0]?.left;
+    };
+    return {
+      writers: start(root.querySelector(".lyric-end-credits p")!),
+      source: start(root.querySelector(".lyric-source")!),
+    };
+  });
+  expect(Math.abs(lefts.writers! - lefts.source!)).toBeLessThanOrEqual(1);
+});

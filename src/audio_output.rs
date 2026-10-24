@@ -7,6 +7,9 @@ use rodio::{
     },
 };
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+const DEFAULT_PROBE_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum OutputIssue {
@@ -20,6 +23,9 @@ struct Selection {
     revision: u64,
     issue: Option<OutputIssue>,
     reported: Option<u64>,
+    default_endpoint: Option<Option<String>>,
+    using_default: bool,
+    next_probe: Option<Instant>,
 }
 
 #[derive(Clone, Default)]
@@ -43,6 +49,11 @@ pub(crate) fn devices() -> anyhow::Result<Vec<String>> {
 }
 
 impl OutputChoice {
+    #[cfg(test)]
+    pub(crate) fn defer_default_probe(&self) {
+        // Synthetic PCM sinks must never probe or open physical audio hardware.
+        self.0.lock().unwrap().next_probe = Some(Instant::now() + Duration::from_secs(3600));
+    }
     pub fn request(&self, name: Option<String>) {
         if let Ok(mut selection) = self.0.lock()
             && selection.name != name
@@ -51,6 +62,9 @@ impl OutputChoice {
             selection.revision = selection.revision.wrapping_add(1);
             selection.issue = None;
             selection.reported = None;
+            selection.default_endpoint = None;
+            selection.using_default = false;
+            selection.next_probe = None;
         }
     }
     #[cfg(test)]
@@ -85,6 +99,16 @@ impl OutputChoice {
             selection.reported = Some(selection.revision);
         }
     }
+    fn retry_stream(&self, revision: u64) {
+        if let Ok(mut selection) = self.0.lock()
+            && selection.revision == revision
+        {
+            selection.revision = selection.revision.wrapping_add(1);
+            selection.issue = None;
+            selection.reported = None;
+            selection.next_probe = None;
+        }
+    }
     fn stream(&self, name: Option<&str>, revision: u64) -> SinkResult<OutputStream> {
         let builder = if let Some(name) = name {
             let device = cpal::default_host()
@@ -102,13 +126,60 @@ impl OutputChoice {
         }
         .map_err(|_| SinkError::ConnectionRefused("Cannot configure audio output".into()))?;
         let choice = self.clone();
-        builder
-            .with_error_callback(move |_| choice.invalidate(revision))
+        let mut stream = builder
+            .with_error_callback(move |_| choice.retry_stream(revision))
             .open_stream_or_fallback()
-            .map_err(|_| SinkError::ConnectionRefused("Cannot open audio output".into()))
+            .map_err(|_| SinkError::ConnectionRefused("Cannot open audio output".into()))?;
+        stream.log_on_drop(false);
+        Ok(stream)
     }
     pub fn open(&self, applied: Option<u64>) -> SinkResult<Option<(OutputStream, u64)>> {
+        self.open_with(
+            applied,
+            Instant::now(),
+            default_output_id,
+            |name, revision| self.stream(name, revision),
+        )
+    }
+    fn observe_default(&self, now: Instant, endpoint: impl FnOnce() -> Option<String>) {
+        let revision = {
+            let Ok(selection) = self.0.lock() else {
+                return;
+            };
+            if (selection.name.is_some() && !selection.using_default)
+                || selection.next_probe.is_some_and(|next| now < next)
+            {
+                return;
+            }
+            selection.revision
+        };
+        let endpoint = endpoint();
+        if let Ok(mut selection) = self.0.lock()
+            && selection.revision == revision
+        {
+            selection.next_probe = Some(now + DEFAULT_PROBE_INTERVAL);
+            if selection
+                .default_endpoint
+                .as_ref()
+                .is_some_and(|previous| previous != &endpoint)
+            {
+                selection.revision = selection.revision.wrapping_add(1);
+                selection.issue = None;
+                selection.reported = None;
+            }
+            selection.default_endpoint = Some(endpoint);
+        }
+    }
+    fn open_with<T>(
+        &self,
+        applied: Option<u64>,
+        now: Instant,
+        mut endpoint: impl FnMut() -> Option<String>,
+        mut open: impl FnMut(Option<&str>, u64) -> SinkResult<T>,
+    ) -> SinkResult<Option<(T, u64)>> {
+        let mut attempts = 0;
         loop {
+            self.observe_default(now, &mut endpoint);
             let (name, revision) = {
                 let selection = self
                     .0
@@ -119,10 +190,19 @@ impl OutputChoice {
                 }
                 (selection.name.clone(), selection.revision)
             };
-            let mut stream = match self.stream(name.as_deref(), revision) {
+            attempts += 1;
+            if attempts > 8 {
+                self.report(revision, OutputIssue::Unavailable);
+                return Err(SinkError::ConnectionRefused(
+                    "Audio output could not stabilize".into(),
+                ));
+            }
+            let mut using_default = name.is_none();
+            let stream = match open(name.as_deref(), revision) {
                 Ok(stream) => stream,
-                Err(_) if name.is_some() => match self.stream(None, revision) {
+                Err(_) if name.is_some() => match open(None, revision) {
                     Ok(stream) => {
+                        using_default = true;
                         self.report(revision, OutputIssue::UsingDefault);
                         stream
                     }
@@ -136,9 +216,8 @@ impl OutputChoice {
                     return Err(error);
                 }
             };
-            stream.log_on_drop(false);
             {
-                let selection = self
+                let mut selection = self
                     .0
                     .lock()
                     .map_err(|_| SinkError::ConnectionRefused("Audio output unavailable".into()))?;
@@ -150,10 +229,52 @@ impl OutputChoice {
                     }
                     continue;
                 }
+                selection.using_default = using_default;
             }
+            // A missing named device may have opened the default as fallback.
+            self.observe_default(now, &mut endpoint);
             return Ok(Some((stream, revision)));
         }
     }
+}
+
+#[cfg(windows)]
+fn default_output_id() -> Option<String> {
+    use windows::Win32::{
+        Foundation::RPC_E_CHANGED_MODE,
+        Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender},
+        System::Com::{
+            CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
+            CoUninitialize,
+        },
+    };
+    struct Apartment(bool);
+    impl Drop for Apartment {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { CoUninitialize() };
+            }
+        }
+    }
+    let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    if initialized != RPC_E_CHANGED_MODE {
+        initialized.ok().ok()?;
+    }
+    let _apartment = Apartment(initialized.is_ok());
+    unsafe {
+        let devices: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = devices.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let id = device.GetId().ok()?;
+        let value = id.to_string().ok();
+        CoTaskMemFree(Some(id.0.cast()));
+        value
+    }
+}
+
+#[cfg(not(windows))]
+fn default_output_id() -> Option<String> {
+    cpal::default_host().default_output_device()?.name().ok()
 }
 
 /// Quiet, bounded output check. This never changes the saved device choice.
@@ -213,6 +334,114 @@ pub(crate) fn test_sound(name: Option<String>) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn default_endpoint_change_reopens_active_playback() {
+        let choice = OutputChoice::default();
+        let now = Instant::now();
+        let (_, first) = choice
+            .open_with(None, now, || Some("speakers-id".into()), |_, _| Ok(()))
+            .unwrap()
+            .unwrap();
+        let unchanged = choice
+            .open_with(
+                Some(first),
+                now + DEFAULT_PROBE_INTERVAL,
+                || Some("speakers-id".into()),
+                |_, _| Ok(()),
+            )
+            .unwrap();
+        assert!(unchanged.is_none());
+        let switched = choice
+            .open_with(
+                Some(first),
+                now + DEFAULT_PROBE_INTERVAL * 2,
+                || Some("headphones-id".into()),
+                |_, _| Ok(()),
+            )
+            .unwrap();
+        assert!(
+            switched.is_some(),
+            "Playback kept the cached stream after the Windows default endpoint changed"
+        );
+        assert_eq!(choice.take_issue(), None);
+    }
+    #[test]
+    fn a_driver_reset_reopens_before_reporting_output_unavailable() {
+        let choice = OutputChoice::default();
+        let now = Instant::now();
+        let (_, first) = choice
+            .open_with(None, now, || Some("speakers-id".into()), |_, _| Ok(()))
+            .unwrap()
+            .unwrap();
+        choice.retry_stream(first);
+        assert_eq!(choice.take_issue(), None);
+        let (_, replacement) = choice
+            .open_with(
+                Some(first),
+                now,
+                || Some("headphones-id".into()),
+                |_, _| Ok(()),
+            )
+            .unwrap()
+            .unwrap();
+        assert_ne!(replacement, first);
+        choice.retry_stream(first);
+        assert_eq!(
+            choice.revision(),
+            replacement,
+            "Retired callbacks must not invalidate the new device"
+        );
+        assert_eq!(choice.take_issue(), None);
+    }
+    #[test]
+    fn named_outputs_stay_pinned_but_default_fallback_follows_windows() {
+        let now = Instant::now();
+        for missing in [false, true] {
+            let choice = OutputChoice::default();
+            choice.request(Some("Headphones".into()));
+            let open = |name: Option<&str>, _| {
+                if missing && name.is_some() {
+                    Err(SinkError::ConnectionRefused(
+                        "Test device disconnected".into(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            };
+            let (_, first) = choice
+                .open_with(None, now, || Some("first-id".into()), open)
+                .unwrap()
+                .unwrap();
+            choice.take_issue();
+            let next = choice
+                .open_with(
+                    Some(first),
+                    now + DEFAULT_PROBE_INTERVAL,
+                    || Some("second-id".into()),
+                    open,
+                )
+                .unwrap();
+            assert_eq!(next.is_some(), missing);
+        }
+    }
+    #[test]
+    fn repeatedly_failing_streams_stop_reopening_and_report_failure() {
+        let choice = OutputChoice::default();
+        let mut opens = 0;
+        let result = choice.open_with(
+            None,
+            Instant::now(),
+            || Some("speakers-id".into()),
+            |_, revision| {
+                opens += 1;
+                choice.retry_stream(revision);
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(opens, 8);
+        assert_eq!(choice.take_issue(), Some(OutputIssue::Unavailable));
+    }
     #[test]
     #[ignore = "Plays two quiet tones on the saved output"]
     fn live_saved_output_test_sound() {

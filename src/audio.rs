@@ -104,13 +104,19 @@ impl AudioSink {
     }
     pub fn prepare_output(&mut self) -> SinkResult<()> {
         if let Some((stream, revision)) = self.buffer.output.open(self.applied_output)? {
-            self.sink = Some(rodio::Sink::connect_new(stream.mixer()));
+            self.install_sink(rodio::Sink::connect_new(stream.mixer()), revision);
             self.stream = Some(stream);
-            self.applied_output = Some(revision);
             #[cfg(windows)]
             let _ = configure_session_identity();
         }
         Ok(())
+    }
+    fn install_sink(&mut self, sink: rodio::Sink, revision: u64) {
+        if self.sink.as_ref().is_some_and(rodio::Sink::is_paused) {
+            sink.pause();
+        }
+        self.sink = Some(sink);
+        self.applied_output = Some(revision);
     }
     #[cfg(test)]
     pub(crate) fn test_output(&mut self) -> impl Source<Item = f32> + use<> {
@@ -120,8 +126,8 @@ impl AudioSink {
     }
     #[cfg(test)]
     fn install_test_sink(&mut self, sink: rodio::Sink) {
-        self.sink = Some(sink);
-        self.applied_output = Some(self.buffer.output.revision());
+        self.install_sink(sink, self.buffer.output.revision());
+        self.buffer.output.defer_default_probe();
     }
     fn discard_old_audio(&mut self) {
         if self.flush.swap(false, Ordering::AcqRel)
@@ -578,6 +584,52 @@ mod tests {
         assert!(buffer.narrating());
         music.next();
         assert!(!buffer.narrating());
+    }
+    #[test]
+    fn replacing_an_active_output_releases_old_audio_and_consumes_new_samples() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut old_output = audio.test_output();
+        audio
+            .write(
+                AudioPacket::Samples(vec![0.25; 64]),
+                &mut Converter::new(None),
+            )
+            .unwrap();
+        assert_eq!(old_output.next(), Some(0.25));
+        buffer.output.request(Some("New output".into()));
+        let mut new_output = audio.test_output();
+        drop(old_output);
+        assert_eq!(buffer.queued.load(Ordering::Acquire), 0);
+        audio
+            .write(
+                AudioPacket::Samples(vec![0.75; 64]),
+                &mut Converter::new(None),
+            )
+            .unwrap();
+        assert_eq!(new_output.next(), Some(0.75));
+    }
+    #[test]
+    fn replacing_a_paused_output_stays_silent_until_resume() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let old_output = audio.test_output();
+        audio.pause().unwrap();
+        buffer.output.request(Some("New output".into()));
+        let mut new_output = audio.test_output();
+        drop(old_output);
+        assert!(audio.sink.as_ref().unwrap().is_paused());
+        audio
+            .write(
+                AudioPacket::Samples(vec![0.75; 64]),
+                &mut Converter::new(None),
+            )
+            .unwrap();
+        assert!((0..100).all(|_| new_output.next() == Some(0.0)));
+        audio.start().unwrap();
+        assert!((0..1000).any(|_| new_output.next() == Some(0.75)));
     }
     #[test]
     fn an_output_that_never_drains_fails_the_write_instead_of_hanging() {

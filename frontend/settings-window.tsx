@@ -175,6 +175,17 @@ export function SettingsWindow({
   // The highlight slides under the selected tab; hidden while searching.
   const [marker, setMarker] = useState<{ left: number; width: number }>();
   const searching = !!query.trim();
+  // Closing records the place too: a scroll right before closing may not
+  // have reported yet.
+  const place = useRef({ tab, searching });
+  place.current = { tab, searching };
+  useLayoutEffect(() => {
+    const node = scroll.current;
+    return () => {
+      if (node && !place.current.searching)
+        writePlace(place.current.tab, node.scrollTop);
+    };
+  }, []);
   const settings = state.settings;
   const [audioOutputs, setAudioOutputs] = useState<string[] | null>(null);
   const [audioRefresh, setAudioRefresh] = useState(0);

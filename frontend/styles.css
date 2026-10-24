@@ -4807,6 +4807,11 @@ input.volume-range:active::-webkit-slider-thumb {
   filter: blur(calc(var(--blur, 0px) / 2)) var(--hover-filter,);
   transition: opacity 180ms ease;
 }
+/* Rotated words leave a hairline where the clipped paint box ends past
+   the last glyph, so the paint hugs the glyphs sideways here. */
+.gravity-word .lyric-paint {
+  --glyph-bleed: 0.02em;
+}
 .gravity-word:not([data-spawned]) {
   visibility: hidden;
   --presence-opacity: 0;

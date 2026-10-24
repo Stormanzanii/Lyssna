@@ -2991,17 +2991,26 @@ small {
   margin: -1em calc(-1 * var(--glyph-bleed));
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  /* Many fonts draw past each glyph's advance into the bleed: slanted
+     tops to the right, tails to the left. At each end of the sweep the
+     edge runs out through the bleed, so sung text is painted to its tips
+     and unsung text shows no sung paint. */
+  --sweep: var(--gradient-ratio, var(--line-gradient, -0.2));
+  --sweep-overrun: calc(
+    (max(0, var(--sweep) - 0.95) - max(0, -0.15 - var(--sweep))) * 20 *
+      (var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) * 0.2)
+  );
   background-image: linear-gradient(
     90deg,
     rgb(var(--lyric-rgb, 255 255 255) / var(--sung-alpha))
       calc(
-        var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) *
-          var(--gradient-ratio, var(--line-gradient, -0.2))
+        var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) * var(--sweep) +
+          var(--sweep-overrun)
       ),
     rgb(var(--lyric-rgb, 255 255 255) / var(--unsung-alpha))
       calc(
         var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) *
-          (var(--gradient-ratio, var(--line-gradient, -0.2)) + 0.2)
+          (var(--sweep) + 0.2) + var(--sweep-overrun)
       )
   );
   background-clip: text;

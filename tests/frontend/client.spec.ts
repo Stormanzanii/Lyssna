@@ -9030,6 +9030,7 @@ test("Settings is solid without Liquid Glass and glass with it", async ({
   const panel = page.locator(".lyrics-settings").first();
   await expect(panel).toHaveCSS("background-color", "rgb(25, 25, 25)");
   await expect(panel).toHaveCSS("backdrop-filter", "none");
+
   await page.evaluate(
     (settings) =>
       (window as any).__clientTest.emit({
@@ -9067,4 +9068,61 @@ test("full screen artwork keeps its share of the screen at any resolution", asyn
   const uhd = await share(3840, 2160);
   expect(hd).toBeGreaterThan(0.4);
   expect(Math.abs(hd - uhd)).toBeLessThan(0.02);
+});
+
+test("sung lyrics paint every glyph to its tips, in any font", async ({
+  page,
+}) => {
+  // The fill runs over each syllable's box. Glyphs that reach past their
+  // advance (slanted tops, swash tails) must still be painted sung once the
+  // syllable is sung, and not sung before it starts.
+  const css = readFileSync("frontend/styles.css", "utf8");
+  const paint = css.match(/\n\.lyric-paint \{[\s\S]*?\n\}/)![0];
+  const fonts = ["Hemi Head", "Gabriola", "Times New Roman"];
+  await page.setContent(`<style>
+    body { margin: 0; background: #000; }
+    ${paint}
+    .row { font-size: 110px; padding: 40px 60px; white-space: nowrap; color: transparent; }
+    .solid .lyric-paint { background: #fff; -webkit-background-clip: text; background-clip: text; }
+    .lyric-paint { --sung-alpha: 1; --unsung-alpha: 0.4; }
+  </style>
+  ${fonts
+    .map((font) =>
+      ["solid", "sung", "unsung"]
+        .map(
+          (kind) =>
+            `<div class="row ${kind}" style="font-family: '${font}'; font-style: italic; --gradient-ratio: ${kind === "unsung" ? -0.2 : 1}">${[..."lfjy"].map((letter) => `<span class="lyric-paint">${letter}</span>`).join("")}</div>`,
+        )
+        .join(""),
+    )
+    .join("")}`);
+  await page.evaluate(() => document.fonts.ready);
+  const rows = page.locator(".row");
+  const pixels = async (index: number) => {
+    const shot = await rows.nth(index).screenshot();
+    return page.evaluate(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const values = context.getImageData(0, 0, image.width, image.height).data;
+      return Array.from({ length: values.length / 4 }, (_, i) => values[i * 4]);
+    }, shot.toString("base64"));
+  };
+  for (let font = 0; font < fonts.length; font += 1) {
+    const [solid, sung, unsung] = await Promise.all(
+      [0, 1, 2].map((kind) => pixels(font * 3 + kind)),
+    );
+    const ink = solid.flatMap((value, index) => (value > 230 ? [index] : []));
+    expect(ink.length).toBeGreaterThan(500);
+    // Fully inside glyphs: sung is full white, unsung is dim.
+    const dimSung = ink.filter((index) => sung[index] < 200).length;
+    const brightUnsung = ink.filter((index) => unsung[index] > 140).length;
+    expect(dimSung, `${fonts[font]} sung`).toBe(0);
+    expect(brightUnsung, `${fonts[font]} unsung`).toBe(0);
+  }
 });

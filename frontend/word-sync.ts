@@ -11,6 +11,7 @@ import { romanizedLyrics } from "./romanization";
  * line but lasts far longer than its words need is trimmed to a speech-rate
  * estimate. Static lyrics use the track duration and text weights to estimate
  * lines first. These estimates do not detect vocals or instrumental sections.
+ * Apple Music syllables that hold several words are split into words.
  */
 
 type Segment = { background: boolean; text: string };
@@ -359,6 +360,47 @@ export function convertToWordSync(lyrics: Lyrics, durationMs = 0): Lyrics {
   return { ...lyrics, lines: output, estimated_words: true };
 }
 
+/** Apple Music lyrics through the Spicy Lyrics provider. */
+const isAppleMusic = (lyrics: Lyrics) =>
+  lyrics.source === "apple_music" || lyrics.source === "aml";
+
+/** One timed word per sung word, timed by letter weight within the original. */
+function splitWord(word: Word): Word[] {
+  const units = normalize(word.text).split(/\s+/).flatMap(hyphenUnits);
+  if (units.length <= 1) return [word];
+  const ranges = distribute(
+    word.start_ms,
+    word.end_ms,
+    units.map((unit) => textWeight(unit.text)),
+  );
+  const leading = /^\s/.test(word.text) ? " " : "",
+    trailing = /\s$/.test(word.text) ? " " : "";
+  return units.map((unit, index) => ({
+    text: `${index === 0 ? leading : units[index - 1].partOfWord ? "" : " "}${unit.text}${index === units.length - 1 ? trailing : ""}`,
+    start_ms: ranges[index].start,
+    end_ms: ranges[index].end,
+    estimated: true,
+  }));
+}
+
+/**
+ * Apple Music sometimes times several words as one syllable ("I want you").
+ * Like Spicy Lyrics' Apple word splitting (pixels-spicy-lyrics,
+ * SplitAppleMusicSyllableWords), each word gets its own share of that time
+ * by letter weight, so the highlight moves word by word.
+ */
+export function splitMergedWords(lyrics: Lyrics): Lyrics {
+  if (!isAppleMusic(lyrics)) return lyrics;
+  let split = false;
+  const lines = lyrics.lines.map((line) => {
+    if (!line.words.some((word) => splitWord(word).length > 1)) return line;
+    split = true;
+    return { ...line, words: line.words.flatMap(splitWord) };
+  });
+  return split ? { ...lyrics, lines, estimated_words: true } : lyrics;
+}
+
+const merged = new WeakMap<Lyrics, Lyrics>();
 const cache = new WeakMap<Lyrics, { durationMs: number; lyrics: Lyrics }>();
 /** Lyrics as displayed: converted when word sync is on and applies. */
 export function displayLyrics<T extends Lyrics | null | undefined>(
@@ -368,7 +410,12 @@ export function displayLyrics<T extends Lyrics | null | undefined>(
   durationMs = 0,
 ): T {
   if (lyrics && romanized) lyrics = romanizedLyrics(lyrics) as T;
-  if (!lyrics || !wordSync || !needsWordSync(lyrics, durationMs)) return lyrics;
+  if (!lyrics || !wordSync) return lyrics;
+  if (!needsWordSync(lyrics, durationMs)) {
+    let split = merged.get(lyrics);
+    if (!split) merged.set(lyrics, (split = splitMergedWords(lyrics)));
+    return split as T;
+  }
   const timingDuration = lyrics.synced ? 0 : durationMs;
   let converted = cache.get(lyrics);
   if (!converted || converted.durationMs !== timingDuration) {

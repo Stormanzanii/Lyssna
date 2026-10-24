@@ -5,6 +5,7 @@ import {
   distribute,
   effectiveLineEnd,
   needsWordSync,
+  splitMergedWords,
   splitUnits,
 } from "./word-sync";
 import type { Line, Lyrics } from "./types";
@@ -170,5 +171,71 @@ describe("word sync", () => {
 
   it("distributes the remainder to the last part", () => {
     expect(distribute(0, 1000, [1, 1, 1]).at(-1)!.end).toBe(1000);
+  });
+});
+
+describe("Apple Music merged words", () => {
+  const apple = (words: Line["words"]): Lyrics => ({
+    ...lyrics({
+      ...line(words.map((word) => word.text).join(""), 1000, 3000),
+      words,
+    }),
+    source: "apple_music",
+  });
+  const word = (text: string, start_ms: number, end_ms: number) => ({
+    text,
+    start_ms,
+    end_ms,
+  });
+
+  it("splits a syllable holding several words by letter weight", () => {
+    const result = splitMergedWords(
+      apple([word("Hey", 1000, 1400), word(" I want you", 1400, 2400)]),
+    );
+    const words = result.lines[0].words;
+    expect(words.map((item) => item.text)).toEqual([
+      "Hey",
+      " I",
+      " want",
+      " you",
+    ]);
+    // 1 + 4 + 3 letters share 1000 ms.
+    expect(words.slice(1).map((item) => [item.start_ms, item.end_ms])).toEqual([
+      [1400, 1525],
+      [1525, 2025],
+      [2025, 2400],
+    ]);
+    expect(words[1].estimated).toBe(true);
+    expect(words[0].estimated).toBeUndefined();
+    expect(result.estimated_words).toBe(true);
+  });
+
+  it("keeps hyphen joins, trailing spaces and separate syllables", () => {
+    const result = splitMergedWords(
+      apple([
+        word("well-known ", 1000, 2000),
+        word("lo", 2000, 2200),
+        word("ver", 2200, 2400),
+      ]),
+    );
+    expect(result.lines[0].words.map((item) => item.text)).toEqual([
+      "well-",
+      "known ",
+      "lo",
+      "ver",
+    ]);
+  });
+
+  it("leaves other sources and single words alone", () => {
+    const other = { ...apple([word("I want", 1000, 2000)]), source: "test" };
+    expect(splitMergedWords(other)).toBe(other);
+    const single = apple([word("Hello", 1000, 2000)]);
+    expect(splitMergedWords(single)).toBe(single);
+  });
+
+  it("applies only while word sync is on", () => {
+    const merged = apple([word("I want", 1000, 2000)]);
+    expect(displayLyrics(merged, false)).toBe(merged);
+    expect(displayLyrics(merged, true).lines[0].words).toHaveLength(2);
   });
 });

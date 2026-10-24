@@ -1024,9 +1024,17 @@ fn listed_context(uri: &str, uris: &[String]) -> librespot_protocol::context::Co
 }
 
 fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
+    // DJ narration and music must retain their supplied order when a normal
+    // playlist was previously shuffled. Other loads inherit Connect options.
+    let ordered_dj = matches!(
+        action,
+        PlayerAction::PreparedDJ { .. } | PlayerAction::RestoreDJ { .. }
+    ) || matches!(action, PlayerAction::PlayContext { context, .. } if is_dj_context(context));
     let options = |playing_track| LoadRequestOptions {
         start_playing: true,
         playing_track,
+        context_options: ordered_dj
+            .then(|| librespot_connect::LoadContextOptions::Options(Default::default())),
         ..LoadRequestOptions::default()
     };
     Some(match action {
@@ -1037,9 +1045,7 @@ fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
             LoadRequestOptions {
                 prepared_context: Some(context.clone()),
                 page_provider: Some(provider.clone()),
-                start_playing: true,
-                playing_track: Some(PlayingTrack::Index(0)),
-                ..LoadRequestOptions::default()
+                ..options(Some(PlayingTrack::Index(0)))
             },
         ),
         PlayerAction::RestoreDJ {
@@ -1063,7 +1069,7 @@ fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
                 )),
                 session_url: session_url.clone(),
                 relative_offset: *relative_offset,
-                ..LoadRequestOptions::default()
+                ..options(None)
             },
         ),
         PlayerAction::Play(Some(uri)) => {
@@ -2366,6 +2372,39 @@ mod tests {
     }
     use super::*;
     use std::cell::Cell;
+    #[test]
+    fn normal_loads_inherit_shuffle_but_dj_keeps_narration_order() {
+        for action in [
+            PlayerAction::PlayUris {
+                uris: vec!["spotify:track:song".into()],
+                offset: 0,
+                context: None,
+            },
+            PlayerAction::PlayContext {
+                context: "spotify:playlist:normal".into(),
+                offset: None,
+            },
+        ] {
+            assert!(load_request(&action).unwrap().context_options.is_none());
+        }
+        for action in [
+            PlayerAction::PlayContext {
+                context: crate::home::DJ_URI.into(),
+                offset: None,
+            },
+            PlayerAction::RestoreDJ {
+                context: crate::home::DJ_URI.into(),
+                session_url: None,
+                track: "spotify:track:song".into(),
+                track_uid: None,
+                position_ms: 0,
+                relative_offset: 0,
+            },
+        ] {
+            assert!(matches!(load_request(&action).unwrap().context_options,
+                Some(librespot_connect::LoadContextOptions::Options(ref options)) if !options.shuffle));
+        }
+    }
     #[test]
     fn saved_queue_load_starts_at_saved_position_without_a_followup_seek() {
         let queue: Vec<String> = vec!["spotify:track:first".into(), "spotify:track:second".into()];

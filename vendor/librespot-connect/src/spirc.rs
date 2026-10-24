@@ -1826,7 +1826,7 @@ impl SpircTask {
 
     async fn handle_load(
         &mut self,
-        cmd: LoadRequest,
+        mut cmd: LoadRequest,
         page: Option<ContextPage>,
         fallback_index: Option<usize>,
     ) -> Result<(), Error> {
@@ -1839,6 +1839,16 @@ impl SpircTask {
                 ResetContext::Completely
             });
 
+        // A new context keeps transport preferences unless its caller overrides them.
+        // Materialize inherited options so the queue takes the shuffle path below.
+        if cmd.options.context_options.is_none() {
+            cmd.options.context_options = Some(LoadContextOptions::Options(crate::Options {
+                shuffle: self.connect_state.shuffling_context(),
+                repeat: self.connect_state.repeat_context(),
+                repeat_track: self.connect_state.repeat_track(),
+            }));
+        }
+        // Resolve the selected row in source order before shuffling the new context.
         self.connect_state.reset_options();
         self.context_resolver
             .set_page_provider(cmd.page_provider.clone());
@@ -1940,6 +1950,12 @@ impl SpircTask {
             self.connect_state.set_repeat_context(options.repeat);
             self.connect_state.set_repeat_track(options.repeat_track);
         }
+        self.player
+            .emit_shuffle_changed_event(self.connect_state.shuffling_context());
+        self.player.emit_repeat_changed_event(
+            self.connect_state.repeat_context(),
+            self.connect_state.repeat_track(),
+        );
 
         if matches!(cmd_options.context_options, Some(LoadContextOptions::Options(ref o)) if o.shuffle)
         {
@@ -2212,8 +2228,11 @@ impl SpircTask {
     }
 
     fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
-        self.player.emit_shuffle_changed_event(shuffle);
-        self.connect_state.handle_shuffle(shuffle)
+        self.connect_state.handle_shuffle(shuffle)?;
+        self.player
+            .emit_shuffle_changed_event(self.connect_state.shuffling_context());
+        self.emit_set_queue_event();
+        Ok(())
     }
 
     fn handle_repeat_context(&mut self, repeat: bool) -> Result<(), Error> {
@@ -2553,6 +2572,197 @@ impl SpircTask {
 impl Drop for SpircTask {
     fn drop(&mut self) {
         debug!("drop Spirc[{}]", self.spirc_id);
+    }
+}
+
+#[cfg(test)]
+mod shuffle_tests {
+    use super::*;
+    use crate::playback::{
+        audio_backend::{Sink, SinkResult},
+        convert::Converter,
+        decoder::AudioPacket,
+        mixer::softmixer::SoftMixer,
+    };
+
+    struct SilentSink;
+    impl Sink for SilentSink {
+        fn write(&mut self, _: AudioPacket, _: &mut Converter) -> SinkResult<()> {
+            Ok(())
+        }
+    }
+
+    fn tracks() -> Vec<String> {
+        (0..16)
+            .map(|index| format!("spotify:track:{index:022}"))
+            .collect()
+    }
+
+    fn task() -> SpircTask {
+        let session = Session::new(Default::default(), None);
+        let mixer = Arc::new(SoftMixer::open(Default::default()).unwrap());
+        let player = Player::new(
+            Default::default(),
+            session.clone(),
+            mixer.get_soft_volume(),
+            || Box::new(SilentSink),
+        );
+        let player_events = Some(player.get_player_event_channel());
+        let mut connect_state = ConnectState::new(Default::default(), &session);
+        connect_state
+            .update_context(
+                Context {
+                    uri: Some("spotify:playlist:0123456789abcdefghijkl".into()),
+                    pages: vec![tracks().into()],
+                    ..Default::default()
+                },
+                ContextType::Default,
+            )
+            .unwrap();
+        connect_state.set_current_track(0).unwrap();
+        connect_state.reset_playback_to_position(Some(0)).unwrap();
+        SpircTask {
+            devices: Default::default(),
+            state_updates: Default::default(),
+            resume_on_startup: false,
+            player,
+            mixer,
+            connect_state,
+            connect_established: false,
+            play_request_id: None,
+            play_status: SpircPlayStatus::Stopped,
+            connection_id_update: Box::pin(futures_util::stream::pending()),
+            connect_state_update: Box::pin(futures_util::stream::pending()),
+            connect_state_volume_update: Box::pin(futures_util::stream::pending()),
+            connect_state_logout_request: Box::pin(futures_util::stream::pending()),
+            playlist_update: Box::pin(futures_util::stream::pending()),
+            session_update: Box::pin(futures_util::stream::pending()),
+            connect_state_command: Box::pin(futures_util::stream::pending()),
+            user_attributes_update: Box::pin(futures_util::stream::pending()),
+            user_attributes_mutation: Box::pin(futures_util::stream::pending()),
+            commands: None,
+            player_events,
+            context_resolver: ContextResolver::new(session.clone()),
+            emit_set_queue_events: true,
+            shutdown: false,
+            session,
+            transfer_state: None,
+            update_volume: false,
+            update_state: false,
+            spirc_id: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn shuffle_toggle_publishes_the_actual_upcoming_queue() {
+        let mut task = task();
+        for enabled in [true, false] {
+            task.handle_shuffle(enabled).unwrap();
+            let expected: Vec<_> = task
+                .connect_state
+                .player()
+                .next_tracks
+                .iter()
+                .map(|track| track.uri.clone())
+                .collect();
+            let published = tokio::time::timeout(Duration::from_millis(500), async {
+                while let Some(event) = task.player_events.as_mut().unwrap().recv().await {
+                    if let PlayerEvent::SetQueue { next_tracks, .. } = event {
+                        return next_tracks
+                            .into_iter()
+                            .map(|track| track.uri)
+                            .collect::<Vec<_>>();
+                    }
+                }
+                panic!("Player event channel closed");
+            })
+            .await
+            .expect("Shuffle changed playback but never published its new queue");
+            assert_eq!(published, expected);
+            assert_eq!(
+                task.connect_state.current_track(|track| track.uri.clone()),
+                tracks()[0]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn shuffle_survives_loading_another_playlist() {
+        let mut task = task();
+        task.connect_state.handle_shuffle(true).unwrap();
+        let uri = "spotify:playlist:1123456789abcdefghijkl";
+        let context = Context {
+            uri: Some(uri.into()),
+            pages: vec![tracks().into()],
+            ..Default::default()
+        };
+        task.handle_load(
+            LoadRequest::from_context_uri(
+                uri.into(),
+                LoadRequestOptions {
+                    prepared_context: Some(Box::new(context)),
+                    playing_track: Some(PlayingTrack::Index(3)),
+                    ..Default::default()
+                },
+            ),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(
+            task.connect_state.shuffling_context(),
+            "Loading a playlist cleared the enabled shuffle setting"
+        );
+        assert_eq!(
+            task.connect_state.current_track(|track| track.uri.clone()),
+            tracks()[3]
+        );
+        assert!(
+            task.connect_state
+                .get_context(ContextType::Default)
+                .unwrap()
+                .metadata
+                .contains_key("shuffle_seed")
+        );
+        task.handle_shuffle(false).unwrap();
+        let upcoming: Vec<_> = task
+            .connect_state
+            .player()
+            .next_tracks
+            .iter()
+            .map(|track| track.uri.clone())
+            .collect();
+        assert_eq!(upcoming, tracks()[4..]);
+        task.player.stop();
+    }
+
+    #[tokio::test]
+    async fn shuffle_survives_plain_lists_and_respects_explicit_overrides() {
+        let mut task = task();
+        task.connect_state.handle_shuffle(true).unwrap();
+        for explicit in [None, Some(LoadContextOptions::Options(Default::default()))] {
+            task.handle_load(
+                LoadRequest::from_tracks(
+                    tracks(),
+                    LoadRequestOptions {
+                        context_options: explicit.clone(),
+                        playing_track: Some(PlayingTrack::Index(5)),
+                        ..Default::default()
+                    },
+                ),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(task.connect_state.shuffling_context(), explicit.is_none());
+            assert_eq!(
+                task.connect_state.current_track(|track| track.uri.clone()),
+                tracks()[5]
+            );
+        }
+        task.player.stop();
     }
 }
 

@@ -2786,7 +2786,8 @@ test("fullscreen moves lyrics right and Escape restores normal layout", async ({
     .poll(() =>
       flow.evaluate((element) => {
         const root = element.closest(".lyrics-page")!.getBoundingClientRect();
-        return (element.getBoundingClientRect().left - root.left) / root.width;
+        const text = element.querySelector(".lyric-line")!;
+        return (text.getBoundingClientRect().left - root.left) / root.width;
       }),
     )
     .toBeGreaterThan(0.5);
@@ -3191,9 +3192,8 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   const mode = async (value: string) => {
     await page.getByTitle("SpotiFlex settings", { exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
-    await expect(
-      dialog.getByRole("tab", { name: "Lyrics", exact: true }),
-    ).toHaveAttribute("aria-selected", "true");
+    // Settings reopen where they were left; pick Lyrics each time.
+    await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
     const select = dialog.getByLabel("Pinned Lyrics Footer", { exact: true });
     await expect(select.locator("option")).toHaveText([
       "Off",
@@ -4606,6 +4606,7 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
   await expect(dialog).toBeVisible();
+  await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
   await expect(
     dialog.getByLabel("Lyric text size", { exact: true }),
   ).toHaveValue("36");
@@ -8658,4 +8659,27 @@ test("lyrics song and artist links dim on hover instead of underlining", async (
   await artist.hover();
   await expect(artist).toHaveCSS("text-decoration-line", "none");
   await expect(artist).toHaveCSS("opacity", "0.75");
+});
+
+test("lyrics clip only at the page box, not at the text column", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await expect(page.locator(".lyrics-page .lyric-line").first()).toBeVisible();
+  const room = await page
+    .locator(".lyrics-page .lyric-scroll")
+    .evaluate((scroller) => {
+      const box = scroller.getBoundingClientRect();
+      const text = scroller
+        .querySelector(".lyric-line")!
+        .getBoundingClientRect();
+      return { left: text.left - box.left, right: box.right - text.right };
+    });
+  // A popping word at either edge has room before anything clips it.
+  expect(room.left).toBeGreaterThanOrEqual(48);
+  expect(room.right).toBeGreaterThanOrEqual(48);
 });

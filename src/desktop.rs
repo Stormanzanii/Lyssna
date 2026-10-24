@@ -2272,6 +2272,18 @@ async fn liked_songs_count(state: State<'_, Desktop>) -> std::result::Result<usi
         .map_err(|_| "Library worker unavailable".to_owned())?
         .map_err(error)
 }
+/// Clipboard text, read natively: the webview refuses clipboard reads
+/// unless its document has focus.
+#[tauri::command]
+async fn read_clipboard() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.get_text())
+            .map_err(|_| "Clipboard has no preset code.".to_owned())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 /// Exact song count and total length of a playlist or Liked Songs.
 #[tauri::command]
 async fn list_duration(
@@ -3126,6 +3138,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             window_fullscreen,
+            read_clipboard,
             dj_request,
             dj_prepare,
             dj_voice,

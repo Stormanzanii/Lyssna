@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { rpc } from "./bridge";
 import { SettingRow } from "./setting-row";
 import {
   ANIMATOR_DETAILS,
@@ -22,6 +23,11 @@ import {
   type AnimatorPreset,
   type AnimatorSettings,
 } from "./animator-tuning";
+
+// The webview refuses clipboard reads while its document lacks focus, so
+// the app reads the clipboard natively.
+const readClipboard = () =>
+  rpc<string>("read_clipboard").catch(() => navigator.clipboard.readText());
 
 const PRESET_HELP = "Default matches upstream. Custom stores live tuning.";
 
@@ -269,8 +275,7 @@ export function AnimatorBehavior({
               }
               return;
             }
-            navigator.clipboard
-              .readText()
+            readClipboard()
               .then((code) => {
                 if (!code.trim())
                   throw new Error("Clipboard has no preset code.");

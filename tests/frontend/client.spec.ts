@@ -611,6 +611,11 @@ async function startClient(
             return host.__clientTest.artistLiked ?? 0;
           if (command === "liked_songs_count")
             return host.__clientTest.likedTotal ?? 0;
+          if (command === "read_clipboard") {
+            if (!host.__clientTest.clipboard)
+              throw new Error("Clipboard has no preset code.");
+            return host.__clientTest.clipboard;
+          }
           if (command === "list_duration") {
             if (!host.__clientTest.listDuration)
               throw new Error("Length unavailable");
@@ -8548,6 +8553,18 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   expect(saved.preset).toBe("Custom");
   expect(saved.saved[0].name).toBe("Bouncy");
   expect(saved.custom.verticalStrength).toBe(2);
+  // A code copied elsewhere imports from the clipboard, read natively since
+  // the webview refuses reads while it lacks focus.
+  await page.evaluate(() => {
+    (window as any).__clientTest.clipboard =
+      "SLP1:Shared|1.1,1.2,2,1,1,0.88,0.64,1.45,0.2,1.18,0.56";
+  });
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Imported Shared.");
+  await expect(page.getByLabel("Preset name", { exact: true })).toHaveCSS(
+    "color",
+    "rgb(255, 255, 255)",
+  );
   await page.screenshot({ path: "target/diagnostics/animator-panel.png" });
   // Closing leaves the full screen Manage entered.
   await page.keyboard.press("Escape");

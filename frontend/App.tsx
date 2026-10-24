@@ -155,7 +155,11 @@ import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
 import { coverJpeg } from "./playlist-cover";
 import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
-import { SettingsWindow, type SettingsTab } from "./settings-window";
+import {
+  lastSettingsTab,
+  SettingsWindow,
+  type SettingsTab,
+} from "./settings-window";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
 import { presetOf } from "./animator-tuning";
@@ -1215,7 +1219,7 @@ function App() {
         },
         {
           label: "Settings",
-          onSelect: () => setSettingsTab("General"),
+          onSelect: () => setSettingsTab(lastSettingsTab()),
         },
       ],
     },
@@ -2249,7 +2253,7 @@ function App() {
                 setProfileView({ user: state.profile.id, hint: state.profile });
                 setCenter("profile");
               } else if (action === "recents") navigate("recent");
-              else if (action === "settings") setSettingsTab("General");
+              else if (action === "settings") setSettingsTab(lastSettingsTab());
               else void call("sign_out");
             }}
           />
@@ -2523,7 +2527,7 @@ function App() {
                   className="icon-button"
                   title="SpotiFlex settings"
                   data-icon="settings"
-                  onClick={() => setSettingsTab("Lyrics")}
+                  onClick={() => setSettingsTab(lastSettingsTab())}
                 >
                   <SettingsIcon size={18} />
                 </button>

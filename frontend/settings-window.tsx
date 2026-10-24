@@ -82,6 +82,32 @@ const TABS = [
 export type SettingsTab = (typeof TABS)[number][0] | "About";
 type Tab = SettingsTab;
 
+/** Settings reopen on the tab and scroll position they were left at. */
+const PLACE_KEY = "spotiflex.settings-place";
+function readPlace(): { tab: Tab; scroll: number } {
+  try {
+    const place = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null");
+    if (
+      place &&
+      [...TABS.map(([label]) => label), "About"].includes(place.tab) &&
+      Number.isFinite(place.scroll)
+    )
+      return { tab: place.tab, scroll: Math.max(0, place.scroll) };
+  } catch {
+    // Storage may be unavailable; start at the top of General.
+  }
+  return { tab: "General", scroll: 0 };
+}
+function writePlace(tab: Tab, scroll: number) {
+  try {
+    localStorage.setItem(PLACE_KEY, JSON.stringify({ tab, scroll }));
+  } catch {
+    // Remembering the place is a convenience only.
+  }
+}
+/** The tab Settings was last left on. */
+export const lastSettingsTab = () => readPlace().tab;
+
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
 }[keyof Settings];
@@ -117,6 +143,32 @@ export function SettingsWindow({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
+  // Back on the tab it was left at, Settings scrolls to where it was.
+  useLayoutEffect(() => {
+    const place = readPlace();
+    if (place.tab !== initialTab) {
+      writePlace(initialTab, 0);
+      return;
+    }
+    // Rows fill in over the first frames (audio outputs, fonts); keep
+    // restoring until the page is tall enough or a moment has passed.
+    const node = scroll.current;
+    const opened = performance.now();
+    let frame = 0;
+    const restore = () => {
+      node?.scrollTo({ top: place.scroll });
+      if (
+        node &&
+        node.scrollHeight - node.clientHeight < place.scroll &&
+        performance.now() - opened < 600
+      )
+        frame = requestAnimationFrame(restore);
+    };
+    restore();
+    return () => cancelAnimationFrame(frame);
+    // Only when the window opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [query, setQuery] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -176,6 +228,7 @@ export function SettingsWindow({
     setTab(next);
     setQuery("");
     scroll.current?.scrollTo({ top: 0 });
+    writePlace(next, 0);
   };
   const flag = (key: Flag, label: string, help: string, keywords = "") => (
     <SettingRow key={key} label={label} help={help} keywords={keywords}>
@@ -933,7 +986,13 @@ export function SettingsWindow({
             </button>
           ))}
         </div>
-        <div className="lyrics-settings-scroll" ref={scroll}>
+        <div
+          className="lyrics-settings-scroll"
+          ref={scroll}
+          onScroll={(event) => {
+            if (!searching) writePlace(tab, event.currentTarget.scrollTop);
+          }}
+        >
           <SettingsQuery.Provider value={query}>
             {about ? (
               <section className="lyrics-settings-about" aria-label="About">

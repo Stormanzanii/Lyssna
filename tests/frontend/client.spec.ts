@@ -8620,3 +8620,27 @@ test("a reshuffled queue never slides rows in from far away", async ({
     );
   for (const offset of offsets) expect(offset).toBeLessThan(80);
 });
+
+test("Settings reopen on the tab and scroll position they were left at", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  const scroller = page.locator(".lyrics-settings-scroll");
+  await scroller.evaluate((node) => node.scrollTo({ top: 300 }));
+  await expect
+    .poll(() => scroller.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(200);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("tab", { name: "Lyrics", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => scroller.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(200);
+});

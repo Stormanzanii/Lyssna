@@ -4414,10 +4414,10 @@ input.volume-range:active::-webkit-slider-thumb {
   gap: 4%;
 }
 .immersive .lyrics-album > .cover {
-  max-width: 560px;
+  max-width: 52vh;
 }
 .immersive .lyrics-title .song-title {
-  font-size: 36px;
+  font-size: clamp(28px, 3.3vh, 72px);
 }
 .reduce-motion * {
   scroll-behavior: auto !important;

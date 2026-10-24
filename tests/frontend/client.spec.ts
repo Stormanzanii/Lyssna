@@ -9040,3 +9040,31 @@ test("Settings is solid without Liquid Glass and glass with it", async ({
   );
   await expect(panel).not.toHaveCSS("backdrop-filter", "none");
 });
+
+test("full screen artwork keeps its share of the screen at any resolution", async ({
+  page,
+}) => {
+  const share = async (width: number, height: number) => {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(100);
+    const cover = (await page.locator(".lyrics-media > .cover").boundingBox())!;
+    return cover.height / height;
+  };
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, canvas_lyrics: false },
+      }),
+    emptyState.settings,
+  );
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  const hd = await share(1920, 1080);
+  const uhd = await share(3840, 2160);
+  expect(hd).toBeGreaterThan(0.4);
+  expect(Math.abs(hd - uhd)).toBeLessThan(0.02);
+});

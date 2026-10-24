@@ -930,18 +930,20 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
     else {
         return;
     };
+    // The live order, shuffled or not, so a restart resumes and skips
+    // through the songs the queue showed, not the start of a long list.
+    let queue = prev_tracks
+        .iter()
+        .rev()
+        .take(33)
+        .rev()
+        .chain(std::iter::once(&track))
+        .chain(next_tracks.iter().take(66))
+        .filter(|track| track.uri.starts_with("spotify:track:"))
+        .map(|track| track.uri.clone())
+        .collect();
+    crate::resume::remember_native_queue(account, queue);
     let context = if is_dj_context(&context_uri) {
-        let queue = prev_tracks
-            .iter()
-            .rev()
-            .take(33)
-            .rev()
-            .chain(std::iter::once(&track))
-            .chain(next_tracks.iter().take(66))
-            .filter(|track| track.uri.starts_with("spotify:track:"))
-            .map(|track| track.uri.clone())
-            .collect();
-        crate::resume::remember_native_queue(account, queue);
         (context_uri != librespot_connect::REQUESTED_DJ_CONTEXT).then_some(
             crate::resume::DJContext {
                 uri: context_uri,
@@ -958,6 +960,34 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
 #[cfg(test)]
 mod dj_queue_tests {
     use super::*;
+    #[test]
+    fn shuffled_playlist_queue_is_saved_in_its_live_order() {
+        use librespot_playback::player::QueueTrack;
+        let account = "test-native-live-order";
+        let track = |id: char| QueueTrack {
+            uri: format!("spotify:track:{}", id.to_string().repeat(22)),
+            provider: "context".into(),
+        };
+        remember_player_queue(
+            account,
+            PlayerEvent::SetQueue {
+                context_uri: "spotify:user:me:collection".into(),
+                session_url: None,
+                track_uid: None,
+                current_track: Some(track('c')),
+                prev_tracks: vec![track('a')],
+                next_tracks: vec![track('z'), track('m')],
+            },
+        );
+        let queue = crate::resume::queue(account);
+        assert_eq!(queue.len(), 4);
+        assert_eq!(queue[1], track('c').uri);
+        assert!(matches!(
+            crate::resume::skip_action(&queue[1], &queue, 0, true),
+            Some(PlayerAction::Resume { offset: 2, .. })
+        ));
+    }
+
     #[test]
     fn player_queue_remembers_dj_origin_but_manual_play_clears_it() {
         use librespot_playback::player::QueueTrack;

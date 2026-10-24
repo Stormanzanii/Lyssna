@@ -8549,8 +8549,22 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   expect(saved.saved[0].name).toBe("Bouncy");
   expect(saved.custom.verticalStrength).toBe(2);
   await page.screenshot({ path: "target/diagnostics/animator-panel.png" });
-  // Escape closes the panel and stays in full screen; Back reopens Settings.
+  // Closing leaves the full screen Manage entered.
   await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  // Already in full screen, closing stays there.
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await page.mouse.move(900, 300);
+  await page
+    .locator(".lyrics-toolbar")
+    .getByTitle("SpotiFlex settings", { exact: true })
+    .click();
+  await page.getByRole("tab", { name: "Effects", exact: true }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await page.getByRole("button", { name: "Close Animator Behavior" }).click();
   await expect(panel).toHaveCount(0);
   await expect(page.locator(".application")).toHaveClass(/immersive/);
 });

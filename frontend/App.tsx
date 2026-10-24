@@ -392,6 +392,9 @@ function App() {
   // The SpotiFlex settings window and the tab it opened on.
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [animatorPanel, setAnimatorPanel] = useState(false);
+  // Manage enters full screen only for tuning; closing leaves it again
+  // unless full screen was already on.
+  const animatorFullscreen = useRef(false);
   useEffect(() => setSettingsTab(null), [state.profile?.id]);
   const [about, setAbout] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
@@ -1397,6 +1400,11 @@ function App() {
       .isFullscreen()
       .then((value) => setImmersive(!!value));
   }, []);
+  const closeAnimatorPanel = () => {
+    setAnimatorPanel(false);
+    if (animatorFullscreen.current) void fullscreen(false);
+    animatorFullscreen.current = false;
+  };
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === "F11" || (event.key === "Escape" && immersive)) {
@@ -4325,7 +4333,9 @@ function App() {
           onManageAnimator={() => {
             setSettingsTab(null);
             setAnimatorPanel(true);
-            void fullscreen(true);
+            animatorFullscreen.current = !immersive;
+            if (!immersive) void fullscreen(true);
+            else setCenter("lyrics");
           }}
         />
       )}
@@ -4334,10 +4344,10 @@ function App() {
           animator={state.settings.lyrics_animator}
           onChange={(lyrics_animator) => updateSettings({ lyrics_animator })}
           onBack={() => {
-            setAnimatorPanel(false);
+            closeAnimatorPanel();
             setSettingsTab("Effects");
           }}
-          onClose={() => setAnimatorPanel(false)}
+          onClose={closeAnimatorPanel}
         />
       )}
       {ttmlOpen && (

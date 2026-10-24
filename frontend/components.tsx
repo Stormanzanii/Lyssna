@@ -1034,9 +1034,23 @@ function SongLyricsPage({
     track = state.playback.item;
   // Full screen seek: preview while dragging, seek once on release.
   const [seeking, setSeeking] = useState<number | null>(null);
+  // After release the bar holds the chosen spot until playback reports it,
+  // instead of flicking back to the old time for a moment.
+  const [landing, setLanding] = useState<{ to: number; at: number } | null>(
+    null,
+  );
+  const landed =
+    !landing ||
+    Math.abs(songTime - landing.to) < 750 ||
+    performance.now() - landing.at > 2000;
+  useEffect(() => {
+    if (landing && landed) setLanding(null);
+  }, [landing, landed]);
+  const seekShown = seeking ?? (landed ? songTime : landing!.to);
   const commitSeek = () => {
     if (seeking === null) return;
     onPlayer({ command: "seek", positionMs: seeking });
+    setLanding({ to: seeking, at: performance.now() });
     setSeeking(null);
     wakeTools();
   };
@@ -1142,7 +1156,7 @@ function SongLyricsPage({
         className="lyrics-glass-seek"
         style={
           {
-            "--range": `${((seeking ?? songTime) / Math.max(1, track.duration_ms || 1)) * 100}%`,
+            "--range": `${(seekShown / Math.max(1, track.duration_ms || 1)) * 100}%`,
           } as CSSProperties
         }
       >
@@ -1152,7 +1166,7 @@ function SongLyricsPage({
           aria-label="Seek position"
           min="0"
           max={track.duration_ms || 1}
-          value={Math.min(seeking ?? songTime, track.duration_ms || 1)}
+          value={Math.min(seekShown, track.duration_ms || 1)}
           onChange={(event) => setSeeking(Number(event.target.value))}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -1173,7 +1187,7 @@ function SongLyricsPage({
         />
       </div>
       <div className="lyrics-fullscreen-times">
-        <time>{formatTime(seeking ?? songTime)}</time>
+        <time>{formatTime(seekShown)}</time>
         <time>{formatTime(track.duration_ms)}</time>
       </div>
       <div className="lyrics-fullscreen-buttons">

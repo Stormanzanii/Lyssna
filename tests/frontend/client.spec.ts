@@ -8209,6 +8209,18 @@ test("fullscreen seek stays usable through idle and commits once on release", as
       ),
     )
     .toBe(1);
+  // Before playback reports the new spot, the bar stays where it was let go.
+  const target = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter(
+          (c: any) =>
+            c.command === "player" && c.args.request.command === "seek",
+        )
+        .at(-1).args.request.positionMs,
+  );
+  await page.waitForTimeout(300);
+  expect(Math.abs(Number(await seek.inputValue()) - target)).toBeLessThan(500);
   await page.keyboard.press("Tab");
   await expect(controls).toHaveCSS("opacity", "1");
 });

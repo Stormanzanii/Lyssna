@@ -1331,14 +1331,19 @@ fn playing_position(decoded_ms: u32, queued_ms: u64, resumed: Option<u64>) -> u6
     resumed.unwrap_or_else(|| u64::from(decoded_ms).saturating_sub(queued_ms))
 }
 
+/// The Spotify Connect name: the computer first, as Spotify's own client
+/// names itself, then the app, e.g. "ARASHII-PC (SpotiFlex)".
 pub fn device_name() -> String {
     let host = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_default();
-    if host.trim().is_empty() {
-        "SpotiFlex".into()
-    } else {
-        format!("SpotiFlex ({})", host.trim())
+    named_device(&host)
+}
+
+fn named_device(host: &str) -> String {
+    match host.trim() {
+        "" => "SpotiFlex".into(),
+        host => format!("{host} (SpotiFlex)"),
     }
 }
 
@@ -2221,6 +2226,11 @@ pub(crate) fn with_live_session<T>(check: impl AsyncFnOnce(&Session) -> T) -> T 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn connect_name_puts_the_computer_first() {
+        assert_eq!(super::named_device("ARASHII-PC"), "ARASHII-PC (SpotiFlex)");
+        assert_eq!(super::named_device("  "), "SpotiFlex");
+    }
     #[test]
     #[ignore = "Saved sign-in; register an idle Connect device without starting playback"]
     fn live_native_ready_requires_connect_registration() {

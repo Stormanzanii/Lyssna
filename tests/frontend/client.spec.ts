@@ -8480,3 +8480,40 @@ for (const viewportWidth of [1200, 1500, 2000]) {
     await expect.poll(libraryWidth).toBe(expandedWidth);
   });
 }
+
+test("animator presets import Spicy Lyrics share codes into Custom tuning", async ({
+  page,
+}) => {
+  await startClient(page);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-animator",
+    "Default",
+  );
+  await openSettings(page, "Effects");
+  const preset = page.getByRole("combobox", { name: "Animator preset" });
+  await expect(preset.locator("option")).toHaveText(["Default", "Custom"]);
+  await preset.selectOption("Custom");
+  await expect(page.locator("html")).toHaveAttribute("data-animator", "Custom");
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  // A code shared from Spicy Lyrics pasted into the name box.
+  await page
+    .getByLabel("Preset name", { exact: true })
+    .fill("SLP1:Bouncy|1.2,1.3,2,1,1,0.88,0.64,1.45,0.2,1.18,0.56");
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Imported Bouncy.");
+  await expect(
+    page.getByRole("combobox", { name: "Saved preset" }),
+  ).toHaveValue(/^animator-/);
+  await expect(
+    page.getByLabel("Word peak scale value", { exact: true }),
+  ).toHaveValue("1.2");
+  const saved = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "save_settings")
+        .at(-1)?.args.settings.lyrics_animator,
+  );
+  expect(saved.preset).toBe("Custom");
+  expect(saved.saved[0].name).toBe("Bouncy");
+  expect(saved.custom.verticalStrength).toBe(2);
+});

@@ -60,6 +60,7 @@ import {
   vocalGap,
   vocalEnd,
   lineBlur,
+  tuneMotion,
   glideScroll,
   GLIDE_MS,
   type ScrollSpring,
@@ -490,7 +491,10 @@ export function LyricsDisplay({
   if (positionJumped) jumped.current = true;
   lastPosition.current = positionMs;
   const animator = useRef<LyricAnimator>(undefined);
+  // New springs pick up the animator preset's curves and tuning.
+  const tuning = JSON.stringify(settings.lyrics_animator ?? {});
   useLayoutEffect(() => {
+    tuneMotion(JSON.parse(tuning));
     const instance = new LyricAnimator(
       lyrics,
       (index) => lines.current[index] ?? null,
@@ -498,7 +502,7 @@ export function LyricsDisplay({
     );
     animator.current = instance;
     return () => instance.dispose();
-  }, [lyrics, settings.reduce_motion, settings.lyrics_simple]);
+  }, [lyrics, settings.reduce_motion, settings.lyrics_simple, tuning]);
   useLayoutEffect(() => {
     if (!lyrics.synced) return;
     if (positionJumped) animator.current?.reset();
@@ -1319,6 +1323,7 @@ function SongLyricsPage({
                 lyrics={lyrics}
                 time={current}
                 reduceMotion={!motionAllowed}
+                tuning={state.settings.lyrics_animator}
                 onSeek={(positionMs) =>
                   onPlayer({ command: "seek", positionMs })
                 }

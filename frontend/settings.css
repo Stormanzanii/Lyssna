@@ -737,3 +737,50 @@
 .settings-folder-picks input {
   accent-color: #1ed760;
 }
+/* Animator Behavior, after the Spicy Lyrics fork's panel. */
+.animator-preset-control,
+.animator-toolbar,
+.animator-preset-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.animator-toolbar {
+  justify-content: space-between;
+  padding: 12px 16px 4px;
+}
+.animator-preset-actions {
+  padding: 4px 16px 12px;
+}
+.animator-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  text-align: left;
+}
+.animator-heading {
+  margin: 16px 16px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted, #b3b3b3);
+}
+.animator-message {
+  padding: 0 16px 8px;
+}
+.animator-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.animator-slider input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.animator-slider .number-field {
+  width: 76px;
+}
+.animator-unit {
+  font-size: 12px;
+  color: var(--muted, #b3b3b3);
+}

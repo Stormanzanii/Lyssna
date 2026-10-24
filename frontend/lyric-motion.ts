@@ -1,4 +1,10 @@
 import type { Word, Line } from "./types";
+import {
+  animatorValues,
+  idleScale,
+  presetOf,
+  type AnimatorSettings,
+} from "./animator-tuning";
 
 export interface AnimatedWord extends Word {
   /** A floating fragment keeps its place in the original held word. */
@@ -304,8 +310,8 @@ export function naturalSpline(points: readonly (readonly [number, number])[]) {
   };
 }
 /** Animation curves over a syllable's progress, and the springs that chase
- * them. Lift is a share of the font size. Unsung text rests at full size,
- * slightly low, so word spacing stays even while a line waits to be sung. */
+ * them. Lift is a share of the font size. `tuneMotion` rebuilds them for the
+ * chosen animator preset. */
 export const MOTION = {
   scale: naturalSpline([
     [0, 1],
@@ -334,7 +340,13 @@ export const MOTION = {
     [1, 0],
   ]),
   /** Frequency in hertz and damping ratio. */
-  springs: { scale: [0.88, 0.64], lift: [1.45, 0.4], glow: [1.18, 0.56] },
+  springs: {
+    scale: [0.88, 0.64] as [number, number],
+    lift: [1.45, 0.4] as [number, number],
+    glow: [1.18, 0.56] as [number, number],
+  },
+  /** Scale unsung text rests at on the active line. */
+  idleScale: 1,
   /** Glow left on sung letters while their held word waits between letters. */
   sungLetterGlow: 0.2,
   /** Held words finish their letters this much before the word ends. */
@@ -345,7 +357,46 @@ export const MOTION = {
   leadMs: 90,
   blurPerLine: 1.25,
   maxBlur: 1.25 * 5.465,
-} as const;
+};
+/** Applies an animator preset as the fork's rebuildAnimatorTuning: Default
+ * keeps upstream's literal curves; other presets put their idle and peak
+ * scales into the curves and multiply lift, glow and blur. */
+export function tuneMotion(settings: AnimatorSettings = {}) {
+  const upstream = presetOf(settings) === "Default",
+    tuning = animatorValues(settings),
+    idle = idleScale(settings);
+  MOTION.idleScale = idle;
+  MOTION.scale = naturalSpline([
+    [0, idle],
+    [0.7, tuning.wordPeakScale],
+    [1, 1],
+  ]);
+  MOTION.letterScale = naturalSpline([
+    [0, idle],
+    [0.7, tuning.letterPeakScale],
+    [1, 1],
+  ]);
+  const lift = upstream ? 1 : tuning.verticalStrength,
+    glow = upstream ? 1 : tuning.glowStrength;
+  MOTION.lift = naturalSpline([
+    [0, lift / 100],
+    [0.9, -lift / 60],
+    [1, 0],
+  ]);
+  MOTION.glow = naturalSpline([
+    [0, 0],
+    [0.15, glow],
+    [0.6, glow],
+    [1, 0],
+  ]);
+  MOTION.springs = {
+    scale: [tuning.scaleFrequency, tuning.scaleDamping],
+    lift: [tuning.verticalFrequency, tuning.verticalDamping],
+    glow: [tuning.glowFrequency, tuning.glowDamping],
+  };
+  MOTION.blurPerLine = 1.25 * tuning.blurStrength;
+  MOTION.maxBlur = MOTION.blurPerLine * 5.465;
+}
 export type SungState = "unsung" | "active" | "sung";
 export const sungState = (start: number, end: number, time: number) =>
   (time < start ? "unsung" : time >= end ? "sung" : "active") as SungState;

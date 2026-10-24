@@ -158,6 +158,7 @@ import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
 import { SettingsWindow, type SettingsTab } from "./settings-window";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
+import { presetOf } from "./animator-tuning";
 import {
   NextIcon,
   PauseIcon,
@@ -593,6 +594,11 @@ function App() {
     },
     [call],
   );
+  // Styles that differ between animator presets key off the root.
+  const animatorPreset = presetOf(state.settings.lyrics_animator);
+  useEffect(() => {
+    document.documentElement.dataset.animator = animatorPreset;
+  }, [animatorPreset]);
   useAppZoom(
     state.settings.ui_zoom_percent ?? 100,
     (percent) => updateSettings({ ui_zoom_percent: percent }),

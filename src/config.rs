@@ -44,6 +44,82 @@ pub fn clean_song_sorts(sorts: &mut std::collections::BTreeMap<String, String>) 
     }
 }
 
+/// Animator preset and Custom tuning, as the Spicy Lyrics fork's Animator
+/// Behavior panel. The frontend validates values; this keeps the file bounded.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LyricsAnimator {
+    pub preset: String,
+    pub detail: String,
+    pub custom: std::collections::BTreeMap<String, f64>,
+    pub saved: Vec<SavedAnimatorPreset>,
+    pub selected: Option<String>,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedAnimatorPreset {
+    pub id: String,
+    pub name: String,
+    pub values: std::collections::BTreeMap<String, f64>,
+}
+
+impl Default for LyricsAnimator {
+    fn default() -> Self {
+        Self {
+            preset: "Default".into(),
+            detail: "Basic".into(),
+            custom: Default::default(),
+            saved: Vec::new(),
+            selected: None,
+        }
+    }
+}
+
+const ANIMATOR_VALUES: usize = 32;
+const ANIMATOR_PRESETS: usize = 200;
+
+fn clean_animator_values(values: &mut std::collections::BTreeMap<String, f64>) {
+    values.retain(|key, value| {
+        !key.is_empty()
+            && key.len() <= 32
+            && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
+            && value.is_finite()
+    });
+    while values.len() > ANIMATOR_VALUES {
+        values.pop_last();
+    }
+}
+
+impl LyricsAnimator {
+    pub fn clean(&mut self) {
+        if !["Default", "Custom"].contains(&self.preset.as_str()) {
+            self.preset = "Default".into();
+        }
+        if !["Basic", "Advanced", "Full", "Full + Extras"].contains(&self.detail.as_str()) {
+            self.detail = "Basic".into();
+        }
+        clean_animator_values(&mut self.custom);
+        self.saved.retain(|preset| {
+            !preset.id.is_empty()
+                && preset.id.len() <= 64
+                && !preset.name.trim().is_empty()
+                && preset.name.chars().count() <= 80
+        });
+        self.saved.truncate(ANIMATOR_PRESETS);
+        for preset in &mut self.saved {
+            clean_animator_values(&mut preset.values);
+        }
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|id| !self.saved.iter().any(|preset| &preset.id == id))
+        {
+            self.selected = None;
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -79,6 +155,7 @@ pub struct Settings {
     /// Lyrics page background: "animated", "static" or "color".
     pub lyrics_background: String,
     pub lyrics_pinned_footer: PinnedLyricsFooter,
+    pub lyrics_animator: LyricsAnimator,
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
     pub lyrics_sources_disabled: Vec<String>,
@@ -154,6 +231,7 @@ impl Default for Settings {
             now_playing_open: true,
             song_sorts: Default::default(),
             spotify_plus: SpotifyPlus::default(),
+            lyrics_animator: LyricsAnimator::default(),
         }
     }
 }
@@ -205,6 +283,7 @@ impl Settings {
             .audio_output
             .filter(|name| crate::audio_output::valid_name(name));
         clean_song_sorts(&mut settings.song_sorts);
+        settings.lyrics_animator.clean();
         Ok(settings)
     }
 
@@ -259,6 +338,25 @@ mod tests {
         }
         let older: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(older.lyrics_pinned_footer, PinnedLyricsFooter::Off);
+    }
+
+    #[test]
+    fn animator_settings_keep_known_presets_and_bounded_values() {
+        let mut settings: Settings = serde_json::from_str(
+            r#"{"lyrics_animator":{"preset":"Pixel","detail":"Full + Extras",
+            "custom":{"wordPeakScale":1.2,"bad key":2},
+            "saved":[{"id":"a","name":"Mine","values":{"glowStrength":2}},{"id":"","name":"x"}],
+            "selected":"gone"}}"#,
+        )
+        .unwrap();
+        settings.lyrics_animator.clean();
+        let animator = &settings.lyrics_animator;
+        assert_eq!(animator.preset, "Default");
+        assert_eq!(animator.detail, "Full + Extras");
+        assert_eq!(animator.custom.len(), 1);
+        assert_eq!(animator.saved.len(), 1);
+        assert_eq!(animator.selected, None);
+        assert_eq!(Settings::default().lyrics_animator.preset, "Default");
     }
 
     #[test]

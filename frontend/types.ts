@@ -1,3 +1,4 @@
+import type { AnimatorSettings } from "./animator-tuning";
 export interface Artwork {
   url: string;
   width?: number;
@@ -111,6 +112,7 @@ export interface Settings {
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
   space_gravity?: boolean;
+  lyrics_animator?: AnimatorSettings;
   experimental_word_sync?: boolean;
   lyrics_hide_artwork?: boolean;
   lyrics_artwork_right?: boolean;

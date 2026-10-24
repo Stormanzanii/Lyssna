@@ -6,7 +6,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { vocalGap, wordGroups, type AnimatedWord } from "./lyric-motion";
+import {
+  tuneMotion,
+  vocalGap,
+  wordGroups,
+  type AnimatedWord,
+} from "./lyric-motion";
+import type { AnimatorSettings } from "./animator-tuning";
 import { LyricAnimator } from "./lyric-animator";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
@@ -196,12 +202,14 @@ export function SpaceGravityLyrics({
   lyrics,
   time,
   reduceMotion,
+  tuning,
   onSeek,
   credits,
 }: {
   lyrics: Lyrics;
   time: number;
   reduceMotion: boolean;
+  tuning?: AnimatorSettings;
   onSeek: (position: number) => void;
   credits: ReactNode;
 }) {
@@ -404,7 +412,9 @@ export function SpaceGravityLyrics({
   // The normal lyrics animator drives the syllables, exactly as in the
   // regular lyrics view.
   const animator = useRef<LyricAnimator>(undefined);
+  const tuningKey = JSON.stringify(tuning ?? {});
   useLayoutEffect(() => {
+    tuneMotion(JSON.parse(tuningKey));
     const instance = new LyricAnimator(
       lyrics,
       (index) =>
@@ -415,7 +425,7 @@ export function SpaceGravityLyrics({
     );
     animator.current = instance;
     return () => instance.dispose();
-  }, [lyrics, reduceMotion]);
+  }, [lyrics, reduceMotion, tuningKey]);
   const lastTime = useRef(time);
   useLayoutEffect(() => {
     // A seek jumps song time; snap instead of springing through it.

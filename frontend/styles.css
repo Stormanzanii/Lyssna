@@ -2792,6 +2792,27 @@ small {
 .lyric-syllable.joined-middle .lyric-letter {
   scale: none !important;
 }
+/* Custom animator preset, as the pixels-spicy-lyrics fork: split
+   syllables keep full size while more of the line follows, so no gaps open;
+   the line's final syllable and Space Gravity keep their scale. Default
+   scales every piece like upstream Spicy Lyrics. */
+:root:not([data-animator="Default"])
+  .lyric-word
+  > .lyric-syllable:not(
+    :only-child,
+    .lyric-main > .lyric-word-group:last-child .lyric-syllable:last-child,
+    .space-gravity *
+  ),
+:root:not([data-animator="Default"])
+  .lyric-word
+  > .lyric-syllable:not(
+    :only-child,
+    .lyric-main > .lyric-word-group:last-child .lyric-syllable:last-child,
+    .space-gravity *
+  )
+  .lyric-letter {
+  scale: none !important;
+}
 .lyric-line:not(.opposite)
   .lyric-main
   > .lyric-word-group:first-child

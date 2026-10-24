@@ -92,6 +92,8 @@ librespot-protocol = { git = "https://github.com/School-User/librespot.git", rev
 
 [profile.dev]
 debug = 1
+# Incremental caches grew to tens of GB in target/debug/incremental.
+incremental = false
 
 # Model verification hashes 190 MB on each on-demand load.
 [profile.dev.package.sha2]
@@ -103,4 +105,5 @@ librespot-playback = { path = "vendor/librespot-playback" }
 
 [profile.release]
 lto = "thin"
+incremental = false
 strip = true

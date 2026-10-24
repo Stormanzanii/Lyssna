@@ -290,6 +290,18 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
+/* Without Liquid Glass, Settings is a solid window like other dialogs. */
+.application:not(.liquid-glass) .lyrics-settings {
+  border-color: #ffffff15;
+  background: #191919;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 25px 120px #0007;
+}
+.application:not(.liquid-glass) .lyrics-settings::before,
+.application:not(.liquid-glass) .lyrics-settings::after {
+  content: none;
+}
 @media (prefers-reduced-transparency: reduce) {
   .lyrics-settings {
     background: #1e1e23f2;

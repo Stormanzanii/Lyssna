@@ -9009,3 +9009,22 @@ test("the release year dot sits evenly between year and artist", async ({
   });
   expect(Math.abs(gaps[0] - gaps[1])).toBeLessThanOrEqual(2);
 });
+
+test("Settings is solid without Liquid Glass and glass with it", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "General");
+  const panel = page.locator(".lyrics-settings").first();
+  await expect(panel).toHaveCSS("background-color", "rgb(25, 25, 25)");
+  await expect(panel).toHaveCSS("backdrop-filter", "none");
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, liquid_glass: true },
+      }),
+    emptyState.settings,
+  );
+  await expect(panel).not.toHaveCSS("backdrop-filter", "none");
+});

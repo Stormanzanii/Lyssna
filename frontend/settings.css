@@ -788,11 +788,13 @@
 .lyrics-settings.animator-panel {
   position: fixed;
   z-index: 900;
-  top: 72px;
-  left: 24px;
-  width: min(380px, calc(100vw - 48px));
-  height: auto;
-  max-height: calc(100vh - 168px);
+  /* The fork's panel spans about a third of the window and three
+     quarters of its height. */
+  top: 9vh;
+  left: 1vw;
+  width: min(clamp(380px, 32vw, 680px), calc(100vw - 32px));
+  height: 75vh;
+  max-height: calc(100vh - 32px);
 }
 .animator-panel-header {
   display: flex;
@@ -806,20 +808,13 @@
   font-weight: 700;
 }
 .animator-panel-body {
+  flex: 1;
   overflow-y: auto;
   min-height: 0;
   margin: 0 8px 8px;
 }
 .animator-panel .animator-slider .number-field {
   width: 64px;
-}
-.lyrics-settings.animator-panel .setting-row {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
-.lyrics-settings.animator-panel .setting-control {
-  display: block;
 }
 .lyrics-settings.animator-panel .settings-select {
   max-width: none;

@@ -28,7 +28,7 @@
     :has(:focus-visible)
   ) {
   --lyrics-controls-opacity: 1;
-  --lyrics-dock-lift: 104px;
+  --lyrics-dock-lift: 136px;
 }
 .immersive .lyrics-page .lyrics-fullscreen-controls,
 .immersive .lyrics-page .lyrics-toolbar {
@@ -162,14 +162,43 @@
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
-  bottom: 24px;
-  width: min(36%, 600px);
+  bottom: 28px;
+  width: min(46%, 780px);
+  gap: 10px;
+}
+/* Full screen Canvas controls read from across the room, like Spotify's. */
+.immersive .canvas-lyrics .lyrics-glass-seek {
+  height: 12px;
+}
+.immersive .canvas-lyrics .lyrics-fullscreen-times {
+  font-size: 17px;
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-buttons {
   position: relative;
   justify-content: center;
-  padding-inline: 44px;
-  gap: clamp(18px, 2vw, 30px);
+  padding-inline: 72px;
+  margin-top: 10px;
+  gap: clamp(24px, 3vw, 52px);
+}
+.immersive .canvas-lyrics .lyrics-fullscreen-buttons svg {
+  width: 30px;
+  height: 30px;
+}
+.immersive
+  .canvas-lyrics
+  .lyrics-fullscreen-buttons
+  .lyrics-fullscreen-play
+  svg {
+  width: 46px;
+  height: 46px;
+}
+.immersive
+  .canvas-lyrics
+  .lyrics-fullscreen-buttons
+  .lyrics-fullscreen-like
+  svg {
+  width: 40px;
+  height: 40px;
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-like {
   position: absolute;
@@ -178,7 +207,7 @@
 }
 .immersive .canvas-lyrics:not(.narrow) :is(.lyrics-title, .lyrics-artists) {
   left: var(--fullscreen-gutter);
-  width: min(36%, 600px);
+  width: min(46%, 780px);
   max-width: none;
   translate: 0 calc(-1 * var(--lyrics-dock-lift));
   transition: translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1) 200ms;

@@ -159,6 +159,7 @@ import { SettingsWindow, type SettingsTab } from "./settings-window";
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
 import { presetOf } from "./animator-tuning";
+import { AnimatorPanel } from "./animator-settings";
 import {
   NextIcon,
   PauseIcon,
@@ -386,6 +387,7 @@ function App() {
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
   // The SpotiFlex settings window and the tab it opened on.
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  const [animatorPanel, setAnimatorPanel] = useState(false);
   useEffect(() => setSettingsTab(null), [state.profile?.id]);
   const [about, setAbout] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
@@ -4316,6 +4318,22 @@ function App() {
           onClose={() => setSettingsTab(null)}
           onCall={call}
           onNotice={notify}
+          onManageAnimator={() => {
+            setSettingsTab(null);
+            setAnimatorPanel(true);
+            void fullscreen(true);
+          }}
+        />
+      )}
+      {state.profile && animatorPanel && (
+        <AnimatorPanel
+          animator={state.settings.lyrics_animator}
+          onChange={(lyrics_animator) => updateSettings({ lyrics_animator })}
+          onBack={() => {
+            setAnimatorPanel(false);
+            setSettingsTab("Effects");
+          }}
+          onClose={() => setAnimatorPanel(false)}
         />
       )}
       {ttmlOpen && (

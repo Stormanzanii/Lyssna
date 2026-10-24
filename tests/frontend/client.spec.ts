@@ -8506,7 +8506,17 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   await expect(preset.locator("option")).toHaveText(["Default", "Custom"]);
   await preset.selectOption("Custom");
   await expect(page.locator("html")).toHaveAttribute("data-animator", "Custom");
+  await showLyrics(page);
+  await openSettings(page, "Effects");
   await page.getByRole("button", { name: "Manage", exact: true }).click();
+  // Like the fork, tuning floats beside full screen lyrics.
+  const panel = page.getByRole("dialog", { name: "Animator Behavior" });
+  await expect(panel).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect(page.locator(".lyrics-page")).toBeVisible();
   // A code shared from Spicy Lyrics pasted into the name box.
   await page
     .getByLabel("Preset name", { exact: true })
@@ -8528,6 +8538,11 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   expect(saved.preset).toBe("Custom");
   expect(saved.saved[0].name).toBe("Bouncy");
   expect(saved.custom.verticalStrength).toBe(2);
+  await page.screenshot({ path: "target/diagnostics/animator-panel.png" });
+  // Escape closes the panel and stays in full screen; Back reopens Settings.
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
 });
 
 test("a reshuffled queue never slides rows in from far away", async ({

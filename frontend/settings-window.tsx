@@ -29,7 +29,7 @@ import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { LyricsProvider } from "./lyrics-provider";
-import { AnimatorBehavior, AnimatorPresetRow } from "./animator-settings";
+import { AnimatorPresetRow } from "./animator-settings";
 
 /** Default source order; LRCLIB and Netease start off. */
 const DEFAULT_SOURCES = [
@@ -99,8 +99,11 @@ export function SettingsWindow({
   onClose,
   onCall,
   onNotice,
+  onManageAnimator,
 }: {
   initialTab?: Tab;
+  /** Opens Custom animator tuning beside full screen lyrics. */
+  onManageAnimator: () => void;
   state: AppState;
   onSettings: (settings: Partial<Settings>) => void;
   onCall: <T = void>(
@@ -114,8 +117,6 @@ export function SettingsWindow({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
-  // Custom animator tuning opens in place of the tab, like the fork's panel.
-  const [managingAnimator, setManagingAnimator] = useState(false);
   const [query, setQuery] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -173,7 +174,6 @@ export function SettingsWindow({
   }, [tab]);
   const select = (next: Tab) => {
     setTab(next);
-    setManagingAnimator(false);
     setQuery("");
     scroll.current?.scrollTo({ top: 0 });
   };
@@ -684,10 +684,7 @@ export function SettingsWindow({
           key="animator"
           animator={settings.lyrics_animator}
           onChange={(lyrics_animator) => onSettings({ lyrics_animator })}
-          onManage={() => {
-            setManagingAnimator(true);
-            scroll.current?.scrollTo({ top: 0 });
-          }}
+          onManage={onManageAnimator}
         />,
         flag(
           "canvas_lyrics",
@@ -948,21 +945,6 @@ export function SettingsWindow({
                   Settings
                 </button>
                 <Credits onOpen={onOpen} />
-              </section>
-            ) : managingAnimator && !searching ? (
-              <section
-                className="lyrics-settings-section"
-                aria-label="Animator Behavior"
-              >
-                <div className="lyrics-settings-group">
-                  <AnimatorBehavior
-                    animator={settings.lyrics_animator}
-                    onChange={(lyrics_animator) =>
-                      onSettings({ lyrics_animator })
-                    }
-                    onBack={() => setManagingAnimator(false)}
-                  />
-                </div>
               </section>
             ) : (
               <div role="tabpanel">

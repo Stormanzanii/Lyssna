@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { SettingRow } from "./setting-row";
 import {
   ANIMATOR_DETAILS,
@@ -354,5 +355,56 @@ export function AnimatorBehavior({
         </p>
       )}
     </div>
+  );
+}
+
+/** Custom tuning floating over full screen lyrics, as the fork's Manage
+ * opens it: the lyrics keep playing beside it so each change shows live.
+ * Escape closes the panel without leaving full screen. */
+export function AnimatorPanel({
+  animator,
+  onChange,
+  onBack,
+  onClose,
+}: {
+  animator?: AnimatorSettings;
+  onChange: (animator: AnimatorSettings) => void;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => document.removeEventListener("keydown", closeOnEscape, true);
+  }, [onClose]);
+  return (
+    <aside
+      className="animator-panel lyrics-settings"
+      role="dialog"
+      aria-label="Animator Behavior"
+    >
+      <header className="animator-panel-header">
+        <h2>Animator Behavior</h2>
+        <button
+          className="icon-button"
+          title="Close Animator Behavior"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </header>
+      <div className="animator-panel-body lyrics-settings-group">
+        <AnimatorBehavior
+          animator={animator}
+          onChange={onChange}
+          onBack={onBack}
+        />
+      </div>
+    </aside>
   );
 }

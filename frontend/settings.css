@@ -784,3 +784,47 @@
   font-size: 12px;
   color: var(--muted, #b3b3b3);
 }
+/* Manage: tuning floats over the artwork while full screen lyrics play. */
+.lyrics-settings.animator-panel {
+  position: fixed;
+  z-index: 900;
+  top: 72px;
+  left: 24px;
+  width: min(380px, calc(100vw - 48px));
+  height: auto;
+  max-height: calc(100vh - 168px);
+}
+.animator-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 6px 18px;
+}
+.animator-panel-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.animator-panel-body {
+  overflow-y: auto;
+  min-height: 0;
+  margin: 0 8px 8px;
+}
+.animator-panel .animator-slider .number-field {
+  width: 64px;
+}
+.lyrics-settings.animator-panel .setting-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.lyrics-settings.animator-panel .setting-control {
+  display: block;
+}
+.lyrics-settings.animator-panel .settings-select {
+  max-width: none;
+  flex: 1;
+}
+.lyrics-settings.animator-panel .animator-preset-control > .settings-select {
+  min-width: 0;
+}

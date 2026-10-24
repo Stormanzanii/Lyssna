@@ -5,8 +5,12 @@ import {
   GRAVITY,
   gravityPieces,
   intersects,
+  lineLayout,
   measure,
+  spawn,
+  spawnOverlap,
   speedMultiplier,
+  staticLayout,
   step,
   visibleWordCount,
   wordWindow,
@@ -20,6 +24,7 @@ import {
 import type { Line, Lyrics } from "./types";
 
 const bounds = { width: 800, height: 600 };
+const field = { bounds };
 const body = (seed = 1) => {
   const result = createBody(seed, 1);
   measure(result, 80, 40);
@@ -49,7 +54,7 @@ describe("Space Gravity physics", () => {
     const word = body();
     word.x = -50;
     word.y = 900;
-    constrain(word, bounds, []);
+    constrain(word, field);
     expect(word.x).toBeGreaterThanOrEqual(GRAVITY.edgePadding + word.radius);
     expect(word.y).toBeLessThanOrEqual(
       bounds.height - GRAVITY.edgePadding - word.radius,
@@ -58,16 +63,29 @@ describe("Space Gravity physics", () => {
     const inside = body(2);
     inside.x = 300;
     inside.y = 300;
-    constrain(inside, bounds, [art]);
+    constrain(inside, { bounds, cover: art });
     expect(intersects(inside, art)).toBe(false);
+    // The credits footer is a floor: words leave it upward or sideways.
+    const footer = { left: 0, top: 520, right: 800, bottom: 600 };
+    const low = body(3);
+    low.y = 560;
+    constrain(low, { bounds, footer });
+    expect(low.y).toBeCloseTo(520 - low.radius);
+    // A play area keeps words inside it.
+    const area = { left: 400, top: 0, right: 800, bottom: 600 };
+    const left = body(4);
+    left.x = 100;
+    constrain(left, { bounds, area });
+    expect(left.x).toBeGreaterThanOrEqual(400 + left.radius);
   });
 
   it("stays finite and in bounds over many steps", () => {
     const words = Array.from({ length: 20 }, (_, index) => body(index));
     for (let frame = 0; frame < 600; frame += 1)
-      step(words, 1 / 60, bounds, [
-        { left: 0, top: 0, right: 300, bottom: 600 },
-      ]);
+      step(words, 1 / 60, {
+        bounds,
+        cover: { left: 0, top: 0, right: 300, bottom: 600 },
+      });
     for (const word of words) {
       expect(Number.isFinite(word.x) && Number.isFinite(word.y)).toBe(true);
       expect(word.x).toBeGreaterThan(0);
@@ -79,17 +97,24 @@ describe("Space Gravity physics", () => {
     const word = body();
     word.vx = 0;
     word.vy = 0;
-    step([word], 0.05, bounds, [], { vx: 500, vy: 0 });
+    step([word], 0.05, field, { vx: 500, vy: 0 });
     expect(word.vx).toBeLessThan(0);
   });
 
   it("sizes the word window from the free area", () => {
-    expect(visibleWordCount({ width: 100, height: 100 })).toBe(
+    expect(visibleWordCount({ bounds: { width: 100, height: 100 } })).toBe(
       GRAVITY.minVisibleWords,
     );
-    expect(visibleWordCount({ width: 4000, height: 4000 })).toBe(
+    expect(visibleWordCount({ bounds: { width: 4000, height: 4000 } })).toBe(
       GRAVITY.maxVisibleWords,
     );
+    // Artwork in the play area leaves room for fewer words.
+    const open = visibleWordCount({ bounds: { width: 1600, height: 1000 } });
+    const covered = visibleWordCount({
+      bounds: { width: 1600, height: 1000 },
+      cover: { left: 0, top: 0, right: 800, bottom: 1000 },
+    });
+    expect(covered).toBeLessThan(open);
     expect(wordWindow(0, 100, 12)).toEqual({ first: 0, last: 11 });
     expect(wordWindow(99, 100, 12)).toEqual({ first: 88, last: 99 });
     expect(wordWindow(50, 5, 12)).toEqual({ first: 0, last: 4 });
@@ -114,6 +139,40 @@ const line = (
   })),
   background,
   opposite: false,
+});
+
+describe("Space Gravity spawning", () => {
+  it("lays a line out in rows across the area, duets at the right", () => {
+    const sizes = [
+      { width: 100, height: 40 },
+      { width: 100, height: 40 },
+      { width: 100, height: 40 },
+    ];
+    const left = lineLayout(sizes, 250);
+    expect(left.places.map((place) => place.x)).toEqual([50, 150, 50]);
+    expect(left.height).toBe(80);
+    const right = lineLayout(sizes.slice(0, 1), 250, true);
+    expect(right.places[0].x).toBe(200);
+  });
+
+  it("finds room beside words already on screen", () => {
+    const first = body(1);
+    first.naturalX = first.x = 400;
+    first.naturalY = first.y = 300;
+    const second = body(2);
+    second.naturalX = 400;
+    second.naturalY = 300;
+    spawn(second, [first], field, false, () => 0.5);
+    expect(spawnOverlap(second, first)).toBe(0);
+  });
+
+  it("centres lines in still rows under reduced motion", () => {
+    const words = [body(1), body(2)];
+    staticLayout([words], field);
+    expect(words[0].y).toBe(words[1].y);
+    expect(words[1].x - words[0].x).toBe(86);
+    expect(words.every((word) => word.angle === 0)).toBe(true);
+  });
 });
 
 describe("Space Gravity word selection", () => {

@@ -2063,9 +2063,14 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
   await openSettings(page, "Appearance");
   await page.getByLabel("Reduce motion").check();
   await showLyrics(page);
-  await expect(page.locator(".gravity-stage")).toHaveCount(0);
+  // As in the fork, reduced motion keeps Space Gravity as still, centred
+  // rows instead of drifting words.
   await expect(page.locator(".lyrics-canvas-cover")).toHaveCount(0);
-  await expect(page.locator(".lyrics-page .lyric-line")).toHaveCount(80);
+  const still = page.locator(".gravity-word[data-spawned]").first();
+  await expect(still).toBeVisible();
+  await expect
+    .poll(() => still.evaluate((node) => (node as HTMLElement).style.transform))
+    .toContain("rotate(0deg)");
 });
 
 test("Canvas and its toolbar move together without restarting the video", async ({
@@ -4357,15 +4362,16 @@ test("Space Gravity shares normal syllable joins and held-letter timing", async 
     await position(time);
     await expect.poll(fills).toEqual(expected);
   }
-  await expect(page.locator(".gravity-word.singing")).toHaveCount(1);
+  // The sung line shows at full strength, as in the fork; its fill marks
+  // the sung words.
   await expect
     .poll(() =>
       page
-        .locator(".gravity-word.current:not(.singing)")
+        .locator(".gravity-word.current")
         .first()
         .evaluate((node) => Number(getComputedStyle(node).opacity)),
     )
-    .toBeCloseTo(0.55, 2);
+    .toBeCloseTo(1, 2);
   await expect(page.locator(".gravity-word .joined-start")).toHaveText("Hel");
   await expect(page.locator(".gravity-word .joined-end")).toHaveText("lo");
   await expect
@@ -4426,23 +4432,26 @@ test("Space Gravity words keep drifting while the song plays", async ({
   }
   // Re-rendering every frame must not respawn words at their start point.
   expect(new Set(samples).size).toBeGreaterThan(2);
-  // Exactly one word is marked as being sung.
-  await expect(page.locator(".gravity-word.singing")).toHaveCount(1);
-  // Its fill sweeps smoothly like the normal lyrics view.
+  // The sung line's fill sweeps smoothly like the normal lyrics view.
   const fill = () =>
     page
-      .locator(".gravity-word.singing .lyric-syllable")
-      .first()
-      .evaluate((element) =>
-        parseFloat(
-          (element as HTMLElement).style.getPropertyValue(
-            "--gradient-position",
-          ),
+      .locator(".gravity-word.current .lyric-syllable")
+      .evaluateAll((elements) =>
+        elements.reduce(
+          (sum, element) =>
+            sum +
+            (parseFloat(
+              (element as HTMLElement).style.getPropertyValue(
+                "--gradient-position",
+              ),
+            ) || 0),
+          0,
         ),
       );
   const first = await fill();
   await page.waitForTimeout(250);
   expect(await fill()).toBeGreaterThan(first);
+  await page.screenshot({ path: "target/diagnostics/space-gravity.png" });
 });
 
 test("Space plays and pauses after clicking any button, but not while searching", async ({

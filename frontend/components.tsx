@@ -1130,8 +1130,7 @@ function SongLyricsPage({
     state.settings.space_gravity &&
     state.lyrics &&
     !state.lyrics.instrumental &&
-    (state.lyrics.synced || track?.duration_ms) &&
-    motionAllowed
+    (state.lyrics.synced || track?.duration_ms)
   );
   const lyrics = displayLyrics(
     state.lyrics,

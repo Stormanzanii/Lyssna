@@ -1,5 +1,6 @@
 :root {
-  font-family: Metropolis, "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  font-family:
+    Metropolis, "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
   color: #f7f7f7;
   background: #000000;
   font-synthesis: none;
@@ -1480,7 +1481,9 @@ small {
   color: #fff;
   background: #ffffff0f;
   box-shadow: inset 0 0 0 1px #ffffff1f;
-  transition: background 0.18s, transform 0.12s;
+  transition:
+    background 0.18s,
+    transform 0.12s;
 }
 .load-ttml-mode:active {
   transform: scale(0.99);
@@ -1537,7 +1540,9 @@ small {
   font-size: 13.5px;
   font-weight: 600;
   flex-shrink: 0;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 }
 .load-ttml-back {
   color: #fff;
@@ -1653,7 +1658,9 @@ small {
   color: #fff;
   background: #ffffff0f;
   box-shadow: inset 0 0 0 1px #ffffff1f;
-  transition: background 0.15s, transform 0.12s;
+  transition:
+    background 0.15s,
+    transform 0.12s;
 }
 .load-ttml-row-actions button:hover:not(:disabled) {
   background: #ffffff24;
@@ -2903,7 +2910,22 @@ small {
 .lyric-wait[aria-hidden="true"] .lyric-wait-dots {
   scale: 0;
   transition: scale 0.4s
-    linear(0, -0.006 9.4%, -0.029 18%, -0.157 43.3%, -0.185 51.4%, -0.189 55.9%, -0.182 60%, -0.163 63.9%, -0.133 67.6%, -0.074 72.3%, 0.006 76.7%, 0.238 85%, 0.566 92.7%, 1);
+    linear(
+      0,
+      -0.006 9.4%,
+      -0.029 18%,
+      -0.157 43.3%,
+      -0.185 51.4%,
+      -0.189 55.9%,
+      -0.182 60%,
+      -0.163 63.9%,
+      -0.133 67.6%,
+      -0.074 72.3%,
+      0.006 76.7%,
+      0.238 85%,
+      0.566 92.7%,
+      1
+    );
 }
 .reduce-motion .lyric-wait-dots {
   transition: none;
@@ -2919,9 +2941,8 @@ small {
   transform: translateY(calc(var(--dot-lift) * var(--dot-lyric-size) * -1))
     scale(var(--dot-scale));
   /* A compact halo follows the fork's text-shadow rather than a wide bloom. */
-  box-shadow:
-    0 0 calc(4px + var(--dot-glow) * 6px)
-      rgb(255 255 255 / calc(var(--dot-glow) * 0.9));
+  box-shadow: 0 0 calc(4px + var(--dot-glow) * 6px)
+    rgb(255 255 255 / calc(var(--dot-glow) * 0.9));
 }
 .reduce-motion .lyric-wait i {
   animation: none;
@@ -2994,7 +3015,11 @@ small {
   height: 52px;
   border: 1px solid #ffffff45;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--lyrics-cover-color, #535353) 48%, #15151566);
+  background: color-mix(
+    in srgb,
+    var(--lyrics-cover-color, #535353) 48%,
+    #15151566
+  );
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
   box-shadow:
@@ -3007,7 +3032,11 @@ small {
     transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .follow-lyrics:hover {
-  background: color-mix(in srgb, var(--lyrics-cover-color, #535353) 60%, #ffffff16);
+  background: color-mix(
+    in srgb,
+    var(--lyrics-cover-color, #535353) 60%,
+    #ffffff16
+  );
 }
 .follow-lyrics:active {
   transform: scale(0.94);
@@ -4348,7 +4377,9 @@ input.volume-range:active::-webkit-slider-thumb {
 .immersive .canvas-lyrics:not(.narrow) .lyrics-title {
   bottom: 162px;
 }
-.immersive .canvas-lyrics.artwork-right:not(.narrow) .lyrics-fullscreen-controls {
+.immersive
+  .canvas-lyrics.artwork-right:not(.narrow)
+  .lyrics-fullscreen-controls {
   left: auto;
   right: 2%;
 }
@@ -4744,17 +4775,19 @@ input.volume-range:active::-webkit-slider-thumb {
   overflow: hidden;
   pointer-events: none;
 }
+/* Words take the normal lyric size and fill. As in the fork, the sung line
+   shows fully, the next line at 34% and earlier lines at 22%; lines blur by
+   distance from the sung one. A word stays hidden until placed, then fades
+   in; leaving words fade out. */
 .gravity-word {
+  --role-opacity: 1;
+  --presence-opacity: 1;
   position: absolute;
   left: 0;
   top: 0;
-  max-width: 40cqw;
-  padding: 4px 6px;
+  padding: 0;
   border: 0;
-  font-family: var(--lyric-font, inherit);
-  font-size: clamp(22px, 2.6cqw, 44px);
-  font-weight: 750;
-  line-height: 1.15;
+  font: inherit;
   white-space: nowrap;
   color: transparent;
   background: none;
@@ -4762,33 +4795,34 @@ input.volume-range:active::-webkit-slider-thumb {
   will-change: transform;
   pointer-events: auto;
   cursor: pointer;
-  transition:
-    opacity 180ms ease,
-    text-shadow 160ms ease;
-  animation: gravity-word-in 180ms ease both;
+  opacity: calc(var(--role-opacity) * var(--presence-opacity));
+  filter: blur(calc(var(--blur, 0px) / 2)) var(--hover-filter,);
+  transition: opacity 180ms ease;
 }
-@keyframes gravity-word-in {
-  from {
-    opacity: 0;
-  }
+.gravity-word:not([data-spawned]) {
+  visibility: hidden;
+  --presence-opacity: 0;
+  pointer-events: none;
+  transition: none;
 }
-.gravity-word.current {
-  opacity: 0.55;
-}
-/* The word being sung is the brightest; size and position stay put. */
-.gravity-word.singing {
-  z-index: 5;
-  opacity: 1;
-  text-shadow: 0 0 16px #ffffff59;
-}
-.gravity-word.opposite.singing {
-  text-shadow: 0 0 16px #ff8ca859;
+.gravity-word.exiting {
+  --presence-opacity: 0;
+  pointer-events: none;
 }
 .gravity-word.next {
-  opacity: 0.34;
+  --role-opacity: 0.34;
 }
 .gravity-word.previous {
-  opacity: 0.22;
+  --role-opacity: 0.22;
+}
+.gravity-word:hover {
+  --role-opacity: 1;
+}
+.gravity-word.current:hover {
+  --hover-filter: drop-shadow(0 0 10px rgb(255 255 255 / 0.85));
+}
+.gravity-word.opposite.current:hover {
+  --hover-filter: drop-shadow(0 0 10px rgb(255 140 168 / 0.85));
 }
 /* Box-less line wrappers: the lyric animator finds a line's syllables
    through them, and the normal lyric styles and fill apply inside. */
@@ -4797,26 +4831,7 @@ input.volume-range:active::-webkit-slider-thumb {
 }
 /* The second duet voice gets its own colour so the two singers read apart. */
 .gravity-word.opposite {
-  --lyric-rgb: 255 179 199;
-}
-.gravity-word.opposite.current {
-  text-shadow: 0 0 18px #ff8ca833;
-}
-.gravity-word.background {
-  font-size: clamp(17px, 1.9cqw, 32px);
-}
-.gravity-word.exiting {
-  opacity: 0;
-  pointer-events: none;
-}
-.gravity-word:hover {
-  opacity: 1;
-}
-.gravity-word.current:hover {
-  filter: drop-shadow(0 0 10px #ffffffd9);
-}
-.gravity-word.opposite.current:hover {
-  filter: drop-shadow(0 0 10px #ff8ca8d9);
+  --lyric-rgb: 255 140 168;
 }
 .gravity-word:focus-visible {
   outline: 2px solid #fff9;
@@ -5097,7 +5112,8 @@ input.volume-range:active::-webkit-slider-thumb {
 }
 /* Wide lyrics: the toolbar sits over the cover-art side and follows the
    artwork when it is flipped, as it does with Canvas. */
-.lyrics-page:not(.narrow):not(.no-artwork):not(.canvas-lyrics) > .lyrics-toolbar {
+.lyrics-page:not(.narrow):not(.no-artwork):not(.canvas-lyrics)
+  > .lyrics-toolbar {
   left: 16px;
   right: auto;
 }

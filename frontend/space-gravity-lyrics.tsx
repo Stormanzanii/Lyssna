@@ -4,9 +4,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
+  lineBlur,
   tuneMotion,
   vocalGap,
   wordGroups,
@@ -17,19 +19,21 @@ import { LyricAnimator } from "./lyric-animator";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
 import {
-  constrain,
   createBody,
   GRAVITY,
   gravityPieces,
   hash,
+  lineLayout,
   measure,
-  random,
+  spawn,
   speedMultiplier,
+  staticLayout,
   step,
   trackWindow,
   visibleWordCount,
   wordWindow,
   type Body,
+  type Field,
   type Rect,
   type WindowMotion,
 } from "./space-gravity";
@@ -196,6 +200,73 @@ function relative(element: Element | null | undefined, stage: DOMRect) {
     bottom: rect.bottom - stage.top,
   };
 }
+const union = (rects: (Rect | undefined)[]) =>
+  rects.reduce<Rect | undefined>(
+    (all, rect) =>
+      !rect
+        ? all
+        : !all
+          ? rect
+          : {
+              left: Math.min(all.left, rect.left),
+              top: Math.min(all.top, rect.top),
+              right: Math.max(all.right, rect.right),
+              bottom: Math.max(all.bottom, rect.bottom),
+            },
+    undefined,
+  );
+const contains = (outer: Rect | undefined, inner: Rect | undefined) =>
+  !!outer &&
+  !!inner &&
+  outer.left <= inner.left &&
+  outer.top <= inner.top &&
+  outer.right >= inner.right &&
+  outer.bottom >= inner.bottom;
+
+/** Where words may float on this page, as the fork measures it: the lyrics
+ * column above the credits, or the whole page over Canvas, where only the
+ * song details and controls block words. */
+function measureField(stage: HTMLElement): Field {
+  const box = stage.getBoundingClientRect();
+  const page = stage.closest(".lyrics-page");
+  const bounds = { width: stage.clientWidth, height: stage.clientHeight };
+  const canvas =
+    !!page?.matches(".canvas-lyrics:not(.narrow)") &&
+    !page.matches(".no-artwork");
+  const footer = relative(page?.querySelector(".gravity-credits"), box);
+  const column = relative(page?.querySelector(".lyrics-body"), box);
+  const area =
+    canvas || !column
+      ? { left: 0, top: 0, right: bounds.width, bottom: bounds.height }
+      : column;
+  area.bottom = Math.min(area.bottom, footer?.top ?? area.bottom);
+  const toolbar = relative(page?.querySelector(".lyrics-toolbar"), box);
+  if (canvas) {
+    const dock = union(
+      [".lyrics-title", ".lyrics-artists", ".lyrics-fullscreen-controls"].map(
+        (selector) => relative(page?.querySelector(selector), box),
+      ),
+    );
+    return {
+      bounds,
+      area,
+      footer,
+      blockers: [dock, contains(dock, toolbar) ? undefined : toolbar].filter(
+        (rect): rect is Rect => !!rect,
+      ),
+    };
+  }
+  const cover = relative(page?.querySelector(".lyrics-album"), box);
+  return {
+    bounds,
+    area,
+    footer,
+    cover,
+    blockers: contains(cover, toolbar) || !toolbar ? [] : [toolbar],
+  };
+}
+
+type GravityBody = Body & { spawned: boolean; entryFrame?: number };
 
 /** Space Gravity: sung words float in zero gravity around the artwork. */
 export function SpaceGravityLyrics({
@@ -217,10 +288,8 @@ export function SpaceGravityLyrics({
   const gap = vocalGap(lyrics.lines, time);
   const waitKey = gap ? `wait:${gap.start}:${gap.end}` : "";
   const stage = useRef<HTMLDivElement>(null);
-  const [bounds, setBounds] = useState({ width: 0, height: 0 });
-  // Area the artwork, toolbar and credits take; measured by the frame loop.
-  const [occupied, setOccupied] = useState(0);
-  const count = visibleWordCount(bounds, occupied);
+  // Lead words that fit the free play area; measured by the frame loop.
+  const [count, setCount] = useState<number>(GRAVITY.minVisibleWords);
   const visible = visibleGravity(prepared, time, count);
   const visibleKeys = visible.map((entity) => entity.key).join("|");
   // Words that just left stay a moment to fade out.
@@ -246,13 +315,14 @@ export function SpaceGravityLyrics({
     // visibleKeys captures every change to the visible set.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleKeys]);
+  const anchorLine = gravityAnchor(prepared, time).line;
   const shown = [
     ...visible,
     ...leaving.filter((entity) => !visible.includes(entity)),
   ];
 
   const elements = useRef(new Map<string, HTMLElement>());
-  const bodies = useRef(new Map<string, Body & { spawned: boolean }>());
+  const bodies = useRef(new Map<string, GravityBody>());
   const live = useRef({ visible, prepared, reduceMotion, waitKey });
   live.current = { visible, prepared, reduceMotion, waitKey };
   useEffect(() => {
@@ -276,117 +346,103 @@ export function SpaceGravityLyrics({
     return callback;
   };
 
-  useLayoutEffect(() => {
-    const element = stage.current;
-    if (!element) return;
-    const observer = new ResizeObserver(() =>
-      setBounds({ width: element.clientWidth, height: element.clientHeight }),
-    );
-    observer.observe(element);
-    setBounds({ width: element.clientWidth, height: element.clientHeight });
-    return () => observer.disconnect();
-  }, []);
-
   useEffect(() => {
     const element = stage.current;
     if (!element) return;
     let frame = 0,
+      renderFrame = 0,
       last = performance.now(),
-      obstaclesAt = 0;
-    let obstacles: Rect[] = [];
+      fieldAt = 0,
+      field: Field | undefined,
+      staticKey = "";
     const motion: WindowMotion = { vx: 0, vy: 0 };
-    const page = element.closest(".lyrics-page");
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
-      const dt = Math.min(0.1, (now - last) / 1000);
+      renderFrame += 1;
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
-      const area = { width: element.clientWidth, height: element.clientHeight };
-      if (area.width < 1 || area.height < 1) return;
-      const box = element.getBoundingClientRect();
-      if (now - obstaclesAt > 250) {
-        obstaclesAt = now;
-        // The artwork block first: words shrink to fit beside it.
-        obstacles = [
-          relative(page?.querySelector(".lyrics-album"), box),
-          relative(page?.querySelector(".lyrics-toolbar"), box),
-          relative(page?.querySelector(".gravity-credits"), box),
-        ].filter((rect): rect is Rect => !!rect);
-        const covered = obstacles.reduce(
-          (sum, rect) =>
-            sum +
-            Math.max(
-              0,
-              Math.min(area.width, rect.right) - Math.max(0, rect.left),
-            ) *
-              Math.max(
-                0,
-                Math.min(area.height, rect.bottom) - Math.max(0, rect.top),
-              ),
-          0,
-        );
-        setOccupied((current) =>
-          Math.abs(current - covered) > GRAVITY.areaPerWord / 2
-            ? covered
-            : current,
-        );
+      if (element.clientWidth < 1 || element.clientHeight < 1) return;
+      let measured = false;
+      if (!field || now - fieldAt > 250) {
+        fieldAt = now;
+        measured = true;
+        field = measureField(element);
+        const next = visibleWordCount(field);
+        setCount((current) => (current === next ? current : next));
       }
       const { visible, prepared, reduceMotion, waitKey } = live.current;
-      const art = obstacles[0];
-      // Spawn words in the larger free strip beside the artwork.
-      const freeLeft =
-        art && art.left > area.width - art.right ? 0 : (art?.right ?? 0);
-      const freeRight =
-        art && art.left > area.width - art.right ? art.left : area.width;
-      const centreX = (freeLeft + freeRight) / 2;
-      // A wide header above (the stacked layout) moves the free area down;
-      // the credits close it off at the bottom.
-      const headerAbove =
-        art &&
-        art.right - art.left > area.width * 0.5 &&
-        art.bottom < area.height * 0.6;
-      const freeTop = headerAbove ? art.bottom : 0;
-      const credits = obstacles.find((rect) => rect.top > area.height * 0.6);
-      const centreY = (freeTop + (credits?.top ?? area.height)) / 2;
-      const active: Body[] = [];
-      for (const [key, element] of elements.current) {
-        const waiting = key === waitKey;
-        const entity =
-          visible.find((item) => item.key === key) ??
-          prepared.entities.find((item) => item.key === key);
-        if (!entity && !waiting) continue;
+      const byKey = new Map(prepared.entities.map((item) => [item.key, item]));
+      const shownKeys = new Set(visible.map((entity) => entity.key));
+      if (waitKey) shownKeys.add(waitKey);
+      for (const [key, node] of elements.current) {
+        const entity = byKey.get(key);
         let body = bodies.current.get(key);
         if (!body) {
           body = {
-            ...createBody(entity?.seed ?? hash(key), entity?.speed ?? 1),
+            ...createBody(
+              entity?.seed ?? hash(key),
+              entity?.speed ?? 1,
+              entity ? prepared.leads[entity.lead].start : 0,
+              entity ? prepared.entities.indexOf(entity) : -1,
+            ),
             spawned: false,
           };
           bodies.current.set(key, body);
         }
-        if (element.offsetWidth)
-          measure(body, element.offsetWidth, element.offsetHeight);
-        if (!body.spawned) {
-          const spread = Math.min(freeRight - freeLeft, area.width) * 0.8;
-          const column =
-            entity && entity.slots > 1
-              ? entity.slot / (entity.slots - 1) - 0.5
-              : 0;
-          body.x =
-            centreX +
-            column * spread +
-            (random(body.seed + 7) * 2 - 1) * body.width * 1.35;
-          // Every line spawns around the middle of the free area, as in
-          // Spicy Lyrics; its words then drift apart.
-          body.y =
-            centreY + (random(body.seed + 8) * 2 - 1) * body.height * 1.35;
+        if (node.offsetWidth)
+          measure(body, node.offsetWidth, node.offsetHeight);
+      }
+      // Each new word starts near its place in its line, laid out across
+      // the play area and centred in it, then drifts from there.
+      const area = field.area!;
+      const lines = new Map<string, string[]>();
+      for (const key of shownKeys) {
+        if (!elements.current.has(key)) continue;
+        const line = key === waitKey ? key : String(byKey.get(key)?.line);
+        lines.set(line, [...(lines.get(line) ?? []), key]);
+      }
+      const occupied: GravityBody[] = [];
+      for (const [key, body] of bodies.current)
+        if (body.spawned && elements.current.has(key)) occupied.push(body);
+      for (const keys of lines.values()) {
+        const members = keys.map((key) => bodies.current.get(key)!);
+        if (members.every((body) => body.spawned)) continue;
+        const width = area.right - area.left - GRAVITY.edgePadding * 2;
+        const layout = lineLayout(
+          members,
+          width,
+          !!byKey.get(keys[0])?.opposite,
+        );
+        const top = area.top + (area.bottom - area.top - layout.height) / 2;
+        members.forEach((body, index) => {
+          body.naturalX =
+            area.left + GRAVITY.edgePadding + layout.places[index].x;
+          body.naturalY = top + layout.places[index].y;
+        });
+        for (const body of members) {
+          if (body.spawned) continue;
+          spawn(body, occupied, field, reduceMotion);
           body.spawned = true;
-          constrain(body, area, obstacles);
+          body.entryFrame = renderFrame;
+          occupied.push(body);
         }
-        if (waiting || (entity && visible.includes(entity))) active.push(body);
+      }
+      const active: GravityBody[] = [],
+        exiting: GravityBody[] = [];
+      for (const [key, body] of bodies.current) {
+        if (!body.spawned || !elements.current.has(key)) continue;
+        (shownKeys.has(key) ? active : exiting).push(body);
       }
       if (reduceMotion) {
-        for (const body of active) {
-          body.angle = 0;
-          constrain(body, area, obstacles);
+        const key = [...lines.values()].flat().join("|");
+        if (key !== staticKey || measured) {
+          staticKey = key;
+          staticLayout(
+            [...lines.values()].map((keys) =>
+              keys.map((key) => bodies.current.get(key)!),
+            ),
+            field,
+          );
         }
       } else {
         trackWindow(
@@ -394,15 +450,21 @@ export function SpaceGravityLyrics({
           windowPosition() ?? { x: window.screenX, y: window.screenY },
           dt,
         );
-        step(active, dt, area, obstacles, motion);
+        step(active, dt, field, motion, exiting);
       }
       // Words that left the screen start fresh when they return.
       for (const key of bodies.current.keys())
         if (!elements.current.has(key)) bodies.current.delete(key);
-      for (const [key, element] of elements.current) {
+      for (const [key, node] of elements.current) {
         const body = bodies.current.get(key);
         if (!body?.spawned) continue;
-        element.style.transform = `translate3d(${body.x - body.width / 2}px, ${body.y - body.height / 2}px, 0) rotate(${body.angle}deg) scale(${body.scale})`;
+        node.style.transform = `translate3d(${body.x - body.width / 2}px, ${body.y - body.height / 2}px, 0) rotate(${body.angle}deg) scale(${body.scale})`;
+        // Shown a frame after placing, so it fades in where it spawned.
+        if (
+          !node.hasAttribute("data-spawned") &&
+          (reduceMotion || (body.entryFrame ?? 0) < renderFrame)
+        )
+          node.setAttribute("data-spawned", "");
       }
     };
     frame = requestAnimationFrame(tick);
@@ -443,6 +505,9 @@ export function SpaceGravityLyrics({
       >
         {groupByLine(shown).map(([index, entities]) => {
           const line = lyrics.lines[index];
+          // Like the normal view, lines blur by their distance from the line
+          // being sung.
+          const distance = Math.abs(entities[0].lead - anchorLine);
           const state =
             time >= line.end_ms
               ? "past"
@@ -456,21 +521,21 @@ export function SpaceGravityLyrics({
               key={index}
               className={`gravity-line lyric-line ${state} ${line.background ? "background-vocal" : ""}`}
               data-line={index}
+              style={
+                {
+                  "--blur": `${reduceMotion ? 0 : lineBlur(distance)}px`,
+                } as CSSProperties
+              }
             >
               {entities.map((entity) => {
                 const lead = prepared.leads[entity.lead];
                 const role = gravityRole(entity, lead, time, prepared.finalEnd);
                 const exiting = !visible.includes(entity);
-                // The word being sung right now is the brightest.
-                const singing =
-                  role === "current" &&
-                  time >= entity.start &&
-                  time < entity.end;
                 return (
                   <button
                     key={entity.key}
                     ref={refFor(entity.key)}
-                    className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""} ${singing ? "singing" : ""}`}
+                    className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""}`}
                     onClick={() => onSeek(entity.start)}
                     tabIndex={exiting ? -1 : 0}
                   >

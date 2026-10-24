@@ -1785,21 +1785,36 @@ export function QueuePanel({
     const previous = tops.current;
     const animate = previous.size > 0 && !state.settings.reduce_motion;
     const next = new Map<string, number>();
+    const moves: [HTMLElement, number | undefined, number][] = [];
     for (const [key, element] of rows.current) {
       const top = element.getBoundingClientRect().top - origin;
       next.set(key, top);
-      if (!animate) continue;
       const before = previous.get(key);
-      if (before === top) continue;
+      if (animate && before !== top) moves.push([element, before, top]);
+    }
+    // Skip and Previous move rows by one place, so they slide. A reshuffle
+    // moves rows across the list; sliding them from far away left gaps and
+    // overlaps, so then every moved row fades in where it lands.
+    const far = (
+      element: HTMLElement,
+      before: number | undefined,
+      top: number,
+    ) =>
+      before !== undefined &&
+      Math.abs(before - top) > element.offsetHeight * 1.5;
+    const reshuffled = moves.filter((move) => far(...move)).length > 2;
+    for (const [element, before, top] of moves) {
+      const slides =
+        !reshuffled && before !== undefined && !far(element, before, top);
       element.animate(
-        before === undefined
+        slides
           ? [
-              { opacity: 0, transform: "translateY(16px)" },
-              { opacity: 1, transform: "none" },
+              { transform: `translateY(${before! - top}px)` },
+              { transform: "none" },
             ]
           : [
-              { transform: `translateY(${before - top}px)` },
-              { transform: "none" },
+              { opacity: 0, transform: "translateY(16px)" },
+              { opacity: 1, transform: "none" },
             ],
         { duration: 360, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
       );

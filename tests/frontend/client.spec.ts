@@ -8529,3 +8529,70 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   expect(saved.saved[0].name).toBe("Bouncy");
   expect(saved.custom.verticalStrength).toBe(2);
 });
+
+test("a reshuffled queue never slides rows in from far away", async ({
+  page,
+}) => {
+  await startClient(page);
+  const songs = Array.from({ length: 30 }, (_, index) => ({
+    ...track,
+    uri: `spotify:track:song${String(index).padStart(2, "0")}`,
+    name: `Song ${index}`,
+  }));
+  await page.evaluate(
+    ({ track, songs }) =>
+      (window as any).__clientTest.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: { artists: track.artists, queue: songs },
+      }),
+    { track, songs },
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const panel = page.locator(".queue-panel");
+  await expect(panel).toContainText("Song 29");
+  // Skip to the next song, then Spotify sends a reshuffled queue.
+  const shuffled = songs
+    .slice(1)
+    .map((song, index) => ({ song, key: (index * 17) % 29 }))
+    .sort((a, b) => a.key - b.key)
+    .map(({ song }) => song);
+  await page.evaluate(
+    ({ next, shuffled, playback }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: next, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      setTimeout(
+        () =>
+          host.emit({
+            type: "playing_details",
+            uri: next.uri,
+            details: { artists: next.artists, queue: shuffled },
+          }),
+        150,
+      );
+    },
+    { next: songs[0], shuffled, playback: emptyState.playback },
+  );
+  await page.waitForTimeout(210);
+  await page.screenshot({ path: "target/diagnostics/queue-reshuffle.png" });
+  // Mid-animation, the first rows sit near their places: no blank gap.
+  const offsets = await panel
+    .locator(".queue-section:last-child .queue-row")
+    .evaluateAll((rows) =>
+      rows.slice(0, 5).map((row) => {
+        const transform = getComputedStyle(row).transform;
+        return transform === "none"
+          ? 0
+          : Math.abs(new DOMMatrix(transform).m42);
+      }),
+    );
+  for (const offset of offsets) expect(offset).toBeLessThan(80);
+});

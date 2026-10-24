@@ -4811,9 +4811,23 @@ input.volume-range:active::-webkit-slider-thumb {
   transition: opacity 180ms ease;
 }
 /* Rotated words leave a hairline where the clipped paint box ends past
-   the last glyph, so the paint hugs the glyphs sideways here. */
+   the last glyph. The paint keeps its full bleed, so wide custom fonts are
+   not cut off, and its outermost pixels fade out. */
 .gravity-word .lyric-paint {
-  --glyph-bleed: 0.02em;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 2px,
+    #000 calc(100% - 2px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 2px,
+    #000 calc(100% - 2px),
+    transparent
+  );
 }
 .gravity-word:not([data-spawned]) {
   visibility: hidden;

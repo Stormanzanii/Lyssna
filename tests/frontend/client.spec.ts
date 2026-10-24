@@ -7602,6 +7602,97 @@ test("SpotiFlex settings combines app and lyrics options with ordered sources", 
   await expect(page.locator(".lyrics-page")).toBeVisible();
 });
 
+for (const route of ["liked", "playlist:0123456789abcdefghijkl"]) {
+  for (const [column, clicks, order] of [
+    ["Album", 2, [1, 2, 0]],
+    ["Date added", 1, [2, 1, 0]],
+  ] as const) {
+    test(`${route} queues visible ${column} order after sorting`, async ({
+      page,
+    }) => {
+      await startClient(page, route);
+      await expect(page.locator(".track-row")).toHaveCount(150);
+      const tracks = ["Alpha", "Charlie", "Bravo"].map((album, index) => ({
+        ...track,
+        uri: `spotify:track:${String(index).padStart(22, "0")}`,
+        name: index === 0 ? "Other song" : `Queue song ${index + 1}`,
+        album: { ...track.album, name: album },
+        added_at: `202${6 - index}-01-01T00:00:00Z`,
+      }));
+      await page.evaluate(
+        ({ tracks, route }) => {
+          const host = (window as any).__clientTest;
+          const generation = host.commands
+            .filter(
+              (entry: any) =>
+                entry.command === "browse" && entry.args.key === route,
+            )
+            .at(-1).args.generation;
+          host.emit({
+            type: "tracks",
+            key: route,
+            generation,
+            offset: 0,
+            more: false,
+            tracks,
+          });
+        },
+        { tracks, route },
+      );
+      await expect(page.locator(".track-row")).toHaveCount(3);
+      const header = page.getByRole("button", {
+        name: new RegExp(`Sort by ${column}`),
+      });
+      for (let click = 0; click < clicks; click++) await header.click();
+      await expect(page.locator(".track-row .track-name")).toHaveText(
+        order.map((index) => tracks[index].name),
+      );
+      await page.locator(".track-row .track-name").first().click();
+      const request = () =>
+        page.evaluate(
+          () =>
+            (window as any).__clientTest.commands
+              .filter((entry: any) => entry.command === "player")
+              .at(-1).args.request,
+        );
+      const expected = {
+        command: "play_uris",
+        context: route === "liked" ? "liked" : `spotify:${route}`,
+        uris: order.map((index) => tracks[index].uri),
+        offset: 0,
+      };
+      expect(await request()).toMatchObject(expected);
+      // Starting from the middle retains the full list and its exact offset.
+      await page.locator(".track-row .track-name").nth(1).click();
+      expect(await request()).toMatchObject({ ...expected, offset: 1 });
+      // The page's Play button starts the first displayed song too.
+      await page.locator(".browse-actions .primary-play").click();
+      expect(await request()).toMatchObject(expected);
+      await page.getByTitle("Search in playlist", { exact: true }).click();
+      await page.getByLabel("Search songs in this playlist").fill("Queue song");
+      await expect(page.locator(".track-row")).toHaveCount(2);
+      await page.locator(".browse-actions .primary-play").click();
+      const filtered = {
+        ...expected,
+        uris: order
+          .filter((index) => index !== 0)
+          .map((index) => tracks[index].uri),
+      };
+      expect(await request()).toMatchObject(filtered);
+      await page
+        .locator(".track-row")
+        .first()
+        .getByTitle("Song options")
+        .click();
+      await page
+        .getByRole("menu", { name: "Song actions" })
+        .getByRole("menuitem", { name: "Play", exact: true })
+        .click();
+      expect(await request()).toMatchObject(filtered);
+    });
+  }
+}
+
 test("Title, Album and Date added headers sort like Spotify", async ({
   page,
 }) => {

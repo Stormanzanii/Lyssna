@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { addedLabel, collectionTracks, nextHeaderSort } from "./collection";
+import {
+  addedLabel,
+  collectionQueue,
+  collectionTracks,
+  nextHeaderSort,
+} from "./collection";
 import type { Track } from "./types";
 const tracks = [
   {
@@ -28,6 +33,47 @@ const tracks = [
   is_local: false,
 })) satisfies Track[];
 const filters = { query: "", genre: "", age: "", sort: "order" };
+it("queues every sorted and filtered row from the selected occurrence", () => {
+  for (const sort of ["album_asc", "album_desc", "added_oldest", "recent"]) {
+    const visible = collectionTracks(tracks, {}, { ...filters, sort });
+    const queue = collectionQueue(visible, visible[0], 0)!;
+    expect(queue.uris.slice(queue.offset)).toEqual(
+      visible.map((track) => track.uri),
+    );
+  }
+  const visible = collectionTracks(
+    tracks,
+    {},
+    { ...filters, query: "Other", sort: "added_oldest" },
+  );
+  expect(collectionQueue(visible, visible[0])).toEqual({
+    uris: ["b", "c"],
+    offset: 0,
+  });
+});
+it("skips unplayable rows without losing duplicate positions or long queues", () => {
+  const visible = [
+    tracks[0],
+    { ...tracks[1], is_local: true },
+    { ...tracks[2], unavailable: true },
+    tracks[0],
+    ...Array.from({ length: 804 }, (_, index) => ({
+      ...tracks[1],
+      uri: `song:${index}`,
+    })),
+  ];
+  const queue = collectionQueue(visible, tracks[0], 3)!;
+  expect(queue.uris).toHaveLength(806);
+  expect(queue.offset).toBe(1);
+  expect(queue.uris.slice(queue.offset, queue.offset + 3)).toEqual([
+    "a",
+    "song:0",
+    "song:1",
+  ]);
+  expect(collectionQueue(visible, visible[1], 1)).toBeUndefined();
+  expect(collectionQueue(visible, visible[2], 2)).toBeUndefined();
+  expect(collectionQueue([], tracks[0])).toBeUndefined();
+});
 it("filters by song, artist, genre and release age without changing the playlist", () => {
   expect(collectionTracks(tracks, {}, { ...filters, query: "Singer" })).toEqual(
     [tracks[1]],

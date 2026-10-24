@@ -170,6 +170,7 @@ import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
 import {
   addedLabel,
+  collectionQueue,
   collectionTracks,
   genresFor,
   nextHeaderSort,
@@ -1071,47 +1072,6 @@ function App() {
     },
     [call],
   );
-  const playTrack = useCallback(
-    (track: Track, index?: number) => {
-      if (track.unavailable) return;
-      const current = stateRef.current;
-      let complete = track;
-      if (current.browse_info?.album)
-        complete = { ...track, album: current.browse_info.album };
-      if (
-        current.route.startsWith("playlist:") ||
-        current.route.startsWith("album:")
-      )
-        play({
-          command: "play_context",
-          context: `spotify:${current.route}`,
-          uri: track.uri,
-          track: complete,
-        });
-      else if (index !== undefined) {
-        const tracks = (
-          current.browse_info?.artist
-            ? (current.browse_info.overview?.popular.map(
-                (item) => item.track,
-              ) ?? [])
-            : current.tracks
-        ).filter((track) => !track.is_local && !track.unavailable);
-        const clicked = tracks.findIndex((item) => item.uri === track.uri);
-        const start = Math.max(0, clicked - 30),
-          uris = tracks.slice(start, start + 100).map((item) => item.uri);
-        play({
-          command: "play_uris",
-          uris,
-          offset: clicked - start,
-          // On this computer the backend plays Liked Songs from Spotify's
-          // collection instead, so the library row shows it playing.
-          ...(current.route === "liked" ? { context: "liked" } : {}),
-          track: complete,
-        });
-      } else play({ command: "play", uri: track.uri, track: complete });
-    },
-    [play],
-  );
   const importFile = async (file: File, mode: LoadMode = "persistent") => {
     if (file.size > 2_000_000) {
       notify("Lyric file exceeds 2 MB", true);
@@ -1673,6 +1633,44 @@ function App() {
           sort: songSort,
         })
       : state.tracks;
+  const playTrack = useCallback(
+    (track: Track, index?: number) => {
+      if (track.is_local || track.unavailable) return;
+      const current = stateRef.current;
+      const complete = current.browse_info?.album
+        ? { ...track, album: current.browse_info.album }
+        : track;
+      if (
+        current.route.startsWith("album:") ||
+        (current.route.startsWith("playlist:") && !filtering)
+      )
+        play({
+          command: "play_context",
+          context: `spotify:${current.route}`,
+          uri: track.uri,
+          track: complete,
+        });
+      else {
+        const queue =
+          collection || index !== undefined
+            ? collectionQueue(displayTracks, track, index)
+            : undefined;
+        if (queue)
+          play({
+            command: "play_uris",
+            ...queue,
+            ...(likedRoute
+              ? { context: "liked" }
+              : current.route.startsWith("playlist:")
+                ? { context: `spotify:${current.route}` }
+                : {}),
+            track: complete,
+          });
+        else play({ command: "play", uri: track.uri, track: complete });
+      }
+    },
+    [play, collection, likedRoute, displayTracks, filtering],
+  );
   // Title, Album and Date added headers sort like Spotify's on playlists
   // and Liked Songs: ascending, descending, then the playlist's own order.
   const headerSort = (column: "title" | "album" | "added", label: string) => {
@@ -1759,8 +1757,11 @@ function App() {
     );
   };
   const playLiked = () => {
-    if (stateRef.current.route === "liked" && stateRef.current.tracks[0])
-      playTrack(stateRef.current.tracks[0], 0);
+    const first = displayTracks.find(
+      (track) => !track.is_local && !track.unavailable,
+    );
+    if (stateRef.current.route === "liked" && first)
+      playTrack(first, displayTracks.indexOf(first));
     else {
       likedPlay.current = true;
       navigate("liked");
@@ -1773,13 +1774,13 @@ function App() {
       likedPlay.current = false;
       return;
     }
-    const first = state.tracks.find(
+    const first = displayTracks.find(
       (track) => !track.is_local && !track.unavailable,
     );
     if (!first) return;
     likedPlay.current = false;
-    playTrack(first, state.tracks.indexOf(first));
-  }, [state.route, state.tracks, playTrack]);
+    playTrack(first, displayTracks.indexOf(first));
+  }, [state.route, displayTracks, playTrack]);
   const playlistRow = (playlist: Playlist) => (
     <div
       className={`library-row ${nowPlayingRoute === `playlist:${playlist.id}` ? "playing" : ""}`}
@@ -2749,8 +2750,14 @@ function App() {
                                 command: "play_context",
                                 context: `spotify:${state.route}`,
                               });
-                            else if (state.tracks[0])
-                              playTrack(state.tracks[0], 0);
+                            else {
+                              const index = displayTracks.findIndex(
+                                (track) =>
+                                  !track.is_local && !track.unavailable,
+                              );
+                              if (index >= 0)
+                                playTrack(displayTracks[index], index);
+                            }
                           }}
                         >
                           <Play fill="currentColor" size={24} />

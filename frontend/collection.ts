@@ -5,6 +5,28 @@ export interface SongFilters {
   age: string;
   sort: string;
 }
+/** Keep displayed order and duplicate occurrences when starting a queue. */
+export function collectionQueue(
+  tracks: Track[],
+  selected: Track,
+  index?: number,
+) {
+  if (selected.is_local || selected.unavailable) return;
+  let clicked =
+    index !== undefined && tracks[index]?.uri === selected.uri
+      ? index
+      : tracks.indexOf(selected);
+  if (clicked < 0)
+    clicked = tracks.findIndex((track) => track.uri === selected.uri);
+  if (clicked < 0) return;
+  const playable = tracks
+    .map((track, position) => ({ track, position }))
+    .filter(({ track }) => !track.is_local && !track.unavailable);
+  return {
+    uris: playable.map(({ track }) => track.uri),
+    offset: playable.findIndex(({ position }) => position === clicked),
+  };
+}
 /**
  * Spotify's "Date added" text: relative under four weeks ("3 days ago"),
  * otherwise the date ("Mar 13, 2024"). Empty when unknown.

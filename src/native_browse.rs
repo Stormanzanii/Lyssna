@@ -1468,7 +1468,7 @@ pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result
             .await
             .ok()
             .and_then(Result::ok)
-            .and_then(|item| crate::native::metadata_track(&item)),
+            .and_then(|item| crate::native::metadata_track(&item, Some(&session.user_data()))),
             Err(_) => None,
         };
         match track {
@@ -2178,6 +2178,7 @@ pub(crate) async fn tracks_batched(
         ..Default::default()
     };
     let response = session.spclient().get_extended_metadata(request).await?;
+    let user = session.user_data();
     let mut tracks = HashMap::new();
     for array in response.extended_metadata {
         for entry in array.extension_data {
@@ -2190,7 +2191,7 @@ pub(crate) async fn tracks_batched(
             };
             if let Some(track) = librespot_metadata::Track::try_from(&message)
                 .ok()
-                .and_then(|item| crate::native::metadata_track(&item))
+                .and_then(|item| crate::native::metadata_track(&item, Some(&user)))
             {
                 tracks.insert(entry.entity_uri.clone(), track);
             }
@@ -2202,6 +2203,42 @@ pub(crate) async fn tracks_batched(
 #[cfg(test)]
 mod live_timing_tests {
     use super::*;
+    #[test]
+    #[ignore = "Counts unplayable songs in saved playlists with the saved sign-in; never writes"]
+    fn live_unplayable_songs_are_a_minority() {
+        crate::native::with_live_session(async |session: &Session| {
+            let playlists = library(session).await.expect("Library unreadable");
+            let (mut total, mut unavailable) = (0, Vec::new());
+            for playlist in playlists.iter().take(12) {
+                let Ok(read) = read_playlist(session, &playlist.id).await else {
+                    continue;
+                };
+                let uris: Vec<String> = read
+                    .tracks()
+                    .map(|uri| uri.to_uri())
+                    .filter(|uri| uri.starts_with("spotify:track:"))
+                    .take(500)
+                    .collect();
+                let tracks = tracks_batched(session, &uris).await.expect("Batch failed");
+                total += tracks.len();
+                unavailable.extend(
+                    tracks
+                        .values()
+                        .filter(|track| track.unavailable)
+                        .map(|track| format!("{} - {}", track.name, track.artist())),
+                );
+            }
+            eprintln!(
+                "{} of {total} unavailable: {unavailable:?}",
+                unavailable.len()
+            );
+            assert!(total > 0);
+            assert!(
+                unavailable.len() * 10 < total,
+                "Most songs must stay playable"
+            );
+        });
+    }
     #[test]
     #[ignore = "Times read-only playlist loads with the saved sign-in; never writes"]
     fn live_playlist_load_timing() {

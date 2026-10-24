@@ -1855,6 +1855,17 @@ small {
 .track-row:hover .row-play {
   display: flex;
 }
+/* A song Spotify cannot play: dimmed like Spotify's and never started. */
+.track-row.unavailable > * {
+  opacity: 0.45;
+}
+/* Hovering keeps the number; there is no play button to show. */
+.track-row.unavailable:hover .row-play {
+  display: none;
+}
+.track-row.unavailable:hover .track-number > span {
+  display: inline;
+}
 .track-cell {
   display: flex;
   gap: 12px;

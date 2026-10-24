@@ -668,7 +668,7 @@ impl NativeControls {
         )?;
         let message = librespot_protocol::metadata::Track::parse_from_bytes(&bytes)?;
         let track = librespot_metadata::Track::try_from(&message)?;
-        metadata_track(&track).context("Track metadata unavailable")
+        metadata_track(&track, None).context("Track metadata unavailable")
     }
     fn request_metadata(
         &self,
@@ -2189,7 +2189,50 @@ impl Drop for NativePlayer {
     }
 }
 
-pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::model::Track> {
+/// Whether librespot would play `item` for `user`, by the rules of its own
+/// availability check: released, offered in the listener's country for
+/// their catalogue, with audio files; otherwise an alternative recording.
+/// Without the listener's details, country restrictions are not checked.
+pub(crate) fn playable(
+    item: &librespot_metadata::Track,
+    user: Option<&librespot_core::session::UserData>,
+) -> bool {
+    use librespot_core::date::Date;
+    let now = Date::now_utc();
+    let released = now >= item.earliest_live_timestamp
+        && (item.availability.is_empty()
+            || item.availability.iter().any(|window| now >= window.start));
+    let offered = user.is_none_or(|user| {
+        let catalogue = user
+            .attributes
+            .get("catalogue")
+            .map_or("premium", String::as_str);
+        // The first restriction for this catalogue decides, as in librespot.
+        item.restrictions
+            .iter()
+            .find(|restriction| {
+                restriction
+                    .catalogue_strs
+                    .iter()
+                    .any(|name| name == catalogue)
+                    && (restriction.countries_allowed.is_some()
+                        || restriction.countries_forbidden.is_some())
+            })
+            .is_none_or(|restriction| match &restriction.countries_allowed {
+                Some(allowed) => allowed.contains(&user.country),
+                None => !restriction
+                    .countries_forbidden
+                    .as_ref()
+                    .is_some_and(|forbidden| forbidden.contains(&user.country)),
+            })
+    });
+    (released && offered && !item.files.is_empty()) || !item.alternatives.is_empty()
+}
+
+pub(crate) fn metadata_track(
+    item: &librespot_metadata::Track,
+    user: Option<&librespot_core::session::UserData>,
+) -> Option<crate::model::Track> {
     use crate::model::{Album, Artist, Artwork, Track};
     let artists = |items: &librespot_metadata::artist::Artists| {
         items
@@ -2220,6 +2263,7 @@ pub(crate) fn metadata_track(item: &librespot_metadata::Track) -> Option<crate::
     images.sort_by_key(|image| std::cmp::Reverse(image.width));
     images.dedup_by(|a, b| a.url == b.url);
     Some(Track {
+        unavailable: !playable(item, user),
         explicit: item.is_explicit,
         id: uri.rsplit(':').next().map(str::to_owned),
         uri,
@@ -2522,7 +2566,8 @@ mod tests {
             }),
             ..WireTrack::default()
         };
-        let track = metadata_track(&librespot_metadata::Track::try_from(&wire).unwrap()).unwrap();
+        let track =
+            metadata_track(&librespot_metadata::Track::try_from(&wire).unwrap(), None).unwrap();
         assert!(track.album.id.is_some());
         assert!(track.album.uri.starts_with("spotify:album:"));
         assert_eq!(track.album.name, "Album");

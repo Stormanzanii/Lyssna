@@ -36,6 +36,8 @@ export interface Track {
   duration_ms: number;
   is_local: boolean;
   played_context?: string;
+  /** Spotify cannot play it for this account; shown dimmed, never started. */
+  unavailable?: boolean;
 }
 export interface Device {
   id?: string;

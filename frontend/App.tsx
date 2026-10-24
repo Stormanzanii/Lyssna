@@ -1073,6 +1073,7 @@ function App() {
   );
   const playTrack = useCallback(
     (track: Track, index?: number) => {
+      if (track.unavailable) return;
       const current = stateRef.current;
       let complete = track;
       if (current.browse_info?.album)
@@ -1094,7 +1095,7 @@ function App() {
                 (item) => item.track,
               ) ?? [])
             : current.tracks
-        ).filter((track) => !track.is_local);
+        ).filter((track) => !track.is_local && !track.unavailable);
         const clicked = tracks.findIndex((item) => item.uri === track.uri);
         const start = Math.max(0, clicked - 30),
           uris = tracks.slice(start, start + 100).map((item) => item.uri);
@@ -1772,7 +1773,9 @@ function App() {
       likedPlay.current = false;
       return;
     }
-    const first = state.tracks.find((track) => !track.is_local);
+    const first = state.tracks.find(
+      (track) => !track.is_local && !track.unavailable,
+    );
     if (!first) return;
     likedPlay.current = false;
     playTrack(first, state.tracks.indexOf(first));
@@ -2881,7 +2884,12 @@ function App() {
                               track.uri === state.playback.item?.uri;
                             return (
                               <div
-                                className={`track-row ${current ? "playing" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
+                                title={
+                                  track.unavailable
+                                    ? "This song is not available on Spotify"
+                                    : undefined
+                                }
+                                className={`track-row ${current ? "playing" : ""} ${track.unavailable ? "unavailable" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
                                 key={`${track.uri}-${index}`}
                                 draggable={reorderable}
                                 onDragStart={(event) => {
@@ -2957,6 +2965,7 @@ function App() {
                                   </span>
                                   <button
                                     className="row-play"
+                                    disabled={track.unavailable}
                                     title={
                                       current && state.playback.is_playing
                                         ? "Pause"

@@ -1690,7 +1690,7 @@ fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
     if let PlayerAction::PlayContext { context, offset } = &action {
         let uris: Vec<_> = tracks
             .iter()
-            .filter(|track| !track.is_local)
+            .filter(|track| !track.is_local && !track.unavailable)
             .map(|track| track.uri.clone())
             .take(LISTED_CONTEXT_LIMIT)
             .collect();
@@ -1727,7 +1727,7 @@ fn liked_from_collection(
             let chosen = uris.get(offset).cloned();
             let all: Vec<_> = loaded
                 .iter()
-                .filter(|track| !track.is_local)
+                .filter(|track| !track.is_local && !track.unavailable)
                 .map(|track| track.uri.clone())
                 .take(LISTED_CONTEXT_LIMIT)
                 .collect();

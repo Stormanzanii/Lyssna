@@ -84,6 +84,10 @@ pub struct Track {
     /// Context (album, playlist, artist) a recently played track came from.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub played_context: String,
+    /// Spotify cannot play it for this account: removed, not released yet,
+    /// or not offered in the listener's country, with no alternative.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unavailable: bool,
 }
 
 impl Track {
@@ -354,7 +358,9 @@ pub fn play_window(tracks: &[Track], index: usize, limit: usize) -> Option<(Vec<
         .iter()
         .enumerate()
         .filter(|(_, track)| {
-            track.uri.starts_with("spotify:track:") || track.uri.starts_with("spotify:episode:")
+            !track.unavailable
+                && (track.uri.starts_with("spotify:track:")
+                    || track.uri.starts_with("spotify:episode:"))
         })
         .map(|(position, track)| (position, track.uri.as_str()))
         .collect();

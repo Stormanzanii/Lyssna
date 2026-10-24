@@ -6377,6 +6377,65 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   ).toBe("artist:0123456789abcdefghij07");
 });
 
+test("songs Spotify cannot play are dimmed and never start", async ({
+  page,
+}) => {
+  await startClient(page);
+  const browse = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "browse")
+      .at(-1),
+  );
+  await page.evaluate(
+    ({ generation, key, track }) =>
+      (window as any).__clientTest.emit({
+        type: "tracks",
+        key,
+        generation,
+        offset: 0,
+        more: false,
+        tracks: [
+          {
+            ...track,
+            uri: "spotify:track:gone",
+            name: "Prompting",
+            unavailable: true,
+          },
+          { ...track, uri: "spotify:track:here", name: "Still here" },
+        ],
+      }),
+    { generation: browse.args.generation, key: browse.args.key, track },
+  );
+  const gone = page.locator(".track-row", { hasText: "Prompting" });
+  await expect(gone).toHaveClass(/unavailable/);
+  await expect(gone.locator(".track-cell")).toHaveCSS("opacity", "0.45");
+  const players = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "player",
+        ).length,
+    );
+  const before = await players();
+  await gone.locator(".track-name").dblclick();
+  await gone.hover();
+  await expect(gone.locator(".row-play")).toBeHidden();
+  expect(await players()).toBe(before);
+  // Playing a neighbour leaves the unavailable song out of the list.
+  await page
+    .locator(".track-row", { hasText: "Still here" })
+    .locator(".track-name")
+    .dblclick();
+  await expect.poll(players).toBeGreaterThan(before);
+  const request = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .at(-1).args.request,
+  );
+  expect(JSON.stringify(request)).not.toContain("spotify:track:gone");
+});
+
 test("a single click on a song selects nothing; a double click plays it", async ({
   page,
 }) => {

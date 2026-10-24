@@ -6355,7 +6355,7 @@ test("a single click on a song selects nothing; a double click plays it", async 
     .toBeTruthy();
 });
 
-test("Liked Songs plays from the collection and its row turns green", async ({
+test("Liked Songs names its context and its row turns green when playing", async ({
   page,
 }) => {
   await startClient(page);
@@ -6369,12 +6369,14 @@ test("Liked Songs plays from the collection and its row turns green", async ({
           .filter((entry: any) => entry.command === "player")
           .at(-1)?.args.request,
     );
+  // Named as Liked Songs, so the backend can play Spotify's collection.
   await expect.poll(request).toMatchObject({
-    command: "play_context",
-    context: expect.stringMatching(/^spotify:user:[^:]+:collection$/),
+    command: "play_uris",
+    context: "liked",
   });
-  if (uri) expect((await request()).uri).toBe(uri);
-  const context = (await request()).context;
+  const sent = await request();
+  if (uri) expect(sent.uris[sent.offset]).toBe(uri);
+  const context = "spotify:user:test-user:collection";
   await page.evaluate(
     ({ base, track, context }) =>
       (window as any).__clientTest.emit({
@@ -6946,19 +6948,18 @@ test("Your Library covers show a play button for playlists and Liked Songs", asy
   expect(await route()).toBe(before);
   // DJ starts from its own row; it has no cover play button.
   await expect(page.getByRole("button", { name: "Play DJ" })).toHaveCount(0);
-  // Liked Songs plays on this computer from Spotify's collection, without
-  // leaving the current page, like a playlist.
+  // From another page, Liked Songs opens and starts its first song.
   await page.locator(".home-button").click();
   await expect.poll(route).toBe("home");
   await page.locator(".library-liked").hover();
   await page
     .locator(".library-cover-play[aria-label='Play Liked Songs']")
     .click();
+  await expect.poll(route).toBe("liked");
   await expect.poll(lastPlayer).toMatchObject({
-    command: "play_context",
-    context: expect.stringMatching(/^spotify:user:[^:]+:collection$/),
+    command: "play_uris",
+    context: "liked",
   });
-  expect(await route()).toBe("home");
 });
 
 test("lyrics toolbar sits over the cover art and follows it when flipped", async ({

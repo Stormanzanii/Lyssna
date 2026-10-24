@@ -1695,6 +1695,24 @@ fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
     Ok(action)
 }
 
+/// The context a `play_uris` request names when its songs are Liked Songs.
+const LIKED_SONGS: &str = "liked";
+
+/// On this computer Liked Songs plays from Spotify's collection, as Spotify
+/// does: the queue runs past 100 songs and the context reads as Liked Songs.
+/// Speakers, driven through the Web API, keep the song list.
+fn liked_from_collection(action: PlayerAction, context: Option<&str>, user: &str) -> PlayerAction {
+    match action {
+        PlayerAction::PlayUris { uris, offset } if context == Some(LIKED_SONGS) => {
+            PlayerAction::PlayContext {
+                context: format!("spotify:user:{user}:collection"),
+                offset: uris.get(offset).cloned(),
+            }
+        }
+        action => action,
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PlayerRequest {
@@ -1789,6 +1807,9 @@ fn player(
             lock(&state.0.native_id)?.as_deref(),
             &snapshot.playback.device,
         );
+        if local && let Some(profile) = snapshot.profile.as_ref() {
+            action = liked_from_collection(action, request.context.as_deref(), &profile.id);
+        }
         if local
             && matches!(action, PlayerAction::Play(None))
             && !state.0.controls.has_track()
@@ -3116,6 +3137,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn liked_songs_play_from_the_collection_only_when_named() {
+        let list = || PlayerAction::PlayUris {
+            uris: vec!["spotify:track:a".into(), "spotify:track:b".into()],
+            offset: 1,
+        };
+        match liked_from_collection(list(), Some("liked"), "me") {
+            PlayerAction::PlayContext { context, offset } => {
+                assert_eq!(context, "spotify:user:me:collection");
+                assert_eq!(offset.as_deref(), Some("spotify:track:b"));
+            }
+            _ => panic!("Liked Songs should play from the collection"),
+        }
+        assert!(matches!(
+            liked_from_collection(list(), None, "me"),
+            PlayerAction::PlayUris { .. }
+        ));
+    }
     #[test]
     fn early_play_requests_start_once_when_native_audio_is_ready() {
         for context in [

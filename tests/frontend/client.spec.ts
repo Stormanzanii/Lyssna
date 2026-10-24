@@ -4720,6 +4720,49 @@ test("flat paragraph lyrics gain estimated word timing and revert when disabled"
   await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(text);
 });
 
+test("word sync splits merged Apple Music words and says so", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "apple_music",
+          synced: true,
+          instrumental: false,
+          lines: [
+            {
+              text: "Hey I want you",
+              start_ms: 0,
+              end_ms: 4000,
+              words: [
+                { text: "Hey", start_ms: 0, end_ms: 1000 },
+                { text: " I want you", start_ms: 1000, end_ms: 4000 },
+              ],
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+            },
+          ],
+        },
+      }),
+    track.uri,
+  );
+  const source = page.locator(".lyrics-page .lyric-source");
+  await expect(source).toContainText("Apple Music");
+  await expect(source).not.toContainText("extra splits");
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Experimental word sync", { exact: true })
+    .click();
+  await expect(source).toContainText("Apple Music (+ extra splits)");
+});
+
 test("pending search debounce cannot reopen search after navigating Home", async ({
   page,
 }) => {

@@ -168,6 +168,8 @@ export interface Lyrics {
   synced: boolean;
   /** Word timing was estimated (experimental word sync). */
   estimated_words?: boolean;
+  /** Merged Apple Music words were split by experimental word sync. */
+  split_words?: boolean;
   /** Line boundaries were estimated from static text and track duration. */
   estimated_lines?: boolean;
 }

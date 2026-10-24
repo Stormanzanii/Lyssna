@@ -207,7 +207,7 @@ describe("Apple Music merged words", () => {
     ]);
     expect(words[1].estimated).toBe(true);
     expect(words[0].estimated).toBeUndefined();
-    expect(result.estimated_words).toBe(true);
+    expect(result.split_words).toBe(true);
   });
 
   it("keeps hyphen joins, trailing spaces and separate syllables", () => {

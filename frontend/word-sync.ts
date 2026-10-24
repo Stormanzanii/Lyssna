@@ -397,7 +397,7 @@ export function splitMergedWords(lyrics: Lyrics): Lyrics {
     split = true;
     return { ...line, words: line.words.flatMap(splitWord) };
   });
-  return split ? { ...lyrics, lines, estimated_words: true } : lyrics;
+  return split ? { ...lyrics, lines, split_words: true } : lyrics;
 }
 
 const merged = new WeakMap<Lyrics, Lyrics>();

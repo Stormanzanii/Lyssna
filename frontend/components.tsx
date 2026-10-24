@@ -822,10 +822,11 @@ const LyricCredits = memo(function LyricCredits({
   return (
     <div className={`lyric-source ${expanded ? "expanded" : ""}`}>
       Lyrics provided by: {source}
-      {lyrics.estimated_words &&
-        (lyrics.estimated_lines
+      {lyrics.estimated_words
+        ? lyrics.estimated_lines
           ? " (+ estimated line and word timing)"
-          : " (+ estimated word timing)")}
+          : " (+ estimated word timing)"
+        : lyrics.split_words && " (+ extra splits)"}
       {lyrics.source === "spicy_lyrics" &&
         (
           [

@@ -1791,33 +1791,32 @@ export function QueuePanel({
       const before = previous.get(key);
       if (animate && before !== top) moves.push([element, before, top]);
     }
-    // Skip and Previous move rows by one place, so they slide. A reshuffle
-    // moves rows across the list; sliding them from far away left gaps and
-    // overlaps, so then every moved row fades in where it lands.
-    const far = (
-      element: HTMLElement,
-      before: number | undefined,
-      top: number,
-    ) =>
-      before !== undefined &&
-      Math.abs(before - top) > element.offsetHeight * 1.5;
-    const reshuffled = moves.filter((move) => far(...move)).length > 2;
-    for (const [element, before, top] of moves) {
-      const slides =
-        !reshuffled && before !== undefined && !far(element, before, top);
-      element.animate(
-        slides
-          ? [
-              { transform: `translateY(${before! - top}px)` },
-              { transform: "none" },
-            ]
-          : [
-              { opacity: 0, transform: "translateY(16px)" },
-              { opacity: 1, transform: "none" },
-            ],
-        { duration: 360, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
-      );
-    }
+    // Skip and Previous move the list by one place: rows slide that step
+    // and songs joining the end fade in. Any other change (a reshuffle, a
+    // new list) shows at once, since sliding or fading a whole list read as
+    // the queue blanking and jumping.
+    const moved = moves.filter(([, before]) => before !== undefined);
+    const step = (element: HTMLElement, before: number, top: number) =>
+      Math.abs(before - top) <= element.offsetHeight * 1.5;
+    const stepped = moved.filter(([element, before, top]) =>
+      step(element, before!, top),
+    );
+    const shifted = moved.length
+      ? stepped.length >= moved.length * 0.8
+      : moves.length <= 3;
+    if (shifted)
+      for (const [element, before, top] of moves) {
+        if (before !== undefined && !step(element, before, top)) continue;
+        element.animate(
+          before !== undefined
+            ? [
+                { transform: `translateY(${before - top}px)` },
+                { transform: "none" },
+              ]
+            : [{ opacity: 0 }, { opacity: 1 }],
+          { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+        );
+      }
     tops.current = next;
   }, [order, state.settings.reduce_motion]);
   const row = (item: Track, key: string, current = false) => (

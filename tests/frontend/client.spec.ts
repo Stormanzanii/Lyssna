@@ -9137,3 +9137,67 @@ test("sung lyrics paint every glyph to its tips, in any font", async ({
     expect(brightUnsung, `${fonts[font]} unsung`).toBe(0);
   }
 });
+
+test("the explicit badge centres its E", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = document.createElement("div");
+    host.style.cssText =
+      "position:fixed;left:20px;top:20px;z-index:9999;font-size:var(--probe-size);background:#c5c5c5;padding:20px";
+    host.innerHTML = '<span class="explicit-badge" id="badge-probe">E</span>';
+    document.querySelector(".application")!.append(host);
+  });
+  const badge = page.locator("#badge-probe");
+  // Badges sit beside text of many sizes; check typical ones and a big one.
+  for (const size of [13, 14, 15, 16, 120]) {
+    await page.evaluate(
+      (size) =>
+        document.documentElement.style.setProperty("--probe-size", `${size}px`),
+      size,
+    );
+    const shot = await badge.screenshot();
+    const box = await page.evaluate(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const {
+        data: pixels,
+        width,
+        height,
+      } = context.getImageData(0, 0, image.width, image.height);
+      let left = width,
+        right = 0,
+        top = height,
+        bottom = 0;
+      for (let y = 0; y < height; y += 1)
+        for (let x = 0; x < width; x += 1)
+          if (pixels[(y * width + x) * 4] < 100) {
+            left = Math.min(left, x);
+            right = Math.max(right, x);
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+          }
+      return {
+        left,
+        right: width - 1 - right,
+        top,
+        bottom: height - 1 - bottom,
+      };
+    }, shot.toString("base64"));
+    // An odd pixel left over cannot split, so allow one (two when huge).
+    const slack = size > 20 ? 2 : 1;
+    expect(
+      Math.abs(box.left - box.right),
+      `${size}px across`,
+    ).toBeLessThanOrEqual(slack);
+    expect(
+      Math.abs(box.top - box.bottom),
+      `${size}px down`,
+    ).toBeLessThanOrEqual(slack);
+  }
+});

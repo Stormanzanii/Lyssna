@@ -4433,7 +4433,8 @@ test("Space Gravity words keep drifting while the song plays", async ({
     },
     { track, base: emptyState.playback },
   );
-  const word = page.locator(".gravity-word:not(.exiting)").first();
+  // The sung word stays on screen while sampled; older words may leave.
+  const word = page.locator(".gravity-word.current:not(.exiting)").first();
   await expect(word).toBeVisible();
   const key = await word.textContent();
   const sample = () =>
@@ -8878,6 +8879,12 @@ test("Space Gravity without Canvas floats around the artwork, not over it", asyn
   expect(result.count).toBeGreaterThan(0);
   expect(result.overCover).toBe(0);
   expect(result.overTitle).toBe(0);
+  // Credits read as clearly as the pinned footer beside normal lyrics.
+  const credits = await page.locator(".gravity-credits").evaluate((node) => ({
+    size: parseFloat(getComputedStyle(node.querySelector("p")!).fontSize),
+    gap: innerHeight - node.getBoundingClientRect().bottom,
+  }));
+  expect(credits.size).toBeGreaterThanOrEqual(15);
 });
 
 test("Space Gravity keeps words in place when the same lyrics load again", async ({

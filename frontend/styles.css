@@ -4899,16 +4899,21 @@ input.volume-range:active::-webkit-slider-thumb {
   will-change: transform;
   pointer-events: none;
 }
+/* Sized and placed like the pinned footer beside normal lyrics. */
 .gravity-credits {
   position: absolute;
   right: 5%;
-  bottom: 16px;
+  bottom: clamp(32px, 4.5vh, 64px);
   z-index: 3;
   width: 42%;
-  max-height: 120px;
+  max-height: 160px;
   overflow: auto;
   color: #fff9;
-  font-size: 13px;
+  font-size: clamp(
+    15px,
+    calc(min(var(--lyric-size, 58px), 4.6cqw) * 0.3),
+    24px
+  );
   line-height: 1.5;
 }
 .gravity-credits p {
@@ -4917,6 +4922,7 @@ input.volume-range:active::-webkit-slider-thumb {
 .gravity-credits .lyric-source {
   position: static;
   padding: 0;
+  font-size: 0.88em;
 }
 
 /* Dims the app while a creator profile sheet is open above it. */

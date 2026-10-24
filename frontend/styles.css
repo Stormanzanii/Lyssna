@@ -75,8 +75,8 @@
   margin-right: 0.55em;
   border-radius: 2px;
   /* The drawn E gives no text baseline, so the box aligns by its bottom
-     edge; this places it where a typed E's badge sat. */
-  vertical-align: -0.42em;
+     edge; this centres it on the artist's capitals. */
+  vertical-align: -0.23em;
   background: #c5c5c5;
   color: #151515;
   font-weight: 700;

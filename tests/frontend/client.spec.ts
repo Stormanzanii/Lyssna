@@ -8184,6 +8184,32 @@ test("a green bar names the other device playing and opens the device list", asy
   await page.locator("footer.player-bar").screenshot({
     path: "target/diagnostics/playing-elsewhere.png",
   });
+  // It spans the player's width, 8px in from the window edges.
+  const footer = (await page.locator("footer.player-bar").boundingBox())!,
+    box = (await bar.boundingBox())!;
+  expect(Math.abs(box.x - (footer.x + 8))).toBeLessThan(1.5);
+  expect(
+    Math.abs(footer.x + footer.width - 8 - (box.x + box.width)),
+  ).toBeLessThan(1.5);
+  // With Liquid Glass it is the capsule's flush lower edge.
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, liquid_glass: true },
+      }),
+    emptyState.settings,
+  );
+  await expect(page.locator(".application")).toHaveClass(/liquid-glass/);
+  const glass = (await page.locator("footer.player-bar").boundingBox())!,
+    edge = (await bar.boundingBox())!;
+  expect(Math.abs(edge.x - glass.x)).toBeLessThan(1.5);
+  expect(
+    Math.abs(glass.y + glass.height - (edge.y + edge.height)),
+  ).toBeLessThan(1.5);
+  await page.locator("footer.player-bar").screenshot({
+    path: "target/diagnostics/playing-elsewhere-glass.png",
+  });
   await bar.click();
   await expect(page.locator(".device-menu")).toBeVisible();
   // This computer playing shows no bar.

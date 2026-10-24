@@ -3398,29 +3398,41 @@ small {
     );
   align-items: center;
   gap: 18px;
+  /* Edge padding, shared with the "Playing on" bar that bleeds past it. */
+  --bar-pad-x: 18px;
+  --bar-pad-left: var(--bar-pad-x);
+  --bar-pad-bottom: 9px;
   padding: 0 18px 9px;
   background: #000000;
   z-index: 20;
   min-width: 0;
 }
-/* Spotify's "Playing on" bar under the player, for another device. */
+/* Spotify's "Playing on" bar under the player, for another device. It
+   runs the player's full width along its bottom edge, 8px in from the
+   window like Spotify's. */
 .playing-elsewhere {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  height: 24px;
-  margin-top: -4px;
-  padding: 0 12px;
-  border-radius: 4px;
+  height: 26px;
+  margin: -2px calc(8px - var(--bar-pad-x)) calc(8px - var(--bar-pad-bottom))
+    calc(8px - var(--bar-pad-left));
+  padding: 0 14px;
+  border-radius: 6px;
   background: #1ed760;
   color: #000;
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: background 0.15s;
 }
 .playing-elsewhere:hover {
   background: #3be477;
+}
+.playing-elsewhere svg {
+  flex-shrink: 0;
 }
 .player-song {
   display: flex;
@@ -4378,6 +4390,7 @@ input.volume-range:active::-webkit-slider-thumb {
       );
     gap: 10px;
     padding-left: 12px;
+    --bar-pad-left: 12px;
     padding-right: 10px;
   }
   .player-extras {

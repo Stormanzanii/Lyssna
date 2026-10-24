@@ -97,7 +97,24 @@
 .liquid-glass .player-bar {
   margin: 0 8px 8px;
   padding: 8px 18px;
+  --bar-pad-bottom: 8px;
   border-radius: 24px;
+}
+/* In the floating capsule the "Playing on" bar becomes its lower edge,
+   flush with the sides and following the rounded corners. */
+.liquid-glass .playing-elsewhere {
+  position: relative;
+  z-index: 1;
+  margin: 0 calc(-1 * var(--bar-pad-x)) calc(-1 * var(--bar-pad-bottom))
+    calc(-1 * var(--bar-pad-left));
+  height: 28px;
+  padding: 0 22px;
+  border-radius: 0 0 24px 24px;
+  background: #1ed760e6;
+  box-shadow: 0 -1px 0 #ffffff33 inset;
+}
+.liquid-glass .playing-elsewhere:hover {
+  background: #3be477;
 }
 .liquid-glass .now-card {
   background: #ffffff0f;

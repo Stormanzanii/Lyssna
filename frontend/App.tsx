@@ -2924,7 +2924,15 @@ function App() {
                                   dragRow.current = null;
                                   setDropAt(null);
                                 }}
-                                onDoubleClick={() => playTrack(track, index)}
+                                onDoubleClick={(event) => {
+                                  // The title already played on its first click.
+                                  if (
+                                    !(event.target as HTMLElement).closest(
+                                      ".track-name",
+                                    )
+                                  )
+                                    playTrack(track, index);
+                                }}
                                 onMouseEnter={() => prefetchCanvas(track.uri)}
                                 onContextMenu={(event) => {
                                   // Anywhere on the row opens the song menu;
@@ -2998,7 +3006,10 @@ function App() {
                                       className="text-link track-name"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        playTrack(track, index);
+                                        // The first click plays; the rest of a
+                                        // double-click must not load it again.
+                                        if (event.detail <= 1)
+                                          playTrack(track, index);
                                       }}
                                     >
                                       {track.name}

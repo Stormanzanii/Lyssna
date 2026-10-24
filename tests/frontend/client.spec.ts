@@ -6444,7 +6444,18 @@ test("a single click on a song selects nothing; a double click plays it", async 
   await row.locator(".track-name").click();
   await expect(page.locator(".track-row.selected")).toHaveCount(0);
   await expect(page.locator(".selection-bar")).toHaveCount(0);
+  const plays = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "player",
+        ).length,
+    );
+  const before = await plays();
   await row.locator(".track-name").dblclick();
+  await page.waitForTimeout(300);
+  // A double-click loads the song once, not once per click.
+  expect(await plays()).toBe(before + 1);
   await expect
     .poll(() =>
       page.evaluate(

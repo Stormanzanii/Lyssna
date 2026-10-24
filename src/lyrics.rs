@@ -797,6 +797,26 @@ pub fn fetch(
     access_token: &str,
     native: &crate::native::NativeControls,
 ) -> Result<Lyrics> {
+    fetch_from(client, track, access_token, native, true)
+}
+
+/// The best lyrics already on disk, in the chosen source order, without any
+/// request or token: shown at once while the sources are asked again.
+pub fn cached(
+    client: &Client,
+    track: &Track,
+    native: &crate::native::NativeControls,
+) -> Option<Lyrics> {
+    fetch_from(client, track, "", native, false).ok()
+}
+
+fn fetch_from(
+    client: &Client,
+    track: &Track,
+    access_token: &str,
+    native: &crate::native::NativeControls,
+    network: bool,
+) -> Result<Lyrics> {
     let root = data_dir()?.join("lyrics");
     let key = track_key(track);
     if let Some(lyrics) = SESSION
@@ -819,12 +839,14 @@ pub fn fetch(
             .ok()
             .and_then(|modified| modified.elapsed().ok())
             .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
-        if fresh
+        // Offline, any saved answer will do until the sources reply.
+        if (fresh || !network)
             && let Ok(bytes) = fs::read(&file)
             && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
         {
             return Ok(lyrics);
         }
+        anyhow::ensure!(network, "Not cached");
         let lyrics = fetch()?;
         if fs::create_dir_all(&cache).is_ok() {
             let _ = fs::write(file, serde_json::to_vec(&lyrics)?);

@@ -62,6 +62,31 @@ pub struct PopularTrack {
 type Cache = Mutex<HashMap<String, (Instant, ArtistOverview)>>;
 static CACHE: OnceLock<Cache> = OnceLock::new();
 
+fn saved_path(id: &str) -> Option<std::path::PathBuf> {
+    let valid = id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric());
+    valid
+        .then(|| crate::config::data_dir().ok())
+        .flatten()
+        .map(|dir| dir.join("artists").join(format!("{id}.json")))
+}
+
+/// The artist's overview from the last visit, of any age: shown at once
+/// (for example in Now playing after a restart) while `fetch` refreshes it.
+pub fn saved(id: &str) -> Option<ArtistOverview> {
+    serde_json::from_slice(&std::fs::read(saved_path(id)?).ok()?).ok()
+}
+
+fn save(id: &str, overview: &ArtistOverview) {
+    if let Some(path) = saved_path(id)
+        && path
+            .parent()
+            .is_some_and(|dir| std::fs::create_dir_all(dir).is_ok())
+        && let Ok(bytes) = serde_json::to_vec(overview)
+    {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
 pub fn fetch(client: &Client, id: &str) -> Result<ArtistOverview> {
     ensure!(
         id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
@@ -87,6 +112,7 @@ pub fn fetch(client: &Client, id: &str) -> Result<ArtistOverview> {
         .read_to_string(&mut html)?;
     ensure!(html.len() <= 2_000_000, "Artist page too large");
     let overview = parse_page(&html, id)?;
+    save(id, &overview);
     if let Ok(mut cache) = cache.lock() {
         if cache.len() >= 128 {
             cache.clear();

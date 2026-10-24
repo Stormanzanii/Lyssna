@@ -389,6 +389,10 @@ impl Desktop {
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":true}),
                                 );
+                                if let Some(track) = snapshot.playback.item.clone() {
+                                    let _ = pump.commands.send(Command::FetchLyrics(track.clone()));
+                                    let _ = pump.commands.send(Command::PlayingDetails(track));
+                                }
                             }
                         }
                         Event::PagePrefetched {
@@ -558,6 +562,12 @@ impl Desktop {
                                 emit(
                                     json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":true}),
                                 );
+                                // Saved lyrics and details show without
+                                // waiting for the first playback report.
+                                if let Some(track) = snapshot.playback.item.clone() {
+                                    let _ = pump.commands.send(Command::FetchLyrics(track.clone()));
+                                    let _ = pump.commands.send(Command::PlayingDetails(track));
+                                }
                             }
                         }
                         Event::SignedOut => {

@@ -221,6 +221,8 @@ pub enum LyricCommand {
         contents: String,
         mode: lyrics::ImportMode,
     },
+    /// Send lyrics already on disk for the track, if any, before a fetch.
+    Cached(Track),
     Fetch(Track, String),
     Import(Track, PathBuf),
     /// Drop lyrics imported for a track; a following fetch uses the provider.
@@ -459,8 +461,19 @@ impl Worker {
             let Ok(client) = auth::http_client() else {
                 return;
             };
+            // The song whose saved lyrics are showing: a failed refresh
+            // must not replace them with an error.
+            let mut showing_cached = None;
             while let Ok(command) = receive_lyrics.recv() {
                 let (track, result) = match command {
+                    LyricCommand::Cached(track) => {
+                        showing_cached = None;
+                        let Some(found) = lyrics::cached(&client, &track, &lyric_native) else {
+                            continue;
+                        };
+                        showing_cached = Some(track.uri.clone());
+                        (track, Ok(found))
+                    }
                     LyricCommand::ImportText {
                         track,
                         filename,
@@ -472,6 +485,9 @@ impl Worker {
                     }
                     LyricCommand::Fetch(track, token) => {
                         let result = lyrics::fetch(&client, &track, &token, &lyric_native);
+                        if result.is_err() && showing_cached.as_deref() == Some(&track.uri) {
+                            continue;
+                        }
                         (track, result)
                     }
                     LyricCommand::Import(track, path) => {
@@ -1248,6 +1264,8 @@ impl Backend {
                 self.emit(Event::Notice("Saved to Liked Songs".into()));
             }
             Command::FetchLyrics(track) => {
+                // Saved lyrics show before the token request and the sources.
+                let _ = self.lyrics.send(LyricCommand::Cached(track.clone()));
                 let api = self.api()?;
                 let token = if crate::provider::requires_spotify_token() {
                     api.provider_token()?
@@ -1488,11 +1506,17 @@ impl Backend {
                         })
                         .collect()
                 } else {
+                    // Browsed artists come from the cache; only others ask
+                    // the Web API.
                     let mut artists = Vec::new();
                     for artist in &track.artists {
-                        if let Some(id) = &artist.id
-                            && let Ok(artist) = self.api()?.artist(id)
+                        let Some(id) = &artist.id else { continue };
+                        if let Some(cached) =
+                            crate::library_cache::info(&self.profile.id, &format!("artist:{id}"))
+                                .and_then(|info| info.artist)
                         {
+                            artists.push(cached);
+                        } else if let Ok(artist) = self.api()?.artist(id) {
                             artists.push(artist);
                         }
                     }
@@ -1531,16 +1555,23 @@ impl Backend {
                     let context = self.context.clone();
                     let uri = track.uri;
                     thread::spawn(move || {
-                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id) {
+                        let send = |overview: crate::artist::ArtistOverview| {
                             let _ = events.send(Event::ArtistStats {
-                                uri,
-                                artist_id,
+                                uri: uri.clone(),
+                                artist_id: artist_id.clone(),
                                 listeners: overview.monthly_listeners,
                                 image: overview.header_image.or(overview.avatar_image),
                                 verified: overview.verified,
                                 biography: overview.biography,
                             });
                             context.request_repaint();
+                        };
+                        // Last visit's card first; the page then refreshes it.
+                        if let Some(saved) = crate::artist::saved(&artist_id) {
+                            send(saved);
+                        }
+                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id) {
+                            send(overview);
                         }
                     });
                 }

@@ -329,10 +329,17 @@ export const ArtistLinks = memo(function ArtistLinks({
     </>
   );
 });
+/** The badge's E is drawn, not typed: a font's ascent and pixel rounding
+ * left a typed E off centre at small sizes. */
+export const EXPLICIT_MARK = (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M5.5 4.2h5.1v1.7H7.3v1.25h3v1.7h-3v1.25h3.3v1.7H5.5z" />
+  </svg>
+);
 export function ExplicitBadge({ track }: { track: Track }) {
   return track.explicit ? (
     <span className="explicit-badge" aria-label="Explicit" title="Explicit">
-      E
+      {EXPLICIT_MARK}
     </span>
   ) : null;
 }

@@ -7,7 +7,13 @@ import {
   Play,
   Search,
 } from "lucide-react";
-import { ArtistLinks, Cover, cancelPrefetch, prefetchPage } from "./components";
+import {
+  ArtistLinks,
+  Cover,
+  EXPLICIT_MARK,
+  cancelPrefetch,
+  prefetchPage,
+} from "./components";
 import { Shelf } from "./HomePage";
 import type { AppState } from "./state";
 import type {
@@ -70,7 +76,9 @@ export function SearchPage({
     ],
   );
   // Further pages per category: next offset, or done once Spotify has no more.
-  const [pages, setPages] = useState<Partial<Record<SearchCategory, number | "done">>>({});
+  const [pages, setPages] = useState<
+    Partial<Record<SearchCategory, number | "done">>
+  >({});
   const [loadingMore, setLoadingMore] = useState(false);
   const top = entries[0];
   const preview = entries.slice(1, 6);
@@ -181,7 +189,7 @@ export function SearchPage({
               <>
                 {entry.track.explicit && (
                   <span className="explicit-badge" aria-label="Explicit">
-                    E
+                    {EXPLICIT_MARK}
                   </span>
                 )}
                 <span>Song · </span>

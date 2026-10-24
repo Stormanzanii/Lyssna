@@ -8902,3 +8902,75 @@ test("Space Gravity keeps words in place when the same lyrics load again", async
   // Drift over a few frames, not a respawn across the page.
   expect(Math.max(...moved)).toBeLessThan(40);
 });
+
+test("the queue moves once on skip even when Spotify sends the queue first", async ({
+  page,
+}) => {
+  await startClient(page);
+  const songs = Array.from({ length: 12 }, (_, index) => ({
+    ...track,
+    uri: `spotify:track:next${String(index).padStart(2, "0")}`,
+    name: `Next ${index}`,
+  }));
+  const details = (uri: string, queue: unknown[]) =>
+    page.evaluate(
+      ({ uri, queue, artists }) =>
+        (window as any).__clientTest.emit({
+          type: "playing_details",
+          uri,
+          details: { artists, queue },
+        }),
+      { uri, queue, artists: track.artists },
+    );
+  await details(track.uri, songs);
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const panel = page.locator(".queue-panel");
+  const firstNext = panel
+    .locator(".queue-section:last-child .queue-row")
+    .first();
+  await expect(firstNext).toContainText("Next 0");
+  await page.waitForTimeout(400);
+  // The advanced queue arrives before the song change: nothing moves yet.
+  await details(track.uri, songs.slice(1));
+  await page.waitForTimeout(50);
+  await expect(firstNext).toContainText("Next 0");
+  // Then the song changes, and rows slide up from where they show,
+  // never dropping back down mid-slide.
+  const trace = await page.evaluate(
+    async ({ next, playback }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: next, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      const tops: number[] = [];
+      const row = () =>
+        [...document.querySelectorAll(".queue-panel .queue-row")].find(
+          (element) => element.textContent?.includes("Next 1"),
+        )!;
+      await new Promise<void>((resolve) => {
+        const start = performance.now();
+        const sample = () => {
+          tops.push(row().getBoundingClientRect().top);
+          if (performance.now() - start < 350) requestAnimationFrame(sample);
+          else resolve();
+        };
+        requestAnimationFrame(sample);
+      });
+      return tops;
+    },
+    { next: songs[0], playback: emptyState.playback },
+  );
+  await expect(
+    panel.locator(".queue-section:first-of-type .queue-row"),
+  ).toContainText("Next 0");
+  await expect(firstNext).toContainText("Next 1");
+  for (let index = 1; index < trace.length; index += 1)
+    expect(trace[index]).toBeLessThanOrEqual(trace[index - 1] + 0.5);
+  expect(trace[0] - trace.at(-1)!).toBeGreaterThan(20);
+});

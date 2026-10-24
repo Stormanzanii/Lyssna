@@ -1766,7 +1766,36 @@ export function QueuePanel({
   onClose: () => void;
 }) {
   const track = state.playback.item,
-    queue = state.details.queue;
+    raw = state.details.queue;
+  // Spotify can report the advanced queue a moment before the song changes.
+  // The leaving song stays listed until then, so the list moves once.
+  const hold = useRef({ track: "", queue: [] as Track[], since: 0 });
+  const holdTimer = useRef(0);
+  const [, wake] = useState(0);
+  const held = hold.current;
+  const early =
+    !!track &&
+    held.track === track.uri &&
+    raw.length > 0 &&
+    held.queue.length > 1 &&
+    held.queue[0].uri !== raw[0].uri &&
+    held.queue[1].uri === raw[0].uri &&
+    (!held.since || performance.now() - held.since < 1500);
+  const queue = early ? [held.queue[0], ...raw] : raw;
+  useEffect(() => {
+    if (!early) {
+      hold.current = { track: track?.uri ?? "", queue: raw, since: 0 };
+      return;
+    }
+    if (held.since) return;
+    held.since = performance.now();
+    clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(
+      () => wake((count) => count + 1),
+      1600,
+    );
+  });
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
   // Rows are keyed by song and repeat count, so the next song keeps its key
   // when it becomes Now playing and can slide up into that slot.
   const seen = new Map<string, number>();
@@ -1790,10 +1819,16 @@ export function QueuePanel({
     const next = new Map<string, number>();
     const moves: [HTMLElement, number | undefined, number][] = [];
     for (const [key, element] of rows.current) {
+      // A row still sliding is measured where it shows, then at rest, so a
+      // new move continues from its place on screen instead of jumping.
+      const shown = element.getBoundingClientRect().top - origin;
+      for (const animation of element.getAnimations()) animation.cancel();
       const top = element.getBoundingClientRect().top - origin;
       next.set(key, top);
-      const before = previous.get(key);
-      if (animate && before !== top) moves.push([element, before, top]);
+      const rest = previous.get(key);
+      const before = rest === undefined ? undefined : rest + shown - top;
+      if (animate && (before === undefined || Math.abs(before - top) > 0.5))
+        moves.push([element, before, top]);
     }
     // Skip and Previous move the list by one place: rows slide that step
     // and songs joining the end fade in. Any other change (a reshuffle, a

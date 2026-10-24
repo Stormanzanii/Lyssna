@@ -8532,27 +8532,42 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   ).toHaveCount(0);
   await expect(page.locator(".application")).toHaveClass(/immersive/);
   await expect(page.locator(".lyrics-page")).toBeVisible();
+  // Default sits in the saved list; the prompt shows only until a choice.
+  const saved = page.getByRole("combobox", { name: "Saved preset" });
+  await expect(saved.locator("option")).toHaveText(["Choose…", "Default"]);
+  await page.getByLabel("Word peak scale value", { exact: true }).fill("1.5");
+  await page
+    .getByLabel("Word peak scale value", { exact: true })
+    .press("Enter");
+  await saved.selectOption("default");
+  await page.getByRole("button", { name: "Load", exact: true }).click();
+  await expect(saved.locator("option")).toHaveText(["Default"]);
+  await expect(saved).toHaveValue("default");
+  await expect(
+    page.getByLabel("Word peak scale value", { exact: true }),
+  ).toHaveValue("1.0505");
+  await expect(
+    page.getByRole("button", { name: "Delete Current", exact: true }),
+  ).toBeDisabled();
   // A code shared from Spicy Lyrics pasted into the name box.
   await page
     .getByLabel("Preset name", { exact: true })
     .fill("SLP1:Bouncy|1.2,1.3,2,1,1,0.88,0.64,1.45,0.2,1.18,0.56");
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("Imported Bouncy.");
-  await expect(
-    page.getByRole("combobox", { name: "Saved preset" }),
-  ).toHaveValue(/^animator-/);
+  await expect(saved).toHaveValue(/^animator-/);
   await expect(
     page.getByLabel("Word peak scale value", { exact: true }),
   ).toHaveValue("1.2");
-  const saved = await page.evaluate(
+  const stored = await page.evaluate(
     () =>
       (window as any).__clientTest.commands
         .filter((entry: any) => entry.command === "save_settings")
         .at(-1)?.args.settings.lyrics_animator,
   );
-  expect(saved.preset).toBe("Custom");
-  expect(saved.saved[0].name).toBe("Bouncy");
-  expect(saved.custom.verticalStrength).toBe(2);
+  expect(stored.preset).toBe("Custom");
+  expect(stored.saved[0].name).toBe("Bouncy");
+  expect(stored.custom.verticalStrength).toBe(2);
   // A code copied elsewhere imports from the clipboard, read natively since
   // the webview refuses reads while it lacks focus.
   await page.evaluate(() => {

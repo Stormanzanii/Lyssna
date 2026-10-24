@@ -78,6 +78,8 @@ impl Default for LyricsAnimator {
 
 const ANIMATOR_VALUES: usize = 32;
 const ANIMATOR_PRESETS: usize = 200;
+/// The built-in saved-preset choice holding upstream values.
+const DEFAULT_ANIMATOR_PRESET: &str = "default";
 
 fn clean_animator_values(values: &mut std::collections::BTreeMap<String, f64>) {
     values.retain(|key, value| {
@@ -110,11 +112,9 @@ impl LyricsAnimator {
         for preset in &mut self.saved {
             clean_animator_values(&mut preset.values);
         }
-        if self
-            .selected
-            .as_ref()
-            .is_some_and(|id| !self.saved.iter().any(|preset| &preset.id == id))
-        {
+        if self.selected.as_ref().is_some_and(|id| {
+            id != DEFAULT_ANIMATOR_PRESET && !self.saved.iter().any(|preset| &preset.id == id)
+        }) {
             self.selected = None;
         }
     }
@@ -320,7 +320,7 @@ pub fn valid_client_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{PinnedLyricsFooter, Settings};
+    use super::{LyricsAnimator, PinnedLyricsFooter, Settings};
 
     #[test]
     fn pinned_lyrics_footer_survives_settings_restore_and_unknown_modes() {
@@ -360,6 +360,12 @@ mod tests {
         assert_eq!(animator.saved.len(), 1);
         assert_eq!(animator.selected, None);
         assert_eq!(Settings::default().lyrics_animator.preset, "Default");
+        let mut chosen = LyricsAnimator {
+            selected: Some("default".into()),
+            ..LyricsAnimator::default()
+        };
+        chosen.clean();
+        assert_eq!(chosen.selected.as_deref(), Some("default"));
     }
 
     #[test]

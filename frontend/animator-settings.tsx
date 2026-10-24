@@ -3,8 +3,10 @@ import { X } from "lucide-react";
 import { rpc } from "./bridge";
 import { SettingRow } from "./setting-row";
 import {
+  ANIMATOR_DEFAULTS,
   ANIMATOR_DETAILS,
   ANIMATOR_PRESETS,
+  DEFAULT_PRESET_ID,
   animatorValues,
   choosePreset,
   cleanSavedPresets,
@@ -160,8 +162,10 @@ export function AnimatorBehavior({
   const visible = visibleParameters(detail);
   const groups = [...new Set(visible.map((parameter) => parameter.group))];
   const shared =
-    presets.find((preset) => preset.id === presetToLoad) ??
-    presets.find((preset) => preset.id === animator.selected);
+    presetToLoad === DEFAULT_PRESET_ID
+      ? { name: "Default", values: ANIMATOR_DEFAULTS }
+      : (presets.find((preset) => preset.id === presetToLoad) ??
+        presets.find((preset) => preset.id === animator.selected));
   const importFrom = (code: string) => {
     const result = importCode(animator, code.trim());
     onChange(result.settings);
@@ -197,12 +201,15 @@ export function AnimatorBehavior({
             className="settings-select"
             aria-label="Saved preset"
             value={presetToLoad}
-            disabled={!presets.length}
             onChange={(event) => setPresetToLoad(event.target.value)}
           >
-            <option value="">
-              {presets.length ? "Choose…" : "None saved"}
-            </option>
+            {/* Only a prompt until something is chosen. */}
+            {!presetToLoad && (
+              <option value="" disabled>
+                Choose…
+              </option>
+            )}
+            <option value={DEFAULT_PRESET_ID}>Default</option>
             {presets.map((preset) => (
               <option key={preset.id} value={preset.id}>
                 {preset.name}
@@ -239,7 +246,7 @@ export function AnimatorBehavior({
         </button>
         <button
           className="pill outline"
-          disabled={!presetToLoad}
+          disabled={!presetToLoad || presetToLoad === DEFAULT_PRESET_ID}
           onClick={() => {
             onChange(deletePreset(animator, presetToLoad));
             setPresetToLoad("");

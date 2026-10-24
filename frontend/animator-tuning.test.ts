@@ -3,6 +3,7 @@ import {
   ANIMATOR_DEFAULTS,
   animatorValues,
   choosePreset,
+  DEFAULT_PRESET_ID,
   deletePreset,
   idleScale,
   importCode,
@@ -56,6 +57,14 @@ describe("animator presets", () => {
       saved: [],
       selected: null,
     });
+  });
+  it("loads the built-in Default entry as upstream values", () => {
+    const loaded = loadPreset(
+      setValue({}, "glowStrength", 3),
+      DEFAULT_PRESET_ID,
+    );
+    expect(loaded).toMatchObject({ preset: "Custom", selected: "default" });
+    expect(loaded.custom).toEqual(ANIMATOR_DEFAULTS);
   });
   it("round-trips SLP1 share codes and renames duplicates", () => {
     const code = shareCode("Bouncy", { verticalDamping: 0.2 });

@@ -321,10 +321,19 @@ export const resetValues = (settings: AnimatorSettings): AnimatorSettings => ({
   ...settings,
   custom: { ...ANIMATOR_DEFAULTS },
 });
+/** The saved-preset list's built-in entry: upstream values. */
+export const DEFAULT_PRESET_ID = "default";
 export function loadPreset(
   settings: AnimatorSettings,
   id: string,
 ): AnimatorSettings {
+  if (id === DEFAULT_PRESET_ID)
+    return {
+      ...settings,
+      preset: "Custom",
+      custom: { ...ANIMATOR_DEFAULTS },
+      selected: id,
+    };
   const preset = cleanSavedPresets(settings.saved).find(
     (item) => item.id === id,
   );

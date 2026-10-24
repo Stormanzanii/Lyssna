@@ -8732,3 +8732,106 @@ test("bundled translations stay hidden unless turned on", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.locator(".lyric-translation")).toHaveText("迎着初升的朝阳");
 });
+
+test("Space Gravity over Canvas starts words across the page, not bunched left", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, space_gravity: true },
+      }),
+    emptyState.settings,
+  );
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await emitCanvas(page);
+  await expect(page.locator(".lyrics-page")).toHaveClass(/canvas-lyrics/);
+  await expect(
+    page.locator(".gravity-word[data-spawned]").first(),
+  ).toBeVisible();
+  await page.waitForTimeout(300);
+  const right = await page.locator(".lyrics-page").evaluate((root) => {
+    const box = root.getBoundingClientRect();
+    const words = [...root.querySelectorAll(".gravity-word[data-spawned]")];
+    const centres = words.map((word) => {
+      const rect = word.getBoundingClientRect();
+      return (rect.left + rect.width / 2 - box.left) / box.width;
+    });
+    return centres.filter((x) => x > 0.5).length / centres.length;
+  });
+  // Lines are laid out in the lyrics column on the right before floating.
+  expect(right).toBeGreaterThan(0.35);
+});
+
+async function gravityWithoutCanvas(page: Page) {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          progress_ms: 40_000,
+          device: { name: "SpotiFlex", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  await expect(
+    page.locator(".gravity-word[data-spawned]").first(),
+  ).toBeVisible();
+}
+
+test("Space Gravity without Canvas floats around the artwork, not over it", async ({
+  page,
+}) => {
+  await gravityWithoutCanvas(page);
+  await page.waitForTimeout(2500);
+  const result = await page.locator(".lyrics-page").evaluate((root) => {
+    const rect = (selector: string) =>
+      root.querySelector(selector)!.getBoundingClientRect();
+    const cover = rect(".lyrics-media .cover");
+    const title = rect(".lyrics-title");
+    const column = rect(".lyrics-body");
+    const words = [
+      ...root.querySelectorAll(".gravity-word[data-spawned]:not(.exiting)"),
+    ].map((word) => word.getBoundingClientRect());
+    const centreInside = (word: DOMRect, box: DOMRect) => {
+      const x = word.left + word.width / 2,
+        y = word.top + word.height / 2;
+      return x > box.left && x < box.right && y > box.top && y < box.bottom;
+    };
+    return {
+      count: words.length,
+      overCover: words.filter((word) => centreInside(word, cover)).length,
+      overTitle: words.filter((word) => centreInside(word, title)).length,
+      columnLeft: column.left,
+      coverRight: cover.right,
+    };
+  });
+  expect(result.count).toBeGreaterThan(0);
+  expect(result.overCover).toBe(0);
+  expect(result.overTitle).toBe(0);
+});

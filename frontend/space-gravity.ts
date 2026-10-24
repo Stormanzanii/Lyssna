@@ -29,6 +29,9 @@ export interface Bounds {
 export interface Field {
   bounds: Bounds;
   area?: Rect;
+  /** Where lines are laid out before their words float: the lyrics column,
+   * even when words may roam the whole page over Canvas. */
+  layout?: Rect;
   cover?: Rect;
   blockers?: Rect[];
   footer?: Rect;

@@ -223,9 +223,10 @@ const contains = (outer: Rect | undefined, inner: Rect | undefined) =>
   outer.right >= inner.right &&
   outer.bottom >= inner.bottom;
 
-/** Where words may float on this page, as the fork measures it: the lyrics
- * column above the credits, or the whole page over Canvas, where only the
- * song details and controls block words. */
+/** Where words may float on this page, as the fork measures it: the whole
+ * page above the credits. Over Canvas only the song details and controls
+ * block words; otherwise words also drift around the artwork, above it and
+ * below the title. Lines start laid out in the lyrics column. */
 function measureField(stage: HTMLElement): Field {
   const box = stage.getBoundingClientRect();
   const page = stage.closest(".lyrics-page");
@@ -235,34 +236,34 @@ function measureField(stage: HTMLElement): Field {
     !page.matches(".no-artwork");
   const footer = relative(page?.querySelector(".gravity-credits"), box);
   const column = relative(page?.querySelector(".lyrics-body"), box);
-  const area =
-    canvas || !column
-      ? { left: 0, top: 0, right: bounds.width, bottom: bounds.height }
-      : column;
+  const area = { left: 0, top: 0, right: bounds.width, bottom: bounds.height };
   area.bottom = Math.min(area.bottom, footer?.top ?? area.bottom);
   const toolbar = relative(page?.querySelector(".lyrics-toolbar"), box);
-  if (canvas) {
-    const dock = union(
-      [".lyrics-title", ".lyrics-artists", ".lyrics-fullscreen-controls"].map(
-        (selector) => relative(page?.querySelector(selector), box),
-      ),
-    );
-    return {
-      bounds,
-      area,
-      footer,
-      blockers: [dock, contains(dock, toolbar) ? undefined : toolbar].filter(
-        (rect): rect is Rect => !!rect,
-      ),
-    };
-  }
-  const cover = relative(page?.querySelector(".lyrics-album"), box);
+  const dock = union(
+    [".lyrics-title", ".lyrics-artists", ".lyrics-fullscreen-controls"].map(
+      (selector) => relative(page?.querySelector(selector), box),
+    ),
+  );
+  const cover = canvas
+    ? undefined
+    : relative(
+        page?.querySelector(".lyrics-media .cover") ??
+          page?.querySelector(".lyrics-media"),
+        box,
+      );
   return {
     bounds,
     area,
+    layout: column && {
+      ...column,
+      bottom: Math.min(column.bottom, area.bottom),
+    },
     footer,
     cover,
-    blockers: contains(cover, toolbar) || !toolbar ? [] : [toolbar],
+    blockers: [
+      dock,
+      contains(dock, toolbar) || contains(cover, toolbar) ? undefined : toolbar,
+    ].filter((rect): rect is Rect => !!rect),
   };
 }
 
@@ -394,7 +395,7 @@ export function SpaceGravityLyrics({
       }
       // Each new word starts near its place in its line, laid out across
       // the play area and centred in it, then drifts from there.
-      const area = field.area!;
+      const area = field.layout ?? field.area!;
       const lines = new Map<string, string[]>();
       for (const key of shownKeys) {
         if (!elements.current.has(key)) continue;

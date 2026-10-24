@@ -673,6 +673,16 @@ describe("queue across song changes", () => {
     expect(other.queue).toEqual([]);
     expect(other.played?.map((item) => item.uri)).toEqual(["a"]);
   });
+  it("holds a queue Spotify advanced before the song changed", () => {
+    const early = advanceDetails({ artists: [], queue: [c, d] }, a, b, true);
+    expect(early.queue.map((item) => item.uri)).toEqual(["c", "d"]);
+    const back = advanceDetails(
+      { artists: [], queue: [a, c], played: [b] },
+      a,
+      b,
+    );
+    expect(back.queue.map((item) => item.uri)).toEqual(["a", "c"]);
+  });
   it("keeps the queue while the next one arrives", () => {
     const state = reducer(
       {

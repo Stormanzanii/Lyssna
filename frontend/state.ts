@@ -222,24 +222,30 @@ export type Action =
   | { type: "dj_pending_expired" };
 /** The queue right after the song changes, before Spotify sends it: a
  * skip moves up to the new song and Previous puts the old one back on top,
- * so the panel never empties and its rows can slide into place. */
+ * so the panel never empties and its rows can slide into place. Spotify can
+ * publish the advanced queue just before the song itself changes; `keep`
+ * then holds that queue when the new song is no longer in it. */
 export function advanceDetails(
   details: PlayingDetails,
   from: Track | null | undefined,
   to: Track | null | undefined,
+  keep = false,
 ): PlayingDetails {
   const played = details.played ?? [];
   if (!to) return { artists: [], queue: [], played: [] };
   if (played.at(-1)?.uri === to.uri)
     return {
       artists: [],
-      queue: from ? [from, ...details.queue] : details.queue,
+      queue:
+        from && details.queue[0]?.uri !== from.uri
+          ? [from, ...details.queue]
+          : details.queue,
       played: played.slice(0, -1),
     };
   const at = details.queue.findIndex((track) => track.uri === to.uri);
   return {
     artists: [],
-    queue: at >= 0 ? details.queue.slice(at + 1) : [],
+    queue: at >= 0 ? details.queue.slice(at + 1) : keep ? details.queue : [],
     played: from ? [...played, from].slice(-20) : played,
   };
 }
@@ -616,6 +622,7 @@ export function reducer(state: AppState, action: Action): AppState {
               state.details,
               state.playback.item,
               action.playback.item,
+              true,
             )
           : state.details,
       };

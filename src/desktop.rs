@@ -488,6 +488,13 @@ impl Desktop {
                                 );
                             }
                         }
+                        Event::ProfileRefreshed(profile) => {
+                            if snapshot.profile.as_ref().map(|old| &old.id) == Some(&profile.id) {
+                                let _ = crate::native::save_profile(&profile);
+                                snapshot.profile = Some(profile.clone());
+                                emit(json!({"type":"profile","profile":profile}));
+                            }
+                        }
                         Event::Session(profile) => {
                             if !snapshot.login_pending {
                                 continue;

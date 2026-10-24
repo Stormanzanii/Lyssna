@@ -314,6 +314,12 @@ export function reducer(state: AppState, action: Action): AppState {
         can_follow: action.can_follow,
         login_pending: false,
       };
+    case "profile":
+      // Spotify's current name and picture, after a restore unlocked with
+      // the saved ones.
+      return state.profile?.id === action.profile.id
+        ? { ...state, profile: action.profile }
+        : state;
     case "signed_out":
       return {
         ...emptyState,

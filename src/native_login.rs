@@ -26,6 +26,10 @@ pub struct Authenticated {
     pub(crate) credentials: Credentials,
     pub(crate) connection: Connected,
     pub(crate) runtime: tokio::runtime::Runtime,
+    /// A restored session unlocks with the saved profile; Spotify's current
+    /// one arrives here afterwards.
+    /// Held in a mutex so the login result stays shareable across threads.
+    pub(crate) profile_refresh: Option<std::sync::Mutex<std::sync::mpsc::Receiver<Profile>>>,
 }
 
 impl Authenticated {
@@ -45,6 +49,7 @@ impl Authenticated {
             credentials,
             connection,
             runtime,
+            profile_refresh: None,
         }
     }
 }
@@ -76,6 +81,7 @@ pub fn authenticate(
     } else {
         Credentials::with_access_token(auth::authorize_audio(client, cancelled)?)
     };
+    let started = std::time::Instant::now();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -90,11 +96,14 @@ pub fn authenticate(
             let account = session.username();
             ensure!(!account.is_empty(), "Spotify did not authenticate an account");
             if let Some(previous) = previous.as_ref() { ensure!(account == previous.id, "Saved Spotify sign-in belongs to a different account"); }
-            let encoded: String = url::form_urlencoded::byte_serialize(account.as_bytes()).collect();
-            let bytes = tokio::time::timeout(Duration::from_secs(8), session.spclient().get_user_profile(&encoded, Some(0), Some(0))).await;
-            let profile = match bytes {
-                Ok(Ok(bytes)) => profile_from_response(&account, &bytes)?,
-                _ => previous.clone().unwrap_or(Profile { id: account.clone(), ..Default::default() }),
+            // Restoring, the saved profile unlocks the app as soon as Spotify
+            // authenticates; its refresh follows instead of delaying startup.
+            let profile = match previous.clone() {
+                Some(previous) => previous,
+                None => match fetch_profile(session, &account).await {
+                    Some(result) => result?,
+                    None => Profile { id: account.clone(), ..Default::default() },
+                },
             };
             let reusable = Credentials { username: Some(account), auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS, auth_data: session.auth_data() };
             ensure!(!cancelled.load(Ordering::Acquire), "Sign-in cancelled");
@@ -105,16 +114,48 @@ pub fn authenticate(
             () = async { while !cancelled.load(Ordering::Acquire) { tokio::time::sleep(Duration::from_millis(50)).await; } } => anyhow::bail!("Sign-in cancelled"),
         };
         let (profile, credentials) = result?;
+        native::diagnostic(&format!(
+            "sign-in {} {}ms",
+            if restoring { "restore" } else { "fresh" },
+            started.elapsed().as_millis()
+        ));
         Ok((profile, credentials, connected))
     });
     result.map(|(profile, credentials, connection)| {
+        let profile_refresh = previous.is_some().then(|| {
+            let (send, receive) = std::sync::mpsc::channel();
+            let session = connection.0.clone();
+            let account = profile.id.clone();
+            runtime.spawn(async move {
+                if let Some(Ok(profile)) = fetch_profile(&session, &account).await {
+                    let _ = send.send(profile);
+                }
+            });
+            std::sync::Mutex::new(receive)
+        });
         Some(Authenticated {
             profile,
             credentials,
             connection,
             runtime,
+            profile_refresh,
         })
     })
+}
+
+/// Spotify's profile for `account`; `None` when it cannot be reached in time.
+async fn fetch_profile(session: &Session, account: &str) -> Option<Result<Profile>> {
+    let encoded: String = url::form_urlencoded::byte_serialize(account.as_bytes()).collect();
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(8),
+        session
+            .spclient()
+            .get_user_profile(&encoded, Some(0), Some(0)),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    Some(profile_from_response(account, &bytes))
 }
 
 pub(crate) fn profile_from_response(account: &str, bytes: &[u8]) -> Result<Profile> {

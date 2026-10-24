@@ -7,6 +7,7 @@ import {
   position,
   nextToggle,
   sessionScreen,
+  type AppState,
   type ToggleIntent,
 } from "./state";
 import type { Track } from "./types";
@@ -630,5 +631,24 @@ describe("library edits on the open page", () => {
       reducer(open, { type: "track_removed", key: "playlist:q", index: 0 })
         .tracks,
     ).toHaveLength(3);
+  });
+});
+
+describe("profile refresh", () => {
+  it("updates the signed-in profile only", () => {
+    const signedIn = {
+      ...emptyState,
+      profile: { id: "me", display_name: "Old", images: [] },
+    } as AppState;
+    const refreshed = reducer(signedIn, {
+      type: "profile",
+      profile: { id: "me", display_name: "New", images: [] },
+    });
+    expect(refreshed.profile?.display_name).toBe("New");
+    const other = reducer(signedIn, {
+      type: "profile",
+      profile: { id: "someone", display_name: "Else", images: [] },
+    });
+    expect(other).toBe(signedIn);
   });
 });

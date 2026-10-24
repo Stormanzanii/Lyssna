@@ -885,7 +885,7 @@ fn event_summary(event: &PlayerEvent) -> Option<(&'static str, String)> {
 
 /// Append one line to a small local log of transport commands and player
 /// events, for diagnosing stalls. Holds no account data or credentials.
-fn diagnostic(line: &str) {
+pub(crate) fn diagnostic(line: &str) {
     use std::io::Write;
     let Ok(dir) = crate::config::data_dir().map(|dir| dir.join("diagnostics")) else {
         return;
@@ -1444,6 +1444,16 @@ pub(crate) fn saved_profile() -> Result<Option<crate::model::Profile>> {
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(_) => anyhow::bail!("Cannot read saved Spotify account from the credential store"),
     }
+}
+
+/// Updates the saved account profile (name and picture) for later restores.
+pub(crate) fn save_profile(profile: &crate::model::Profile) -> Result<()> {
+    let _guard = CREDENTIAL_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Spotify credential store unavailable"))?;
+    keyring::Entry::new("SpotiFlex/Account", "active")?
+        .set_password(&serde_json::to_string(profile)?)
+        .context("Cannot save Spotify account")
 }
 
 pub(crate) fn save_login(

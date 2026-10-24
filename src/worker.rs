@@ -180,6 +180,8 @@ pub enum Event {
     /// Saved status for many items at once.
     SavedMany(Vec<(String, bool)>),
     Session(Profile),
+    /// Spotify's current profile, fetched after a restored session unlocked.
+    ProfileRefreshed(Profile),
     SignedOut,
     LoginFinished,
     LoginFailed(auth::LoginIssue),
@@ -681,8 +683,23 @@ impl Backend {
         Ok(())
     }
 
-    fn establish_native(&mut self, login: crate::native_login::Authenticated) -> Result<()> {
+    fn establish_native(&mut self, mut login: crate::native_login::Authenticated) -> Result<()> {
         let profile = login.profile.clone();
+        if let Some(refresh) = login.profile_refresh.take() {
+            let events = self.events.clone();
+            let context = self.context.clone();
+            thread::spawn(move || {
+                let refresh = refresh.into_inner();
+                if let Ok(profile) = refresh.map_err(|_| ()).and_then(|refresh| {
+                    refresh
+                        .recv_timeout(Duration::from_secs(15))
+                        .map_err(|_| ())
+                }) {
+                    let _ = events.send(Event::ProfileRefreshed(profile));
+                    context.request_repaint();
+                }
+            });
+        }
         if let Some(previous) = self.spotify.take() {
             previous.cancel_background();
         }

@@ -432,7 +432,8 @@ impl SpotiFlex {
                 | Event::Saved { .. }
                 | Event::SavedMany(..)
                 | Event::PageChanged(..)
-                | Event::TrackInfo { .. } => {}
+                | Event::TrackInfo { .. }
+                | Event::ProfileRefreshed(..) => {}
                 Event::Session(profile) => {
                     if !self.login_pending {
                         continue;

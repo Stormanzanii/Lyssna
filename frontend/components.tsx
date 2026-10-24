@@ -1738,8 +1738,55 @@ export function QueuePanel({
 }) {
   const track = state.playback.item,
     queue = state.details.queue;
-  const row = (item: Track, current = false) => (
+  // Rows are keyed by song and repeat count, so the next song keeps its key
+  // when it becomes Now playing and can slide up into that slot.
+  const seen = new Map<string, number>();
+  const keyOf = (item: Track) => {
+    const count = seen.get(item.uri) ?? 0;
+    seen.set(item.uri, count + 1);
+    return `${item.uri}#${count}`;
+  };
+  const currentKey = track && !state.narrating ? keyOf(track) : "";
+  const queueKeys = queue.map(keyOf);
+  const rows = useRef(new Map<string, HTMLElement>());
+  const tops = useRef(new Map<string, number>());
+  const scroller = useRef<HTMLDivElement>(null);
+  const order = [currentKey, ...queueKeys].join(" ");
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const origin = box.getBoundingClientRect().top - box.scrollTop;
+    const previous = tops.current;
+    const animate = previous.size > 0 && !state.settings.reduce_motion;
+    const next = new Map<string, number>();
+    for (const [key, element] of rows.current) {
+      const top = element.getBoundingClientRect().top - origin;
+      next.set(key, top);
+      if (!animate) continue;
+      const before = previous.get(key);
+      if (before === top) continue;
+      element.animate(
+        before === undefined
+          ? [
+              { opacity: 0, transform: "translateY(16px)" },
+              { opacity: 1, transform: "none" },
+            ]
+          : [
+              { transform: `translateY(${before - top}px)` },
+              { transform: "none" },
+            ],
+        { duration: 360, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+      );
+    }
+    tops.current = next;
+  }, [order, state.settings.reduce_motion]);
+  const row = (item: Track, key: string, current = false) => (
     <button
+      key={key}
+      ref={(element) => {
+        if (element) rows.current.set(key, element);
+        else rows.current.delete(key);
+      }}
       className={`next-track queue-row ${current ? "current" : ""}`}
       onClick={
         current
@@ -1767,7 +1814,7 @@ export function QueuePanel({
           animate={state.playback.is_playing}
         />
       )}
-      <div className="now-playing-scroll">
+      <div className="now-playing-scroll" ref={scroller}>
         <div className="section-heading">
           <h2>Queue</h2>
           <button className="icon-button" onClick={onClose} title="Close queue">
@@ -1777,15 +1824,13 @@ export function QueuePanel({
         {track && !state.narrating && (
           <section className="queue-section">
             <h3>Now playing</h3>
-            {row(track, true)}
+            {row(track, currentKey, true)}
           </section>
         )}
         <section className="queue-section">
           <h3>Next up</h3>
           {queue.length ? (
-            queue.map((item, index) => (
-              <Fragment key={`${item.uri}-${index}`}>{row(item)}</Fragment>
-            ))
+            queue.map((item, index) => row(item, queueKeys[index]))
           ) : (
             <p className="queue-empty">Nothing is queued yet.</p>
           )}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   reducer,
+  advanceDetails,
   emptyState,
   activeLines,
   progress,
@@ -650,5 +651,41 @@ describe("profile refresh", () => {
       profile: { id: "someone", display_name: "Else", images: [] },
     });
     expect(other).toBe(signedIn);
+  });
+});
+
+describe("queue across song changes", () => {
+  const song = (uri: string): Track => ({ ...track, uri, name: uri });
+  const [a, b, c, d] = ["a", "b", "c", "d"].map(song);
+  it("moves up on skip and back down on previous", () => {
+    const skipped = advanceDetails({ artists: [], queue: [b, c, d] }, a, b);
+    expect(skipped.queue.map((item) => item.uri)).toEqual(["c", "d"]);
+    const back = advanceDetails(skipped, b, a);
+    expect(back.queue.map((item) => item.uri)).toEqual(["b", "c", "d"]);
+    expect(back.played).toEqual([]);
+  });
+  it("skips over songs picked further down the queue", () => {
+    const picked = advanceDetails({ artists: [], queue: [b, c, d] }, a, c);
+    expect(picked.queue.map((item) => item.uri)).toEqual(["d"]);
+  });
+  it("waits for Spotify when the new song was not queued", () => {
+    const other = advanceDetails({ artists: [], queue: [b, c] }, a, d);
+    expect(other.queue).toEqual([]);
+    expect(other.played?.map((item) => item.uri)).toEqual(["a"]);
+  });
+  it("keeps the queue while the next one arrives", () => {
+    const state = reducer(
+      {
+        ...emptyState,
+        playback: { ...emptyState.playback, item: a },
+        details: { artists: [], queue: [b, c] },
+      },
+      {
+        type: "playback",
+        playback: { ...emptyState.playback, item: b },
+        observed_at: 0,
+      } as never,
+    );
+    expect(state.details.queue.map((item) => item.uri)).toEqual(["c"]);
   });
 });

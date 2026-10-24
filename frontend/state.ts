@@ -3,6 +3,7 @@ import type {
   BrowseInfo,
   Device,
   Snapshot,
+  PlayingDetails,
   Track,
   Playlist,
   LibraryFolder,
@@ -219,6 +220,29 @@ export type Action =
   /** A song was dragged within the open playlist. */
   | { type: "track_moved"; key: string; from: number; to: number }
   | { type: "dj_pending_expired" };
+/** The queue right after the song changes, before Spotify sends it: a
+ * skip moves up to the new song and Previous puts the old one back on top,
+ * so the panel never empties and its rows can slide into place. */
+export function advanceDetails(
+  details: PlayingDetails,
+  from: Track | null | undefined,
+  to: Track | null | undefined,
+): PlayingDetails {
+  const played = details.played ?? [];
+  if (!to) return { artists: [], queue: [], played: [] };
+  if (played.at(-1)?.uri === to.uri)
+    return {
+      artists: [],
+      queue: from ? [from, ...details.queue] : details.queue,
+      played: played.slice(0, -1),
+    };
+  const at = details.queue.findIndex((track) => track.uri === to.uri);
+  return {
+    artists: [],
+    queue: at >= 0 ? details.queue.slice(at + 1) : [],
+    played: from ? [...played, from].slice(-20) : played,
+  };
+}
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "narration":
@@ -557,7 +581,10 @@ export function reducer(state: AppState, action: Action): AppState {
         observed_at: Date.now(),
         lyrics: undefined,
         lyric_error: "",
-        details: { artists: [], queue: [] },
+        details:
+          state.playback.item?.uri === action.track.uri
+            ? state.details
+            : advanceDetails(state.details, state.playback.item, action.track),
       };
     case "playback": {
       if (
@@ -584,7 +611,13 @@ export function reducer(state: AppState, action: Action): AppState {
           ? state.canvases[action.playback.item?.uri ?? ""]
           : state.canvas_url,
         lyric_error: changed ? "" : state.lyric_error,
-        details: changed ? { artists: [], queue: [] } : state.details,
+        details: changed
+          ? advanceDetails(
+              state.details,
+              state.playback.item,
+              action.playback.item,
+            )
+          : state.details,
       };
     }
     case "native_position":
@@ -607,7 +640,10 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case "playing_details":
       return action.uri === state.playback.item?.uri
-        ? { ...state, details: action.details }
+        ? {
+            ...state,
+            details: { ...action.details, played: state.details.played },
+          }
         : state;
     case "lyrics":
       return action.uri === state.playback.item?.uri

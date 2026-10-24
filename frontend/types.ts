@@ -185,6 +185,8 @@ export interface Contributor {
 export interface PlayingDetails {
   artists: Artist[];
   queue: Track[];
+  /** Songs played before this one, newest last, to predict Previous. */
+  played?: Track[];
 }
 export interface BrowseInfo {
   playlist?: {

@@ -218,17 +218,14 @@ const keepOnScreen = (menu: HTMLElement | null, x: number, y: number) => {
   menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
 };
 /** Spotify-style total length: "1 hr 42 min" or "38 min 12 sec". */
-const longDuration = (ms: number, estimate = false) => {
+const longDuration = (ms: number) => {
   const minutes = Math.floor(ms / 60_000);
-  // Like Spotify, a total estimated from part of a big list reads "about".
-  if (estimate)
-    return minutes >= 60
-      ? `about ${Math.round(minutes / 60)} hr`
-      : `about ${minutes} min`;
   return minutes >= 60
     ? `${Math.floor(minutes / 60)} hr ${minutes % 60} min`
     : `${minutes} min ${Math.floor(ms / 1000) % 60} sec`;
 };
+/** Exact [song count, length] per list, kept so revisits show it at once. */
+const listDurations = new Map<string, [number, number]>();
 
 function App() {
   const [djRequest, setDJRequest] = useState(false);
@@ -1460,6 +1457,39 @@ function App() {
       live = false;
     };
   }, [state.route, state.profile]);
+  // The exact length comes from the whole list at once, so big playlists
+  // never show a figure that grows as their pages load.
+  const durationKey =
+    state.route === "liked" || state.route.startsWith("playlist:")
+      ? state.route
+      : "";
+  const [listDuration, setListDuration] = useState<{
+    key: string;
+    count: number;
+    ms: number;
+  }>();
+  useEffect(() => {
+    if (!durationKey || !state.profile) return;
+    let live = true;
+    const known = listDurations.get(durationKey);
+    if (known)
+      setListDuration({ key: durationKey, count: known[0], ms: known[1] });
+    rpc<[number, number]>("list_duration", { key: durationKey }).then(
+      (result) => {
+        listDurations.set(durationKey, result);
+        if (live)
+          setListDuration({
+            key: durationKey,
+            count: result[0],
+            ms: result[1],
+          });
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [durationKey, state.profile]);
   const [artistLiked, setArtistLiked] = useState<{
     id: string;
     count: number;
@@ -1503,22 +1533,22 @@ function App() {
     playlistInfo?.total_tracks ??
     (state.route === "liked" ? likedTotal : undefined) ??
     (state.tracks.length > 0 && !state.more ? state.tracks.length : undefined);
-  // Big lists load in pages: until every row is here, estimate the total
-  // from the average length of the loaded songs.
+  const exactList =
+    listDuration?.key === state.route ? listDuration : undefined;
+  // Without the exact figure, a fully loaded list can still be summed.
   const timed = state.tracks.filter((track) => track.duration_ms > 0);
-  const listEstimated = !!listTotal && timed.length < listTotal;
   const playlistDuration =
-    listTotal && timed.length > 0 && (playlistInfo || state.route === "liked")
-      ? (timed.reduce((sum, track) => sum + track.duration_ms, 0) /
-          timed.length) *
-        listTotal
-      : undefined;
+    exactList && exactList.ms > 0
+      ? exactList.ms
+      : listTotal &&
+          timed.length >= listTotal &&
+          (playlistInfo || state.route === "liked")
+        ? timed.reduce((sum, track) => sum + track.duration_ms, 0)
+        : undefined;
   const heroSongCount = entity?.album?.total_tracks ?? listTotal;
   const heroDuration = entity?.album_details?.complete_duration
     ? entity.album_details.duration_ms
     : playlistDuration;
-  const heroEstimated =
-    !entity?.album_details?.complete_duration && listEstimated;
   const title =
     entity?.title ||
     playlist?.name ||
@@ -2732,7 +2762,7 @@ function App() {
                               <span>
                                 {heroSongCount} songs
                                 {heroDuration != null &&
-                                  `, ${longDuration(heroDuration, heroEstimated)}`}
+                                  `, ${longDuration(heroDuration)}`}
                               </span>
                             )}
                           </p>

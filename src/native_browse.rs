@@ -119,16 +119,21 @@ pub async fn liked_count(session: &Session) -> Result<usize> {
 }
 
 async fn count_rows(session: &Session, uri: &str) -> Result<usize> {
+    Ok(context_uris(session, uri).await?.len())
+}
+
+/// Every item URI in a browsing context, following all of its pages.
+async fn context_uris(session: &Session, uri: &str) -> Result<Vec<String>> {
     let context =
         tokio::time::timeout(Duration::from_secs(10), session.spclient().get_context(uri))
             .await
             .context("Spotify library request timed out")??;
     let mut pages = listing_pages(context);
     let mut visited = HashSet::new();
-    let mut count = 0;
+    let mut uris = Vec::new();
     for _ in 0..512 {
         let Some(page) = pages.pop_front() else {
-            return Ok(count);
+            return Ok(uris);
         };
         let rows = page["tracks"].as_array();
         // A page may arrive as only a URL; fetch it in place.
@@ -137,7 +142,11 @@ async fn count_rows(session: &Session, uri: &str) -> Result<usize> {
         } else {
             page["next_page_url"].as_str()
         };
-        count += rows.map_or(0, Vec::len);
+        uris.extend(
+            rows.into_iter()
+                .flatten()
+                .map(|row| row["uri"].as_str().unwrap_or_default().to_owned()),
+        );
         let Some(url) = url.filter(|url| !url.is_empty() && visited.insert(url.to_string())) else {
             continue;
         };
@@ -149,7 +158,64 @@ async fn count_rows(session: &Session, uri: &str) -> Result<usize> {
         ensure!(bytes.len() <= 4_000_000, "Spotify page is too large");
         pages.push_back(serde_json::from_slice(&bytes)?);
     }
-    Ok(count)
+    Ok(uris)
+}
+
+/// Exact song count and total length of a playlist or Liked Songs, so the
+/// header shows Spotify's figure at once instead of summing pages as they load.
+pub async fn list_duration(session: &Session, key: &str) -> Result<(usize, u64)> {
+    let uris = if key == "liked" {
+        context_uris(
+            session,
+            &format!("spotify:user:{}:collection", session.username()),
+        )
+        .await?
+    } else {
+        let id = key.strip_prefix("playlist:").context("Invalid list")?;
+        valid_playlist_id(id)?;
+        let uri = SpotifyUri::from_uri(&format!("spotify:playlist:{id}"))?;
+        let playlist = tokio::time::timeout(Duration::from_secs(8), Playlist::get(session, &uri))
+            .await
+            .context("Playlist request timed out")??;
+        playlist.tracks().map(|uri| uri.to_uri()).collect()
+    };
+    ensure!(uris.len() <= 100_000, "Playlist exceeds browsing limit");
+    let identity = session.username();
+    let mut total = 0;
+    // A song can repeat in a playlist; each copy counts toward the length.
+    let mut missing: HashMap<String, u64> = HashMap::new();
+    if let Ok(cache) = TRACKS.get_or_init(Default::default).lock() {
+        for uri in uris.iter().filter(|uri| uri.starts_with("spotify:track:")) {
+            match cache.get(&(identity.clone(), uri.clone())) {
+                Some(track) => total += track.duration_ms,
+                None => *missing.entry(uri.clone()).or_default() += 1,
+            }
+        }
+    }
+    let copies = missing;
+    let missing: Vec<String> = copies.keys().cloned().collect();
+    // Uncached songs load in parallel batches; 800 songs take two requests.
+    let mut batches = tokio::task::JoinSet::new();
+    for chunk in missing.chunks(500) {
+        let session = session.clone();
+        let chunk = chunk.to_vec();
+        batches.spawn(async move {
+            tokio::time::timeout(Duration::from_secs(10), tracks_batched(&session, &chunk)).await
+        });
+    }
+    let remember = missing.len() <= 2_000;
+    while let Some(batch) = batches.join_next().await {
+        let tracks = batch
+            .context("Song lookup failed")?
+            .context("Song lookup timed out")??;
+        for (uri, track) in tracks {
+            total += track.duration_ms * copies.get(&uri).copied().unwrap_or(1);
+            if remember {
+                remember_track(&identity, &uri, &track);
+            }
+        }
+    }
+    Ok((uris.len(), total))
 }
 
 /// Every saved playlist in Spotify library order, read from the account's

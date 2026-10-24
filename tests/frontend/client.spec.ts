@@ -611,6 +611,11 @@ async function startClient(
             return host.__clientTest.artistLiked ?? 0;
           if (command === "liked_songs_count")
             return host.__clientTest.likedTotal ?? 0;
+          if (command === "list_duration") {
+            if (!host.__clientTest.listDuration)
+              throw new Error("Length unavailable");
+            return host.__clientTest.listDuration;
+          }
           if (command === "saved_lyrics")
             return host.__clientTest.savedLyrics ?? [];
           if (command === "saved_lyrics_file")
@@ -1746,8 +1751,11 @@ test("Home refreshes fresh-looking cached shelves on return and on song changes"
   await expect.poll(homeCalls).toBe(before + 3);
 });
 
-test("big lists show an estimated total length", async ({ page }) => {
+test("big lists show their exact total length", async ({ page }) => {
   await startClient(page, "home");
+  await page.evaluate(() => {
+    (window as any).__clientTest.listDuration = [5000, 1_000_000_000];
+  });
   await page
     .getByRole("button", { name: "Open Daily Mix 1", exact: true })
     .click();
@@ -1770,7 +1778,7 @@ test("big lists show an estimated total length", async ({ page }) => {
     });
   });
   await expect(page.locator(".playlist-meta")).toContainText(
-    /5000 songs, about \d+ hr/,
+    "5000 songs, 277 hr 46 min",
   );
 });
 

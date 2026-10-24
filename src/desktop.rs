@@ -2271,6 +2271,26 @@ async fn liked_songs_count(state: State<'_, Desktop>) -> std::result::Result<usi
         .map_err(|_| "Library worker unavailable".to_owned())?
         .map_err(error)
 }
+/// Exact song count and total length of a playlist or Liked Songs.
+#[tauri::command]
+async fn list_duration(
+    key: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(usize, u64), String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || controls.list_duration(&key))
+        .await
+        .map_err(|_| "Library worker unavailable".to_owned())?
+        .map_err(error)
+}
 /// Songs the user liked by an artist, for the artist page's "You Liked".
 #[tauri::command]
 async fn artist_liked_count(
@@ -3138,6 +3158,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             saved_lyrics,
             saved_lyrics_file,
             artist_liked_count,
+            list_duration,
             liked_songs_count,
             delete_saved_lyrics,
             add_tracks,

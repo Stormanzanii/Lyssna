@@ -405,6 +405,9 @@ impl NativeControls {
     pub fn liked_count(&self) -> Result<usize> {
         self.run(crate::native_browse::liked_count)
     }
+    pub fn list_duration(&self, key: &str) -> Result<(usize, u64)> {
+        self.run(async |session| crate::native_browse::list_duration(session, key).await)
+    }
     pub fn library(
         &self,
     ) -> Result<(

@@ -9030,7 +9030,11 @@ test("Settings is solid without Liquid Glass and glass with it", async ({
   const panel = page.locator(".lyrics-settings").first();
   await expect(panel).toHaveCSS("background-color", "rgb(25, 25, 25)");
   await expect(panel).toHaveCSS("backdrop-filter", "none");
-
+  // A clear dim sets Settings apart from the page behind.
+  await expect(page.locator(".lyrics-settings-backdrop")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0.6)",
+  );
   await page.evaluate(
     (settings) =>
       (window as any).__clientTest.emit({

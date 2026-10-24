@@ -226,12 +226,12 @@
    profile menu or the lyrics toolbar gear. Based on Spicy Lyrics' panel:
    one header row with search, a segmented tab control and rows grouped
    into cards. */
-/* Always glass: it opens over the lyrics, which should stay visible
-   through a light dim instead of the usual dark blurred backdrop. */
+/* It opens over the lyrics, which stay visible through an unblurred dim
+   dark enough to set the window apart. */
 .lyrics-settings-backdrop {
   inset: 0;
   z-index: 80;
-  background: #0000002e;
+  background: #00000099;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }

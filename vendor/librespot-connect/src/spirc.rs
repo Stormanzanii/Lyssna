@@ -1092,6 +1092,7 @@ impl SpircTask {
         // Fire set queue event if context was successfully loaded
         if update_state {
             self.emit_set_queue_event();
+            self.refresh_preload();
         }
 
         self.context_resolver.remove_used_and_invalid();
@@ -1218,6 +1219,7 @@ impl SpircTask {
             SpircCommand::ClearQueue => {
                 self.connect_state.clear_queue()?;
                 self.emit_set_queue_event();
+                self.refresh_preload();
             }
         };
 
@@ -1613,10 +1615,12 @@ impl SpircTask {
             AddToQueue(add_to_queue) => {
                 self.connect_state.add_to_queue(add_to_queue.track, true);
                 self.emit_set_queue_event();
+                self.refresh_preload();
             }
             SetQueue(set_queue) => {
                 self.connect_state.handle_set_queue(set_queue);
                 self.emit_set_queue_event();
+                self.refresh_preload();
             }
             SetOptions(set_options) => {
                 if let Some(repeat_context) = set_options.repeating_context {
@@ -2232,6 +2236,7 @@ impl SpircTask {
         self.player
             .emit_shuffle_changed_event(self.connect_state.shuffling_context());
         self.emit_set_queue_event();
+        self.refresh_preload();
         Ok(())
     }
 
@@ -2275,6 +2280,19 @@ impl SpircTask {
             self.connect_state.add_to_queue(track, true);
         }
         self.emit_set_queue_event();
+        self.refresh_preload();
+    }
+
+    /// The next track was preloaded when this one started. A reshuffle, a
+    /// resolved context or queue edit can pick another, so skipping would
+    /// load it cold; preload the new pick instead.
+    fn refresh_preload(&mut self) {
+        if matches!(
+            self.play_status,
+            SpircPlayStatus::Playing { .. } | SpircPlayStatus::Paused { .. }
+        ) {
+            self.handle_preload_next_track();
+        }
     }
 
     fn handle_preload_next_track(&mut self) {

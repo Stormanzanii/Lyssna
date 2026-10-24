@@ -1155,7 +1155,14 @@ function SongLyricsPage({
             setSeeking(songTime);
             wakeTools();
           }}
-          onPointerUp={commitSeek}
+          // Releasing the pointer lets go of focus, which commits once. A
+          // focused slider would otherwise show its keyboard ring as soon as
+          // Space toggles playback.
+          onPointerUp={(event) => {
+            if (document.activeElement === event.currentTarget)
+              event.currentTarget.blur();
+            else commitSeek();
+          }}
           onKeyUp={commitSeek}
           onPointerCancel={() => setSeeking(null)}
           onBlur={commitSeek}

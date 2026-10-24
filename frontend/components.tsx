@@ -611,6 +611,7 @@ export function LyricsDisplay({
     settings.reduce_motion,
     settings.lyric_size,
     settings.romanized,
+    settings.lyrics_translations,
     footerMode,
     gap?.start,
   ]);
@@ -695,7 +696,10 @@ export function LyricsDisplay({
                 <span className="lyric-main">
                   <LyricWords line={line} />
                 </span>
-                {line.translation && (
+                {/* Lyrics can carry translations, such as Chinese under
+                    English; like Spicy Lyrics they stay hidden unless
+                    asked for. */}
+                {settings.lyrics_translations && line.translation && (
                   <span className="lyric-translation">{line.translation}</span>
                 )}
               </button>

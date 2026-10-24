@@ -112,6 +112,7 @@ export interface Settings {
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
   space_gravity?: boolean;
+  lyrics_translations?: boolean;
   lyrics_animator?: AnimatorSettings;
   experimental_word_sync?: boolean;
   lyrics_hide_artwork?: boolean;

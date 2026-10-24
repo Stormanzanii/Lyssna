@@ -680,6 +680,12 @@ export function SettingsWindow({
           "romanization transliteration",
         ),
         flag(
+          "lyrics_translations",
+          "Show translations",
+          "Show translations that come with the lyrics under each line.",
+          "translation translate language",
+        ),
+        flag(
           "experimental_word_sync",
           "Experimental word sync",
           "Estimate word timing for line-synced or plain lyrics. Timing may be off.",

@@ -137,6 +137,8 @@ pub struct Settings {
     /// Space Gravity lyrics; replaced the earlier floating lyrics option.
     #[serde(alias = "floating_lyrics")]
     pub space_gravity: bool,
+    /// Translations bundled with lyrics; hidden unless asked for.
+    pub lyrics_translations: bool,
     pub experimental_word_sync: bool,
     /// Lyrics page layout toggles from the lyrics toolbar.
     pub lyrics_hide_artwork: bool,
@@ -198,6 +200,7 @@ impl Default for Settings {
             liquid_glass: false,
             canvas_lyrics: true,
             space_gravity: false,
+            lyrics_translations: false,
             experimental_word_sync: false,
             lyrics_hide_artwork: false,
             lyrics_artwork_right: false,

@@ -8697,3 +8697,38 @@ test("lyrics clip only at the page box, not at the text column", async ({
   expect(room.left).toBeGreaterThanOrEqual(48);
   expect(room.right).toBeGreaterThanOrEqual(48);
 });
+
+test("bundled translations stay hidden unless turned on", async ({ page }) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Test",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "Look to the rising sun",
+            start_ms: 0,
+            end_ms: 2000,
+            translation: "迎着初升的朝阳",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  const line = page.locator(".lyrics-page .lyric-line").first();
+  await expect(line).toContainText("Look to the rising sun");
+  await expect(page.locator(".lyric-translation")).toHaveCount(0);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Show translations" }).check();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".lyric-translation")).toHaveText("迎着初升的朝阳");
+});

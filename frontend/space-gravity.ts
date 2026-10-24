@@ -531,6 +531,9 @@ export function spawn(
   reduced = false,
   rand = Math.random,
 ) {
+  // Beside artwork, words start in the lyrics column; they may drift
+  // around the artwork later but never appear there.
+  if (field.cover && field.layout) field = { ...field, area: field.layout };
   const startX = body.naturalX + (rand() * 2 - 1) * body.width * 1.35,
     startY = body.naturalY + (rand() * 2 - 1) * body.height * 1.35;
   const phase = rand() * Math.PI * 2,

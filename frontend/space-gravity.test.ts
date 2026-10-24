@@ -166,6 +166,36 @@ describe("Space Gravity spawning", () => {
     expect(spawnOverlap(second, first)).toBe(0);
   });
 
+  it("spawns beside artwork only in the lyrics column", () => {
+    const column = { left: 500, top: 0, right: 1000, bottom: 600 };
+    const beside = {
+      ...field,
+      area: { left: 0, top: 0, right: 1000, bottom: 600 },
+      layout: column,
+      cover: { left: 100, top: 150, right: 400, bottom: 450 },
+    };
+    const crowd = Array.from({ length: 12 }, (_, index) => {
+      const word = body(index + 10);
+      word.x = 520 + (index % 4) * 120;
+      word.y = 100 + Math.floor(index / 4) * 200;
+      return word;
+    });
+    for (let seed = 0; seed < 20; seed += 1) {
+      const word = body(seed + 40);
+      word.naturalX = 520;
+      word.naturalY = 300;
+      let state = seed / 20;
+      spawn(
+        word,
+        crowd,
+        beside,
+        false,
+        () => (state = (state * 9301 + 0.49297) % 1),
+      );
+      expect(word.x - word.radius).toBeGreaterThanOrEqual(column.left - 0.5);
+    }
+  });
+
   it("centres lines in still rows under reduced motion", () => {
     const words = [body(1), body(2)];
     staticLayout([words], field);

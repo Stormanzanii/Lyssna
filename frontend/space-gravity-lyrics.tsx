@@ -269,6 +269,8 @@ function measureField(stage: HTMLElement): Field {
 
 type GravityBody = Body & { spawned: boolean; entryFrame?: number };
 
+let kept: { signature: string; bodies: Map<string, GravityBody> } | undefined;
+
 /** Space Gravity: sung words float in zero gravity around the artwork. */
 export function SpaceGravityLyrics({
   lyrics,
@@ -285,7 +287,14 @@ export function SpaceGravityLyrics({
   onSeek: (position: number) => void;
   credits: ReactNode;
 }) {
-  const prepared = useMemo(() => prepareGravity(lyrics), [lyrics]);
+  // The same lyrics can arrive again (cached, then fetched) when a song
+  // comes back; only new words start the field over.
+  const signature = useMemo(() => JSON.stringify(lyrics.lines), [lyrics]);
+  const prepared = useMemo(
+    () => prepareGravity(lyrics),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signature],
+  );
   const gap = vocalGap(lyrics.lines, time);
   const waitKey = gap ? `wait:${gap.start}:${gap.end}` : "";
   const stage = useRef<HTMLDivElement>(null);
@@ -323,14 +332,30 @@ export function SpaceGravityLyrics({
   ];
 
   const elements = useRef(new Map<string, HTMLElement>());
-  const bodies = useRef(new Map<string, GravityBody>());
+  // Words keep their places when the view remounts for the same lyrics,
+  // as when a song briefly loses and regains its lyrics.
+  const [restored] = useState(() => {
+    if (kept?.signature !== signature) return new Map<string, GravityBody>();
+    for (const body of kept.bodies.values()) body.entryFrame = 0;
+    return kept.bodies;
+  });
+  const bodies = useRef(restored);
+  const fieldOf = useRef(signature);
   const live = useRef({ visible, prepared, reduceMotion, waitKey });
   live.current = { visible, prepared, reduceMotion, waitKey };
   useEffect(() => {
     // A new song starts every word fresh.
+    if (fieldOf.current === signature) return;
+    fieldOf.current = signature;
     bodies.current.clear();
     refs.current.clear();
-  }, [prepared]);
+  }, [signature]);
+  useEffect(
+    () => () => {
+      kept = { signature: fieldOf.current, bodies: bodies.current };
+    },
+    [],
+  );
   // One stable ref callback per word. An inline callback would be detached
   // and reattached on every render (every frame while playing), and its
   // cleanup would respawn the word each time.

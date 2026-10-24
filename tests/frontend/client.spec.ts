@@ -8835,3 +8835,38 @@ test("Space Gravity without Canvas floats around the artwork, not over it", asyn
   expect(result.overCover).toBe(0);
   expect(result.overTitle).toBe(0);
 });
+
+test("Space Gravity keeps words in place when the same lyrics load again", async ({
+  page,
+}) => {
+  await gravityWithoutCanvas(page);
+  await page.waitForTimeout(600);
+  const places = () =>
+    page.locator(".gravity-word[data-spawned]").evaluateAll((words) =>
+      Object.fromEntries(
+        words.map((word) => {
+          const rect = word.getBoundingClientRect();
+          return [word.textContent, [rect.left, rect.top]];
+        }),
+      ),
+    );
+  const before = await places();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await page.waitForTimeout(120);
+  const after = await places();
+  const moved = Object.keys(before)
+    .filter((key) => after[key])
+    .map((key) =>
+      Math.hypot(
+        after[key][0] - before[key][0],
+        after[key][1] - before[key][1],
+      ),
+    );
+  expect(moved.length).toBeGreaterThan(0);
+  // Drift over a few frames, not a respawn across the page.
+  expect(Math.max(...moved)).toBeLessThan(40);
+});

@@ -3403,6 +3403,25 @@ small {
   z-index: 20;
   min-width: 0;
 }
+/* Spotify's "Playing on" bar under the player, for another device. */
+.playing-elsewhere {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  height: 24px;
+  margin-top: -4px;
+  padding: 0 12px;
+  border-radius: 4px;
+  background: #1ed760;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+}
+.playing-elsewhere:hover {
+  background: #3be477;
+}
 .player-song {
   display: flex;
   align-items: center;

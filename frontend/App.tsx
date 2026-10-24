@@ -312,7 +312,9 @@ function App() {
     // button toggles it itself, so it is left out here.
     const outside = (event: PointerEvent) => {
       const target = event.target as Element | null;
-      if (!target?.closest('.device-menu, [title="Devices"]'))
+      if (
+        !target?.closest('.device-menu, [title="Devices"], .playing-elsewhere')
+      )
         setDeviceMenu(false);
     };
     document.addEventListener("pointerdown", outside);
@@ -4621,6 +4623,10 @@ function PlayerBar({
   );
   useEffect(() => () => volumeControl.dispose(), [volumeControl]);
   const saved = track && state.saved[track.uri];
+  const elsewhere =
+    !!state.playback.device.name &&
+    state.playback.device.is_active &&
+    state.playback.device.name !== state.local_device_name;
   useEffect(() => {
     volumeControl.observe(
       state.playback.device.volume_percent,
@@ -4640,7 +4646,10 @@ function PlayerBar({
   };
   useEffect(() => setSeeking(null), [track?.uri]);
   return (
-    <footer className="player-bar" inert={!state.profile}>
+    <footer
+      className={`player-bar ${elsewhere ? "has-elsewhere" : ""}`}
+      inert={!state.profile}
+    >
       <div className="player-song">
         {state.narrating ? (
           <DJPresentation playing={state.playback.is_playing} />
@@ -4848,6 +4857,18 @@ function PlayerBar({
           <Maximize2 size={19} />
         </button>
       </div>
+      {/* Like Spotify, a green bar names the speaker playing when it is
+          not this computer, and opens the device list. */}
+      {elsewhere && (
+        <button
+          className="playing-elsewhere"
+          onClick={onDevices}
+          title="Connect to a device"
+        >
+          <Speaker size={14} />
+          Playing on {state.playback.device.name}
+        </button>
+      )}
     </footer>
   );
 }

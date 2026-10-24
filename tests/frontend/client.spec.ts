@@ -8113,6 +8113,41 @@ test("the playing playlist turns green with a speaker and its cover pauses", asy
   await expect(page.locator(".library-liked")).not.toHaveClass(/playing/);
 });
 
+test("a green bar names the other device playing and opens the device list", async ({
+  page,
+}) => {
+  await startClient(page);
+  const bar = page.locator(".playing-elsewhere");
+  await expect(bar).toHaveCount(0);
+  const playOn = (name: string) =>
+    page.evaluate(
+      ({ base, track, name }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...base,
+            item: track,
+            is_playing: true,
+            device: { id: "remote", name, is_active: true },
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { base: emptyState.playback, track, name },
+    );
+  await playOn("ARASHII-PC");
+  await expect(bar).toHaveText("Playing on ARASHII-PC");
+  await expect(bar).toHaveCSS("background-color", "rgb(30, 215, 96)");
+  await page.locator("footer.player-bar").screenshot({
+    path: "target/diagnostics/playing-elsewhere.png",
+  });
+  await bar.click();
+  await expect(page.locator(".device-menu")).toBeVisible();
+  // This computer playing shows no bar.
+  await playOn("SpotiFlex (test)");
+  await expect(bar).toHaveCount(0);
+});
+
 test("volume bar turns Spotify green with a knob on hover", async ({
   page,
 }) => {

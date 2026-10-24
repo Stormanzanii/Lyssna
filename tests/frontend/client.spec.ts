@@ -3226,6 +3226,18 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   await expect(pinned).toContainText("Community lyrics");
   await expect(pinned).toContainText("@TestMaker");
   await expect(pinned).not.toContainText("Written by");
+  // Readable and clear of the bottom edge, like Spicy Lyrics' footer.
+  const footer = await pinned.evaluate((node) => {
+    const source = node.querySelector(".lyric-source")!;
+    const text = source.getBoundingClientRect();
+    const box = node.closest(".lyrics-display")!.getBoundingClientRect();
+    return {
+      size: parseFloat(getComputedStyle(source).fontSize),
+      gap: box.bottom - text.bottom,
+    };
+  });
+  expect(footer.size).toBeGreaterThanOrEqual(13);
+  expect(footer.gap).toBeGreaterThanOrEqual(30);
   await expect(flow.locator(".lyric-end-credits")).toContainText(
     "Written by: Writer One, Writer Two",
   );

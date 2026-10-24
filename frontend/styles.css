@@ -2646,10 +2646,24 @@ small {
 .has-pinned-footer .lyric-scroll {
   padding-bottom: 24px;
 }
+/* Like Spicy Lyrics, the credits grow with the lyrics, so they stay
+   readable on large screens, and sit well clear of the bottom edge. */
 .lyric-pinned-footer {
   max-height: min(240px, 35vh);
   overflow-y: auto;
-  padding: 12px calc(var(--lyric-size, 58px) * 0.35) 24px;
+  padding: 12px calc(var(--lyric-size, 58px) * 0.35)
+    clamp(32px, 4.5vh, 64px);
+  font-size: clamp(
+    15px,
+    calc(min(var(--lyric-size, 58px), 4.6cqw) * 0.3),
+    24px
+  );
+}
+.lyric-pinned-footer p {
+  margin-bottom: 0.4em;
+}
+.lyric-pinned-footer .lyric-source {
+  font-size: 0.88em;
 }
 .has-pinned-footer .follow-lyrics {
   grid-row: 1 / 2;

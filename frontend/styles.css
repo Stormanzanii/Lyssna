@@ -5380,7 +5380,9 @@ input.volume-range:active::-webkit-slider-thumb {
 .community-credits .community-name {
   text-decoration: underline;
   text-underline-offset: 0.15em;
-  opacity: 0.75;
+  /* A shade brighter than its label, like the songwriter names. */
+  color: #fff;
+  opacity: 0.8;
   transition: opacity 0.2s;
 }
 .community-credits

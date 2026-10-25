@@ -12,6 +12,8 @@ Animator presets (`frontend/animator-tuning.ts`, `frontend/animator-settings.tsx
 
 Lyric sources (`src/lyric_sources.rs`) reimplement the Spicy Lyrics fork's source manager (`src/utils/Lyrics/ExternalSources.ts` and `Sources/*.ts`, AGPL-3.0): its six sources and default order, quality-first selection, Musixmatch's macro, richsync and subtitle parsing with the fork's public desktop token, Spotify color-lyrics parsing, LRCLIB, and the Netease proxy with credit-line filtering. No fork source files are copied.
 
+Community-credit usernames (`src/provider.rs`) reimplement behaviour read from [iPixelGalaxy/EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated) (GPL-3.0; `LyricsContributorIdentity.swift`, `KaraokeProfileResolver.swift`): the public `ttml.getTTMLProfile` lookup on spicylyrics.org with its devalue-indexed input and output, and the rule that keeps a display name's casing only when it spells the username. Unlike EeveeSpotify, a failed lookup keeps the name from the lyrics metadata. The code is rewritten in Rust; no EeveeSpotify source is copied.
+
 Playlist and interface behavior is informed by the feature descriptions of [iPixelGalaxy/spotify-plus](https://github.com/iPixelGalaxy/spotify-plus). Its repository does not declare a license in the metadata reviewed during setup. SpotiFlex does not copy or bundle its source or assets.
 
 The Load TTML window (`frontend/load-ttml.tsx`) and its Persistent, Temporary and Session load modes, Reset TTML and saved-lyrics list (`src/lyrics.rs`) reimplement behaviour and layout read from the local pixels-spicy-lyrics fork (`UploadTTMLModal.tsx`, `LyricsManager`, AGPL-3.0). No upstream source or assets are copied.

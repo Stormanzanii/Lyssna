@@ -1952,7 +1952,18 @@ impl PlayerInternal {
         normalisation_factor: f64,
     ) {
         match packet {
-            Some((_, mut packet)) => {
+            Some((position, mut packet)) => {
+                // A crossfading sink holds the end of a song for the next
+                // one, so only offer it when that song is ready to follow.
+                let remaining_ms = match self.state {
+                    PlayerState::Playing { duration_ms, .. }
+                        if matches!(self.preload, PlayerPreload::Ready { .. }) =>
+                    {
+                        Some(duration_ms.saturating_sub(position.position_ms))
+                    }
+                    _ => None,
+                };
+                self.sink.crossfade_hint(remaining_ms);
                 if !packet.is_empty() {
                     if let AudioPacket::Samples(ref mut data)
                     | AudioPacket::Narration(ref mut data) = packet

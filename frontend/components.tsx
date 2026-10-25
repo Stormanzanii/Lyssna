@@ -41,6 +41,7 @@ import {
 import type {
   Album,
   Artist,
+  Contributor,
   Track,
   PlayerRequest,
   Lyrics,
@@ -330,18 +331,13 @@ export const ArtistLinks = memo(function ArtistLinks({
   );
 });
 /** Songwriter credit as Spicy Lyrics shows it: a dim label, then the
- * names a little brighter. */
+ * names a little brighter. Without names, Spicy Lyrics omits the line. */
 function WriterCredits({ names }: { names: string[] }) {
+  if (!names.length) return null;
   return (
     <p className="writer-credits">
-      {names.length ? (
-        <>
-          <span className="credit-label">Written by</span>{" "}
-          <span className="credit-names">{names.join(", ")}</span>
-        </>
-      ) : (
-        "Songwriter credits unavailable"
-      )}
+      <span className="credit-label">Written by</span>{" "}
+      <span className="credit-names">{names.join(", ")}</span>
     </p>
   );
 }
@@ -646,7 +642,10 @@ export function LyricsDisplay({
         <Music2 />
         <h2>Instrumental</h2>
         <p>Enjoy the music</p>
-        <LyricCredits lyrics={lyrics} />
+        <LyricCredits
+          lyrics={lyrics}
+          discord={settings.lyrics_discord_usernames !== false}
+        />
       </div>
     );
   return (
@@ -731,7 +730,13 @@ export function LyricsDisplay({
         {footerMode !== "full" && (
           <div className="lyric-end-credits">
             {writerCredits}
-            {footerMode === "off" && <LyricCredits lyrics={lyrics} expanded />}
+            {footerMode === "off" && (
+              <LyricCredits
+                lyrics={lyrics}
+                expanded
+                discord={settings.lyrics_discord_usernames !== false}
+              />
+            )}
           </div>
         )}
       </div>
@@ -742,7 +747,11 @@ export function LyricsDisplay({
           aria-label="Pinned lyrics footer"
         >
           {footerMode === "full" && writerCredits}
-          <LyricCredits lyrics={lyrics} expanded />
+          <LyricCredits
+            lyrics={lyrics}
+            expanded
+            discord={settings.lyrics_discord_usernames !== false}
+          />
         </div>
       )}
       {!following && lyrics.synced && (
@@ -768,10 +777,15 @@ export function LyricsDisplay({
 const LyricCredits = memo(function LyricCredits({
   lyrics,
   expanded = false,
+  discord = true,
 }: {
   lyrics: Lyrics;
   expanded?: boolean;
+  /** Name people by Discord username when their profile gave one. */
+  discord?: boolean;
 }) {
+  const nameOf = (person: Contributor) =>
+    (discord && person.discord) || person.username;
   const source =
     (
       {
@@ -822,7 +836,7 @@ const LyricCredits = memo(function LyricCredits({
               {person.avatar?.startsWith("https://") && (
                 <img src={person.avatar} alt="" />
               )}
-              <span className="community-name">@{person.username}</span>
+              <span className="community-name">@{nameOf(person)}</span>
             </>
           );
           return (
@@ -892,10 +906,10 @@ const LyricCredits = memo(function LyricCredits({
                   }
                 >
                   {expanded ? "@" : ""}
-                  {person.username}
+                  {nameOf(person)}
                 </button>
               ) : (
-                person.username
+                nameOf(person)
               )}
               {expanded && person.avatar?.startsWith("https://") && (
                 <img className="credit-avatar" src={person.avatar} alt="" />
@@ -1376,7 +1390,13 @@ function SongLyricsPage({
                           : (track.songwriters ?? [])
                       }
                     />
-                    <LyricCredits lyrics={lyrics} expanded />
+                    <LyricCredits
+                      lyrics={lyrics}
+                      expanded
+                      discord={
+                        state.settings.lyrics_discord_usernames !== false
+                      }
+                    />
                   </>
                 }
               />

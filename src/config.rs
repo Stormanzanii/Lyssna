@@ -167,6 +167,13 @@ pub struct Settings {
     pub volume_percent: u8,
     pub audio_output: Option<String>,
     pub auto_download_updates: bool,
+    /// The close button hides SpotiFlex to the notification area and music
+    /// keeps playing; Quit in the tray menu exits.
+    pub close_to_tray: bool,
+    /// Seconds songs overlap when one runs into the next; 0 turns it off.
+    pub crossfade_seconds: u8,
+    /// Community lyrics credit people by Discord username, not display name.
+    pub lyrics_discord_usernames: bool,
     pub folders: Vec<PlaylistFolder>,
     /// Whether the Now playing panel is open, kept across restarts.
     pub now_playing_open: bool,
@@ -230,6 +237,9 @@ impl Default for Settings {
             volume_percent: 100,
             audio_output: None,
             auto_download_updates: true,
+            close_to_tray: true,
+            crossfade_seconds: 0,
+            lyrics_discord_usernames: true,
             folders: Vec::new(),
             now_playing_open: true,
             song_sorts: Default::default(),

@@ -848,6 +848,7 @@ async function startClient(
                 source: "Imported TTML",
                 synced: true,
                 instrumental: false,
+                songwriters: ["Test Writer"],
                 lines: Array.from({ length: 80 }, (_, index) => ({
                   text: `Test lyric line ${index + 1}`,
                   start_ms: index * 2000,

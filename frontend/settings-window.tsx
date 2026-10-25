@@ -348,6 +348,30 @@ export function SettingsWindow({
           </select>
         </SettingRow>,
         <SettingRow
+          key="crossfade"
+          label={`Crossfade songs: ${settings.crossfade_seconds ? `${settings.crossfade_seconds} s` : "Off"}`}
+          help="Fade each song into the next when one runs into the other. Songs you pick start straight away."
+          keywords="crossfade fade transition gapless overlap blend"
+        >
+          <span className="settings-range">
+            <input
+              type="range"
+              aria-label="Crossfade seconds"
+              min="0"
+              max="12"
+              value={settings.crossfade_seconds ?? 0}
+              style={
+                {
+                  "--fill": `${((settings.crossfade_seconds ?? 0) / 12) * 100}%`,
+                } as CSSProperties
+              }
+              onChange={(event) =>
+                onSettings({ crossfade_seconds: Number(event.target.value) })
+              }
+            />
+          </span>
+        </SettingRow>,
+        <SettingRow
           key="refresh"
           label="New headphones or speakers"
           help="Find outputs you connected while SpotiFlex was open."
@@ -403,6 +427,18 @@ export function SettingsWindow({
     ],
     [
       "General",
+      "Window",
+      [
+        flag(
+          "close_to_tray",
+          "Close button keeps music playing",
+          "Closing the window hides SpotiFlex in the notification area. Choose Quit from its icon, or Exit from the menu, to close it.",
+          "close minimize minimise tray background notification area system tray quit",
+        ),
+      ],
+    ],
+    [
+      "General",
       "Storage",
       [
         <SettingRow
@@ -427,6 +463,23 @@ export function SettingsWindow({
             }}
           >
             Clear cache
+          </button>
+        </SettingRow>,
+        <SettingRow
+          key="lyrics-cache"
+          label="Lyrics cache"
+          help="Saved lyrics are reused for three days. Clear them to fetch newly uploaded lyrics for every song. Imported lyrics are kept."
+          keywords="lyrics cache clear refresh upload spicy stale"
+        >
+          <button
+            className="pill outline"
+            onClick={() =>
+              void onCall("clear_lyrics_cache").then(() =>
+                onNotice("Cleared saved lyrics."),
+              )
+            }
+          >
+            Clear lyrics
           </button>
         </SettingRow>,
       ],
@@ -662,6 +715,12 @@ export function SettingsWindow({
       "Lyrics",
       "Display",
       [
+        flag(
+          "lyrics_discord_usernames",
+          "Discord usernames in credits",
+          "Credit community lyrics makers by their Discord username, looked up on spicylyrics.org, instead of their display name.",
+          "discord username display name community credits maker uploader",
+        ),
         <SettingRow
           key="offset"
           label="Timing offset"

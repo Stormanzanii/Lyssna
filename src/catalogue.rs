@@ -102,6 +102,44 @@ pub async fn page(session: &Session, kind: &str, id: &str, offset: usize) -> Res
     entity.as_object().context("Invalid catalogue data")?;
     Ok(entity)
 }
+/// Writers from Spotify's track credits, for songs whose metadata names no
+/// composer.
+pub async fn songwriters(session: &Session, id: &str) -> Result<Vec<String>> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid track ID"
+    );
+    // Persisted query identifier from Spotify's desktop credits dialog.
+    let data = query(
+        session,
+        "queryTrackCreditsGroupedModal",
+        "f135fb9be58a72d041ab5d214d817021a272405d883860468e2627afb01a3ca9",
+        json!({"trackUri":format!("spotify:track:{id}"),"contributorsLimit":100,"contributorsOffset":0}),
+    )
+    .await?;
+    Ok(credited_writers(&data))
+}
+fn credited_writers(data: &Value) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for item in data["data"]["trackUnion"]["creditsTrait"]["contributors"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let role = item["role"].as_str().unwrap_or_default().to_lowercase();
+        let writer = ["writer", "composer", "lyricist"]
+            .iter()
+            .any(|kind| role.contains(kind));
+        if let Some(name) = item["name"].as_str().map(str::trim)
+            && writer
+            && !name.is_empty()
+            && !names.iter().any(|known| known == name)
+        {
+            names.push(name.to_owned());
+        }
+    }
+    names
+}
 pub(crate) async fn query(
     session: &Session,
     operation: &str,
@@ -128,6 +166,21 @@ pub(crate) async fn query(
 #[cfg(test)]
 mod base_tests {
     use super::*;
+    #[test]
+    fn credits_keep_each_writer_once_and_skip_other_roles() {
+        let data = json!({"data":{"trackUnion":{"creditsTrait":{"contributors":{"items":[
+            {"name":"Kevin Parker","role":"Writer","roleGroup":{"name":"Composition & Lyrics"}},
+            {"name":"Kevin Parker","role":"Producer","roleGroup":{"name":"Production & Engineering"}},
+            {"name":"Sarah Aarons","role":"Composer"},
+            {"name":"Kevin Parker","role":"Lyricist"},
+            {"name":"Main Artist","role":"Main Artist"}
+        ]}}}}});
+        assert_eq!(
+            credited_writers(&data),
+            vec!["Kevin Parker", "Sarah Aarons"]
+        );
+        assert!(credited_writers(&json!({"data":{"trackUnion":null}})).is_empty());
+    }
     #[test]
     fn native_album_supplies_header_without_public_api() {
         let value = json!({"name":"Album title","coverArt":{"sources":[{"url":"https://artwork.example.test/cover","width":640,"height":640}]},"artists":{"items":[{"uri":"spotify:artist:artist","profile":{"name":"Album artist"}}]},"tracksV2":{"totalCount":13},"date":{"isoString":"2026-05-04T00:00:00Z"}});

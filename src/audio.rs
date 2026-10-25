@@ -9,7 +9,7 @@ use rodio::{OutputStream, Source};
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -30,8 +30,14 @@ pub struct AudioBuffer {
     narration: Arc<AtomicBool>,
     generation: Arc<AtomicUsize>,
     target: Arc<Mutex<Option<String>>>,
+    crossfade_ms: Arc<AtomicU32>,
 }
 impl AudioBuffer {
+    /// How long one song fades into the next; 0 plays them back to back.
+    pub fn set_crossfade(&self, seconds: u8) {
+        self.crossfade_ms
+            .store(u32::from(seconds.min(12)) * 1000, Ordering::Relaxed);
+    }
     /// Silence old packets immediately, including while Connect is awaiting HTTP.
     pub fn interrupt(&self, target: Option<String>) {
         if let Ok(mut pending) = self.target.lock() {
@@ -77,6 +83,42 @@ pub struct AudioSink {
     awaiting_seek: bool,
     generation: usize,
     track_uri: Option<String>,
+    crossfade: Crossfade,
+}
+/// The end of one song, held back and mixed into the start of the next.
+#[derive(Default)]
+struct Crossfade {
+    /// Time left in the song for the coming packet, when a next song is ready.
+    remaining_ms: Option<u32>,
+    /// Samples from the end of the current song, not yet played.
+    tail: Vec<f32>,
+    /// The previous song's held end, being mixed into this song.
+    fading: Vec<f32>,
+    mixed: usize,
+}
+impl Crossfade {
+    fn clear(&mut self) {
+        self.tail.clear();
+        self.fading.clear();
+        self.mixed = 0;
+    }
+    /// Equal-power mix: the old song falls as the new one rises, so the
+    /// overall loudness holds steady through the overlap.
+    fn mix(&mut self, samples: &mut [f32]) {
+        let total = self.fading.len();
+        for sample in samples {
+            let Some(old) = self.fading.get(self.mixed) else {
+                break;
+            };
+            let progress = self.mixed as f32 / total as f32 * std::f32::consts::FRAC_PI_2;
+            *sample = *sample * progress.sin() + old * progress.cos();
+            self.mixed += 1;
+        }
+        if self.mixed >= total {
+            self.fading.clear();
+            self.mixed = 0;
+        }
+    }
 }
 impl AudioSink {
     pub fn new(
@@ -87,6 +129,7 @@ impl AudioSink {
         Self {
             generation: buffer.generation.load(Ordering::Acquire),
             track_uri: None,
+            crossfade: Crossfade::default(),
             buffer: buffer.clone(),
             mixer: None,
             stream: None,
@@ -134,6 +177,7 @@ impl AudioSink {
             && let Some(sink) = &self.sink
         {
             sink.stop();
+            self.crossfade.clear();
             if let Some(generation) = self.buffer.select_track(self.track_uri.as_deref()) {
                 self.generation = generation;
             }
@@ -144,18 +188,36 @@ impl AudioSink {
 impl Sink for AudioSink {
     fn set_track(&mut self, track_id: &librespot_core::SpotifyUri) {
         let uri = track_id.to_uri();
-        if let Some(generation) = self.buffer.select_track(Some(&uri)) {
-            if self.generation != generation
-                && let Some(sink) = &self.sink
-            {
-                sink.stop();
+        let natural = match self.buffer.select_track(Some(&uri)) {
+            Some(generation) => {
+                let natural = self.generation == generation;
+                if !natural && let Some(sink) = &self.sink {
+                    sink.stop();
+                }
+                self.generation = generation;
+                natural
             }
-            self.generation = generation;
-        }
+            None => false,
+        };
+        // Only a song running into the next crossfades; a chosen song
+        // starts cleanly.
+        self.crossfade.fading = if natural {
+            std::mem::take(&mut self.crossfade.tail)
+        } else {
+            Vec::new()
+        };
+        self.crossfade.tail.clear();
+        self.crossfade.mixed = 0;
+        self.crossfade.remaining_ms = None;
         self.track_uri = Some(uri);
     }
+    fn crossfade_hint(&mut self, remaining_ms: Option<u32>) {
+        self.crossfade.remaining_ms = remaining_ms;
+    }
     fn is_empty(&self) -> bool {
-        self.queued.load(Ordering::Acquire) == 0
+        // A held end counts as played: the next song can start while the
+        // last moments before it are still sounding.
+        self.queued.load(Ordering::Acquire) == 0 || !self.crossfade.tail.is_empty()
     }
     fn start(&mut self) -> SinkResult<()> {
         self.discard_old_audio();
@@ -167,6 +229,7 @@ impl Sink for AudioSink {
         if let Some(sink) = &self.sink {
             sink.stop();
         }
+        self.crossfade.clear();
         Ok(())
     }
     fn pause(&mut self) -> SinkResult<()> {
@@ -182,7 +245,25 @@ impl Sink for AudioSink {
         let samples = packet
             .samples()
             .map_err(|_| SinkError::OnWrite("Cannot decode audio samples".into()))?;
-        let samples = converter.f64_to_f32(samples).to_vec();
+        let mut samples = converter.f64_to_f32(samples).to_vec();
+        let fade_ms = self.buffer.crossfade_ms.load(Ordering::Relaxed);
+        if !narration
+            && fade_ms > 0
+            && self
+                .crossfade
+                .remaining_ms
+                .is_some_and(|remaining| remaining <= fade_ms)
+        {
+            self.crossfade.tail.extend_from_slice(&samples);
+            if self.awaiting_seek {
+                self.awaiting_seek = false;
+                let _ = self.seek_ready.send(());
+            }
+            return Ok(());
+        }
+        if !self.crossfade.fading.is_empty() {
+            self.crossfade.mix(&mut samples);
+        }
         let sink = self
             .sink
             .as_ref()
@@ -438,6 +519,64 @@ mod tests {
             .unwrap();
         assert!((0..999).all(|_| output.next() == Some(0.25)));
         assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn natural_transition_mixes_held_end_into_next_song() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer);
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio.crossfade_hint(Some(5000));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 4]), &mut converter)
+            .unwrap();
+        // The last second is held back, and counts as played.
+        audio.crossfade_hint(Some(900));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        assert!((0..4).all(|_| output.next() == Some(0.25)));
+        assert!(audio.is_empty());
+        audio.set_track(&track(2));
+        audio
+            .write(AudioPacket::Samples(vec![1.0; 800]), &mut converter)
+            .unwrap();
+        let mixed: Vec<f32> = (0..800).filter_map(|_| output.next()).collect();
+        // Starts as the old song, rises to the new one, then plays it alone.
+        assert!((mixed[0] - 0.5).abs() < 1e-6);
+        assert!(mixed[399] > 0.9 && mixed[399] < 1.12);
+        assert!(mixed[400..].iter().all(|sample| *sample == 1.0));
+    }
+
+    #[test]
+    fn chosen_song_drops_held_end_and_short_queue_never_holds() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        // Without a next song ready the end plays normally.
+        audio.crossfade_hint(None);
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.25));
+        audio.crossfade_hint(Some(500));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 1000]), &mut converter)
+            .unwrap();
+        assert!(audio.is_empty());
+        // The held end never reaches a chosen song.
+        buffer.interrupt(Some(track(3).to_uri()));
+        audio.set_track(&track(3));
+        assert!(audio.crossfade.tail.is_empty());
+        assert!(audio.crossfade.fading.is_empty());
     }
 
     #[test]

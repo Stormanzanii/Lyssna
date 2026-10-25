@@ -206,6 +206,15 @@ impl NativeControls {
             connection.audio_buffer.output.request(name);
         }
     }
+    pub fn set_crossfade(&self, account: &str, seconds: u8) {
+        if let Ok(connection) = self.0.lock()
+            && let Some(connection) = connection
+                .as_ref()
+                .filter(|connection| connection.account == account)
+        {
+            connection.audio_buffer.set_crossfade(seconds);
+        }
+    }
     #[cfg(test)]
     pub(crate) fn test_active(
         account: &str,
@@ -618,6 +627,13 @@ impl NativeControls {
             .enable_all()
             .build()?
             .block_on(crate::search::catalogue(&session, query))
+    }
+    pub fn songwriters(&self, track_id: &str) -> Result<Vec<String>> {
+        let session = self.session()?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::catalogue::songwriters(&session, track_id))
     }
     pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
         use librespot_protocol::extension_kind::ExtensionKind;
@@ -1728,6 +1744,7 @@ impl NativePlayer {
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(settings) = crate::config::Settings::load() {
             audio_buffer.output.request(settings.audio_output);
+            audio_buffer.set_crossfade(settings.crossfade_seconds);
         }
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {

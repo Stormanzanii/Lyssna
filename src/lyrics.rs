@@ -31,6 +31,10 @@ pub struct Contributor {
     #[serde(default)]
     pub id: String,
     pub username: String,
+    /// Discord username from the person's public profile, when the lyrics
+    /// metadata named them by display name instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discord: Option<String>,
     pub url: Option<String>,
     pub avatar: Option<String>,
     #[serde(default, rename = "hasProfileBanner")]
@@ -791,6 +795,31 @@ fn forget_local_in(directory: &Path, track: &Track) {
     }
 }
 
+/// Drop this track's saved source answers, so the next fetch asks every
+/// source again and picks up newly uploaded lyrics. Imports are kept.
+pub fn forget_cached(track: &Track) -> Result<()> {
+    forget_cached_in(&data_dir()?.join("lyrics").join("cache"), track);
+    Ok(())
+}
+
+fn forget_cached_in(directory: &Path, track: &Track) {
+    let file = format!("{}.json", track_key(track));
+    for namespace in fs::read_dir(directory).into_iter().flatten().flatten() {
+        if namespace.file_type().is_ok_and(|kind| kind.is_dir()) {
+            let _ = fs::remove_file(namespace.path().join(&file));
+        }
+    }
+}
+
+/// Delete every saved source answer; imported lyrics stay.
+pub fn clear_cache() -> Result<()> {
+    let directory = data_dir()?.join("lyrics").join("cache");
+    match fs::remove_dir_all(&directory) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+        _ => Ok(()),
+    }
+}
+
 pub fn fetch(
     client: &Client,
     track: &Track,
@@ -1050,6 +1079,42 @@ mod tests {
         forget_local_in(&directory, &track);
         assert!(session(&track).is_none());
         assert!(import_with_mode("song.txt", "x", &track, ImportMode::Session).is_err());
+        let _ = fs::remove_dir_all(directory);
+    }
+    #[test]
+    fn forgetting_cached_lyrics_clears_every_source_for_that_song_only() {
+        let directory =
+            std::env::temp_dir().join(format!("spotiflex-lyric-cache-{}", std::process::id()));
+        let song = Track {
+            uri: "spotify:track:song".into(),
+            ..Track::default()
+        };
+        let other = Track {
+            uri: "spotify:track:other".into(),
+            ..Track::default()
+        };
+        for namespace in ["provider", "lrclib"] {
+            fs::create_dir_all(directory.join(namespace)).unwrap();
+            for track in [&song, &other] {
+                fs::write(
+                    directory
+                        .join(namespace)
+                        .join(format!("{}.json", track_key(track))),
+                    "{}",
+                )
+                .unwrap();
+            }
+        }
+        forget_cached_in(&directory, &song);
+        for namespace in ["provider", "lrclib"] {
+            let path = |track: &Track| {
+                directory
+                    .join(namespace)
+                    .join(format!("{}.json", track_key(track)))
+            };
+            assert!(!path(&song).exists());
+            assert!(path(&other).exists());
+        }
         let _ = fs::remove_dir_all(directory);
     }
     #[test]

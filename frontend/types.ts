@@ -138,6 +138,9 @@ export interface Settings {
   lyric_font?: string;
   volume_percent?: number;
   auto_download_updates: boolean;
+  close_to_tray?: boolean;
+  crossfade_seconds?: number;
+  lyrics_discord_usernames?: boolean;
   audio_output?: string | null;
   folders: Folder[];
   spotify_plus?: SpotifyPlus;
@@ -181,6 +184,8 @@ export interface Lyrics {
 export interface Contributor {
   id: string;
   username: string;
+  /** Discord username from the public profile, if it differs. */
+  discord?: string;
   url?: string;
   avatar?: string;
   hasProfileBanner?: boolean;

@@ -433,6 +433,7 @@ impl SpotiFlex {
                 | Event::SavedMany(..)
                 | Event::PageChanged(..)
                 | Event::TrackInfo { .. }
+                | Event::Songwriters { .. }
                 | Event::ProfileRefreshed(..) => {}
                 Event::Session(profile) => {
                     if !self.login_pending {

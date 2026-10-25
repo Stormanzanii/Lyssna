@@ -492,6 +492,19 @@ impl Desktop {
                                 );
                             }
                         }
+                        Event::Songwriters { uri, names } => {
+                            if let Some(item) = snapshot
+                                .playback
+                                .item
+                                .as_mut()
+                                .filter(|item| item.uri == uri && item.songwriters.is_empty())
+                            {
+                                item.songwriters = names;
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
+                        }
                         Event::ProfileRefreshed(profile) => {
                             if snapshot.profile.as_ref().map(|old| &old.id) == Some(&profile.id) {
                                 let _ = crate::native::save_profile(&profile);
@@ -2140,6 +2153,7 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
+        settings.crossfade_seconds = settings.crossfade_seconds.min(12);
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.lyrics_source_order =
@@ -2164,6 +2178,12 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
                 .0
                 .controls
                 .set_audio_output(&profile.id, settings.audio_output.clone());
+        }
+        if let Some(profile) = snapshot.profile.as_ref() {
+            state
+                .0
+                .controls
+                .set_crossfade(&profile.id, settings.crossfade_seconds);
         }
         snapshot.settings = settings;
         Ok(())
@@ -2207,6 +2227,32 @@ fn retry_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         .commands
         .send(Command::FetchLyrics(track))
         .map_err(error)
+}
+/// Ask every source again for the current song, skipping saved answers,
+/// so lyrics uploaded since show without waiting for the cache to expire.
+#[tauri::command]
+fn refresh_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    let track = lock(&state.0.snapshot)
+        .map_err(error)?
+        .playback
+        .item
+        .clone()
+        .ok_or("Play a track first")?;
+    // The lyrics thread runs commands in order: the purge lands before the fetch.
+    state
+        .0
+        .lyrics
+        .send(LyricCommand::ForgetCached(track.clone()))
+        .map_err(error)?;
+    state
+        .0
+        .commands
+        .send(Command::FetchLyrics(track))
+        .map_err(error)
+}
+#[tauri::command]
+fn clear_lyrics_cache(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    state.0.lyrics.send(LyricCommand::ClearCache).map_err(error)
 }
 #[tauri::command]
 fn import_lyrics(
@@ -3031,6 +3077,81 @@ fn memory_target(window: &tauri::WebviewWindow, low: bool) {
 }
 #[cfg(not(windows))]
 fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
+/// Hidden windows stop compositing like minimized ones; audio is native and
+/// keeps playing.
+fn set_window_shown(window: &tauri::WebviewWindow, shown: bool) {
+    #[cfg(windows)]
+    let _ = window.with_webview(move |webview| unsafe {
+        let _ = webview.controller().SetIsVisible(shown);
+    });
+    memory_target(window, !shown);
+    if shown {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    } else {
+        let _ = window.hide();
+    }
+}
+/// Exit for real; the close button may only hide to the tray.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+/// Notification-area icon, like Spotify's: click to show the window, or use
+/// the menu to control playback or quit while the window is hidden.
+fn install_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let menu = MenuBuilder::new(app)
+        .item(&MenuItemBuilder::with_id("show", "Show SpotiFlex").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("toggle", "Play/Pause").build(app)?)
+        .item(&MenuItemBuilder::with_id("next", "Next").build(app)?)
+        .item(&MenuItemBuilder::with_id("previous", "Previous").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("quit", "Quit SpotiFlex").build(app)?)
+        .build()?;
+    TrayIconBuilder::with_id("main")
+        .icon(tauri::image::Image::new_owned(
+            crate::app_icon::icon_rgba(32),
+            32,
+            32,
+        ))
+        .tooltip("SpotiFlex")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    set_window_shown(&window, true);
+                }
+            }
+            "quit" => app.exit(0),
+            action @ ("toggle" | "next" | "previous") => {
+                let _ = app.emit(
+                    "spotiflex",
+                    json!({"type":"media_control","action":action,"position_ms":null}),
+                );
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+                && let Some(window) = tray.app_handle().get_webview_window("main")
+            {
+                let shown =
+                    window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+                set_window_shown(&window, !shown);
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
 /// Disk space used by cached songs, in bytes.
 #[tauri::command]
 async fn audio_cache_size() -> u64 {
@@ -3081,6 +3202,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let was_minimized = AtomicBool::new(false);
                 let was_lean = AtomicBool::new(false);
                 window.on_window_event(move |event| {
+                    // Signed in, the close button can keep music playing from
+                    // the tray. Before sign-in it always quits.
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                        && let Some(state) = activity.app_handle().try_state::<Desktop>()
+                        && lock(&state.0.snapshot).is_ok_and(|snapshot| {
+                            snapshot.settings.close_to_tray && snapshot.profile.is_some()
+                        })
+                    {
+                        api.prevent_close();
+                        set_window_shown(&activity, false);
+                        return;
+                    }
                     // Space Gravity lyrics react to the window being dragged.
                     if let tauri::WindowEvent::Moved(position) = event {
                         let scale = activity.scale_factor().unwrap_or(1.0);
@@ -3122,6 +3255,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             app.manage(Desktop::start(app.handle().clone())?);
+            install_tray(app)?;
             let handle = app.handle().clone();
             let session = crate::media::Session::start(app.handle(), move |action| {
                 let position = match action {
@@ -3167,6 +3301,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             configure_provider,
             configure_spicy_lyrics,
             retry_lyrics,
+            refresh_lyrics,
+            quit_app,
+            clear_lyrics_cache,
             import_lyrics,
             reset_lyrics,
             saved_lyrics,

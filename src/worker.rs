@@ -163,6 +163,10 @@ pub enum Event {
         uri: String,
         track: Box<Track>,
     },
+    Songwriters {
+        uri: String,
+        names: Vec<String>,
+    },
     BrowseInfo {
         generation: u64,
         info: Box<BrowseInfo>,
@@ -229,6 +233,10 @@ pub enum LyricCommand {
     Import(Track, PathBuf),
     /// Drop lyrics imported for a track; a following fetch uses the provider.
     Forget(Track),
+    /// Drop a track's saved source answers; a following fetch asks again.
+    ForgetCached(Track),
+    /// Delete every saved source answer.
+    ClearCache,
     Configure {
         host: String,
         consent: bool,
@@ -507,6 +515,14 @@ impl Worker {
                     }
                     LyricCommand::Forget(track) => {
                         let _ = lyrics::forget_local(&track);
+                        continue;
+                    }
+                    LyricCommand::ForgetCached(track) => {
+                        let _ = lyrics::forget_cached(&track);
+                        continue;
+                    }
+                    LyricCommand::ClearCache => {
+                        let _ = lyrics::clear_cache();
                         continue;
                     }
                     LyricCommand::Configure { host, consent } => {
@@ -1497,6 +1513,22 @@ impl Backend {
                     });
                     context.request_repaint();
                 });
+                // Most metadata names no composer; Spotify's credits list does.
+                if track.songwriters.is_empty()
+                    && let Some(id) = track.uri.strip_prefix("spotify:track:")
+                {
+                    let id = id.to_owned();
+                    let uri = track.uri.clone();
+                    let native = self.scoped_native();
+                    let events = self.events.clone();
+                    thread::spawn(move || {
+                        if let Ok(names) = native.songwriters(&id)
+                            && !names.is_empty()
+                        {
+                            let _ = events.send(Event::Songwriters { uri, names });
+                        }
+                    });
+                }
                 let local = self.native_controls.has_track();
                 let artists = if local {
                     track

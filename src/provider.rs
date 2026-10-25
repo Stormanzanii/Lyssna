@@ -141,6 +141,12 @@ pub fn cache_namespace() -> Result<String> {
 }
 
 pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
+    let mut lyrics = fetch_lyrics(client, track, access_token)?;
+    resolve_contributors(&mut lyrics);
+    Ok(lyrics)
+}
+
+fn fetch_lyrics(client: &Client, track: &Track, access_token: &str) -> Result<Lyrics> {
     let provider = load()?;
     if provider.spicy_api {
         return fetch_spicy(client, track, &provider.api_key);
@@ -203,6 +209,103 @@ pub fn fetch(client: &Client, track: &Track, access_token: &str) -> Result<Lyric
         data.clone()
     };
     parse(&data, track.duration_ms)
+}
+
+/// Community credits can name people by their Discord username, as Spicy
+/// Lyrics' site and EeveeSpotify do. Lyrics metadata can carry a display name
+/// in its `username` field, so each person is looked up on the public site.
+fn resolve_contributors(lyrics: &mut Lyrics) {
+    let Some(attribution) = lyrics.attribution.as_mut() else {
+        return;
+    };
+    let Ok(client) = Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+    else {
+        return;
+    };
+    for person in [attribution.maker.as_mut(), attribution.uploader.as_mut()]
+        .into_iter()
+        .flatten()
+    {
+        if let Some((username, display)) = contributor_identity(&client, &person.id) {
+            person.discord = Some(credit_name(&username, display.as_deref(), &person.username));
+        }
+    }
+}
+
+type Identity = (String, Option<String>);
+static IDENTITIES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, Option<Identity>>>,
+> = std::sync::LazyLock::new(Default::default);
+
+fn contributor_identity(client: &Client, id: &str) -> Option<Identity> {
+    if id.is_empty() || id.len() > 24 || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    if let Some(known) = IDENTITIES.lock().ok()?.get(id) {
+        return known.clone();
+    }
+    // tRPC input in devalue's indexed form: {id, includeTracks: false}.
+    let input = json!([{"id":1,"includeTracks":2}, id, false]).to_string();
+    let identity = client
+        .get("https://spicylyrics.org/api/trpc/ttml.getTTMLProfile")
+        .query(&[("input", input)])
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .ok()
+        .filter(|response| response.status().is_success())
+        .and_then(|response| {
+            let mut bytes = Vec::new();
+            response.take(200_001).read_to_end(&mut bytes).ok()?;
+            (bytes.len() <= 200_000).then_some(bytes)
+        })
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|body| profile_identity(&body["result"]["data"], id));
+    if let Ok(mut known) = IDENTITIES.lock() {
+        if known.len() >= 256 {
+            known.clear();
+        }
+        // Failed lookups are retried with the next song's credits.
+        if identity.is_some() {
+            known.insert(id.to_owned(), identity.clone());
+        }
+    }
+    identity
+}
+
+/// Reads `profile.data` from devalue's indexed JSON, where every field holds
+/// the index of its value in one flat array.
+fn profile_identity(data: &Value, id: &str) -> Option<Identity> {
+    let nodes = data.as_array()?;
+    let field = |value: &Value, key: &str| -> Option<Value> {
+        let index = usize::try_from(value.get(key)?.as_u64()?).ok()?;
+        nodes.get(index).cloned()
+    };
+    let details = field(&field(nodes.first()?, "profile")?, "data")?;
+    if field(&details, "id")?.as_str() != Some(id) {
+        return None;
+    }
+    let text = |key: &str| {
+        field(&details, key)
+            .and_then(|value| value.as_str().map(str::trim).map(str::to_owned))
+            .filter(|value| !value.is_empty())
+    };
+    let display = ["globalName", "global_name", "displayName", "display_name"]
+        .iter()
+        .find_map(|key| text(key));
+    Some((text("username")?, display))
+}
+
+/// The username, keeping a display name's casing only when it spells the
+/// same name.
+fn credit_name(username: &str, display: Option<&str>, supplied: &str) -> String {
+    [supplied, display.unwrap_or_default()]
+        .into_iter()
+        .find(|name| !name.is_empty() && name.to_lowercase() == username.to_lowercase())
+        .unwrap_or(username)
+        .to_owned()
 }
 
 pub fn creator_profile(id: &str) -> Result<Url> {
@@ -629,6 +732,24 @@ mod tests {
         assert!(!requires_spotify_token());
     }
 
+    #[test]
+    fn community_credits_use_the_discord_username() {
+        let data = json!([{"profile":1},{"data":2},{"id":3,"username":4,"displayName":5},"1517888020135804969","menacing_midget2.0","Tortilla chep"]);
+        let (username, display) = profile_identity(&data, "1517888020135804969").unwrap();
+        assert_eq!(username, "menacing_midget2.0");
+        assert_eq!(display.as_deref(), Some("Tortilla chep"));
+        assert!(profile_identity(&data, "1").is_none());
+        assert_eq!(
+            credit_name(&username, display.as_deref(), "poteto chep"),
+            "menacing_midget2.0"
+        );
+        // A display name that only recases the username keeps its casing.
+        assert_eq!(
+            credit_name("arashii", Some("Arashii"), "Display"),
+            "Arashii"
+        );
+        assert_eq!(credit_name("arashii", None, "ARASHII"), "ARASHII");
+    }
     #[test]
     fn creator_profile_verification_is_not_treated_as_unpublished() {
         assert_eq!(

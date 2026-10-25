@@ -26,6 +26,9 @@ pub trait Open {
 pub trait Sink {
     /// Identify the decoder before its samples reach the output queue.
     fn set_track(&mut self, _track_id: &librespot_core::SpotifyUri) {}
+    /// Time left in the song for the next packet, when the following song is
+    /// already loaded and could start over its end. `None` otherwise.
+    fn crossfade_hint(&mut self, _remaining_ms: Option<u32>) {}
     /// Whether all submitted PCM has been consumed. Legacy backends may complete immediately.
     fn is_empty(&self) -> bool {
         true

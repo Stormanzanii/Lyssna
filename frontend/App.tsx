@@ -1180,7 +1180,7 @@ function App() {
           disabled: !signedIn,
           onSelect: () => void call("sign_out"),
         },
-        { label: "Exit", onSelect: () => void windowHandle().close() },
+        { label: "Exit", onSelect: () => void rpc("quit_app").catch(() => {}) },
       ],
     },
     {
@@ -2517,9 +2517,9 @@ function App() {
                 </button>
                 <button
                   className="icon-button"
-                  title="Retry lyrics"
+                  title="Refresh lyrics (skips saved copies)"
                   data-icon="retry"
-                  onClick={() => void call("retry_lyrics")}
+                  onClick={() => void call("refresh_lyrics")}
                 >
                   <RetryIcon />
                 </button>

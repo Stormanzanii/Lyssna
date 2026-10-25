@@ -138,7 +138,7 @@ export interface Settings {
   lyric_font?: string;
   volume_percent?: number;
   auto_download_updates: boolean;
-  close_to_tray?: boolean;
+  keep_playing_on_close?: boolean;
   crossfade_seconds?: number;
   lyrics_discord_usernames?: boolean;
   audio_output?: string | null;

@@ -430,7 +430,7 @@ export function SettingsWindow({
       "Window",
       [
         flag(
-          "close_to_tray",
+          "keep_playing_on_close",
           "Close button keeps music playing",
           "Closing the window hides SpotiFlex in the notification area. Choose Quit from its icon, or Exit from the menu, to close it.",
           "close minimize minimise tray background notification area system tray quit",

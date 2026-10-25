@@ -2132,7 +2132,11 @@ async fn audio_outputs(state: State<'_, Desktop>) -> std::result::Result<Vec<Str
         .map_err(error)
 }
 #[tauri::command]
-fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+fn save_settings(
+    settings: Settings,
+    state: State<'_, Desktop>,
+    app: tauri::AppHandle,
+) -> std::result::Result<(), String> {
     let result = || -> Result<()> {
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
@@ -2184,6 +2188,9 @@ fn save_settings(settings: Settings, state: State<'_, Desktop>) -> std::result::
                 .0
                 .controls
                 .set_crossfade(&profile.id, settings.crossfade_seconds);
+        }
+        if let Some(tray) = app.tray_by_id("main") {
+            let _ = tray.set_visible(settings.keep_playing_on_close);
         }
         snapshot.settings = settings;
         Ok(())
@@ -3232,7 +3239,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event
                         && let Some(state) = activity.app_handle().try_state::<Desktop>()
                         && lock(&state.0.snapshot).is_ok_and(|snapshot| {
-                            snapshot.settings.close_to_tray && snapshot.profile.is_some()
+                            snapshot.settings.keep_playing_on_close && snapshot.profile.is_some()
                         })
                     {
                         api.prevent_close();
@@ -3281,6 +3288,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             app.manage(Desktop::start(app.handle().clone())?);
             install_tray(app)?;
+            // The tray icon shows only while closing keeps music playing.
+            let keep_playing = crate::config::Settings::load()
+                .is_ok_and(|settings| settings.keep_playing_on_close);
+            if let Some(tray) = app.tray_by_id("main") {
+                tray.set_visible(keep_playing)?;
+            }
             let handle = app.handle().clone();
             let session = crate::media::Session::start(app.handle(), move |action| {
                 let position = match action {

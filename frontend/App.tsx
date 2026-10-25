@@ -2155,7 +2155,23 @@ function App() {
             title="Home"
             onClick={() => navigate("home")}
           >
-            <Home size={23} />
+            {state.route === "home" && center === "browse" ? (
+              // Filled while Home is open, as Spotify's is.
+              <svg
+                width={23}
+                height={23}
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinejoin="round"
+              >
+                <path d="M12 3 3.5 9.8V20h5.5v-6h6v6h5.5V9.8z" />
+              </svg>
+            ) : (
+              <Home size={23} />
+            )}
           </button>
           <div className="search-box">
             <Search size={21} />

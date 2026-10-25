@@ -560,14 +560,19 @@ small {
   transform: translateX(-50%);
   width: min(46%, 580px);
 }
-.home-button {
-  height: 42px;
-  width: 42px;
-  /* Same fill as the search box beside it. */
+.home-button,
+.home-button:hover {
+  /* A circle the height and fill of the search box beside it. */
+  height: 43px;
+  width: 43px;
+  flex: none;
   background: #212121;
 }
-.home-button:hover {
-  background: #282828;
+.home-button.active {
+  color: #fff;
+}
+.home-button.active:after {
+  content: none;
 }
 .search-box {
   display: flex;

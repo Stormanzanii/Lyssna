@@ -3735,6 +3735,22 @@ input.volume-range:is(:hover, :active, :focus-visible) {
     #ffffff4d var(--range, 0%)
   );
 }
+/* At rest the white fill ends in a rounded cap, as Spotify's does: the
+   fill stops a radius short and a dot of the same height closes it. */
+input.volume-range:not(:hover, :active, :focus-visible) {
+  background:
+    radial-gradient(
+        circle 2px at calc(var(--range, 0%) - 2px) 50%,
+        #e5e5e5 1.5px,
+        transparent 2px
+      )
+      no-repeat,
+    linear-gradient(
+      90deg,
+      #e5e5e5 calc(var(--range, 0%) - 2px),
+      #ffffff25 calc(var(--range, 0%) - 2px)
+    );
+}
 input.volume-range::-webkit-slider-thumb {
   width: 12px;
   height: 12px;

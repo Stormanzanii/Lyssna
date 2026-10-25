@@ -378,8 +378,11 @@ export function tuneMotion(settings: AnimatorSettings = {}) {
   ]);
   const lift = upstream ? 1 : tuning.verticalStrength,
     glow = upstream ? 1 : tuning.glowStrength;
+  // Strength scales the rise only. Unsung text keeps the 0.01em rest that
+  // inactive lines share in CSS; scaling it too dropped a line's unsung
+  // words below its sung ones (0.15em at strength 15).
   MOTION.lift = naturalSpline([
-    [0, lift / 100],
+    [0, 1 / 100],
     [0.9, -lift / 60],
     [1, 0],
   ]);

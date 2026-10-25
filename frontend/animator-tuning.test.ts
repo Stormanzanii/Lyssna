@@ -100,6 +100,10 @@ describe("animator presets", () => {
     expect(MOTION.scale(0.7)).toBeCloseTo(1.2);
     tuneMotion(setValue({}, "blurStrength", 2));
     expect(MOTION.blurPerLine).toBeCloseTo(2.5);
+    // Stronger motion rises further; unsung text stays level with the line.
+    tuneMotion(setValue({}, "verticalStrength", 15));
+    expect(MOTION.lift(0)).toBeCloseTo(0.01);
+    expect(MOTION.lift(0.9)).toBeCloseTo(-0.25);
     tuneMotion({});
   });
 });

@@ -566,6 +566,9 @@ small {
   /* Same fill as the search box beside it. */
   background: #212121;
 }
+.home-button:hover {
+  background: #282828;
+}
 .search-box {
   display: flex;
   align-items: center;

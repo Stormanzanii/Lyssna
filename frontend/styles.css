@@ -3087,6 +3087,13 @@ small {
 .reduce-motion .follow-lyrics {
   transition: none;
 }
+.compact .follow-lyrics {
+  bottom: 12px;
+  right: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
 .page-hero .eyebrow {
   font-family: inherit;
   font-size: 14px;
@@ -3113,7 +3120,8 @@ small {
   background: transparent;
 }
 .compact .lyric-end-credits {
-  padding: 12px 0 16px;
+  /* Bottom room lets the credits scroll clear of the follow button. */
+  padding: 12px 0 72px;
   font-size: 14px;
   line-height: 1.45;
 }
@@ -5273,6 +5281,10 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyrics-page .lyric-end-credits .lyric-source {
   font-size: 0.88em;
 }
+/* The provider line sits right under the writers, as in Spicy Lyrics. */
+.lyrics-page .lyric-end-credits .writer-credits {
+  margin-bottom: 0.2em;
+}
 .lyrics-page .has-pinned-footer .lyric-scroll {
   padding-bottom: 0;
 }
@@ -5282,8 +5294,16 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyrics-page .lyric-pinned-footer {
   padding-top: 4px;
 }
-.community-credits .community-person {
+/* Credits wrap between words in narrow panels; only a name and its avatar
+   stay together. */
+.community-credits .community-profile {
   white-space: nowrap;
+  max-width: 100%;
+}
+.community-credits .community-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .community-credits .community-profile {
   display: inline-flex;

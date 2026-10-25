@@ -103,7 +103,13 @@ export function prepareGravity(lyrics: Lyrics) {
         key: `${lineIndex}:${slot}`,
         text,
         line: lineIndex,
-        words: piece.words,
+        // A trailing space inside a rotated word's paint box draws a dotted
+        // hairline past its last letter; floating words need no spacing.
+        words: piece.words.map((word, index, all) =>
+          index === all.length - 1
+            ? { ...word, text: word.text.trimEnd() }
+            : word,
+        ),
         start: piece.start,
         end: piece.end,
         lead,

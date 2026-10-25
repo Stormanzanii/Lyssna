@@ -2252,7 +2252,25 @@ fn refresh_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> 
 }
 #[tauri::command]
 fn clear_lyrics_cache(state: State<'_, Desktop>) -> std::result::Result<(), String> {
-    state.0.lyrics.send(LyricCommand::ClearCache).map_err(error)
+    state
+        .0
+        .lyrics
+        .send(LyricCommand::ClearCache)
+        .map_err(error)?;
+    // The playing song's lyrics are fetched again, after the purge.
+    if let Some(track) = lock(&state.0.snapshot)
+        .map_err(error)?
+        .playback
+        .item
+        .clone()
+    {
+        state
+            .0
+            .commands
+            .send(Command::FetchLyrics(track))
+            .map_err(error)?;
+    }
+    Ok(())
 }
 #[tauri::command]
 fn import_lyrics(

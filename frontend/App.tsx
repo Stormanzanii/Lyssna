@@ -2517,9 +2517,13 @@ function App() {
                 </button>
                 <button
                   className="icon-button"
-                  title="Refresh lyrics (skips saved copies)"
+                  title="Refresh lyrics (clears this song's saved copy)"
                   data-icon="retry"
-                  onClick={() => void call("refresh_lyrics")}
+                  onClick={() =>
+                    void call("refresh_lyrics").then(() =>
+                      notify("Fetching fresh lyrics…"),
+                    )
+                  }
                 >
                   <RetryIcon />
                 </button>

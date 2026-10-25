@@ -214,7 +214,7 @@ fn fetch_lyrics(client: &Client, track: &Track, access_token: &str) -> Result<Ly
 /// Community credits can name people by their Discord username, as Spicy
 /// Lyrics' site and EeveeSpotify do. Lyrics metadata can carry a display name
 /// in its `username` field, so each person is looked up on the public site.
-fn resolve_contributors(lyrics: &mut Lyrics) {
+pub fn resolve_contributors(lyrics: &mut Lyrics) {
     let Some(attribution) = lyrics.attribution.as_mut() else {
         return;
     };
@@ -228,6 +228,7 @@ fn resolve_contributors(lyrics: &mut Lyrics) {
     for person in [attribution.maker.as_mut(), attribution.uploader.as_mut()]
         .into_iter()
         .flatten()
+        .filter(|person| person.discord.is_none())
     {
         if let Some((username, display)) = contributor_identity(&client, &person.id) {
             person.discord = Some(credit_name(&username, display.as_deref(), &person.username));

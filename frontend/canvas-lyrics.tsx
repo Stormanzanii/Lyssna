@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { IS_MAC } from "./platform";
 
-/** One sharp video; its small, graded frame supplies the blurred lyrics backdrop. */
+const AMBIENT_WIDTH = 80;
+// Canvases run at 24 to 30 fps, so redrawing the backdrop faster buys nothing.
+const AMBIENT_INTERVAL_MS = 1000 / 30;
+// Same grade as the lyrics ambience, so lyric contrast is unchanged.
+const AMBIENT_FILTER = "blur(5px) saturate(2.5) brightness(0.65)";
+
+/** One sharp video; its tiny, graded frame supplies the blurred lyrics backdrop. */
 export function LyricsCanvas({
   url,
   poster,
   playing,
   backdrop,
   onActive,
-  artworkRight = false,
 }: {
   url: string;
   poster?: string;
   playing: boolean;
   backdrop: RefObject<HTMLCanvasElement | null>;
   onActive?: (active: boolean) => void;
-  artworkRight?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
@@ -48,116 +52,64 @@ export function LyricsCanvas({
         "--canvas-sharp-edge",
         `${cover.getBoundingClientRect().width}px`,
       );
-      // A small, smoothly scaled frame provides the Mac blur without applying
-      // WebKit's filter pipeline to a continuously changing video texture.
-      const width = IS_MAC ? 64 : 512;
+      // Spicy Lyrics' backdrop: an 80px frame, blurred there so the blur costs
+      // a few thousand pixels instead of a full-page filter. CSS stretches it.
+      const width = AMBIENT_WIDTH;
       const height = Math.max(
         1,
         Math.round((width * box.height) / Math.max(1, box.width)),
       );
-      if (canvas.width !== width) canvas.width = width;
-      if (canvas.height !== height) canvas.height = height;
+      if (canvas.width !== width || canvas.height !== height) {
+        // Resizing clears the canvas and its filter.
+        canvas.width = width;
+        canvas.height = height;
+        primed = false;
+      }
     };
+    let frame = 0,
+      last = 0,
+      lastTime = -1,
+      // False until the backdrop holds a real frame; the first draw replaces
+      // instead of blending.
+      primed = false;
     resize();
     const observer = new ResizeObserver(resize);
     if (root) observer.observe(root);
     observer.observe(cover);
     element.addEventListener("loadedmetadata", resize);
-    let frame = 0,
-      last = 0;
-    // Stacked layout shows the video as a small header thumbnail, so the
-    // backdrop covers the whole page instead of extending the sharp video.
-    const fillPage = () => {
-      const fit = Math.max(
-          canvas.width / element.videoWidth,
-          canvas.height / element.videoHeight,
-        ),
-        width = canvas.width / fit,
-        height = canvas.height / fit;
-      context.drawImage(
-        element,
-        (element.videoWidth - width) / 2,
-        (element.videoHeight - height) / 2,
-        width,
-        height,
-        0,
-        0,
-        canvas.width,
-        canvas.height,
-      );
-    };
     const draw = (now: number) => {
       if (
-        now - last >= 100 &&
+        now - last >= AMBIENT_INTERVAL_MS &&
         element.readyState >= 2 &&
         element.videoWidth > 0 &&
         element.videoHeight > 0 &&
+        element.currentTime !== lastTime &&
         !document.hidden
       ) {
         last = now;
-        // Clear the whole opaque surface, including pixels outside the two
-        // reflected crops. Otherwise old frames accumulate along their edges.
-        context.filter = "none";
-        context.fillStyle = "#000";
-        context.fillRect(0, 0, canvas.width, canvas.height);
+        lastTime = element.currentTime;
+        const scale =
+            Math.max(
+              canvas.width / element.videoWidth,
+              canvas.height / element.videoHeight,
+            ) * 1.3,
+          width = element.videoWidth * scale,
+          height = element.videoHeight * scale;
         context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        if (!IS_MAC)
-          context.filter = "blur(8px) saturate(2.5) brightness(0.65)";
-        fillPage();
-        if (!root?.classList.contains("narrow")) {
-          const bounds = root?.getBoundingClientRect(),
-            frame = cover.getBoundingClientRect(),
-            rootWidth = Math.max(1, bounds?.width ?? 1),
-            rootHeight = Math.max(1, bounds?.height ?? 1),
-            edge = Math.max(
-              1,
-              Math.min(
-                canvas.width,
-                Math.round((frame.width / rootWidth) * canvas.width),
-              ),
-            ),
-            sharpX = artworkRight ? canvas.width - edge : 0,
-            boundary = artworkRight ? sharpX : edge,
-            top =
-              ((frame.top - (bounds?.top ?? 0)) / rootHeight) * canvas.height,
-            height = (frame.height / rootHeight) * canvas.height,
-            bleed = Math.max(2, Math.ceil((canvas.width * 24) / 512));
-          const scale = Math.max(
-              frame.width / element.videoWidth,
-              frame.height / element.videoHeight,
-            ),
-            sourceWidth = frame.width / scale,
-            sourceHeight = frame.height / scale,
-            sourceX = (element.videoWidth - sourceWidth) / 2,
-            sourceY = (element.videoHeight - sourceHeight) / 2;
-          context.drawImage(
-            element,
-            sourceX,
-            sourceY,
-            sourceWidth,
-            sourceHeight,
-            sharpX,
-            top,
-            edge,
-            height,
-          );
-          context.save();
-          context.translate(boundary * 2, 0);
-          context.scale(-1, 1);
-          context.drawImage(
-            element,
-            sourceX + sourceWidth * (artworkRight ? 0 : 0.8),
-            sourceY,
-            sourceWidth * 0.2,
-            sourceHeight,
-            artworkRight ? boundary - 1 : edge * 2 - canvas.width - bleed,
-            top,
-            canvas.width - edge + bleed + 1,
-            height,
-          );
-          context.restore();
-        }
+        context.filter = IS_MAC ? "none" : AMBIENT_FILTER;
+        // Blending into the previous frame keeps the glow from flickering
+        // with fast cuts.
+        context.globalAlpha = primed ? 0.3 : 1;
+        context.drawImage(
+          element,
+          (canvas.width - width) / 2,
+          (canvas.height - height) / 2,
+          width,
+          height,
+        );
+        context.globalAlpha = 1;
+        primed = true;
+        // WebKit has no canvas filters, so the Mac backdrop is only darkened.
         if (IS_MAC) {
           context.fillStyle = "rgba(0, 0, 0, 0.35)";
           context.fillRect(0, 0, canvas.width, canvas.height);
@@ -183,7 +135,7 @@ export function LyricsCanvas({
       observer.disconnect();
       context.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [url, backdrop, failed, artworkRight]);
+  }, [url, backdrop, failed]);
   return (
     <div className="cover lyrics-canvas-cover">
       {failed ? (

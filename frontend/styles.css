@@ -4772,20 +4772,6 @@ input.volume-range:active::-webkit-slider-thumb {
   pointer-events: none;
   background: linear-gradient(transparent 65%, #0009);
 }
-.canvas-lyrics::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background: linear-gradient(
-    var(--canvas-direction),
-    transparent 31%,
-    #0003 40%,
-    #0005 45%,
-    #0005
-  );
-}
 .canvas-lyrics .lyrics-title {
   position: absolute;
   bottom: 68px;
@@ -4869,9 +4855,6 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyrics-page.narrow.canvas-lyrics .lyrics-artists {
   position: static;
   max-width: none;
-}
-.lyrics-page.narrow.canvas-lyrics::after {
-  background: linear-gradient(#0004, #0006);
 }
 /* Space Gravity: words float over the whole lyrics page. The stage spans
    the page so words can drift around the artwork, which they avoid. */

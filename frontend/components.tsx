@@ -1346,7 +1346,6 @@ function SongLyricsPage({
                 playing={state.playback.is_playing}
                 backdrop={backdrop}
                 onActive={setCanvasShown}
-                artworkRight={!!state.settings.lyrics_artwork_right}
               />
             ) : (
               <div className="lyrics-media">

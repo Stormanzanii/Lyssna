@@ -2047,7 +2047,7 @@ test("Canvas defaults on, Space Gravity is optional, with sharp video left and m
     await page
       .locator(".lyrics-canvas-backdrop")
       .evaluate((element) => (element as HTMLCanvasElement).width),
-  ).toBe(512);
+  ).toBe(80);
   const layout = await page.evaluate(() => {
     const video = document
         .querySelector(".lyrics-canvas-cover")!

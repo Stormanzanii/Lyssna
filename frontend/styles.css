@@ -2671,8 +2671,10 @@ small {
 .lyric-pinned-footer p {
   margin-bottom: 0.4em;
 }
+/* The provider line matches the writers line above it. */
 .lyric-pinned-footer .lyric-source {
-  font-size: 0.88em;
+  font-size: 1em;
+  color: inherit;
 }
 .has-pinned-footer .follow-lyrics {
   grid-row: 1 / 2;
@@ -5265,7 +5267,8 @@ input.volume-range:active::-webkit-slider-thumb {
 }
 /* Songwriters as Spicy Lyrics shows them: one bold line, label and names
    in the same colour. */
-.writer-credits {
+.writer-credits,
+.lyric-end-credits .lyric-source {
   font-weight: 700;
 }
 /* Beside the lyrics, end credits match the pinned footer's size, and
@@ -5277,8 +5280,10 @@ input.volume-range:active::-webkit-slider-thumb {
     24px
   );
 }
+/* The provider line matches the writers line above it. */
 .lyrics-page .lyric-end-credits .lyric-source {
-  font-size: 0.88em;
+  font-size: 1em;
+  color: inherit;
 }
 /* The provider line sits right under the writers, as in Spicy Lyrics. */
 .lyrics-page .lyric-end-credits .writer-credits {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Play, Plus } from "lucide-react";
+import { Check, CirclePlus, Play } from "lucide-react";
 import type { Artist, Artwork } from "./types";
 import { Cover } from "./components";
 import { rpc } from "./bridge";
@@ -65,8 +65,12 @@ export function WhatsNewPage({
       active = false;
     };
   }, []);
-  const fresh = releases?.filter((item) => item.new) ?? [];
-  const earlier = releases?.filter((item) => !item.new) ?? [];
+  // Spotify marks items seen once any client shows them, so recent releases
+  // also count as new: a week, as in Spotify's own New section.
+  const isFresh = (item: Release) =>
+    item.new || Date.now() - Date.parse(item.released) < 7 * DAY;
+  const fresh = releases?.filter(isFresh) ?? [];
+  const earlier = releases?.filter((item) => !isFresh(item)) ?? [];
   const row = (release: Release) => {
     const id = release.uri.split(":")[2];
     const isSaved = !!saved[release.uri];
@@ -97,29 +101,39 @@ export function WhatsNewPage({
             ))}
           </span>
           <span className="whats-new-meta">
-            {typeName(release.album_type)}
-            {releasedAgo(release.released) &&
-              ` · ${releasedAgo(release.released)}`}
+            <span className="whats-new-type">
+              {typeName(release.album_type)}
+            </span>
+            {releasedAgo(release.released) && (
+              <>
+                <span className="whats-new-dot">·</span>
+                {releasedAgo(release.released)}
+              </>
+            )}
           </span>
-          <div className="whats-new-actions">
-            <button
-              className={`icon-button whats-new-save ${isSaved ? "saved" : ""}`}
-              title={
-                isSaved ? "Remove from Your Library" : "Save to Your Library"
-              }
-              aria-pressed={isSaved}
-              onClick={() => onSave(release.uri, !isSaved)}
-            >
-              {isSaved ? <Check size={16} /> : <Plus size={18} />}
-            </button>
-            <button
-              className="whats-new-play"
-              title={`Play ${release.name}`}
-              onClick={() => onPlay(release.uri)}
-            >
-              <Play size={16} fill="currentColor" />
-            </button>
-          </div>
+        </div>
+        <div className="whats-new-actions">
+          <button
+            className={`icon-button whats-new-save ${isSaved ? "saved" : ""}`}
+            title={
+              isSaved ? "Remove from Your Library" : "Save to Your Library"
+            }
+            aria-pressed={isSaved}
+            onClick={() => onSave(release.uri, !isSaved)}
+          >
+            {isSaved ? (
+              <Check size={18} />
+            ) : (
+              <CirclePlus size={30} strokeWidth={1.4} />
+            )}
+          </button>
+          <button
+            className="whats-new-play"
+            title={`Play ${release.name}`}
+            onClick={() => onPlay(release.uri)}
+          >
+            <Play size={20} fill="currentColor" />
+          </button>
         </div>
       </li>
     );

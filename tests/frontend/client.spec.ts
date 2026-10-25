@@ -9262,11 +9262,11 @@ test("the bell opens What's New with new and earlier releases", async ({
   await expect(feed.locator("section").first()).toContainText("New");
   await expect(feed.locator("section").first()).toContainText("Fresh");
   await expect(feed.locator("section").first()).toContainText(
-    "Single · 4 days ago",
+    /Single\s*·\s*4 days ago/,
   );
   await expect(feed.locator("section").nth(1)).toContainText("Earlier");
   await expect(feed.locator("section").nth(1)).toContainText(
-    "Single · 1 week ago",
+    /Single\s*·\s*1 week ago/,
   );
   await page.screenshot({ path: "target/diagnostics/whats-new.png" });
   await feed

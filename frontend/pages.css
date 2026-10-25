@@ -1120,33 +1120,49 @@
   height: 36px;
 }
 
-/* What's New, behind the bell: a narrow column of releases as in
-   Spotify, split into New and Earlier. */
+/* What's New, behind the bell, laid out as Spotify's: a wide column, large
+   covers, and each row's save and play controls on a line of their own. */
 .whats-new-page {
-  max-width: 680px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
+  padding: 56px 32px 64px;
 }
 .whats-new-page h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 800;
   letter-spacing: -0.5px;
 }
 .whats-new-intro {
-  margin: 4px 0 16px;
-  color: var(--muted);
-  font-size: 14px;
+  margin: 6px 0 20px;
+  color: #b3b3b3;
+  font-size: 17px;
 }
 .whats-new-filters {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 44px;
+}
+.whats-new-filters .pill {
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #ffffff1a;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+  cursor: default;
+}
+.whats-new-filters .pill:hover {
+  transform: none;
 }
 .whats-new-page h2 {
-  margin: 28px 0 12px;
-  font-size: 22px;
+  margin: 0;
+  padding: 0 10px 18px;
+  font-size: 30px;
   font-weight: 700;
+}
+.whats-new-page section + section {
+  margin-top: 14px;
 }
 .whats-new-page ul {
   margin: 0;
@@ -1154,24 +1170,28 @@
   list-style: none;
 }
 .whats-new-row {
-  display: flex;
-  gap: 20px;
-  padding: 14px 10px;
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 32px;
+  row-gap: 26px;
+  padding: 22px 16px;
   border-top: 1px solid #ffffff1a;
 }
 .whats-new-cover {
-  flex: none;
-  width: 96px;
-  height: 96px;
+  grid-row: 1;
+  width: 152px;
+  height: 152px;
   border-radius: 6px;
   cursor: pointer;
 }
 .whats-new-text {
+  grid-row: 1;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  gap: 8px;
   min-width: 0;
-  gap: 4px;
+  padding-top: 6px;
 }
 .whats-new-text button {
   padding: 0;
@@ -1186,73 +1206,77 @@
   text-decoration: underline;
 }
 .whats-new-title {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 400;
+  color: #fff;
 }
-.whats-new-artists,
-.whats-new-meta {
-  color: var(--muted);
-  font-size: 13px;
-}
-.whats-new-artists button:hover {
+.whats-new-artists {
+  font-size: 17px;
   color: #fff;
 }
 .whats-new-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
   color: #fff;
-  font-weight: 600;
+  font-size: 17px;
+}
+.whats-new-type {
+  font-size: 19px;
 }
 .whats-new-actions {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: auto;
 }
-.whats-new-text .whats-new-save {
-  width: 32px;
-  height: 32px;
-  border: 1.5px solid var(--muted);
-  border-radius: 50%;
-  color: var(--muted);
-  justify-content: center;
-}
-.whats-new-text .whats-new-save:hover {
-  border-color: #fff;
-  color: #fff;
-  text-decoration: none;
-}
-.whats-new-text .whats-new-save.saved {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #000;
-}
-.whats-new-text .whats-new-play {
+.whats-new-actions .whats-new-save {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #b3b3b3;
+}
+.whats-new-actions .whats-new-save:hover {
+  color: #fff;
+  background: none;
+}
+.whats-new-actions .whats-new-save.saved {
+  background: var(--accent);
+  color: #000;
+}
+.whats-new-actions .whats-new-play {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: 0;
+  border: 0;
   border-radius: 50%;
   background: #fff;
   color: #000;
+  cursor: pointer;
   transition: transform 0.15s;
 }
-.whats-new-text .whats-new-play:hover {
+.whats-new-actions .whats-new-play svg {
+  margin-left: 2px;
+}
+.whats-new-actions .whats-new-play:hover {
   transform: scale(1.06);
-  text-decoration: none;
 }
 .whats-new-empty {
-  color: var(--muted);
+  color: #b3b3b3;
+  font-size: 17px;
 }
 .whats-new-button.active {
   color: #fff;
 }
-.whats-new-filters .pill {
-  font-size: 14px;
-  font-weight: 500;
-  padding: 6px 12px;
-  background: #ffffff1a;
-  color: #fff;
-  cursor: default;
-}
-.whats-new-filters .pill:hover {
-  transform: none;
+.whats-new-button.active:after {
+  content: none;
 }

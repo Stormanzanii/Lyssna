@@ -4913,11 +4913,28 @@ input.volume-range:active::-webkit-slider-thumb {
   filter: blur(calc(var(--blur, 0px) / 2)) var(--hover-filter,);
   transition: opacity 180ms ease;
 }
-/* Rotated words leave a hairline on the GPU where the text-clipped paint
-   box ends past the last glyph (a mask fade did not remove it). Clip the
-   box just inside its bleed, which holds no ink. */
+/* Rotated words painted with a text-clipped gradient left a faint line at
+   the paint box's edge on the GPU, past the last letter; edge masks, clips
+   and a tighter box did not remove it. Floating words instead fill their
+   glyphs with the lyric colour and fade the unsung part with a mask, which
+   paints nothing of its own, so no box edge can show. */
 .gravity-word .lyric-paint {
-  clip-path: inset(0 1px);
+  --glyph-bleed: 0em;
+  --sweep-edge: calc(100% * var(--sweep) + var(--sweep-overrun));
+  padding: 0;
+  margin: 0;
+  background-image: none;
+  -webkit-text-fill-color: rgb(var(--lyric-rgb, 255 255 255));
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / var(--sung-alpha)) var(--sweep-edge),
+    rgb(0 0 0 / var(--unsung-alpha)) calc(var(--sweep-edge) + 20%)
+  );
+  mask-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / var(--sung-alpha)) var(--sweep-edge),
+    rgb(0 0 0 / var(--unsung-alpha)) calc(var(--sweep-edge) + 20%)
+  );
 }
 .gravity-word:not([data-spawned]) {
   visibility: hidden;

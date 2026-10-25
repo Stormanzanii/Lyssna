@@ -15,7 +15,7 @@ default-members = ["."]
 [features]
 default = ["desktop", "custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-desktop = ["dep:tauri", "dep:tauri-plugin-window-state"]
+desktop = ["dep:tauri", "dep:tauri-plugin-window-state", "dep:tauri-plugin-single-instance"]
 legacy-ui = ["dep:eframe", "dep:egui_extras", "dep:ttf-parser", "dep:tiny-skia"]
 
 [dependencies]
@@ -29,6 +29,7 @@ eframe = { version = "0.33", optional = true, default-features = false, features
 egui_extras = { version = "0.33", optional = true, features = ["image", "http"] }
 tauri = { version = "2", optional = true, features = ["image-ico", "tray-icon"] }
 tauri-plugin-window-state = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
 getrandom = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 librespot-connect = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }

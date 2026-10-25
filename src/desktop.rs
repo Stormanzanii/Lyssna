@@ -3199,6 +3199,13 @@ fn trim_memory(window: tauri::WebviewWindow) {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_window_state::StateFlags;
     let app = tauri::Builder::default()
+        // Opening SpotiFlex again, as from the Start menu while it sits in
+        // the tray, shows the running window instead of a second copy.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                set_window_shown(&window, true);
+            }
+        }))
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)

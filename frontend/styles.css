@@ -5263,14 +5263,10 @@ input.volume-range:active::-webkit-slider-thumb {
 .community-credits .community-dot {
   margin-inline: 0.2em;
 }
-/* Songwriters as Spicy Lyrics shows them: dim label, brighter names. */
-.writer-credits .credit-label {
-  opacity: 0.7;
-}
-.writer-credits .credit-names {
-  color: #fff;
-  font-weight: 600;
-  opacity: 0.85;
+/* Songwriters as Spicy Lyrics shows them: one bold line, label and names
+   in the same colour. */
+.writer-credits {
+  font-weight: 700;
 }
 /* Beside the lyrics, end credits match the pinned footer's size, and
    with a footer pinned they sit just above it, as in Spicy Lyrics. */

@@ -563,7 +563,8 @@ small {
 .home-button {
   height: 42px;
   width: 42px;
-  background: #ffffff09;
+  /* Same fill as the search box beside it. */
+  background: #212121;
 }
 .search-box {
   display: flex;

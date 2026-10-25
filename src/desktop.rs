@@ -2157,7 +2157,11 @@ fn save_settings(
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
-        settings.crossfade_seconds = settings.crossfade_seconds.min(12);
+        // 0 came from the earlier slider, where it meant off.
+        settings.crossfade_seconds = match settings.crossfade_seconds {
+            0 => 5,
+            seconds => seconds.min(12),
+        };
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.lyrics_source_order =
@@ -2187,7 +2191,7 @@ fn save_settings(
             state
                 .0
                 .controls
-                .set_crossfade(&profile.id, settings.crossfade_seconds);
+                .set_crossfade(&profile.id, settings.active_crossfade_seconds());
         }
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_visible(settings.keep_playing_on_close);

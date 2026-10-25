@@ -347,30 +347,38 @@ export function SettingsWindow({
             ))}
           </select>
         </SettingRow>,
-        <SettingRow
-          key="crossfade"
-          label={`Crossfade songs: ${settings.crossfade_seconds ? `${settings.crossfade_seconds} s` : "Off"}`}
-          help="Fade each song into the next when one runs into the other. Songs you pick start straight away."
-          keywords="crossfade fade transition gapless overlap blend"
-        >
-          <span className="settings-range">
-            <input
-              type="range"
-              aria-label="Crossfade seconds"
-              min="0"
-              max="12"
-              value={settings.crossfade_seconds ?? 0}
-              style={
-                {
-                  "--fill": `${((settings.crossfade_seconds ?? 0) / 12) * 100}%`,
-                } as CSSProperties
-              }
-              onChange={(event) =>
-                onSettings({ crossfade_seconds: Number(event.target.value) })
-              }
-            />
-          </span>
-        </SettingRow>,
+        flag(
+          "crossfade",
+          "Crossfade songs",
+          "Fade each song into the next when one runs into the other, as Spotify does. Songs you pick start straight away.",
+          "crossfade fade transition gapless overlap blend",
+        ),
+        settings.crossfade ? (
+          <SettingRow
+            key="crossfade-seconds"
+            label={`Crossfade length: ${settings.crossfade_seconds || 5} s`}
+            help="How long the end of one song overlaps the start of the next."
+            keywords="crossfade seconds length duration"
+          >
+            <span className="settings-range">
+              <input
+                type="range"
+                aria-label="Crossfade seconds"
+                min="1"
+                max="12"
+                value={settings.crossfade_seconds || 5}
+                style={
+                  {
+                    "--fill": `${(((settings.crossfade_seconds || 5) - 1) / 11) * 100}%`,
+                  } as CSSProperties
+                }
+                onChange={(event) =>
+                  onSettings({ crossfade_seconds: Number(event.target.value) })
+                }
+              />
+            </span>
+          </SettingRow>
+        ) : null,
         <SettingRow
           key="refresh"
           label="New headphones or speakers"

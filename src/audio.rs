@@ -209,6 +209,12 @@ impl Sink for AudioSink {
         self.crossfade.tail.clear();
         self.crossfade.mixed = 0;
         self.crossfade.remaining_ms = None;
+        #[cfg(not(test))]
+        if !self.crossfade.fading.is_empty() {
+            let ms = self.crossfade.fading.len() as u64 * 1000
+                / (u64::from(SAMPLE_RATE) * u64::from(CHANNELS));
+            crate::native::diagnostic(&format!("event crossfade {ms}ms into {uri}"));
+        }
         self.track_uri = Some(uri);
     }
     fn crossfade_hint(&mut self, remaining_ms: Option<u32>) {

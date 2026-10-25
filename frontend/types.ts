@@ -139,6 +139,7 @@ export interface Settings {
   volume_percent?: number;
   auto_download_updates: boolean;
   keep_playing_on_close?: boolean;
+  crossfade?: boolean;
   crossfade_seconds?: number;
   lyrics_discord_usernames?: boolean;
   audio_output?: string | null;

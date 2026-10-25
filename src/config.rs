@@ -171,7 +171,9 @@ pub struct Settings {
     /// keeps playing; Quit in the tray menu exits. Off by default. Replaces
     /// an earlier `close_to_tray` that was on by default.
     pub keep_playing_on_close: bool,
-    /// Seconds songs overlap when one runs into the next; 0 turns it off.
+    /// Songs overlap when one runs into the next, as Spotify's Crossfade
+    /// songs: off by default, 1 to 12 seconds, 5 unless chosen.
+    pub crossfade: bool,
     pub crossfade_seconds: u8,
     /// Community lyrics credit people by Discord username, not display name.
     pub lyrics_discord_usernames: bool,
@@ -239,7 +241,8 @@ impl Default for Settings {
             audio_output: None,
             auto_download_updates: true,
             keep_playing_on_close: false,
-            crossfade_seconds: 0,
+            crossfade: false,
+            crossfade_seconds: 5,
             lyrics_discord_usernames: true,
             folders: Vec::new(),
             now_playing_open: true,
@@ -272,6 +275,14 @@ pub fn data_dir() -> Result<PathBuf> {
 }
 
 impl Settings {
+    /// Crossfade length in seconds, or 0 while Crossfade songs is off.
+    pub fn active_crossfade_seconds(&self) -> u8 {
+        if self.crossfade {
+            self.crossfade_seconds.clamp(1, 12)
+        } else {
+            0
+        }
+    }
     pub fn load() -> Result<Self> {
         let path = data_dir()?.join("settings.json");
         let mut settings: Self = if path.exists() {

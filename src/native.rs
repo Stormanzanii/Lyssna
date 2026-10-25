@@ -1743,8 +1743,8 @@ impl NativePlayer {
             .unwrap_or(100);
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(settings) = crate::config::Settings::load() {
+            audio_buffer.set_crossfade(settings.active_crossfade_seconds());
             audio_buffer.output.request(settings.audio_output);
-            audio_buffer.set_crossfade(settings.crossfade_seconds);
         }
         if let Ok(mut connection) = controls.0.lock() {
             *connection = Some(ControlConnection {

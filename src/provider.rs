@@ -218,9 +218,11 @@ pub fn resolve_contributors(lyrics: &mut Lyrics) {
     let Some(attribution) = lyrics.attribution.as_mut() else {
         return;
     };
+    // The site answers requests without a User-Agent with a captcha.
     let Ok(client) = Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none())
+        .user_agent(concat!("SpotiFlex/", env!("CARGO_PKG_VERSION")))
         .build()
     else {
         return;

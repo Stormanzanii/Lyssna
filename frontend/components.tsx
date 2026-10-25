@@ -414,6 +414,8 @@ export function usePosition(
   return clock.current.read(Math.max(time, now));
 }
 
+/** Spicy Lyrics resumes following this long after the last scroll. */
+const BROWSE_COOLDOWN_MS = 750;
 export function LyricsDisplay({
   lyrics,
   positionMs,
@@ -439,10 +441,14 @@ export function LyricsDisplay({
       names={lyrics.songwriters?.length ? lyrics.songwriters : writers}
     />
   );
-  // Browsing stays paused until the user returns or selects a lyric.
+  // As in Spicy Lyrics, browsing ends on its own once the user stops
+  // scrolling with the current lyric still on screen; scrolled away from
+  // it, browsing stays until they return or select a lyric.
   const glide = useRef<{ from: number; start: number }>(undefined);
+  const browsedAt = useRef(0);
   const browse = () => {
     glide.current = undefined;
+    browsedAt.current = performance.now();
     setFollowing(false);
   };
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
@@ -636,6 +642,17 @@ export function LyricsDisplay({
     // Held until follow mode resumes, so a jump while browsing still glides.
     if (following) jumped.current = false;
   }, [positionMs, following]);
+  useEffect(() => {
+    if (following || !lyrics.synced) return;
+    if (performance.now() - browsedAt.current < BROWSE_COOLDOWN_MS) return;
+    const container = scroll.current,
+      line = lines.current[primary];
+    if (!container || !line) return;
+    const view = container.getBoundingClientRect(),
+      box = line.getBoundingClientRect();
+    if (Math.min(box.bottom, view.bottom) - Math.max(box.top, view.top) >= 5)
+      setFollowing(true);
+  }, [positionMs, following, primary, lyrics.synced]);
   if (lyrics.instrumental)
     return (
       <div className="lyrics-message">

@@ -2931,6 +2931,42 @@ async function playLyricTrack(page: Page, playing = true) {
     });
   }, playing);
 }
+test("a small scroll resumes following while the current lyric stays on screen", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const position = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) => {
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        });
+      },
+      { uri: track.uri, position_ms },
+    );
+  await position(40_500);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const display = page.locator(".lyrics-page .lyrics-display"),
+    flow = display.locator(".lyric-scroll");
+  await expect
+    .poll(() => flow.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(100);
+  await flow.hover();
+  await page.mouse.wheel(0, 60);
+  await expect(display).toHaveAttribute("data-following", "false");
+  // Like Spicy Lyrics, following waits out the scroll cooldown first.
+  await position(40_600);
+  await expect(display).toHaveAttribute("data-following", "false");
+  await page.waitForTimeout(800);
+  await position(40_700);
+  await expect(display).toHaveAttribute("data-following", "true");
+});
+
 test("lyric browsing stays put until the directional return button is clicked", async ({
   page,
 }) => {

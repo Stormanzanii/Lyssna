@@ -3690,6 +3690,40 @@ input[type="range"] {
   flex: 1;
   width: 100%;
 }
+/* Hovering the bar previews, in light grey, how far a click would jump,
+   with the time above the pointer, as Spotify does. */
+.seek-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.seek-row input[type="range"]:hover {
+  background: linear-gradient(
+    90deg,
+    var(--accent) var(--range, 0%),
+    #ffffffb3 var(--range, 0%),
+    #ffffffb3 max(var(--range, 0%), var(--hover, 0%)),
+    #ffffff25 max(var(--range, 0%), var(--hover, 0%))
+  );
+}
+.seek-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #282828;
+  box-shadow: 0 4px 12px #0009;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
@@ -3743,7 +3777,9 @@ input.volume-range:is(:hover, :active, :focus-visible) {
   background: linear-gradient(
     90deg,
     #1ed760 var(--range, 0%),
-    #ffffff4d var(--range, 0%)
+    #ffffffb3 var(--range, 0%),
+    #ffffffb3 max(var(--range, 0%), var(--hover, 0%)),
+    #ffffff4d max(var(--range, 0%), var(--hover, 0%))
   );
 }
 /* At rest the white fill ends in a rounded cap, as Spotify's does: the

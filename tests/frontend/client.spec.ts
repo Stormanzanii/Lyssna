@@ -9208,3 +9208,23 @@ test("pinned lyric credits line up with the writers above", async ({
   });
   expect(Math.abs(lefts.writers! - lefts.source!)).toBeLessThanOrEqual(1);
 });
+
+test("hovering the progress bar previews the time under the pointer", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const bar = page.getByLabel("Seek position");
+  const box = (await bar.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height / 2);
+  const tooltip = page.locator(".seek-tooltip");
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText(/^\d+:\d{2}$/);
+  expect(
+    await bar.evaluate((node) =>
+      parseFloat(node.style.getPropertyValue("--hover")),
+    ),
+  ).toBeCloseTo(75, 0);
+  await page.mouse.move(box.x + box.width / 2, box.y - 200);
+  await expect(tooltip).toHaveCount(0);
+});

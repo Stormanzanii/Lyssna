@@ -4689,6 +4689,14 @@ function App() {
   );
 }
 
+/** Where the pointer sits along a slider, 0 to 1. Sets `--hover` for the
+ * light preview fill Spotify shows ahead of the current value. */
+function hoverPreview(input: HTMLInputElement, clientX: number) {
+  const box = input.getBoundingClientRect();
+  const at = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
+  input.style.setProperty("--hover", `${at * 100}%`);
+  return at;
+}
 function PlayerBar({
   state,
   onPlayer,
@@ -4725,7 +4733,8 @@ function PlayerBar({
   const current = usePosition(state),
     track = state.playback.item;
   const [seeking, setSeeking] = useState<number | null>(null),
-    [volume, setVolume] = useState(70);
+    [volume, setVolume] = useState(70),
+    [seekHover, setSeekHover] = useState<number | null>(null);
   const volumeCallback = useRef(onPlayer);
   volumeCallback.current = onPlayer;
   const volumeControl = useMemo(
@@ -4880,27 +4889,45 @@ function PlayerBar({
         </div>
         <div className="seek-row">
           <time>{formatTime(seeking ?? current)}</time>
-          <input
-            aria-label="Seek position"
-            type="range"
-            min="0"
-            max={track?.duration_ms || 1}
-            value={seeking ?? current}
-            style={
-              {
-                "--range": `${((seeking ?? current) / Math.max(1, track?.duration_ms || 1)) * 100}%`,
-              } as CSSProperties
-            }
-            onChange={(event) => setSeeking(Number(event.target.value))}
-            onPointerDown={(event) =>
-              event.currentTarget.setPointerCapture(event.pointerId)
-            }
-            onPointerUp={seek}
-            onKeyUp={seek}
-            onPointerCancel={() => setSeeking(null)}
-            onLostPointerCapture={() => setSeeking(null)}
-            onBlur={seek}
-          />
+          <div className="seek-track">
+            {seekHover !== null && track?.duration_ms ? (
+              <span
+                className="seek-tooltip"
+                style={{ left: `${seekHover * 100}%` }}
+                aria-hidden="true"
+              >
+                {formatTime(seekHover * track.duration_ms)}
+              </span>
+            ) : null}
+            <input
+              aria-label="Seek position"
+              type="range"
+              min="0"
+              max={track?.duration_ms || 1}
+              value={seeking ?? current}
+              style={
+                {
+                  "--range": `${((seeking ?? current) / Math.max(1, track?.duration_ms || 1)) * 100}%`,
+                } as CSSProperties
+              }
+              onChange={(event) => setSeeking(Number(event.target.value))}
+              onPointerDown={(event) =>
+                event.currentTarget.setPointerCapture(event.pointerId)
+              }
+              onPointerUp={seek}
+              onKeyUp={seek}
+              onPointerCancel={() => setSeeking(null)}
+              onLostPointerCapture={() => setSeeking(null)}
+              onBlur={seek}
+              onPointerMove={(event) =>
+                setSeekHover(hoverPreview(event.currentTarget, event.clientX))
+              }
+              onPointerLeave={(event) => {
+                event.currentTarget.style.removeProperty("--hover");
+                setSeekHover(null);
+              }}
+            />
+          </div>
           <time>{formatTime(track?.duration_ms || 0)}</time>
         </div>
       </div>
@@ -4959,6 +4986,12 @@ function PlayerBar({
           onKeyUp={() => volumeControl.finish()}
           onBlur={() => volumeControl.finish()}
           style={{ "--range": `${volume}%` } as CSSProperties}
+          onPointerMove={(event) =>
+            hoverPreview(event.currentTarget, event.clientX)
+          }
+          onPointerLeave={(event) =>
+            event.currentTarget.style.removeProperty("--hover")
+          }
           onChange={(event) => {
             const next = Number(event.target.value);
             volumeControl.edit(next);

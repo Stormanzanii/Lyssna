@@ -5316,6 +5316,11 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyric-end-credits .lyric-source {
   font-weight: 700;
 }
+/* Names stand out a shade brighter than their label, as in Spicy Lyrics. */
+.writer-credits .credit-names {
+  color: #fff;
+  opacity: 0.8;
+}
 /* Beside the lyrics, end credits match the pinned footer's size, and
    with a footer pinned they sit just above it, as in Spicy Lyrics. */
 .lyrics-page .lyric-end-credits {

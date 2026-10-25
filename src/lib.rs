@@ -10,6 +10,8 @@ mod audio;
 pub mod audio_cache;
 mod audio_output;
 pub mod auth;
+#[cfg(feature = "desktop")]
+pub mod autostart;
 pub mod canvas;
 pub mod catalogue;
 pub mod collection;

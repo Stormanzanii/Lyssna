@@ -3122,6 +3122,20 @@ fn set_window_shown(window: &tauri::WebviewWindow, shown: bool) {
         let _ = window.hide();
     }
 }
+#[tauri::command]
+async fn autostart() -> std::result::Result<crate::autostart::Launch, String> {
+    tauri::async_runtime::spawn_blocking(crate::autostart::get)
+        .await
+        .map_err(|_| "Startup setting unavailable".to_owned())?
+        .map_err(|error| error.to_string())
+}
+#[tauri::command]
+async fn set_autostart(launch: crate::autostart::Launch) -> std::result::Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || crate::autostart::set(launch))
+        .await
+        .map_err(|_| "Startup setting unavailable".to_owned())?
+        .map_err(|error| error.to_string())
+}
 /// Exit for real; the close button may only hide to the tray.
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
@@ -3298,6 +3312,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(tray) = app.tray_by_id("main") {
                 tray.set_visible(keep_playing)?;
             }
+            // Opened at sign-in as "Minimized": to the tray when closing keeps
+            // music playing, otherwise to the taskbar.
+            if std::env::args().any(|argument| argument == crate::autostart::MINIMIZED_ARG)
+                && let Some(window) = app.get_webview_window("main")
+            {
+                if keep_playing {
+                    set_window_shown(&window, false);
+                } else {
+                    window.minimize()?;
+                }
+            }
             let handle = app.handle().clone();
             let session = crate::media::Session::start(app.handle(), move |action| {
                 let position = match action {
@@ -3345,6 +3370,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             retry_lyrics,
             refresh_lyrics,
             quit_app,
+            autostart,
+            set_autostart,
             clear_lyrics_cache,
             import_lyrics,
             reset_lyrics,

@@ -191,6 +191,19 @@ export function SettingsWindow({
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [testingOutput, setTestingOutput] = useState(false);
   const [cacheBytes, setCacheBytes] = useState<number | null>(null);
+  // Read from Windows each time Settings opens: Task Manager can change it.
+  const [launch, setLaunch] = useState<"off" | "open" | "minimized" | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    void onCall<"off" | "open" | "minimized">("autostart").then((value) => {
+      if (active && value) setLaunch(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall]);
   const [clearingCache, setClearingCache] = useState(false);
   useEffect(() => {
     let active = true;
@@ -435,13 +448,34 @@ export function SettingsWindow({
     ],
     [
       "General",
-      "Window",
+      "Startup and window behaviour",
       [
+        <SettingRow
+          key="autostart"
+          label="Open SpotiFlex automatically after you log into the computer"
+          keywords="startup autostart login sign in boot launch minimized"
+        >
+          <select
+            className="settings-select"
+            aria-label="Open SpotiFlex automatically"
+            value={launch ?? "off"}
+            disabled={launch === null}
+            onChange={(event) => {
+              const next = event.target.value as "off" | "open" | "minimized";
+              setLaunch(next);
+              void onCall("set_autostart", { launch: next });
+            }}
+          >
+            <option value="off">No</option>
+            <option value="open">Yes</option>
+            <option value="minimized">Minimized</option>
+          </select>
+        </SettingRow>,
         flag(
           "keep_playing_on_close",
-          "Close button keeps music playing",
-          "Closing the window hides SpotiFlex in the notification area. Choose Quit from its icon, or Exit from the menu, to close it.",
-          "close minimize minimise tray background notification area system tray quit",
+          "Close button should minimize the SpotiFlex window",
+          "",
+          "close minimize minimise tray background notification area system tray quit keep playing",
         ),
       ],
     ],

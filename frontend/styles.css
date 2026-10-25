@@ -4866,24 +4866,11 @@ input.volume-range:active::-webkit-slider-thumb {
   filter: blur(calc(var(--blur, 0px) / 2)) var(--hover-filter,);
   transition: opacity 180ms ease;
 }
-/* Rotated words leave a hairline where the clipped paint box ends past
-   the last glyph. The paint keeps its full bleed, so wide custom fonts are
-   not cut off, and its outermost pixels fade out. */
+/* Rotated words leave a hairline on the GPU where the text-clipped paint
+   box ends past the last glyph (a mask fade did not remove it). Clip the
+   box just inside its bleed, which holds no ink. */
 .gravity-word .lyric-paint {
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent,
-    #000 2px,
-    #000 calc(100% - 2px),
-    transparent
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent,
-    #000 2px,
-    #000 calc(100% - 2px),
-    transparent
-  );
+  clip-path: inset(0 1px);
 }
 .gravity-word:not([data-spawned]) {
   visibility: hidden;

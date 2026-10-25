@@ -143,6 +143,7 @@ export function LyricsCanvas({
       ) : (
         <video
           ref={video}
+          data-canvas-video
           // Active means a frame is on screen. A paused video keeps its
           // frame, so pausing must not swap the page back to the artwork.
           onLoadedData={() => onActive?.(true)}

@@ -1538,6 +1538,7 @@ function CanvasArtwork({
     <button className="canvas-artwork" aria-label="Open album" onClick={onOpen}>
       <video
         ref={video}
+        data-canvas-video
         src={url}
         muted
         loop
@@ -1625,6 +1626,7 @@ export function NowPlaying({
         track={track}
         reduceMotion={state.settings.reduce_motion}
         animate={state.playback.is_playing}
+        followCanvas={!!state.canvas_url}
       />
       <div className="now-playing-scroll">
         {!canvas && heading}

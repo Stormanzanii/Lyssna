@@ -16,6 +16,7 @@ export const Ambience = memo(function Ambience({
   speed = 1,
   shade = true,
   saturation = 3,
+  followCanvas = false,
 }: {
   track?: Track;
   /** Artwork URL used instead of the track's album art. */
@@ -31,13 +32,19 @@ export const Ambience = memo(function Ambience({
   /** Kawarp colour boost. 3, its maximum, stands in for Spicy Lyrics'
    * `saturate(2.5)` filter on top of 1.5 without a full-panel filter pass. */
   saturation?: number;
+  /** Warp the playing Canvas video instead of the artwork, as Spicy Lyrics'
+   * Now Playing background does. */
+  followCanvas?: boolean;
 }) {
   const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
     renderer = useRef<Kawarp | null>(null),
     resume = useRef<((settleMs?: number) => void) | null>(null),
+    following = useRef<HTMLVideoElement | null>(null),
+    artwork = useRef(source),
     motion = useRef({ animate, reduceMotion });
   motion.current = { animate, reduceMotion };
+  artwork.current = source;
   useEffect(() => {
     const canvas = surface.current;
     if (!canvas) return;
@@ -94,6 +101,10 @@ export const Ambience = memo(function Ambience({
       engine.start();
       engine.stop();
       engine.renderFrame();
+      // Kawarp samples video frames only while its own loop runs. Ours paces
+      // the drawing, so the engine is marked playing without that loop.
+      if (following.current && allowed())
+        (engine as unknown as { isPlaying: boolean }).isPlaying = true;
       if (allowed() || settling()) frame = requestAnimationFrame(tick);
     };
     resume.current = (settleMs = 0) => {
@@ -143,7 +154,58 @@ export const Ambience = memo(function Ambience({
     };
   }, []);
   useEffect(() => {
-    if (!source) return;
+    if (!followCanvas) return;
+    const engine = renderer.current;
+    if (!engine) return;
+    let failed: HTMLVideoElement | null = null;
+    const stopFollowing = () => {
+      if (!following.current) return;
+      following.current = null;
+      engine.unloadVideo();
+      if (artwork.current)
+        void engine
+          .loadImage(artwork.current)
+          .then(() => resume.current?.(engine.transitionDuration + 100))
+          .catch(() => {});
+    };
+    // Canvas videos come and go with songs and layouts; look for the one on
+    // screen twice a second rather than threading it through every parent.
+    const look = () => {
+      const video = document.querySelector<HTMLVideoElement>(
+        "video[data-canvas-video]",
+      );
+      if (!video || video === failed) return stopFollowing();
+      if (video === following.current) return;
+      try {
+        engine.loadVideo(video, {
+          // Canvases are 9:16; keep that shape in the colour map.
+          sampleWidth: 72,
+          sampleHeight: 128,
+          // Background windows sample fewer frames, as they draw fewer.
+          frameRate: Math.max(1, ambienceFps(windowActivity())),
+          // Fast cuts ease in instead of flashing across the panel.
+          smoothing: 100,
+          onError: () => {
+            failed = video;
+            stopFollowing();
+          },
+        });
+      } catch {
+        failed = video;
+        return;
+      }
+      following.current = video;
+      resume.current?.();
+    };
+    look();
+    const timer = setInterval(look, 500);
+    return () => {
+      clearInterval(timer);
+      stopFollowing();
+    };
+  }, [followCanvas]);
+  useEffect(() => {
+    if (!source || following.current) return;
     let cancelled = false;
     const engine = renderer.current;
     void engine

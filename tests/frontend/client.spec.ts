@@ -654,6 +654,7 @@ async function startClient(
               host.__clientTest.resolveDJRequest = resolve;
             });
           if (command === "follow_user") return args.follow;
+          if (command === "whats_new") return host.__clientTest.whatsNew ?? [];
           if (command === "search_page")
             return {
               more: false,
@@ -9227,4 +9228,58 @@ test("hovering the progress bar previews the time under the pointer", async ({
   ).toBeCloseTo(75, 0);
   await page.mouse.move(box.x + box.width / 2, box.y - 200);
   await expect(tooltip).toHaveCount(0);
+});
+
+test("the bell opens What's New with new and earlier releases", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const release = (name: string, isNew: boolean, daysAgo: number) => ({
+      id: `music_release:${name}`,
+      uri: `spotify:album:${name.padEnd(22, "x").slice(0, 22)}`,
+      name,
+      album_type: "SINGLE",
+      artists: [
+        {
+          id: "0pWR7TsFhvSCnbmHDjWgrE",
+          uri: "spotify:artist:0pWR7TsFhvSCnbmHDjWgrE",
+          name: "Creepy Nuts",
+        },
+      ],
+      images: [{ url: "https://artwork.example.test/cover.svg", width: 640 }],
+      released: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+      new: isNew,
+    });
+    (window as any).__clientTest.whatsNew = [
+      release("Fresh", true, 4),
+      release("Older", false, 8),
+    ];
+  });
+  await page.getByRole("button", { name: "What's New" }).click();
+  const feed = page.locator(".whats-new-page");
+  await expect(feed.getByRole("heading", { name: "What’s New" })).toBeVisible();
+  await expect(feed.locator("section").first()).toContainText("New");
+  await expect(feed.locator("section").first()).toContainText("Fresh");
+  await expect(feed.locator("section").first()).toContainText(
+    "Single · 4 days ago",
+  );
+  await expect(feed.locator("section").nth(1)).toContainText("Earlier");
+  await expect(feed.locator("section").nth(1)).toContainText(
+    "Single · 1 week ago",
+  );
+  await page.screenshot({ path: "target/diagnostics/whats-new.png" });
+  await feed
+    .getByRole("button", { name: "Save to Your Library" })
+    .first()
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (entry: any) => entry.command === "save_item" && entry.args.saved,
+        ),
+      ),
+    )
+    .toBe(true);
 });

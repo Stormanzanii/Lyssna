@@ -1119,3 +1119,140 @@
   width: 36px;
   height: 36px;
 }
+
+/* What's New, behind the bell: a narrow column of releases as in
+   Spotify, split into New and Earlier. */
+.whats-new-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+.whats-new-page h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.whats-new-intro {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.whats-new-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.whats-new-page h2 {
+  margin: 28px 0 12px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.whats-new-page ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.whats-new-row {
+  display: flex;
+  gap: 20px;
+  padding: 14px 10px;
+  border-top: 1px solid #ffffff1a;
+}
+.whats-new-cover {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.whats-new-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.whats-new-text button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.whats-new-text button:hover {
+  text-decoration: underline;
+}
+.whats-new-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.whats-new-artists,
+.whats-new-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+.whats-new-artists button:hover {
+  color: #fff;
+}
+.whats-new-meta {
+  color: #fff;
+  font-weight: 600;
+}
+.whats-new-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+.whats-new-text .whats-new-save {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  color: var(--muted);
+  justify-content: center;
+}
+.whats-new-text .whats-new-save:hover {
+  border-color: #fff;
+  color: #fff;
+  text-decoration: none;
+}
+.whats-new-text .whats-new-save.saved {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #000;
+}
+.whats-new-text .whats-new-play {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  transition: transform 0.15s;
+}
+.whats-new-text .whats-new-play:hover {
+  transform: scale(1.06);
+  text-decoration: none;
+}
+.whats-new-empty {
+  color: var(--muted);
+}
+.whats-new-button.active {
+  color: #fff;
+}
+.whats-new-filters .pill {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+  background: #ffffff1a;
+  color: #fff;
+  cursor: default;
+}
+.whats-new-filters .pill:hover {
+  transform: none;
+}

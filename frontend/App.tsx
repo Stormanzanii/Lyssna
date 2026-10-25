@@ -26,6 +26,7 @@ import {
   FolderPlus,
   Heart,
   Code,
+  Bell,
   Home,
   ImagePlus,
   Pencil,
@@ -174,6 +175,7 @@ import {
 } from "./player-icons";
 import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
+import { WhatsNewPage } from "./whats-new-page";
 import {
   addedLabel,
   collectionQueue,
@@ -2264,6 +2266,14 @@ function App() {
           </div>
         </div>
         <div className="top-actions">
+          <button
+            className={`icon-button whats-new-button ${state.route === "whats-new" && center === "browse" ? "active" : ""}`}
+            title="What's New"
+            aria-label="What's New"
+            onClick={() => navigate("whats-new")}
+          >
+            <Bell size={20} />
+          </button>
           <ProfileMenu
             name={profileName}
             image={profileImage}
@@ -2577,6 +2587,18 @@ function App() {
                 onNotice={notify}
               />
             )
+          ) : state.route === "whats-new" ? (
+            <div className="browse-scroll" ref={mainScroll}>
+              <WhatsNewPage
+                saved={state.saved}
+                onOpen={(route) => navigate(route)}
+                onPlay={(uri) => play({ command: "play_home", context: uri })}
+                onSave={(uri, saved) => {
+                  dispatch({ type: "saved", uri, saved });
+                  void call("save_item", { uri, saved });
+                }}
+              />
+            </div>
           ) : state.route === "recent" ? (
             <div className="browse-scroll" ref={mainScroll}>
               <RecentsPage

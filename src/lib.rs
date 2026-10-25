@@ -43,4 +43,5 @@ pub mod track_facts;
 pub mod ui;
 pub mod updater;
 pub mod user_profile;
+pub mod whats_new;
 pub mod worker;

@@ -1481,7 +1481,7 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::Logout).map_err(error)
 }
 fn valid_route(key: &str) -> bool {
-    if ["home", "liked", "queue", "recent"].contains(&key) {
+    if ["home", "liked", "queue", "recent", "whats-new"].contains(&key) {
         return true;
     }
     if let Some(query) = key.strip_prefix("search:") {
@@ -1619,7 +1619,8 @@ fn browse(
             "Page changed"
         );
         snapshot.loading = true;
-        if key == "home" {
+        // These pages load their own content.
+        if key == "home" || key == "whats-new" {
             snapshot.loading = false;
             snapshot.more = false;
             return Ok(());
@@ -2767,6 +2768,25 @@ async fn user_profile(
     .map_err(error)?
     .map_err(|_| "Profile unavailable. Try again shortly.".to_owned())
 }
+/// New releases from followed artists, as Spotify's What's New panel.
+#[tauri::command]
+async fn whats_new(
+    state: State<'_, Desktop>,
+) -> std::result::Result<Vec<crate::whats_new::Release>, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || controls.run(crate::whats_new::fetch))
+        .await
+        .map_err(error)?
+        .map_err(|_| "What's New is unavailable. Try again shortly.".to_owned())
+}
 /// Follow or unfollow a Spotify user; returns the confirmed state.
 #[tauri::command]
 async fn follow_user(
@@ -3372,6 +3392,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             quit_app,
             autostart,
             set_autostart,
+            whats_new,
             clear_lyrics_cache,
             import_lyrics,
             reset_lyrics,

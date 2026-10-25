@@ -103,7 +103,7 @@ export function LyricsCanvas({
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = "high";
         if (!IS_MAC)
-          context.filter = "blur(8px) saturate(1.25) brightness(0.5)";
+          context.filter = "blur(8px) saturate(2.5) brightness(0.65)";
         fillPage();
         if (!root?.classList.contains("narrow")) {
           const bounds = root?.getBoundingClientRect(),
@@ -159,7 +159,7 @@ export function LyricsCanvas({
           context.restore();
         }
         if (IS_MAC) {
-          context.fillStyle = "rgba(0, 0, 0, 0.5)";
+          context.fillStyle = "rgba(0, 0, 0, 0.35)";
           context.fillRect(0, 0, canvas.width, canvas.height);
         }
       }

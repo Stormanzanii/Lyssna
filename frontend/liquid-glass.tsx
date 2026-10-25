@@ -25,6 +25,7 @@ export const GlassBackdrop = memo(function GlassBackdrop({
         reduceMotion={reduceMotion}
         warp={1.6}
         speed={2.4}
+        saturation={1.5}
         shade={false}
       />
       <div className="glass-backdrop-shade" />

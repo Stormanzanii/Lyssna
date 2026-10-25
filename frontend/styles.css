@@ -2493,13 +2493,12 @@ small {
 .ambient-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(#0004, #0005);
-}
-.now-playing .ambient-layer {
-  opacity: 0.85;
+  /* Spicy Lyrics' brightness(0.65), as a flat layer instead of a filter. */
+  background: #00000059;
 }
 .now-playing .ambient-shade {
-  background: linear-gradient(#0004, #0005);
+  /* Its side panel's brightness(0.6). */
+  background: #0006;
 }
 .lyrics-page {
   container-type: inline-size;

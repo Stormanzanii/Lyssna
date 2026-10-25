@@ -15,6 +15,7 @@ export const Ambience = memo(function Ambience({
   warp = 1,
   speed = 1,
   shade = true,
+  saturation = 3,
 }: {
   track?: Track;
   /** Artwork URL used instead of the track's album art. */
@@ -27,6 +28,9 @@ export const Ambience = memo(function Ambience({
   speed?: number;
   /** Omit when the parent applies this same gradient with its other shading. */
   shade?: boolean;
+  /** Kawarp colour boost. 3, its maximum, stands in for Spicy Lyrics'
+   * `saturate(2.5)` filter on top of 1.5 without a full-panel filter pass. */
+  saturation?: number;
 }) {
   const source = image ?? track?.album.images?.[0]?.url ?? "",
     surface = useRef<HTMLCanvasElement>(null),
@@ -43,7 +47,7 @@ export const Ambience = memo(function Ambience({
         warpIntensity: 1,
         blurPasses: 8,
         animationSpeed: 1,
-        saturation: 1.5,
+        saturation,
         dithering: 0.008,
         transitionDuration: 500,
         tintIntensity: 0,
@@ -157,8 +161,9 @@ export const Ambience = memo(function Ambience({
     renderer.current?.setOptions({
       warpIntensity: warp,
       animationSpeed: speed,
+      saturation,
     });
-  }, [warp, speed]);
+  }, [warp, speed, saturation]);
   return (
     <div
       className={`ambience ${reduceMotion ? "still" : ""}`}

@@ -11263,6 +11263,78 @@ test("highlighter finishes a line at the singing's pace", async ({ page }) => {
   await expect.poll(spread).toBeGreaterThan(0.95);
 });
 
+test("highlighter ink edge sits on the letter being sung", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await showLyrics(page);
+  const at = (progress_ms: number) =>
+    page.evaluate(
+      ({ track, playback, progress_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...playback,
+            item: track,
+            is_playing: false,
+            progress_ms,
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { track, playback: emptyState.playback, progress_ms },
+    );
+  await at(500);
+  await page.evaluate(
+    ({ track }) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              start_ms: 0,
+              end_ms: 4000,
+              text: "Mmmmmmmmmm",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [{ text: "Mmmmmmmmmm", start_ms: 0, end_ms: 4000 }],
+            },
+          ],
+        },
+      }),
+    { track },
+  );
+  const first = page.locator(".lyrics-page .lyric-line").first();
+  // Where the ink's edge sits, as a share of the word.
+  const edge = () =>
+    first.evaluate((line) => {
+      const tip = line.querySelector(".highlighter-tip:not(.lifted)")!;
+      const piece = line
+        .querySelector(".highlighter-piece")!
+        .getBoundingClientRect();
+      const em = parseFloat(getComputedStyle(line).fontSize);
+      const box = tip.getBoundingClientRect();
+      return (
+        ((box.left + box.right) / 2 - 0.09 * em - piece.left) / piece.width
+      );
+    });
+  for (const [time, share] of [
+    [1000, 0.25],
+    [2000, 0.5],
+    [3000, 0.75],
+  ]) {
+    await at(time);
+    await expect.poll(edge).toBeGreaterThan(share - 0.04);
+    expect(await edge()).toBeLessThan(share + 0.04);
+  }
+});
+
 test("highlighter toggles mid-song without per-line layouts", async ({
   page,
 }) => {

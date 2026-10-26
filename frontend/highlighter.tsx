@@ -363,21 +363,25 @@ function paint(
     tip.className = "highlighter-tip";
     const width = lane.right - lane.left,
       height = lane.bottom - lane.top;
-    const reveal = Math.min(width, path - lane.start);
+    const reveal = Math.max(0, Math.min(width, path - lane.start));
     const left = lane.left - lead,
       full = width + lead + tail,
       top = lane.top + height * 0.09,
       tall = height * 0.84;
-    // The ink's margins grow with it, so a row starts from nothing and
-    // ends without a hop.
-    const end = (Math.max(0, reveal) / Math.max(1, width)) * full;
+    // The ink's edge sits exactly on the letter being sung. Its margins
+    // grow in over the first and last half em, so a row starts from
+    // nothing and ends without a hop.
+    const ramp = 0.5 * em;
+    const opening = lead * Math.min(1, reveal / ramp),
+      closing = tail * Math.max(0, Math.min(1, (reveal - width + ramp) / ramp));
+    const end = lead + reveal + closing;
     // A hand drifts a little across a row.
     const tilt = wobble(seed + index) * 0.6,
       drift = Math.tan((tilt * Math.PI) / 180);
     band.style.transform = `translate(${left}px, ${top}px) rotate(${tilt.toFixed(2)}deg) skewX(-8deg)`;
     band.style.width = `${full}px`;
     band.style.height = `${tall}px`;
-    band.style.clipPath = `inset(0 ${Math.max(0, full - end).toFixed(1)}px 0 0 round ${(0.14 * em).toFixed(1)}px)`;
+    band.style.clipPath = `inset(0 ${Math.max(0, full - end).toFixed(1)}px 0 ${(lead - opening).toFixed(1)}px round ${(0.14 * em).toFixed(1)}px)`;
     band.style.setProperty("--shade", laneShade(lane, left, pieces, em, time));
     const mask = `${laneMask(lane, left, pieces, em, time)}, ${WAVER}`;
     const size = `100% 100%, ${(2.8 * em).toFixed(1)}px 100%`;
@@ -392,7 +396,10 @@ function paint(
     tip.style.transform = `translate(${left + along}px, ${top + along * drift}px) rotate(${tilt.toFixed(2)}deg) skewX(-8deg)`;
     tip.style.width = `${nibWidth}px`;
     tip.style.height = `${tall}px`;
-    tip.style.setProperty("--tip-opacity", `${Math.min(1, end / nibWidth)}`);
+    tip.style.setProperty(
+      "--tip-opacity",
+      `${Math.min(1, (opening + reveal) / nibWidth)}`,
+    );
     // Only the row being drawn keeps its tip; a finished row's fades out
     // as the pen moves on, rather than vanishing.
     tip.classList.toggle("lifted", index !== shown.length - 1);
@@ -457,34 +464,36 @@ export const HighlighterWords = memo(function HighlighterWords({
       sheet = ink.current;
     if (!element || !sheet) return;
     const state = pen.current;
-    const step = () =>
-      batched(element, () => {
-        const now = performance.now();
-        const resized = !layout.current;
-        const current = (layout.current ??= measure(element, pieces));
-        const target = pathAt(element, current, pieces, latest.current);
-        const elapsed = state.at ? Math.min(100, now - state.at) : 1000 / 60;
-        state.at = now;
-        // A new layout must use song time, not the old layout's pixel distance.
-        // Otherwise the pen eases toward the song, including the final margin.
-        const finishing = latest.current === Infinity;
-        state.path =
-          !state.drawn || resized || target < state.path - 1
-            ? target
-            : state.path +
-              (target - state.path) *
-                (1 - Math.exp(-elapsed / (finishing ? 70 : 30)));
-        state.drawn = true;
-        const moving = Math.abs(target - state.path) > 0.3;
-        if (!moving) {
-          state.path = target;
-          state.at = 0;
-        }
-        return () => {
-          paint(sheet, current, pieces, state.path, latest.current, seed);
-          if (moving) step();
-        };
-      });
+    const read = () => {
+      const now = performance.now();
+      const resized = !layout.current;
+      const current = (layout.current ??= measure(element, pieces));
+      const target = pathAt(element, current, pieces, latest.current);
+      const elapsed = state.at ? Math.min(100, now - state.at) : 1000 / 60;
+      state.at = now;
+      // The pen follows the song exactly, so ink stays in sync. Only a
+      // jump forward (a quick word, or a line ending) eases, so the pen
+      // slides there instead of snapping. A new layout, a first drawing
+      // or a seek back lands at once.
+      const finishing = latest.current === Infinity;
+      const jump = target - state.path;
+      state.path =
+        !state.drawn || resized || jump < -1 || jump <= 0.45 * current.em
+          ? target
+          : state.path +
+            jump * (1 - Math.exp(-elapsed / (finishing ? 70 : 40)));
+      state.drawn = true;
+      const moving = Math.abs(target - state.path) > 0.3;
+      if (!moving) {
+        state.path = target;
+        state.at = 0;
+      }
+      return () => {
+        paint(sheet, current, pieces, state.path, latest.current, seed);
+        if (moving) step();
+      };
+    };
+    const step = () => batched(element, read);
     redraw.current = step;
     // Lines not yet sung have no ink and need no measuring.
     if (time === -Infinity) {
@@ -492,6 +501,10 @@ export const HighlighterWords = memo(function HighlighterWords({
       state.path = 0;
       state.at = 0;
       state.drawn = false;
+    } else if (Number.isFinite(time)) {
+      // The line being sung draws now, not a frame later.
+      cancelBatched(element);
+      read()();
     } else step();
     return () => cancelBatched(element);
   }, [pieces, time, seed]);

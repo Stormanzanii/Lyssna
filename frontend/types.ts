@@ -129,6 +129,10 @@ export interface Settings {
   library_view?: LibraryView;
   /** The marker colour: "#rrggbb", or "cover" for the artwork's colour. */
   lyrics_highlighter_color?: string;
+  /** Space Gravity with the Highlighter: marker lines join sung words. */
+  gravity_links?: boolean;
+  /** Their width as a percentage of the Highlighter's band, 10 to 100. */
+  gravity_link_width?: number;
   lyrics_translations?: boolean;
   lyrics_animator?: AnimatorSettings;
   experimental_word_sync?: boolean;

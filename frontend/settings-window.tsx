@@ -1020,6 +1020,26 @@ export function SettingsWindow({
             }
           />
         ) : null,
+        ...(settings.lyrics_highlighter && settings.space_gravity
+          ? [
+              flag(
+                "gravity_links",
+                "Connecting lines",
+                "In Space Gravity, a marker line joins each sung word to the next.",
+                "highlighter space gravity line link connect brainstorm",
+              ),
+              range(
+                "gravity_link_width",
+                "Connecting line thickness",
+                "How broad the lines are, as a share of the Highlighter's band.",
+                "highlighter space gravity line link thickness width",
+                [10, 100, 5],
+                100,
+                "%",
+                settings.gravity_links === false,
+              ),
+            ]
+          : []),
         <AnimatorPresetRow
           key="animator"
           animator={settings.lyrics_animator}

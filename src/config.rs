@@ -195,6 +195,10 @@ pub struct Settings {
     /// The Highlighter's marker colour: "#rrggbb", or "cover" for the
     /// artwork's colour.
     pub lyrics_highlighter_color: String,
+    /// Space Gravity with the Highlighter: marker lines join sung words.
+    pub gravity_links: bool,
+    /// Their width as a percentage of the Highlighter's band, 10 to 100.
+    pub gravity_link_width: u8,
     /// Translations bundled with lyrics; hidden unless asked for.
     pub lyrics_translations: bool,
     pub experimental_word_sync: bool,
@@ -337,6 +341,8 @@ impl Default for Settings {
             space_gravity: false,
             lyrics_highlighter: false,
             lyrics_highlighter_color: "#d4b80f".into(),
+            gravity_links: true,
+            gravity_link_width: 100,
             lyrics_translations: false,
             experimental_word_sync: false,
             lyrics_hide_artwork: false,
@@ -442,6 +448,7 @@ impl Settings {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
         self.lyrics_background_blur = self.lyrics_background_blur.min(48);
         self.animation_fps_cap = self.animation_fps_cap.clamp(15, 240);
+        self.gravity_link_width = self.gravity_link_width.clamp(10, 100);
         let mut seen = std::collections::HashSet::new();
         self.hidden_settings.retain(|id| {
             !id.is_empty()

@@ -4670,6 +4670,17 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   await expect.poll(offset).toBeCloseTo(0, 2);
   await at(4500);
   await expect(links).toHaveCount(2);
+  // The link into the next line draws across the pause before it, rather
+  // than appearing whole when that line starts.
+  await at(6500);
+  const into = page.locator('.gravity-links path[data-link="0:2>1:0"]');
+  await expect
+    .poll(() =>
+      into.evaluate((path) =>
+        Number((path as SVGPathElement).style.strokeDashoffset),
+      ),
+    )
+    .toBeCloseTo(0.5, 1);
   // The line before the one being sung keeps its links...
   await at(7700);
   const kept = page.locator(".gravity-links path:not(.leaving)");
@@ -4779,6 +4790,33 @@ test("Space Gravity marker links reach each word as it starts, at the Highlighte
     .first()
     .evaluate((piece) => piece.getBoundingClientRect().height);
   expect(width).toBeGreaterThan(band * 0.5);
+  // Effects can thin the lines, or turn them off.
+  await openSettings(page, "Effects");
+  await page
+    .getByRole("slider", { name: "Connecting line thickness" })
+    .fill("50");
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() =>
+      links
+        .first()
+        .evaluate((path) =>
+          parseFloat((path as SVGPathElement).style.strokeWidth),
+        ),
+    )
+    .toBeCloseTo(width / 2, 0);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Connecting lines" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".gravity-links path:not(.leaving)")).toHaveCount(
+    0,
+  );
+  // The options only show with both Space Gravity and the Highlighter on.
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await expect(
+    page.getByRole("switch", { name: "Connecting lines" }),
+  ).toHaveCount(0);
 });
 
 test("Space Gravity words keep drifting while the song plays", async ({

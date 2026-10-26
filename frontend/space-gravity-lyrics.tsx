@@ -318,26 +318,38 @@ function drawLinks(
   bodies: Map<string, GravityBody>,
   elements: Map<string, HTMLElement>,
   time: number,
+  width: number,
 ) {
   // Words fading out still carry their links, which fade with them.
   const lead = entities.filter(
     (entity) => entity.index >= 0 && elements.has(entity.key),
   );
-  // The latest line to start, and the one before it, keep their links.
+  // Each link lands on its word just as that word is sung. It sets off
+  // when the word before ends, or a little before that when the words run
+  // back to back, so it never arrives late. A link always starts at or
+  // after the previous one landed, so they draw in order.
+  const setsOff = (from: Entity, to: Entity) =>
+    Math.max(from.start, Math.min(from.end, to.start - 250));
+  // The latest line under way, counting the link drawing into it, and the
+  // line before it keep their links.
   let current = -1;
-  for (const entity of lead)
-    if (entity.start <= time) current = Math.max(current, entity.lead);
+  lead.forEach((entity, index) => {
+    const before = lead[index - 1];
+    if (
+      entity.start <= time ||
+      (before &&
+        before.index + 1 === entity.index &&
+        setsOff(before, entity) <= time)
+    )
+      current = Math.max(current, entity.lead);
+  });
   const now = performance.now();
   const wanted = new Set<string>();
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
-    // Each link lands on its word just as that word is sung. It sets off
-    // when the word before ends, or a little before that when the words
-    // run back to back, so it never arrives late. A link always starts at
-    // or after the previous one landed, so they draw in order.
     const finish = to.start,
-      begin = Math.max(from.start, Math.min(from.end, finish - 250));
+      begin = setsOff(from, to);
     // Links within the sung line and the one before, and the link from
     // that earlier line into the sung one.
     const within =
@@ -400,7 +412,9 @@ function drawLinks(
     );
     // As broad as the Highlighter's band on the smaller of the two words.
     path.style.strokeWidth = `${(
-      Math.min(a.height * a.scale, b.height * b.scale) * 0.84
+      Math.min(a.height * a.scale, b.height * b.scale) *
+      0.84 *
+      width
     ).toFixed(1)}px`;
     // The link dims with its words: each half takes its own word's
     // strength, so a link from a dim word to the sung one is half and half.
@@ -462,6 +476,7 @@ export function SpaceGravityLyrics({
   onSeek,
   credits,
   highlighter,
+  linkWidth = 1,
 }: {
   lyrics: Lyrics;
   time: number;
@@ -469,6 +484,9 @@ export function SpaceGravityLyrics({
   /** The Highlighter's ink colour: each word gets its pen instead of the
    *  usual sweep. */
   highlighter?: string;
+  /** Connecting lines' width as a share of the Highlighter's band; 0
+   *  turns them off. */
+  linkWidth?: number;
   tuning?: AnimatorSettings;
   onSeek: (position: number) => void;
   credits: ReactNode;
@@ -534,6 +552,7 @@ export function SpaceGravityLyrics({
     waitKey,
     time,
     highlighter,
+    linkWidth,
   });
   live.current = {
     visible,
@@ -542,6 +561,7 @@ export function SpaceGravityLyrics({
     waitKey,
     time,
     highlighter,
+    linkWidth,
   };
   const links = useRef<SVGSVGElement>(null);
   useEffect(() => {
@@ -622,7 +642,10 @@ export function SpaceGravityLyrics({
       }
       // Each new word starts near its place in its line, laid out across
       // the play area and centred in it, then drifts from there.
-      const area = field.layout ?? field.area!;
+      // Beside artwork, words start in the lyrics column. Over a canvas
+      // nothing needs dodging, so they start spread across the stage.
+      const spread = !field.cover && !!element.closest(".canvas-lyrics");
+      const area = spread ? field.area! : (field.layout ?? field.area!);
       const lines = new Map<string, string[]>();
       for (const key of shownKeys) {
         if (!elements.current.has(key)) continue;
@@ -640,6 +663,7 @@ export function SpaceGravityLyrics({
           members,
           width,
           !!byKey.get(keys[0])?.opposite,
+          spread ? Math.max(...members.map((body) => body.height)) * 1.1 : 0,
         );
         const top = area.top + (area.bottom - area.top - layout.height) / 2;
         members.forEach((body, index) => {
@@ -691,10 +715,13 @@ export function SpaceGravityLyrics({
       if (links.current)
         drawLinks(
           links.current,
-          live.current.highlighter ? prepared.entities : [],
+          live.current.highlighter && live.current.linkWidth > 0
+            ? prepared.entities
+            : [],
           bodies.current,
           elements.current,
           live.current.time,
+          live.current.linkWidth,
         );
       for (const [key, node] of elements.current) {
         const body = bodies.current.get(key);

@@ -1680,6 +1680,11 @@ function SongLyricsPage({
                     ? markerColour(state.settings.lyrics_highlighter_color)
                     : undefined
                 }
+                linkWidth={
+                  state.settings.gravity_links === false
+                    ? 0
+                    : (state.settings.gravity_link_width ?? 100) / 100
+                }
                 onSeek={(positionMs) =>
                   onPlayer({
                     command: "seek",

@@ -142,6 +142,8 @@ export const emptyState: AppState = {
     library_sort: "recents",
     library_view: "list",
     lyrics_highlighter_color: "#d4b80f",
+    gravity_links: true,
+    gravity_link_width: 100,
     lyrics_translations: false,
     experimental_word_sync: false,
     lyrics_hide_artwork: false,

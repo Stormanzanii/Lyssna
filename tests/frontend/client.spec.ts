@@ -4573,6 +4573,8 @@ test("Highlighter inks each floating word in Space Gravity", async ({
   await expect(
     page.locator(".gravity-word").nth(1).locator(".highlighter-stroke"),
   ).toHaveCount(0);
+  // Lead words drop the pen tip; the connecting lines carry the pen on.
+  await expect(word.locator(".highlighter-tip")).toBeHidden();
 });
 
 test("Highlighter joins sung words with marker lines in Space Gravity", async ({

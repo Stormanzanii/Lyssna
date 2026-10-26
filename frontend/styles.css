@@ -6026,3 +6026,9 @@ input[type="range"]:hover {
 .gravity-links stop.dim {
   stop-color: color-mix(in srgb, var(--highlighter-ink) 45%, #000);
 }
+/* In Space Gravity the connecting lines carry the pen on from each word,
+   so lead words drop the pen tip; backing vocals, which have no lines,
+   keep it. */
+.gravity-lyrics.highlighter .gravity-word:not(.background) .highlighter-tip {
+  display: none;
+}

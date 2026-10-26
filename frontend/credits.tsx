@@ -31,13 +31,6 @@ export const CREDITS = [
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
   },
   {
-    name: "EeveeSpotifyReincarnated",
-    by: "iPixelGalaxy",
-    licence: "GPL-3.0",
-    note: "The profile lookup that shows Discord usernames on community lyrics, reimplemented. No source is copied.",
-    url: "https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated",
-  },
-  {
     name: "librespot",
     by: "librespot contributors",
     licence: "MIT",

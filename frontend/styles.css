@@ -3838,15 +3838,6 @@ input[type="range"] {
   flex: 1;
   min-width: 0;
 }
-.seek-row input[type="range"]:hover {
-  background: linear-gradient(
-    90deg,
-    var(--accent) var(--range, 0%),
-    #ffffffb3 var(--range, 0%),
-    #ffffffb3 max(var(--range, 0%), var(--hover, 0%)),
-    #ffffff25 max(var(--range, 0%), var(--hover, 0%))
-  );
-}
 .seek-tooltip {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -3910,9 +3901,14 @@ input[type="range"]:hover {
   width: 104px;
   margin: 0 6px 0 2px;
 }
-/* Spotify's volume bar: green fill and a white knob with a soft shadow
-   while hovered or dragged. */
-input.volume-range:is(:hover, :active, :focus-visible) {
+/* Spotify's volume and seek bars: green fill, a light preview of where a
+   click would land, and a white knob with a soft shadow while hovered or
+   dragged. */
+:is(input.volume-range, .seek-row input[type="range"]):is(
+    :hover,
+    :active,
+    :focus-visible
+  ) {
   background: linear-gradient(
     90deg,
     #1ed760 var(--range, 0%),
@@ -3923,7 +3919,11 @@ input.volume-range:is(:hover, :active, :focus-visible) {
 }
 /* At rest the white fill ends in a rounded cap, as Spotify's does: the
    fill stops a radius short and a dot of the same height closes it. */
-input.volume-range:not(:hover, :active, :focus-visible) {
+:is(input.volume-range, .seek-row input[type="range"]):not(
+    :hover,
+    :active,
+    :focus-visible
+  ) {
   background:
     radial-gradient(
         circle 2px at calc(var(--range, 0%) - 2px) 50%,
@@ -3937,12 +3937,12 @@ input.volume-range:not(:hover, :active, :focus-visible) {
       #ffffff25 calc(var(--range, 0%) - 2px)
     );
 }
-input.volume-range::-webkit-slider-thumb {
+:is(input.volume-range, .seek-row input[type="range"])::-webkit-slider-thumb {
   width: 12px;
   height: 12px;
   box-shadow: 0 2px 4px #00000080;
 }
-input.volume-range:active::-webkit-slider-thumb {
+:is(input.volume-range, .seek-row input[type="range"]):active::-webkit-slider-thumb {
   opacity: 1;
 }
 .spin {

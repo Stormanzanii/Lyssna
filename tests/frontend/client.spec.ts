@@ -9489,8 +9489,24 @@ test("hovering the progress bar previews the time under the pointer", async ({
       parseFloat(node.style.getPropertyValue("--hover")),
     ),
   ).toBeCloseTo(75, 0);
+  // The seek bar hovers like the volume bar: green fill, light preview.
+  const background = (node: Element) => getComputedStyle(node).backgroundImage;
+  const hovered = await bar.evaluate(background);
+  expect(hovered).toContain("rgb(30, 215, 96)");
+  expect(hovered).toContain("rgba(255, 255, 255, 0.3)");
+  const volume = page.getByLabel("Volume", { exact: true });
+  const volumeBox = (await volume.boundingBox())!;
+  await page.mouse.move(
+    volumeBox.x + volumeBox.width * 0.9,
+    volumeBox.y + volumeBox.height / 2,
+  );
+  expect((await volume.evaluate(background)).replace(/[\d.]+%/g, "")).toBe(
+    hovered.replace(/[\d.]+%/g, ""),
+  );
   await page.mouse.move(box.x + box.width / 2, box.y - 200);
   await expect(tooltip).toHaveCount(0);
+  // At rest both end in the same rounded cap.
+  expect(await bar.evaluate(background)).toContain("radial-gradient");
 });
 
 test("the bell opens What's New with new and earlier releases", async ({

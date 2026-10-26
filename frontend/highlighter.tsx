@@ -1,19 +1,28 @@
-import { memo, useMemo, type CSSProperties } from "react";
+import {
+  memo,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+} from "react";
 import type { Line } from "./types";
 
-/* Highlighter: a lyrics player where a marker pen sweeps behind each line
- * as it is sung, row by row. Each word's stroke is skewed and overlaps
- * its neighbours, so a row reads as one stroke with slanted ends. Timed syllables set the pace; a line without them is shared out
- * over its words by letter count. */
+/* Highlighter: a lyrics player where a marker pen draws over each line as
+ * it is sung. The ink lies on top of the text, see-through like a real
+ * highlighter, one stroke per row with slanted chisel-tip ends, a slight
+ * tilt and wobble, and streaks. Sung lines keep their strokes. Timed
+ * syllables set the pace; a line without them is shared out over its
+ * words by letter count. */
 
-/** Marker colours to pick from; dark enough for white lyrics on top. */
+/** Marker colours to pick from. The ink is see-through, so these are
+ *  bright; over dark backgrounds they read as a darker shade. */
 export const MARKER_COLOURS = [
-  ["#7d6f08", "Yellow"],
-  ["#8a4a10", "Orange"],
-  ["#8a2a5c", "Pink"],
-  ["#5b3290", "Purple"],
-  ["#24508f", "Blue"],
-  ["#1f7a3a", "Green"],
+  ["#d4b80f", "Yellow"],
+  ["#e07a1f", "Orange"],
+  ["#e0479a", "Pink"],
+  ["#a066e8", "Purple"],
+  ["#3f8ee8", "Blue"],
+  ["#3fbf5f", "Green"],
 ] as const;
 export const DEFAULT_MARKER: string = MARKER_COLOURS[0][0];
 
@@ -60,8 +69,113 @@ export function inkAt(piece: Piece, time: number) {
   return (time - piece.start_ms) / Math.max(1, piece.end_ms - piece.start_ms);
 }
 
+interface Row {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** The rows the line's text sits on, from its pieces' boxes. */
+function textRows(spans: HTMLElement[]): Row[] {
+  const rows: Row[] = [];
+  for (const span of spans)
+    for (const box of span.getClientRects()) {
+      if (!box.width) continue;
+      const row = rows.find(
+        (row) => Math.abs(row.top - box.top) < box.height / 2,
+      );
+      if (row) {
+        row.left = Math.min(row.left, box.left);
+        row.right = Math.max(row.right, box.right);
+        row.bottom = Math.max(row.bottom, box.bottom);
+      } else rows.push({ ...box.toJSON() });
+    }
+  return rows.sort((a, b) => a.top - b.top);
+}
+
+/** Where the marker's tip is at `time`: the end of the ink, or null before
+ *  the line starts. `Infinity` means the whole line is inked. */
+function tipAt(
+  spans: HTMLElement[],
+  pieces: Piece[],
+  time: number,
+): { x: number; top: number } | null {
+  const current = pieces.findIndex((piece) => time < piece.end_ms);
+  if (current === -1) return { x: Infinity, top: Infinity };
+  const span = spans[current],
+    text = span?.firstChild;
+  if (!span || !text) return null;
+  const letters = Math.round(
+    inkAt(pieces[current], time) * (text.textContent?.length ?? 0),
+  );
+  if (!letters) {
+    if (current === 0) return null;
+    const start = span.getClientRects()[0];
+    return start ? { x: start.left, top: start.top } : null;
+  }
+  const range = document.createRange();
+  range.setStart(text, 0);
+  range.setEnd(text, letters);
+  const boxes = range.getClientRects(),
+    end = boxes[boxes.length - 1];
+  return end ? { x: end.right, top: end.top } : null;
+}
+
+/** Small steady variations per row, so strokes look drawn by hand. */
+function wobble(seed: number) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value) - 0.5;
+}
+
+/** Draws the strokes for `time` into `ink`, reusing its stroke elements. */
+function drawInk(
+  root: HTMLElement,
+  ink: HTMLElement,
+  pieces: Piece[],
+  time: number,
+  seed: number,
+) {
+  const spans = [...root.querySelectorAll<HTMLElement>(".highlighter-piece")];
+  const tip = time === -Infinity ? null : tipAt(spans, pieces, time);
+  const strokes: Row[] = [];
+  if (tip) {
+    const box = root.getBoundingClientRect();
+    const em = parseFloat(getComputedStyle(root).fontSize) || 16;
+    for (const row of textRows(spans)) {
+      const done = row.top < tip.top - (row.bottom - row.top) / 2;
+      const here =
+        !done && Math.abs(row.top - tip.top) < (row.bottom - row.top) / 2;
+      if (!done && !here) break;
+      const right = here ? Math.min(tip.x, row.right) : row.right;
+      if (right <= row.left) continue;
+      strokes.push({
+        left: row.left - box.left - 0.14 * em,
+        right: right - box.left + (here && tip.x < row.right ? 0 : 0.14 * em),
+        top: row.top - box.top,
+        bottom: row.bottom - box.top,
+      });
+    }
+  }
+  while (ink.children.length > strokes.length) ink.lastChild!.remove();
+  strokes.forEach((stroke, index) => {
+    const element =
+      (ink.children[index] as HTMLElement | undefined) ??
+      ink.appendChild(document.createElement("span"));
+    element.className = "highlighter-stroke";
+    const height = stroke.bottom - stroke.top;
+    const shift = wobble(seed + index);
+    element.style.left = `${stroke.left}px`;
+    element.style.width = `${stroke.right - stroke.left}px`;
+    element.style.top = `${stroke.top + height * (0.14 + shift * 0.04)}px`;
+    element.style.height = `${height * (0.78 + wobble(seed - index) * 0.05)}px`;
+    element.style.transform = `rotate(${shift * 0.9}deg)`;
+  });
+}
+
 /** One line's words with the marker drawn up to `time`. Lines that are not
- *  being sung pass a fixed time, so they skip re-rendering each frame. */
+ *  being sung pass `-Infinity` (not yet sung) or `Infinity` (sung), so
+ *  they skip redrawing each frame. */
 export const HighlighterWords = memo(function HighlighterWords({
   line,
   time,
@@ -70,8 +184,28 @@ export const HighlighterWords = memo(function HighlighterWords({
   time: number;
 }) {
   const pieces = useMemo(() => highlighterPieces(line), [line]);
+  const root = useRef<HTMLSpanElement>(null),
+    ink = useRef<HTMLSpanElement>(null),
+    latest = useRef(time);
+  latest.current = time;
+  const seed = line.start_ms % 997;
+  useLayoutEffect(() => {
+    if (root.current && ink.current)
+      drawInk(root.current, ink.current, pieces, time, seed);
+  }, [pieces, time, seed]);
+  // Rows move when the window or text size changes.
+  useLayoutEffect(() => {
+    const element = root.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      if (ink.current)
+        drawInk(element, ink.current, pieces, latest.current, seed);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [pieces, seed]);
   return (
-    <span className="highlighter-words">
+    <span className="highlighter-words" ref={root}>
       {pieces.map((piece, index) => (
         <span
           key={index}
@@ -81,6 +215,7 @@ export const HighlighterWords = memo(function HighlighterWords({
           {piece.text}
         </span>
       ))}
+      <span className="highlighter-ink" aria-hidden="true" ref={ink} />
     </span>
   );
 });

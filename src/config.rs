@@ -329,7 +329,7 @@ impl Default for Settings {
             glass_seek: true,
             space_gravity: false,
             lyrics_highlighter: false,
-            lyrics_highlighter_color: "#7d6f08".into(),
+            lyrics_highlighter_color: "#d4b80f".into(),
             lyrics_translations: false,
             experimental_word_sync: false,
             lyrics_hide_artwork: false,
@@ -448,7 +448,22 @@ impl Settings {
         {
             self.lyrics_background = "animated".into();
         }
-        let colour = self.lyrics_highlighter_color.to_ascii_lowercase();
+        let mut colour = self.lyrics_highlighter_color.to_ascii_lowercase();
+        // The first marker presets were dark fills behind the text; the ink
+        // now lies over it, see-through, so each moves to its bright shade.
+        if let Some((_, bright)) = [
+            ("#7d6f08", "#d4b80f"),
+            ("#8a4a10", "#e07a1f"),
+            ("#8a2a5c", "#e0479a"),
+            ("#5b3290", "#a066e8"),
+            ("#24508f", "#3f8ee8"),
+            ("#1f7a3a", "#3fbf5f"),
+        ]
+        .iter()
+        .find(|(old, _)| *old == colour)
+        {
+            colour = (*bright).into();
+        }
         self.lyrics_highlighter_color = if colour == "cover"
             || (colour.len() == 7
                 && colour.starts_with('#')
@@ -456,7 +471,7 @@ impl Settings {
         {
             colour
         } else {
-            "#7d6f08".into()
+            "#d4b80f".into()
         };
         if !["off", "gibberish", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
             self.lyrics_word_filter = "off".into();
@@ -626,11 +641,12 @@ mod tests {
         gibberish.clean_lyrics_options();
         assert_eq!(gibberish.lyrics_word_filter, "gibberish");
         let older: Settings = serde_json::from_str("{}").unwrap();
-        assert_eq!(older.lyrics_highlighter_color, "#7d6f08");
+        assert_eq!(older.lyrics_highlighter_color, "#d4b80f");
         for (saved, kept) in [
-            ("#1F7A3A", "#1f7a3a"),
+            ("#12AB34", "#12ab34"),
             ("cover", "cover"),
-            ("red", "#7d6f08"),
+            ("red", "#d4b80f"),
+            ("#24508F", "#3f8ee8"),
         ] {
             let mut marker: Settings =
                 serde_json::from_value(serde_json::json!({ "lyrics_highlighter_color": saved }))

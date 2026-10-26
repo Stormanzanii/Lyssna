@@ -5776,15 +5776,17 @@ input[type="range"]:hover {
   transform: scale(1.08);
 }
 
-/* Highlighter lyrics player: an opaque marker stroke, skewed like a pen
-   held at an angle, fills behind each word as it is sung. Neighbouring
-   strokes overlap a little, so a row reads as one stroke with slanted
-   ends. */
+/* Highlighter lyrics player: see-through marker strokes drawn over the
+   text, one per row (highlighter.tsx places them). Chisel-tip ends, ink
+   pooling at both ends and faint streaks make them look hand-drawn. */
 .lyrics-display.highlighter {
-  --highlighter-ink: #7d6f08;
+  --highlighter-ink: #d4b80f;
+}
+.highlighter-words {
+  position: relative;
+  display: block;
 }
 .highlighter-piece {
-  position: relative;
   display: inline-block;
   max-width: 100%;
   white-space: pre-wrap;
@@ -5794,23 +5796,44 @@ input[type="range"]:hover {
 .lyric-line.active .highlighter-piece {
   -webkit-text-fill-color: #fff;
 }
-.highlighter-piece::before {
-  content: "";
+.highlighter-ink {
   position: absolute;
-  z-index: -1;
-  left: -0.12em;
-  bottom: 0.06em;
-  width: calc(var(--ink, 0) * (100% + 0.24em));
-  height: 0.86em;
-  border-radius: 0.14em;
-  background: var(--highlighter-ink);
-  transform: skewX(-14deg);
-  opacity: min(1, calc(var(--ink, 0) * 40));
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
 }
-.lyrics-display.highlighter .lyric-line:not(.active) .highlighter-piece::before {
-  transition: opacity 0.3s ease-out;
-  opacity: 0;
-}
-.reduce-motion .highlighter-piece::before {
-  transform: none;
+.highlighter-stroke {
+  --tip: 0.26em;
+  position: absolute;
+  opacity: 0.56;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 0.16),
+      transparent 0.45em,
+      transparent calc(100% - 0.45em),
+      rgb(0 0 0 / 0.16)
+    ),
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.12),
+      transparent 35%,
+      rgb(0 0 0 / 0.1)
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 0.09em,
+      rgb(0 0 0 / 0.07) 0.09em 0.12em
+    ),
+    var(--highlighter-ink);
+  clip-path: polygon(
+    var(--tip) 5%,
+    34% 0,
+    70% 4%,
+    100% 0,
+    calc(100% - var(--tip)) 96%,
+    62% 100%,
+    27% 95%,
+    0 100%
+  );
 }

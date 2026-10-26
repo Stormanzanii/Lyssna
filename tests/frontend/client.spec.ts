@@ -10682,12 +10682,14 @@ test("gibberish respells lyrics and long phrases still wrap", async ({
   }
 });
 
-test("highlighter sweeps a marker behind the sung words", async ({ page }) => {
+test("highlighter draws see-through strokes over sung words and keeps them", async ({
+  page,
+}) => {
   await startClient(page);
   await openSettings(page, "Effects");
   await page.getByRole("switch", { name: "Highlighter" }).click();
   await expect(page.getByLabel("Marker colour", { exact: true })).toHaveValue(
-    "#7d6f08",
+    "#d4b80f",
   );
   await showLyrics(page);
   await page.evaluate(
@@ -10745,31 +10747,69 @@ test("highlighter sweeps a marker behind the sung words", async ({ page }) => {
   // At 1.5 s the first three words are sung and the rest are not.
   await expect.poll(async () => (await inks()).slice(0, 3)).toEqual([1, 1, 1]);
   expect((await inks()).slice(4)).toEqual(Array(8).fill(0));
-  const marker = await active
-    .locator(".highlighter-piece")
-    .first()
-    .evaluate((piece) => getComputedStyle(piece, "::before").backgroundColor);
-  expect(marker).toBe("rgb(125, 111, 8)");
-  // Lines not being sung carry no marker.
-  expect(
-    await page
-      .locator(".lyrics-page .lyric-line:not(.active) .highlighter-piece")
-      .evaluateAll((pieces) =>
-        pieces.every(
-          (piece) =>
-            (piece as HTMLElement).style.getPropertyValue("--ink") === "0",
-        ),
+  // One stroke over the first row, ending where "came " ends, on top of
+  // the text and see-through.
+  const strokes = active.locator(".highlighter-stroke");
+  await expect(strokes).toHaveCount(1);
+  const reach = await active.evaluate((line) => {
+    const stroke = line.querySelector(".highlighter-stroke")!;
+    const came = line.querySelectorAll(".highlighter-piece")[2];
+    const style = getComputedStyle(stroke);
+    return {
+      gap: Math.abs(
+        stroke.getBoundingClientRect().right -
+          came.getBoundingClientRect().right,
       ),
-  ).toBe(true);
+      over:
+        getComputedStyle(stroke.parentElement!).zIndex === "1" &&
+        stroke.parentElement!.previousElementSibling !== null,
+      opacity: Number(style.opacity),
+      ink: style.backgroundImage + style.backgroundColor,
+    };
+  });
+  expect(reach.gap).toBeLessThan(12);
+  expect(reach.over).toBe(true);
+  expect(reach.opacity).toBeLessThan(1);
+  // Lines yet to be sung carry no strokes.
+  await expect(
+    page.locator(".lyrics-page .lyric-line:not(.active) .highlighter-stroke"),
+  ).toHaveCount(0);
+  // Once sung, a line keeps its strokes over every row.
+  await page.evaluate(
+    ({ track, playback }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: false,
+          progress_ms: 7000,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { track, playback: emptyState.playback },
+  );
+  const sung = page.locator(".lyrics-page .lyric-line").first();
+  await expect(sung).not.toHaveClass(/active/);
+  const rows = await sung.evaluate(
+    (line) =>
+      new Set(
+        [...line.querySelectorAll(".highlighter-piece")].map(
+          (piece) => (piece as HTMLElement).offsetTop,
+        ),
+      ).size,
+  );
+  await expect(sung.locator(".highlighter-stroke")).toHaveCount(rows);
   await openSettings(page, "Effects");
   await page
     .getByLabel("Marker colour", { exact: true })
-    .selectOption("#24508f");
+    .selectOption("#3f8ee8");
   await showLyrics(page);
   expect(
-    await active
-      .locator(".highlighter-piece")
+    await sung
+      .locator(".highlighter-stroke")
       .first()
-      .evaluate((piece) => getComputedStyle(piece, "::before").backgroundColor),
-  ).toBe("rgb(36, 80, 143)");
+      .evaluate((stroke) => getComputedStyle(stroke).backgroundColor),
+  ).toBe("rgb(63, 142, 232)");
 });

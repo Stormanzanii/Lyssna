@@ -814,7 +814,13 @@ export function LyricsDisplay({
                   {highlighter ? (
                     <HighlighterWords
                       line={line}
-                      time={playing ? positionMs : -Infinity}
+                      time={
+                        playing
+                          ? positionMs
+                          : positionMs >= vocalEnd(line)
+                            ? Infinity
+                            : -Infinity
+                      }
                     />
                   ) : (
                     <LyricWords line={line} />

@@ -37,6 +37,6 @@ describe("highlighter", () => {
   it("turns a saved colour into CSS", () => {
     expect(markerColour("#1f7a3a")).toBe("#1f7a3a");
     expect(markerColour("cover")).toContain("--lyrics-cover-color");
-    expect(markerColour("red")).toBe("#7d6f08");
+    expect(markerColour("red")).toBe("#d4b80f");
   });
 });

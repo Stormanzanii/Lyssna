@@ -184,9 +184,9 @@ fn apply(uris: &mut HashMap<String, i32>, items: Vec<Item>) {
     }
 }
 
-/// Saved albums or followed artists, most recently added first, as Your
-/// Library lists them.
-pub async fn listed(session: &Session, kind: &str) -> Result<Vec<String>> {
+/// Saved albums or followed artists with when each was added (Unix
+/// seconds), most recently added first.
+pub async fn listed(session: &Session, kind: &str) -> Result<Vec<(String, i32)>> {
     let (set, prefix) = match kind {
         "album" => ("collection", "spotify:album:"),
         "artist" => ("artist", "spotify:artist:"),
@@ -201,14 +201,17 @@ pub async fn listed(session: &Session, kind: &str) -> Result<Vec<String>> {
     ))
 }
 
-fn newest_first(uris: Option<&HashMap<String, i32>>, prefix: &str) -> Vec<String> {
+fn newest_first(uris: Option<&HashMap<String, i32>>, prefix: &str) -> Vec<(String, i32)> {
     let mut items: Vec<_> = uris
         .into_iter()
         .flatten()
         .filter(|(uri, _)| uri.starts_with(prefix))
         .collect();
     items.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
-    items.into_iter().map(|(uri, _)| uri.clone()).collect()
+    items
+        .into_iter()
+        .map(|(uri, added)| (uri.clone(), *added))
+        .collect()
 }
 
 async fn request(session: &Session, endpoint: &str, body: Vec<u8>) -> Result<Vec<u8>> {
@@ -396,7 +399,10 @@ mod tests {
         ]);
         assert_eq!(
             newest_first(Some(&uris), "spotify:album:"),
-            ["spotify:album:new", "spotify:album:old"]
+            [
+                ("spotify:album:new".to_owned(), 20),
+                ("spotify:album:old".to_owned(), 10)
+            ]
         );
         assert!(newest_first(None, "spotify:album:").is_empty());
     }

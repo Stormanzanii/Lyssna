@@ -149,6 +149,13 @@ pub struct Playlist {
     /// Spotify folders containing this playlist, outermost first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folders: Vec<FolderRef>,
+    /// When it joined Your Library, in Unix milliseconds; 0 when unknown.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub added_at: i64,
+}
+
+fn is_zero(value: &i64) -> bool {
+    *value == 0
 }
 
 impl Playlist {

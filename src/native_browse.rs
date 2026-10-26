@@ -380,7 +380,25 @@ async fn hydrate_playlist_artwork(session: &Session, playlists: &mut [crate::mod
 
 /// The latest 50 played contexts, newest first, each as the song last heard
 /// in it. Spotify's play history is per context, not per play.
-pub async fn recent(session: &Session) -> Result<Vec<Track>> {
+/// When each context (playlist, album, artist) was last played, in Unix
+/// milliseconds, from Spotify's play history.
+pub async fn played_contexts(session: &Session) -> Result<HashMap<String, i64>> {
+    let mut played = HashMap::new();
+    for play in recent_plays(&play_history(session).await?)? {
+        let at = time::OffsetDateTime::parse(
+            &play.played_at,
+            &time::format_description::well_known::Rfc3339,
+        )
+        .map_or(0, |at| {
+            i64::try_from(at.unix_timestamp_nanos() / 1_000_000).unwrap_or(0)
+        });
+        let latest = played.entry(play.context).or_insert(0);
+        *latest = (*latest).max(at);
+    }
+    Ok(played)
+}
+
+async fn play_history(session: &Session) -> Result<Value> {
     let user: String =
         url::form_urlencoded::byte_serialize(session.username().as_bytes()).collect();
     let path = format!(
@@ -398,7 +416,11 @@ pub async fn recent(session: &Session) -> Result<Vec<Track>> {
         bytes.len() <= 2_000_000,
         "Spotify play history is too large"
     );
-    let plays = recent_plays(&serde_json::from_slice(&bytes)?)?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+pub async fn recent(session: &Session) -> Result<Vec<Track>> {
+    let plays = recent_plays(&play_history(session).await?)?;
     let uris: Vec<String> = plays.iter().map(|play| play.track.clone()).collect();
     let mut tracks = resolve_tracks(session, &uris).await?;
     // Spotify records Liked Songs plays under a hidden playlist (format
@@ -1303,6 +1325,7 @@ fn rootlist_page(
             },
             collaborative: attributes.collaborative(),
             folders: open.clone(),
+            added_at: item.attributes.get_or_default().timestamp(),
         });
     }
     Ok(contents.items.len())

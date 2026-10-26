@@ -84,6 +84,8 @@ export interface Playlist {
   collaborative: boolean;
   /** Spotify folders containing the playlist, outermost first. */
   folders?: FolderRef[];
+  /** When it joined Your Library, in Unix milliseconds. */
+  added_at?: number;
 }
 export interface SearchResults {
   tracks: Track[];

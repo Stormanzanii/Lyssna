@@ -401,6 +401,7 @@ fn parse_native(response: &Value) -> Result<Vec<Playlist>> {
                 },
                 collaborative: false,
                 folders: Vec::new(),
+                added_at: 0,
             })
         })
         .collect())

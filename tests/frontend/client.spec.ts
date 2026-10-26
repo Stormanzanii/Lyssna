@@ -9493,6 +9493,11 @@ test("Your Library lists saved albums and followed artists", async ({
           images: [],
         },
       ],
+      // Followed just now, saved long ago: Recents puts the artist first.
+      recency: {
+        "spotify:artist:0pWR7TsFhvSCnbmHDjWgrE": Date.now() - 1000,
+        "spotify:album:5jGFlFGPRbQYzKUM5ux9v3": 1,
+      },
     };
   });
   const library = page.locator(".library-panel");
@@ -9505,6 +9510,17 @@ test("Your Library lists saved albums and followed artists", async ({
     library.locator(".library-item", { hasText: "Saved Single" }),
   ).toBeVisible();
   await expect(library.locator(".library-liked")).toBeVisible();
+  // Mixed by Recents, not grouped by kind.
+  const names = await library
+    .locator(
+      ".library-list > .library-item strong, .library-list > div:not(.library-liked) .library-item strong",
+    )
+    .allTextContents();
+  expect(names.indexOf("Creepy Nuts")).toBeLessThan(
+    names.indexOf("Saved Single"),
+  );
+  // Test playlists carry no dates, so both collection rows come first.
+  expect(names.slice(0, 2)).toEqual(["Creepy Nuts", "Saved Single"]);
   const playlists = library.getByRole("button", {
     name: "Playlists",
     exact: true,

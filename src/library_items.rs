@@ -20,6 +20,10 @@ const PARALLEL: usize = 8;
 pub struct LibraryItems {
     pub albums: Vec<Album>,
     pub artists: Vec<Artist>,
+    /// When each library item was last played or added, whichever is later,
+    /// in Unix milliseconds: Spotify's Recents order. Playlists appear here
+    /// only once played; their added time comes with the playlist.
+    pub recency: HashMap<String, i64>,
 }
 
 #[derive(Clone)]
@@ -32,13 +36,24 @@ enum Named {
 static NAMED: LazyLock<Mutex<HashMap<String, Named>>> = LazyLock::new(Default::default);
 
 pub async fn fetch(session: &Session) -> Result<LibraryItems> {
-    let mut items = LibraryItems::default();
+    let mut items = LibraryItems {
+        // Without play history the order falls back to when items were added.
+        recency: crate::native_browse::played_contexts(session)
+            .await
+            .unwrap_or_default(),
+        ..LibraryItems::default()
+    };
     for kind in ["album", "artist"] {
-        let uris: Vec<String> = crate::collection::listed(session, kind)
+        let listed: Vec<(String, i32)> = crate::collection::listed(session, kind)
             .await?
             .into_iter()
             .take(LIMIT)
             .collect();
+        for (uri, added) in &listed {
+            let at = items.recency.entry(uri.clone()).or_insert(0);
+            *at = (*at).max(i64::from(*added) * 1000);
+        }
+        let uris: Vec<String> = listed.into_iter().map(|(uri, _)| uri).collect();
         let named = name_all(session, &uris).await;
         for uri in &uris {
             match named.get(uri) {

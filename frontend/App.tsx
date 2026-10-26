@@ -188,6 +188,7 @@ import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
 import { libraryTree, type LibraryEntry } from "./library-tree";
+import { byRecents, entryRecency, type Recency } from "./library-recents";
 import {
   loadRecentSearches,
   rememberSearch,
@@ -285,6 +286,7 @@ function App() {
   const [savedCollection, setSavedCollection] = useState<{
     albums: Album[];
     artists: Artist[];
+    recency: Recency;
   } | null>(null);
   // The Spotify folders opened in Your Library, outermost first.
   const [folderPath, setFolderPath] = useState<string[]>([]);
@@ -1776,26 +1778,41 @@ function App() {
     .filter((uri) => state.saved[uri] && /^spotify:(album|artist):/.test(uri))
     .sort()
     .join();
+  // Loaded with every view: its play times order playlists too. A new
+  // context reloads it so Spotify's play history moves what was played.
   useEffect(() => {
-    if (!showingCollection || !state.profile || !state.native_ready) return;
+    if (!state.profile || !state.native_ready) return;
     let active = true;
-    rpc<{ albums: Album[]; artists: Artist[] }>("library_items")
+    rpc<{ albums: Album[]; artists: Artist[]; recency: Recency }>(
+      "library_items",
+    )
       .then((items) => active && setSavedCollection(items))
       .catch(
         () =>
           active &&
-          setSavedCollection((items) => items ?? { albums: [], artists: [] }),
+          setSavedCollection(
+            (items) => items ?? { albums: [], artists: [], recency: {} },
+          ),
       );
     return () => {
       active = false;
     };
   }, [
-    showingCollection,
     state.profile?.id,
     state.native_ready,
     collectionKey,
     collectionReload,
+    state.playback.context,
   ]);
+  // What is playing now counts as most recent, as in Spotify, before its
+  // play reaches Spotify's history.
+  const playingSince = useMemo(() => Date.now(), [state.playback.context]);
+  const recency: Recency = { ...savedCollection?.recency };
+  if (state.playback.context)
+    recency[state.playback.context] = Math.max(
+      recency[state.playback.context] ?? 0,
+      playingSince,
+    );
   const collectionRows: (
     { kind: "album"; item: Album } | { kind: "artist"; item: Artist }
   )[] = [
@@ -1970,6 +1987,53 @@ function App() {
       if (!next) break;
       openFolder = next;
     }
+  const collectionEntry = ({
+    kind,
+    item,
+  }: (typeof collectionRows)[number]): ReactNode => {
+    const route = `${kind}:${item.id}`;
+    return (
+      <button
+        key={item.uri}
+        className={`library-item ${state.route === route ? "current" : ""}`}
+        data-context-route={route}
+        data-context-name={item.name}
+        onClick={() => navigate(route)}
+        {...prefetchOn(route)}
+      >
+        <Cover
+          images={item.images}
+          className={kind === "artist" ? "artist-cover" : ""}
+        />
+        <div>
+          <strong>{item.name}</strong>
+          <small>
+            {kind === "album"
+              ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
+              : "Artist"}
+          </small>
+        </div>
+      </button>
+    );
+  };
+  // Playlists, folders, albums and artists in one list, ordered like
+  // Spotify's Recents with pinned playlists on top.
+  const pinnedIds = accountOrder(state).pinned;
+  type LibraryRow =
+    | { entry: LibraryEntry; row?: undefined }
+    | { entry?: undefined; row: (typeof collectionRows)[number] };
+  const libraryRows = byRecents<LibraryRow>(
+    [
+      ...libraryEntries.map((entry) => ({ entry })),
+      ...collectionRows.map((row) => ({ row })),
+    ],
+    (item) =>
+      item.entry
+        ? entryRecency(item.entry, recency)
+        : (recency[item.row.item.uri ?? ""] ?? 0),
+    ({ entry }) =>
+      entry?.kind === "playlist" && pinnedIds.includes(entry.playlist.id),
+  );
   // Like Spotify, a folder opens as its own list of playlists.
   const libraryEntry = (entry: LibraryEntry): ReactNode =>
     entry.kind === "playlist" ? (
@@ -2485,13 +2549,19 @@ function App() {
             </div>
             {openFolder ? (
               <>
-                {openFolder.entries.map(libraryEntry)}
+                {byRecents(openFolder.entries, (entry) =>
+                  entryRecency(entry, recency),
+                ).map(libraryEntry)}
                 {!openFolder.entries.length && (
                   <p className="empty-library">This folder is empty.</p>
                 )}
               </>
             ) : (
-              libraryEntries.map(libraryEntry)
+              libraryRows.map((item) =>
+                item.entry
+                  ? libraryEntry(item.entry)
+                  : collectionEntry(item.row),
+              )
             )}
             {!openFolder &&
               showingPlaylists &&
@@ -2526,33 +2596,6 @@ function App() {
                     ))}
                 </details>
               ))}
-            {!openFolder &&
-              collectionRows.map(({ kind, item }) => {
-                const route = `${kind}:${item.id}`;
-                return (
-                  <button
-                    key={item.uri}
-                    className={`library-item ${state.route === route ? "current" : ""}`}
-                    data-context-route={route}
-                    data-context-name={item.name}
-                    onClick={() => navigate(route)}
-                    {...prefetchOn(route)}
-                  >
-                    <Cover
-                      images={item.images}
-                      className={kind === "artist" ? "artist-cover" : ""}
-                    />
-                    <div>
-                      <strong>{item.name}</strong>
-                      <small>
-                        {kind === "album"
-                          ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
-                          : "Artist"}
-                      </small>
-                    </div>
-                  </button>
-                );
-              })}
             {(libraryFilter === "albums" || libraryFilter === "artists") &&
               savedCollection &&
               !collectionRows.length && (

@@ -41,6 +41,19 @@ describe("unique word filters", () => {
     expect(filterWords(lyrics, "lower").lines[0].text).toBe("hello world");
   });
 
+  it("respells timed words as gibberish and keeps their timing", () => {
+    const gibberish = filterWords(lyrics, "gibberish");
+    expect(gibberish.lines[0].words.map((word) => word.text).join("")).toBe(
+      gibberish.lines[0].text,
+    );
+    expect(gibberish.lines[0].text).not.toContain(" ");
+    expect(gibberish.lines[0].words[1].start_ms).toBe(500);
+    expect(gibberish.lines[0].translation).toBe("Bonjour");
+    expect(filterWords(gibberish, "gibberish")).toBe(
+      filterWords(gibberish, "gibberish"),
+    );
+  });
+
   it("returns the same object for the same lyrics and filter", () => {
     expect(filterWords(lyrics, "upper")).toBe(filterWords(lyrics, "upper"));
     expect(filterWords(lyrics, "upper")).not.toBe(filterWords(lyrics, "lower"));

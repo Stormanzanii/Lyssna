@@ -206,7 +206,7 @@ pub struct Settings {
     pub lyrics_minimal: bool,
     /// In Minimal lyrics mode, lines sung over an earlier line stay dimmed.
     pub lyrics_keep_overlaps: bool,
-    /// Unique Word Filters: "off", "lower" or "upper" case lyrics.
+    /// Unique Word Filters: "off", "gibberish", or "lower" or "upper" case.
     pub lyrics_word_filter: String,
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
@@ -441,7 +441,7 @@ impl Settings {
         {
             self.lyrics_background = "animated".into();
         }
-        if !["off", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
+        if !["off", "gibberish", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
             self.lyrics_word_filter = "off".into();
         }
         if !["song", "reload", "all"].contains(&self.lyrics_cache_action.as_str()) {
@@ -601,9 +601,13 @@ mod tests {
         action.clean_lyrics_options();
         assert_eq!(action.lyrics_cache_action, "song");
         let mut filter: Settings =
-            serde_json::from_str(r#"{"lyrics_word_filter":"Gibberish"}"#).unwrap();
+            serde_json::from_str(r#"{"lyrics_word_filter":"Shout"}"#).unwrap();
         filter.clean_lyrics_options();
         assert_eq!(filter.lyrics_word_filter, "off");
+        let mut gibberish: Settings =
+            serde_json::from_str(r#"{"lyrics_word_filter":"gibberish"}"#).unwrap();
+        gibberish.clean_lyrics_options();
+        assert_eq!(gibberish.lyrics_word_filter, "gibberish");
         let mut background: Settings =
             serde_json::from_str(r#"{"lyrics_background":"legacy","lyrics_background_blur":200}"#)
                 .unwrap();

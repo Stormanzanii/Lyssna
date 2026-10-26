@@ -169,7 +169,7 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 - **[spr](https://github.com/Fraktality/spr)** · Fraktality · MIT<br>The spring that animates lyrics.
 - **[Kawarp](https://github.com/better-lyrics/kawarp)** · Better Lyrics · MIT<br>The warped artwork and Canvas ambience.
 
-SpotiFlex reimplements Spicy Lyrics' behaviour; it copies no Spicy Lyrics source or assets.
+SpotiFlex reimplements Spicy Lyrics' behaviour. The only Spicy Lyrics code it copies is the Gibberish word filter's dictionary and rules, under the same AGPL-3.0 licence; [NOTICE.md](NOTICE.md) has the details.
 
 ## License
 

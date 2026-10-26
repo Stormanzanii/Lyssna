@@ -1013,8 +1013,8 @@ export function SettingsWindow({
         <SettingRow
           key="word-filter"
           label="Unique word filters"
-          help="Show every lyric word in lower case or upper case."
-          keywords="word filter lowercase uppercase case meme"
+          help="Show every lyric word in lower case or upper case, or respell lyrics as gibberish the way they sound."
+          keywords="word filter lowercase uppercase case meme gibberish wenomechainsama"
         >
           <select
             className="settings-select"
@@ -1028,6 +1028,7 @@ export function SettingsWindow({
             }
           >
             <option value="off">Off</option>
+            <option value="gibberish">Gibberish</option>
             <option value="lower">all lowercase</option>
             <option value="upper">ALL UPPERCASE</option>
           </select>

@@ -10616,3 +10616,68 @@ test("settings slider values stay inside their rows", async ({ page }) => {
       expect(past, `${text} on ${tab}`).toBeLessThanOrEqual(0.5);
   }
 });
+
+test("gibberish respells lyrics and long phrases still wrap", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page
+    .getByLabel("Unique word filters", { exact: true })
+    .selectOption("gibberish");
+  await showLyrics(page);
+  const sentence =
+    "We know me chain so much you are beautiful and I will be there forever and always";
+  await page.evaluate(
+    ({ track, playback, sentence }) => {
+      const { emit } = (window as any).__clientTest;
+      emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: true,
+          progress_ms: 0,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      const words = sentence.split(" ");
+      emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [0, 1].map((line) => ({
+            start_ms: line * 20_000,
+            end_ms: (line + 1) * 20_000,
+            text: sentence,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: words.map((word, index) => ({
+              start_ms: line * 20_000 + index * 500,
+              end_ms: line * 20_000 + (index + 1) * 500,
+              text: index < words.length - 1 ? `${word} ` : word,
+            })),
+          })),
+        },
+      });
+    },
+    { track, playback: emptyState.playback, sentence },
+  );
+  const line = page.locator(".lyrics-page .lyric-line").first();
+  await expect(line).toContainText("Winomichen");
+  await expect(line).not.toContainText("beautiful");
+  for (const width of [1000, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() =>
+        line.evaluate((element) => element.scrollWidth - element.clientWidth),
+      )
+      .toBeLessThanOrEqual(2);
+  }
+});

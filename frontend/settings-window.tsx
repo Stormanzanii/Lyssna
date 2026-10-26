@@ -887,6 +887,12 @@ export function SettingsWindow({
           "duet padding",
         ),
         flag(
+          "lyrics_credits_follow",
+          "Credits follow the last singer",
+          "Put the credits on the side of the song's last line, so a duet ending on the right keeps them there.",
+          "credits duet side align right",
+        ),
+        flag(
           "lyrics_line_hover",
           "Line hover background",
           "Highlight a line when you point at it.",

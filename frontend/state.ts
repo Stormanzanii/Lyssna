@@ -141,6 +141,7 @@ export const emptyState: AppState = {
     lyrics_right_align: false,
     lyrics_flip_duet: false,
     lyrics_wide_duet: true,
+    lyrics_credits_follow: false,
     lyrics_simple: false,
     lyrics_line_hover: false,
     lyrics_skeleton: true,
@@ -787,6 +788,18 @@ export function activeLines(
       ? [index]
       : [],
   );
+}
+/**
+ * Whether the last lead line sits on the right, so credits can follow the
+ * last singer. Duet lines sit right unless the sides are mirrored by Flip
+ * duet sides or Right align lyrics.
+ */
+export function endsOnRight(
+  lines: { background: boolean; opposite: boolean }[],
+  mirrored: boolean,
+): boolean {
+  const last = lines.filter((line) => !line.background).at(-1);
+  return !!last && last.opposite !== mirrored;
 }
 export function progress(start: number, end: number, time: number): number {
   return Math.max(0, Math.min(1, (time - start) / Math.max(1, end - start)));

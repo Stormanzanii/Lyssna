@@ -4,6 +4,7 @@ import {
   advanceDetails,
   emptyState,
   activeLines,
+  endsOnRight,
   progress,
   position,
   nextToggle,
@@ -22,6 +23,22 @@ const track: Track = {
   duration_ms: 10000,
   is_local: false,
 };
+describe("credits following the last singer", () => {
+  const line = (opposite: boolean, background = false) => ({
+    opposite,
+    background,
+  });
+  it("follows the last lead line, ignoring background vocals", () => {
+    expect(endsOnRight([line(false), line(true)], false)).toBe(true);
+    expect(endsOnRight([line(true), line(false)], false)).toBe(false);
+    expect(endsOnRight([line(true), line(false, true)], false)).toBe(true);
+  });
+  it("swaps sides when duets are mirrored", () => {
+    expect(endsOnRight([line(true)], true)).toBe(false);
+    expect(endsOnRight([line(false)], true)).toBe(true);
+    expect(endsOnRight([], true)).toBe(false);
+  });
+});
 describe("asynchronous playback and browsing", () => {
   it("keeps all music search categories together and rejects old responses", () => {
     const artist = {

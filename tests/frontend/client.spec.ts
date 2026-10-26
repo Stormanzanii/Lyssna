@@ -9713,3 +9713,47 @@ test("lyrics show a loading skeleton until they arrive or fail", async ({
     )
     .toBe(false);
 });
+
+test("credits follow a duet that ends on the right when asked", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const line = (text: string, start: number, opposite: boolean) => ({
+      text,
+      start_ms: start,
+      end_ms: start + 1000,
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite,
+      words: [],
+    });
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        songwriters: ["Test Writer"],
+        lines: [line("Left", 1000, false), line("Right", 2000, true)],
+      },
+    });
+  }, track.uri);
+  const display = page.locator(".lyrics-display");
+  const credits = display.locator(".lyric-end-credits");
+  await expect(credits).toHaveCSS("text-align", "start");
+  await openSettings(page, "Lyrics");
+  await page
+    .getByRole("switch", { name: "Credits follow the last singer" })
+    .click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(display).toHaveClass(/credits-right/);
+  await expect(credits).toHaveCSS("text-align", "right");
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Flip duet sides" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(credits).toHaveCSS("text-align", "start");
+});

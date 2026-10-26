@@ -148,6 +148,8 @@ pub struct Settings {
     pub lyrics_right_align: bool,
     pub lyrics_flip_duet: bool,
     pub lyrics_wide_duet: bool,
+    /// Credits sit on the side of the song's last lead line.
+    pub lyrics_credits_follow: bool,
     pub lyrics_simple: bool,
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
@@ -222,6 +224,7 @@ impl Default for Settings {
             lyrics_right_align: false,
             lyrics_flip_duet: false,
             lyrics_wide_duet: true,
+            lyrics_credits_follow: false,
             lyrics_simple: false,
             lyrics_line_hover: false,
             lyrics_skeleton: true,

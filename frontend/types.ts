@@ -123,6 +123,7 @@ export interface Settings {
   lyrics_right_align?: boolean;
   lyrics_flip_duet?: boolean;
   lyrics_wide_duet?: boolean;
+  lyrics_credits_follow?: boolean;
   lyrics_simple?: boolean;
   lyrics_line_hover?: boolean;
   lyrics_skeleton?: boolean;

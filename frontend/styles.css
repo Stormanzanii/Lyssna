@@ -5692,3 +5692,9 @@ input.volume-range:active::-webkit-slider-thumb {
     transform: translateY(-0.18em);
   }
 }
+/* Credits follow the last singer: a song ending on a line sung from the
+   right keeps its credits on that side. */
+.credits-right .lyric-end-credits,
+.credits-right .lyric-end-credits .lyric-source {
+  text-align: right;
+}

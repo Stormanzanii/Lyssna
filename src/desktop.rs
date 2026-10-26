@@ -279,6 +279,7 @@ impl Desktop {
         );
         crate::lyric_sources::set_prefer_apple(settings.lyrics_prefer_apple);
         crate::lyric_sources::set_musixmatch_words(!settings.lyrics_musixmatch_lines_only);
+        crate::lyric_sources::load_musixmatch_token();
         let worker = Worker::start(notifier.clone());
         let updates = updater::Updater::start(notifier);
         let route = settings.last_view.clone();
@@ -2276,6 +2277,26 @@ fn refresh_lyrics(
         .send(Command::FetchLyrics(track))
         .map_err(error)
 }
+/// Whether the user's own Musixmatch token is saved. The token itself never
+/// leaves the backend.
+#[tauri::command]
+fn musixmatch_token_saved() -> bool {
+    crate::lyric_sources::musixmatch_token_saved()
+}
+#[tauri::command]
+fn save_musixmatch_token(token: String) -> std::result::Result<(), String> {
+    crate::lyric_sources::save_musixmatch_token(&token).map_err(error)
+}
+#[tauri::command]
+async fn renew_musixmatch_token() -> std::result::Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let client = crate::auth::http_client()?;
+        crate::lyric_sources::renew_musixmatch_token(&client).map(|()| true)
+    })
+    .await
+    .map_err(|_| "Musixmatch token worker unavailable".to_owned())?
+    .map_err(error)
+}
 #[tauri::command]
 fn clear_lyrics_cache(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state
@@ -3428,6 +3449,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             whats_new,
             library_items,
             clear_lyrics_cache,
+            musixmatch_token_saved,
+            save_musixmatch_token,
+            renew_musixmatch_token,
             import_lyrics,
             reset_lyrics,
             saved_lyrics,

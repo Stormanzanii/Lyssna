@@ -29,6 +29,7 @@ import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { LyricsProvider } from "./lyrics-provider";
+import { MusixmatchToken } from "./musixmatch-token";
 import { AnimatorPresetRow } from "./animator-settings";
 
 /** Default source order; LRCLIB and Netease start off. */
@@ -1186,6 +1187,11 @@ export function SettingsWindow({
           "Use only Musixmatch's line timing, even when it has word timing.",
           "musixmatch word sync richsync line timing",
         ),
+        <MusixmatchToken
+          key="musixmatch"
+          onCall={onCall}
+          onNotice={onNotice}
+        />,
       ],
     ],
     [

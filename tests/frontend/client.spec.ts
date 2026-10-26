@@ -633,6 +633,13 @@ async function startClient(
             return freed;
           }
           if (command === "test_audio_output") return true;
+          if (command === "musixmatch_token_saved")
+            return !!host.__clientTest.musixmatchToken;
+          if (command === "save_musixmatch_token") {
+            host.__clientTest.musixmatchToken = args?.token ?? "";
+            return;
+          }
+          if (command === "renew_musixmatch_token") return true;
           if (command === "cancel_sign_in") {
             emit({ type: "login_finished" });
             return;
@@ -10190,4 +10197,36 @@ test("Musixmatch word sync can be ignored", async ({ page }) => {
       ),
     )
     .toBe(true);
+});
+
+test("a Musixmatch token is saved without being shown again", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Sources");
+  const field = page.getByLabel("Musixmatch token", { exact: true });
+  await page.getByRole("button", { name: "Refresh token" }).click();
+  await expect(page.locator(".toast")).toContainText(
+    "Musixmatch token refreshed",
+  );
+  await field.fill("abcdefghij0123456789abcd");
+  await page.getByRole("button", { name: "Save token" }).click();
+  await expect(field).toHaveValue("");
+  await expect(field).toHaveAttribute("placeholder", "Saved");
+  await expect(page.getByRole("button", { name: "Refresh token" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Remove token" }).click();
+  await expect(
+    page.getByRole("button", { name: "Refresh token" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((call: any) => call.command === "save_musixmatch_token")
+          .map((call: any) => call.args.token),
+      ),
+    )
+    .toEqual(["abcdefghij0123456789abcd", ""]);
 });

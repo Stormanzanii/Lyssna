@@ -24,6 +24,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
+use crate::credential as keyring;
 use crate::lyrics::{Line, Lyrics, Word};
 use crate::model::Track;
 
@@ -417,6 +418,78 @@ const MUSIXMATCH_TOKEN: &str = "21051986b9886beabe1ce01c3ce94c96319411f8f2c12267
 const MUSIXMATCH: &str = "https://apic-desktop.musixmatch.com/ws/1.1/";
 
 static MUSIXMATCH_USER: OnceLock<Mutex<String>> = OnceLock::new();
+/// Whether the token in use is the user's own, saved in the credential
+/// store. Their token is never replaced by an automatic one.
+static MUSIXMATCH_OWN: AtomicBool = AtomicBool::new(false);
+const MUSIXMATCH_SERVICE: &str = "SpotiFlex/Musixmatch";
+const MUSIXMATCH_ACCOUNT: &str = "user-token";
+
+fn use_musixmatch_token(token: &str) {
+    if let Ok(mut current) = MUSIXMATCH_USER
+        .get_or_init(|| Mutex::new(MUSIXMATCH_TOKEN.into()))
+        .lock()
+    {
+        *current = token.to_owned();
+    }
+}
+
+/// Musixmatch user tokens are letters and digits, like the desktop app's.
+pub fn valid_musixmatch_token(token: &str) -> bool {
+    (20..=200).contains(&token.len()) && token.bytes().all(|byte| byte.is_ascii_alphanumeric())
+}
+
+/// Starts with the user's own token when one is saved.
+pub fn load_musixmatch_token() {
+    if let Ok(token) = keyring::Entry::new(MUSIXMATCH_SERVICE, MUSIXMATCH_ACCOUNT)
+        .and_then(|entry| entry.get_password())
+        && valid_musixmatch_token(&token)
+    {
+        use_musixmatch_token(&token);
+        MUSIXMATCH_OWN.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Saves the user's own Musixmatch token in the credential store, or with
+/// an empty token goes back to automatic tokens.
+pub fn save_musixmatch_token(token: &str) -> Result<()> {
+    let token = token.trim();
+    let entry = keyring::Entry::new(MUSIXMATCH_SERVICE, MUSIXMATCH_ACCOUNT)
+        .map_err(|_| anyhow!("Cannot open the credential store"))?;
+    if token.is_empty() {
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(_) => anyhow::bail!("Cannot remove the saved Musixmatch token"),
+        }
+        MUSIXMATCH_OWN.store(false, Ordering::Relaxed);
+        use_musixmatch_token(MUSIXMATCH_TOKEN);
+        return Ok(());
+    }
+    ensure!(
+        valid_musixmatch_token(token),
+        "A Musixmatch token is 20 to 200 letters and digits"
+    );
+    entry
+        .set_password(token)
+        .map_err(|_| anyhow!("Cannot store the Musixmatch token"))?;
+    use_musixmatch_token(token);
+    MUSIXMATCH_OWN.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+pub fn musixmatch_token_saved() -> bool {
+    MUSIXMATCH_OWN.load(Ordering::Relaxed)
+}
+
+/// Asks Musixmatch for a new automatic token now.
+pub fn renew_musixmatch_token(client: &Client) -> Result<()> {
+    ensure!(
+        !musixmatch_token_saved(),
+        "Your own Musixmatch token is in use; remove it to use automatic tokens"
+    );
+    refresh_musixmatch_token(client)
+        .map(|_| ())
+        .context("Musixmatch did not issue a new token")
+}
 
 fn musixmatch_token() -> String {
     MUSIXMATCH_USER
@@ -441,12 +514,7 @@ fn refresh_musixmatch_token(client: &Client) -> Option<String> {
         .as_str()
         .filter(|token| !token.trim().is_empty() && token.chars().any(|char| char != '0'))?
         .to_owned();
-    if let Ok(mut current) = MUSIXMATCH_USER
-        .get_or_init(|| Mutex::new(MUSIXMATCH_TOKEN.into()))
-        .lock()
-    {
-        *current = token.clone();
-    }
+    use_musixmatch_token(&token);
     Some(token)
 }
 
@@ -467,6 +535,7 @@ fn musixmatch_get(client: &Client, method: &str, query: &[(&str, String)]) -> Re
     };
     let value = request(musixmatch_token())?;
     if value["message"]["header"]["status_code"].as_u64() == Some(401)
+        && !musixmatch_token_saved()
         && let Some(token) = refresh_musixmatch_token(client)
     {
         return request(token);
@@ -884,6 +953,16 @@ mod tests {
             source: source.into(),
             ..Lyrics::default()
         }
+    }
+
+    #[test]
+    fn musixmatch_tokens_are_bounded_letters_and_digits() {
+        assert!(valid_musixmatch_token(MUSIXMATCH_TOKEN));
+        assert!(!valid_musixmatch_token("short"));
+        assert!(!valid_musixmatch_token(&"a".repeat(201)));
+        assert!(!valid_musixmatch_token(
+            "21051986b9886beabe1ce01c3ce94c9631941 1f8f2c"
+        ));
     }
 
     #[test]

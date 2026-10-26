@@ -4774,9 +4774,10 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await expect(dialog.locator(".credit-row").first()).toContainText(
     "Spicy Lyrics",
   );
-  const plus = dialog.locator(".credit-row", { hasText: "Spotify+" });
-  await expect(plus).toContainText("No licence declared");
-  await plus.click();
+  await expect(
+    dialog.locator(".credit-row", { hasText: "Spotify+" }),
+  ).toHaveCount(0);
+  await dialog.locator(".credit-row").first().click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -4786,7 +4787,7 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
             .at(-1)?.args.url,
       ),
     )
-    .toBe("https://github.com/iPixelGalaxy/spotify-plus");
+    .toBe("https://github.com/iPixelGalaxy/spicy-lyrics");
   await dialog.getByRole("button", { name: /Back to settings/ }).click();
   await expect(dialog.locator(".credit-person")).toHaveCount(0);
   // Credits remain searchable after moving About out of the tab bar.

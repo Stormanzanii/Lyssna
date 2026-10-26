@@ -7,7 +7,7 @@ export const PEOPLE = [
   {
     login: "iPixelGalaxy",
     name: "iPixelGalaxy",
-    role: "Spicy Lyrics fork and Spotify+",
+    role: "Spicy Lyrics fork",
   },
   { login: "Spikerko", name: "Spikerko", role: "Creator of Spicy Lyrics" },
 ] as const;
@@ -22,13 +22,6 @@ export const CREDITS = [
     licence: "AGPL-3.0",
     note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows.",
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
-  },
-  {
-    name: "Spotify+",
-    by: "iPixelGalaxy",
-    licence: "No licence declared",
-    note: "The Add to playlist folders menu, reimplemented from its feature descriptions. No source is copied.",
-    url: "https://github.com/iPixelGalaxy/spotify-plus",
   },
   {
     name: "librespot",

@@ -579,7 +579,28 @@ export function LyricsDisplay({
     if (positionJumped) animator.current?.reset();
     animator.current?.update(positionMs);
   }, [positionMs, lyrics, settings.reduce_motion]);
+  // Romanization, translations or a word filter change only the words: the
+  // view stays on the current line instead of sliding to where it rewraps.
+  const timing = useMemo(
+    () => lyrics.lines.map((line) => line.start_ms).join(","),
+    [lyrics],
+  );
+  const wording = useRef({
+    lyrics,
+    timing,
+    translations: settings.lyrics_translations,
+  });
   useLayoutEffect(() => {
+    const before = wording.current;
+    let reworded =
+      before.timing === timing &&
+      (before.lyrics !== lyrics ||
+        before.translations !== settings.lyrics_translations);
+    wording.current = {
+      lyrics,
+      timing,
+      translations: settings.lyrics_translations,
+    };
     const container = scroll.current,
       line = gap ? waiting.current : lines.current[primary];
     if (!container || !line || !lyrics.synced) {
@@ -658,6 +679,15 @@ export function LyricsDisplay({
         setReturnDirection(
           container.scrollTop > spring.current.target ? "up" : "down",
         );
+        return;
+      }
+      if (reworded) {
+        reworded = false;
+        cancelAnimationFrame(frame);
+        frame = 0;
+        glide.current = undefined;
+        container.scrollTop = spring.current.position = spring.current.target;
+        spring.current.velocity = 0;
         return;
       }
       // Smooth scrolling off: the browser's own smooth scroll, not the spring.

@@ -4688,7 +4688,7 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
         Number(stop.getAttribute("stop-opacity")),
       );
     });
-  await expect.poll(async () => (await halves())[0]).toBeLessThan(0.5);
+  await expect.poll(async () => (await halves())[0]).toBeLessThan(0.2);
   await expect.poll(async () => (await halves())[3]).toBeCloseTo(1, 1);
   // ...and older lines' links fade out rather than vanish.
   await at(9600);

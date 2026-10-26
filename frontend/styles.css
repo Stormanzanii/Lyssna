@@ -6023,3 +6023,6 @@ input[type="range"]:hover {
 .gravity-links stop {
   stop-color: var(--highlighter-ink);
 }
+.gravity-links stop.dim {
+  stop-color: color-mix(in srgb, var(--highlighter-ink) 45%, #000);
+}

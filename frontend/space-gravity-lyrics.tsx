@@ -417,11 +417,14 @@ function drawLinks(
           ? Number(getComputedStyle(elements.get(key)!).opacity)
           : 0;
       const [first, second] = [strength(from.key), strength(to.key)];
-      gradient
-        .querySelectorAll("stop")
-        .forEach((stop, index) =>
-          stop.setAttribute("stop-opacity", `${index < 2 ? first : second}`),
-        );
+      // Dim halves sink further, darker and fainter, so the sung line's
+      // links stand out over the line before.
+      gradient.querySelectorAll("stop").forEach((stop, index) => {
+        const strength = index < 2 ? first : second,
+          dim = strength < 0.9;
+        stop.classList.toggle("dim", dim);
+        stop.setAttribute("stop-opacity", `${dim ? strength * 0.6 : strength}`);
+      });
     }
     // The pen follows song time softly, so coarse time updates don't step.
     const target = ease(

@@ -152,6 +152,7 @@ export interface Settings {
   lyrics_escape_exits?: boolean;
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];
+  lyrics_prefer_apple?: boolean;
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;

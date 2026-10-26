@@ -173,6 +173,7 @@ export const emptyState: AppState = {
       "netease",
     ],
     lyrics_sources_disabled: ["lrclib", "netease"],
+    lyrics_prefer_apple: true,
     ui_font: "",
     lyric_font: "",
     audio_output: null,

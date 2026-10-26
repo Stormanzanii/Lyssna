@@ -10149,3 +10149,25 @@ test("the lyrics cache button follows its chosen action", async ({ page }) => {
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(toolbar.locator('[data-icon="retry"]')).toHaveCount(0);
 });
+
+test("Apple Music quality priority is on until turned off", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Sources");
+  const toggle = page.getByRole("switch", {
+    name: "Prioritize Apple Music quality",
+  });
+  await expect(toggle).toBeChecked();
+  await toggle.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyrics_prefer_apple,
+      ),
+    )
+    .toBe(false);
+});

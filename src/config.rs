@@ -230,6 +230,9 @@ pub struct Settings {
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
     pub lyrics_sources_disabled: Vec<String>,
+    /// Prioritize Apple Music Quality: Apple's answer wins higher scores and
+    /// ties with gaps between lines.
+    pub lyrics_prefer_apple: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -317,6 +320,7 @@ impl Default for Settings {
                 .iter()
                 .map(|id| (*id).into())
                 .collect(),
+            lyrics_prefer_apple: true,
             lyrics_sources_disabled: crate::lyric_sources::DEFAULT_DISABLED
                 .iter()
                 .map(|id| (*id).into())
@@ -529,6 +533,7 @@ mod tests {
         action.clean_lyrics_options();
         assert_eq!(action.lyrics_cache_action, "song");
         assert!(older.lyrics_cache_button);
+        assert!(older.lyrics_prefer_apple);
     }
 
     #[test]

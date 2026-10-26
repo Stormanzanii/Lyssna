@@ -908,7 +908,11 @@ fn fetch_from(
         crate::lyric_sources::split_provider(lyrics, source)
             .with_context(|| format!("No {source} lyrics from the provider"))
     };
-    crate::lyric_sources::fetch_best(&crate::lyric_sources::enabled(), &|source| match source {
+    let (sources, prefer_apple) = (
+        crate::lyric_sources::enabled(),
+        crate::lyric_sources::prefer_apple(),
+    );
+    crate::lyric_sources::fetch_best(&sources, prefer_apple, &|source| match source {
         "spicy" | "apple" => from_provider(source),
         "musixmatch" => cached("musixmatch", &|| {
             crate::lyric_sources::musixmatch(client, track)

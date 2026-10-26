@@ -277,6 +277,7 @@ impl Desktop {
             &settings.lyrics_source_order,
             &settings.lyrics_sources_disabled,
         );
+        crate::lyric_sources::set_prefer_apple(settings.lyrics_prefer_apple);
         let worker = Worker::start(notifier.clone());
         let updates = updater::Updater::start(notifier);
         let route = settings.last_view.clone();
@@ -2143,7 +2144,8 @@ fn save_settings(
         let mut settings = settings;
         let output_changed = settings.audio_output != snapshot.settings.audio_output;
         let sources_changed = settings.lyrics_source_order != snapshot.settings.lyrics_source_order
-            || settings.lyrics_sources_disabled != snapshot.settings.lyrics_sources_disabled;
+            || settings.lyrics_sources_disabled != snapshot.settings.lyrics_sources_disabled
+            || settings.lyrics_prefer_apple != snapshot.settings.lyrics_prefer_apple;
         if output_changed {
             ensure!(snapshot.profile.is_some(), "Sign in first");
             ensure!(
@@ -2178,6 +2180,7 @@ fn save_settings(
             &settings.lyrics_source_order,
             &settings.lyrics_sources_disabled,
         );
+        crate::lyric_sources::set_prefer_apple(settings.lyrics_prefer_apple);
         // Reload the playing song's lyrics so a source change shows at once;
         // each source keeps its own cache, so this is cheap.
         if sources_changed && let Some(track) = snapshot.playback.item.clone() {

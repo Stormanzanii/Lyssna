@@ -11,7 +11,7 @@
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-dea584?style=for-the-badge&logo=rust&logoColor=white)](Cargo.toml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
 
-[Download](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe) · [Features](docs/FEATURES.md) · [Build from source](#build-from-source) · [Credits](#credits)
+[Download](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe) · [Build from source](#build-from-source) · [Credits](#credits)
 
 </div>
 
@@ -35,7 +35,7 @@ Press **F11** for full-screen lyrics over the Canvas. The controls fade out unti
 ![Full-screen lyrics over a Spotify Canvas](.github/assets/fullscreen.avif)
 
 > [!NOTE]
-> **Early development.** Some of Spotify's and Spicy Lyrics' features are still missing. [docs/FEATURES.md](docs/FEATURES.md) lists what works and what does not.
+> **Early development.** Some of Spotify's and Spicy Lyrics' features are still missing.
 
 ## Get started
 
@@ -133,8 +133,6 @@ At the time of writing, 234 Rust tests, 185 frontend unit tests and 183 browser 
 - Sign-in has not been tested end to end on an account outside the developer app's allowlist.
 - Library ordering uses the last 50 played contexts from Spotify's play history; older items are ordered by when they were added.
 - Spotify's public API does not expose folder metadata, so folders are read from Spotify's rootlist service.
-
-The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 </details>
 

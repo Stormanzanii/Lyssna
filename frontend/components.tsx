@@ -1526,6 +1526,9 @@ function SongLyricsPage({
                 settings={state.settings}
                 onSeek={(ms) => onPlayer({ command: "seek", positionMs: ms })}
               />
+            ) : !state.lyric_error &&
+              state.settings.lyrics_skeleton !== false ? (
+              <LyricsSkeleton />
             ) : (
               <div className="lyrics-message">
                 <Mic2 />
@@ -1561,6 +1564,32 @@ function SongLyricsPage({
         </div>
       )}
     </section>
+  );
+}
+
+/** Ragged placeholder widths, fixed so the lines never reshuffle. */
+const SKELETON_WIDTHS = [71, 56, 87, 48, 76, 63, 90, 52, 69, 81, 59, 74];
+/** Placeholder lines where the lyrics will land, while they are fetched. */
+function LyricsSkeleton() {
+  return (
+    <div className="lyrics-skeleton" role="status">
+      <div className="lyrics-skeleton-lines" aria-hidden="true">
+        {SKELETON_WIDTHS.map((width, index) => (
+          <span
+            key={index}
+            style={{ width: `${width}%`, "--line": index } as CSSProperties}
+          />
+        ))}
+      </div>
+      <p>
+        Loading lyrics
+        <span className="lyrics-skeleton-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+      </p>
+    </div>
   );
 }
 

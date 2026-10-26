@@ -9674,3 +9674,42 @@ test("Early scroll time stays off until Early scroll is on, then saves", async (
     )
     .toBe(500);
 });
+
+test("lyrics show a loading skeleton until they arrive or fail", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const skeleton = page.locator(".lyrics-skeleton");
+  await expect(skeleton).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Loading lyrics" }),
+  ).toBeVisible();
+  await expect(skeleton.locator(".lyrics-skeleton-lines span")).toHaveCount(12);
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyric_error",
+      uri,
+      message: "No lyrics",
+    });
+  }, track.uri);
+  await expect(skeleton).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Lyrics unavailable" }),
+  ).toBeVisible();
+
+  await openSettings(page, "Lyrics");
+  await page
+    .getByRole("switch", { name: "Lyrics loading skeleton", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyrics_skeleton,
+      ),
+    )
+    .toBe(false);
+});

@@ -892,6 +892,12 @@ export function SettingsWindow({
           "Highlight a line when you point at it.",
           "hover highlight",
         ),
+        flag(
+          "lyrics_skeleton",
+          "Lyrics loading skeleton",
+          "Show placeholder lines while lyrics load, instead of a message.",
+          "loading placeholder skeleton",
+        ),
       ],
     ],
     [

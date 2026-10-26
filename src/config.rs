@@ -150,6 +150,8 @@ pub struct Settings {
     pub lyrics_wide_duet: bool,
     pub lyrics_simple: bool,
     pub lyrics_line_hover: bool,
+    /// Placeholder lines while lyrics load, instead of a message.
+    pub lyrics_skeleton: bool,
     pub lyrics_early_scroll: bool,
     /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
     pub lyrics_early_scroll_ms: u16,
@@ -222,6 +224,7 @@ impl Default for Settings {
             lyrics_wide_duet: true,
             lyrics_simple: false,
             lyrics_line_hover: false,
+            lyrics_skeleton: true,
             lyrics_early_scroll: false,
             lyrics_early_scroll_ms: 250,
             lyrics_hide_year: false,
@@ -412,6 +415,7 @@ mod tests {
     fn lyrics_options_default_like_spicy_lyrics_and_stay_in_range() {
         let older: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(older.lyrics_early_scroll_ms, 250);
+        assert!(older.lyrics_skeleton);
         let mut wild: Settings =
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();

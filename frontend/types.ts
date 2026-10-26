@@ -125,6 +125,7 @@ export interface Settings {
   lyrics_wide_duet?: boolean;
   lyrics_simple?: boolean;
   lyrics_line_hover?: boolean;
+  lyrics_skeleton?: boolean;
   lyrics_early_scroll?: boolean;
   /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */
   lyrics_early_scroll_ms?: number;

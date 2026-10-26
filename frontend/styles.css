@@ -5994,3 +5994,21 @@ input[type="range"]:hover {
   :is(.library-pin, .library-playing, .library-cover-play) {
   display: none;
 }
+
+/* Space Gravity with the Highlighter: marker lines joining sung words. */
+.gravity-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.gravity-links path {
+  fill: none;
+  stroke: var(--highlighter-ink);
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  opacity: 0.72;
+}

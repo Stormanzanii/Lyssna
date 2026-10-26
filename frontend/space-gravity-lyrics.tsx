@@ -289,6 +289,77 @@ type GravityBody = Body & { spawned: boolean; entryFrame?: number };
 
 let kept: { signature: string; bodies: Map<string, GravityBody> } | undefined;
 
+const SVG = "http://www.w3.org/2000/svg";
+
+/** Where a turned, scaled word's left or right edge meets its middle. */
+function edge(body: Body, side: -1 | 1) {
+  const angle = (body.angle * Math.PI) / 180,
+    reach = (side * body.width * body.scale) / 2;
+  return {
+    x: body.x + Math.cos(angle) * reach,
+    y: body.y + Math.sin(angle) * reach,
+  };
+}
+
+/** With the Highlighter on, a marker line runs from each sung word to the
+ *  next one, drawn across the pause between them like brainstorm notes.
+ *  It bends a little and follows both words as they drift. */
+function drawLinks(
+  sheet: SVGSVGElement,
+  entities: Entity[],
+  bodies: Map<string, GravityBody>,
+  elements: Map<string, HTMLElement>,
+  shown: Set<string>,
+  time: number,
+) {
+  const lead = entities.filter(
+    (entity) =>
+      entity.index >= 0 && shown.has(entity.key) && elements.has(entity.key),
+  );
+  const wanted = new Set<string>();
+  for (let index = 1; index < lead.length; index++) {
+    const from = lead[index - 1],
+      to = lead[index];
+    if (to.index !== from.index + 1 || time < from.end) continue;
+    const a = bodies.get(from.key),
+      b = bodies.get(to.key);
+    if (!a?.spawned || !b?.spawned) continue;
+    const key = `${from.key}>${to.key}`;
+    wanted.add(key);
+    let path = sheet.querySelector<SVGPathElement>(
+      `path[data-link="${CSS.escape(key)}"]`,
+    );
+    if (!path) {
+      path = document.createElementNS(SVG, "path");
+      path.dataset.link = key;
+      path.setAttribute("pathLength", "1");
+      sheet.append(path);
+    }
+    const start = edge(a, 1),
+      end = edge(b, -1);
+    const dx = end.x - start.x,
+      dy = end.y - start.y,
+      length = Math.hypot(dx, dy) || 1;
+    // A seeded sideways bend, so each link curves its own way.
+    const bend = (((from.seed % 200) / 100 - 1) * 0.35 + 0.18) * length;
+    const control = {
+      x: (start.x + end.x) / 2 - (dy / length) * bend,
+      y: (start.y + end.y) / 2 + (dx / length) * bend,
+    };
+    path.setAttribute(
+      "d",
+      `M${start.x.toFixed(1)} ${start.y.toFixed(1)}Q${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
+    );
+    const drawn = Math.min(
+      1,
+      Math.max(0, (time - from.end) / Math.max(180, to.start - from.end)),
+    );
+    path.style.strokeDashoffset = `${1 - drawn}`;
+  }
+  for (const path of [...sheet.querySelectorAll<SVGPathElement>("path")])
+    if (!wanted.has(path.dataset.link ?? "")) path.remove();
+}
+
 /** Space Gravity: sung words float in zero gravity around the artwork. */
 export function SpaceGravityLyrics({
   lyrics,
@@ -363,8 +434,23 @@ export function SpaceGravityLyrics({
   });
   const bodies = useRef(restored);
   const fieldOf = useRef(signature);
-  const live = useRef({ visible, prepared, reduceMotion, waitKey });
-  live.current = { visible, prepared, reduceMotion, waitKey };
+  const live = useRef({
+    visible,
+    prepared,
+    reduceMotion,
+    waitKey,
+    time,
+    highlighter,
+  });
+  live.current = {
+    visible,
+    prepared,
+    reduceMotion,
+    waitKey,
+    time,
+    highlighter,
+  };
+  const links = useRef<SVGSVGElement>(null);
   useEffect(() => {
     // A new song starts every word fresh.
     if (fieldOf.current === signature) return;
@@ -508,6 +594,19 @@ export function SpaceGravityLyrics({
         const body = bodies.current.get(key);
         if (!body?.spawned) continue;
         node.style.transform = `translate3d(${body.x - body.width / 2}px, ${body.y - body.height / 2}px, 0) rotate(${body.angle}deg) scale(${body.scale})`;
+      }
+      if (links.current)
+        drawLinks(
+          links.current,
+          live.current.highlighter ? prepared.entities : [],
+          bodies.current,
+          elements.current,
+          new Set(visible.map((entity) => entity.key)),
+          live.current.time,
+        );
+      for (const [key, node] of elements.current) {
+        const body = bodies.current.get(key);
+        if (!body?.spawned) continue;
         // Shown a frame after placing, so it fades in where it spawned.
         if (
           !node.hasAttribute("data-spawned") &&
@@ -559,6 +658,9 @@ export function SpaceGravityLyrics({
         ref={stage}
         aria-label="Space Gravity lyrics"
       >
+        {highlighter && (
+          <svg className="gravity-links" ref={links} aria-hidden="true" />
+        )}
         {groupByLine(shown).map(([index, entities]) => {
           const line = lyrics.lines[index];
           // Like the normal view, lines blur by their distance from the line

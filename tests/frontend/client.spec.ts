@@ -4575,6 +4575,75 @@ test("Highlighter inks each floating word in Space Gravity", async ({
   ).toHaveCount(0);
 });
 
+test("Highlighter joins sung words with marker lines in Space Gravity", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "One two three",
+            start_ms: 0,
+            end_ms: 6000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "One", start_ms: 0, end_ms: 1000 },
+              { text: " two", start_ms: 2000, end_ms: 3000 },
+              { text: " three", start_ms: 4000, end_ms: 6000 },
+            ],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  await at(500);
+  const links = page.locator(".gravity-links path");
+  await expect(page.locator(".gravity-word")).toHaveCount(3);
+  // Nothing is joined until a word is sung.
+  await expect(links).toHaveCount(0);
+  // Halfway through the pause after "One", its line is half drawn.
+  await at(1500);
+  await expect(links).toHaveCount(1);
+  await expect
+    .poll(() => links.first().evaluate((path) => path.style.strokeDashoffset))
+    .toBe("0.5");
+  // Once "two" starts, the line reaches it and stays.
+  await at(2500);
+  await expect
+    .poll(() => links.first().evaluate((path) => path.style.strokeDashoffset))
+    .toBe("0");
+  await at(4500);
+  await expect(links).toHaveCount(2);
+});
+
 test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {

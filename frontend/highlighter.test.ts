@@ -48,8 +48,8 @@ describe("highlighter", () => {
 
   it("lays darker ink where the pen moves slowly", () => {
     expect(inkAlpha(2, 2000)).toBeGreaterThan(inkAlpha(2, 300));
-    expect(inkAlpha(2, 20)).toBe(0.36);
-    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.82, 1);
+    expect(inkAlpha(2, 20)).toBe(0.3);
+    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.56, 1);
   });
 
   it("leaves a mark that grows while the pen rests in a pause", () => {

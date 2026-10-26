@@ -5776,18 +5776,21 @@ input[type="range"]:hover {
   transform: scale(1.08);
 }
 
-/* Highlighter lyrics player: see-through marker strokes drawn over the
-   text, one per row (highlighter.tsx places them and masks each one to
-   set how dark the ink lies). Chisel-tip ends and ink pooling at both
-   ends make them look hand-drawn. */
+/* Highlighter lyrics player (highlighter.tsx lays out the strokes): one
+   slanted, rounded band of ink behind each row of text, its strength set
+   by a mask, and a brighter rounded pen tip at its end. Text over the ink
+   takes a faint tint of it. */
 .lyrics-display.highlighter {
   --highlighter-ink: #d4b80f;
 }
 .highlighter-words {
   position: relative;
   display: block;
+  isolation: isolate;
 }
 .highlighter-piece {
+  position: relative;
+  z-index: 1;
   display: inline-block;
   max-width: 100%;
   white-space: pre-wrap;
@@ -5797,38 +5800,30 @@ input[type="range"]:hover {
 .lyric-line.active .highlighter-piece {
   -webkit-text-fill-color: #fff;
 }
+.lyric-line.active .highlighter-piece[style*="--ink: 1"] {
+  -webkit-text-fill-color: color-mix(
+    in srgb,
+    #fff 90%,
+    var(--highlighter-ink)
+  );
+}
 .highlighter-ink {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
 }
-.highlighter-stroke {
-  --tip: 0.26em;
+.highlighter-stroke,
+.highlighter-tip {
   position: absolute;
-  background:
-    linear-gradient(
-      90deg,
-      rgb(0 0 0 / 0.16),
-      transparent 0.45em,
-      transparent calc(100% - 0.45em),
-      rgb(0 0 0 / 0.16)
-    ),
-    linear-gradient(
-      180deg,
-      rgb(255 255 255 / 0.12),
-      transparent 35%,
-      rgb(0 0 0 / 0.1)
-    ),
-    var(--highlighter-ink);
-  clip-path: polygon(
-    var(--tip) 5%,
-    34% 0,
-    70% 4%,
-    100% 0,
-    calc(100% - var(--tip)) 96%,
-    62% 100%,
-    27% 95%,
-    0 100%
-  );
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+.highlighter-stroke {
+  background: var(--highlighter-ink);
+}
+.highlighter-tip {
+  border-radius: 0.16em 0.22em 0.22em 0.16em;
+  background: color-mix(in srgb, var(--highlighter-ink) 58%, transparent);
 }

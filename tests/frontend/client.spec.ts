@@ -10682,7 +10682,7 @@ test("gibberish respells lyrics and long phrases still wrap", async ({
   }
 });
 
-test("highlighter draws see-through strokes over sung words and keeps them", async ({
+test("highlighter inks sung words behind the text and keeps them", async ({
   page,
 }) => {
   await startClient(page);
@@ -10747,29 +10747,29 @@ test("highlighter draws see-through strokes over sung words and keeps them", asy
   // At 1.5 s the first three words are sung and the rest are not.
   await expect.poll(async () => (await inks()).slice(0, 3)).toEqual([1, 1, 1]);
   expect((await inks()).slice(4)).toEqual(Array(8).fill(0));
-  // One stroke over the first row, ending where "came " ends, on top of
-  // the text and see-through.
+  // One stroke on the first row, its pen tip where "came " ends, behind
+  // the text.
   const strokes = active.locator(".highlighter-stroke");
   await expect(strokes).toHaveCount(1);
-  const reach = await active.evaluate((line) => {
-    const stroke = line.querySelector(".highlighter-stroke")!;
-    const came = line.querySelectorAll(".highlighter-piece")[2];
-    const style = getComputedStyle(stroke);
-    return {
-      gap: Math.abs(
-        stroke.getBoundingClientRect().right -
-          came.getBoundingClientRect().right,
-      ),
-      over:
-        getComputedStyle(stroke.parentElement!).zIndex === "1" &&
-        stroke.parentElement!.previousElementSibling !== null,
-      mask: (stroke as HTMLElement).style.maskImage,
-      ink: style.backgroundImage + style.backgroundColor,
-    };
-  });
-  expect(reach.gap).toBeLessThan(12);
-  expect(reach.over).toBe(true);
-  expect(reach.mask).toContain("linear-gradient");
+  const reach = () =>
+    active.evaluate((line) => {
+      const stroke = line.querySelector(".highlighter-stroke")!;
+      const tip = line.querySelector(".highlighter-tip")!;
+      const came = line.querySelectorAll(".highlighter-piece")[2];
+      return {
+        gap: Math.abs(
+          tip.getBoundingClientRect().right -
+            came.getBoundingClientRect().right,
+        ),
+        behind:
+          Number(getComputedStyle(stroke.parentElement!).zIndex) <
+          Number(getComputedStyle(came).zIndex),
+        mask: (stroke as HTMLElement).style.maskImage,
+      };
+    });
+  await expect.poll(async () => (await reach()).gap).toBeLessThan(14);
+  expect((await reach()).behind).toBe(true);
+  expect((await reach()).mask).toContain("linear-gradient");
   // Lines yet to be sung carry no strokes.
   await expect(
     page.locator(".lyrics-page .lyric-line:not(.active) .highlighter-stroke"),
@@ -10963,8 +10963,8 @@ test("highlighter tip glides and ink stays through the next line", async ({
   const first = page.locator(".lyrics-page .lyric-line").first();
   const width = () =>
     first
-      .locator(".highlighter-stroke")
-      .evaluate((stroke) => stroke.getBoundingClientRect().width);
+      .locator(".highlighter-tip")
+      .evaluate((tip) => tip.getBoundingClientRect().right);
   await expect(first.locator(".highlighter-stroke")).toHaveCount(1);
   const early = await width();
   // Still inside the second letter: the tip has moved on regardless.

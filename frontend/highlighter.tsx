@@ -7,17 +7,20 @@ import {
 } from "react";
 import type { Line } from "./types";
 
-/* Highlighter: a lyrics player where a marker pen draws over each line as
- * it is sung. The ink lies on top of the text, see-through like a real
- * highlighter, one stroke per row with slanted chisel-tip ends, a slight
- * tilt and wobble. Like a real pen, slow stretches leave
- * darker ink than quick ones, and where the singing pauses mid-line the
- * resting tip leaves a darker mark. Sung lines keep their strokes. Timed
- * syllables set the pace; a line without them is shared out over its
- * words by letter count. */
+/* Highlighter: a lyrics player where a marker pen highlights each line as
+ * it is sung, after a screen recording of a highlighter-style lyrics
+ * view. Each row gets one band of ink behind the text, a slanted rounded
+ * stroke, with a brighter rounded pen tip at its end. Ink is laid in place
+ * and revealed as the pen passes, so what is drawn never moves or
+ * stretches. Like a real pen, slow stretches leave stronger ink than
+ * quick ones, and where the singing pauses mid-line the resting tip leaves
+ * a stronger mark. The pen glides after the song instead of snapping, and
+ * sung lines keep their ink. Timed syllables set the pace; a line without
+ * them is shared out over its words by letter count. */
 
-/** Marker colours to pick from. The ink is see-through, so these are
- *  bright; over dark backgrounds they read as a darker shade. */
+/** Marker colours to pick from. The ink is laid see-through over the
+ *  background, so these are bright; on dark backgrounds they read as a
+ *  deeper shade, like the olive of yellow ink on black. */
 export const MARKER_COLOURS = [
   ["#d4b80f", "Yellow"],
   ["#e07a1f", "Orange"],
@@ -71,73 +74,11 @@ export function inkAt(piece: Piece, time: number) {
   return (time - piece.start_ms) / Math.max(1, piece.end_ms - piece.start_ms);
 }
 
-interface Row {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-
-/** The rows the line's text sits on, from its pieces' boxes. */
-function textRows(spans: HTMLElement[]): Row[] {
-  const rows: Row[] = [];
-  for (const span of spans)
-    for (const box of span.getClientRects()) {
-      if (!box.width) continue;
-      const row = rows.find(
-        (row) => Math.abs(row.top - box.top) < box.height / 2,
-      );
-      if (row) {
-        row.left = Math.min(row.left, box.left);
-        row.right = Math.max(row.right, box.right);
-        row.bottom = Math.max(row.bottom, box.bottom);
-      } else rows.push({ ...box.toJSON() });
-    }
-  return rows.sort((a, b) => a.top - b.top);
-}
-
-/** Where the marker's tip is at `time`: the end of the ink, or null before
- *  the line starts. `Infinity` means the whole line is inked. */
-function tipAt(
-  spans: HTMLElement[],
-  pieces: Piece[],
-  time: number,
-): { x: number; top: number } | null {
-  const current = pieces.findIndex((piece) => time < piece.end_ms);
-  if (current === -1) return { x: Infinity, top: Infinity };
-  const span = spans[current],
-    text = span?.firstChild;
-  if (!span || !text) return null;
-  const length = text.textContent?.length ?? 0;
-  const letters = inkAt(pieces[current], time) * length;
-  if (!letters && current === 0) return null;
-  // The tip glides through each letter rather than jumping letter by
-  // letter: it sits between the ends of the letters on either side.
-  const range = document.createRange();
-  const after = (count: number) => {
-    if (!count) {
-      const start = span.getClientRects()[0];
-      return start ? { x: start.left, top: start.top } : null;
-    }
-    range.setStart(text, 0);
-    range.setEnd(text, count);
-    const boxes = range.getClientRects(),
-      end = boxes[boxes.length - 1];
-    return end ? { x: end.right, top: end.top } : null;
-  };
-  const whole = Math.floor(letters),
-    from = after(whole);
-  if (whole >= length || !from) return from;
-  const to = after(whole + 1);
-  if (!to || Math.abs(to.top - from.top) > 2) return from;
-  return { x: from.x + (to.x - from.x) * (letters - whole), top: from.top };
-}
-
-/** How dark the ink lies over a stretch drawn `widthEm` wide in
+/** Ink strength (its opacity) for a stretch drawn `widthEm` wide in
  *  `durationMs`: a slow pen leaves more ink, a quick one less. */
 export function inkAlpha(widthEm: number, durationMs: number) {
   const speed = widthEm / Math.max(0.05, durationMs / 1000);
-  return Math.min(0.82, Math.max(0.36, 0.82 - 0.055 * speed));
+  return Math.min(0.56, Math.max(0.3, 0.56 - 0.03 * speed));
 }
 
 /** How strong a mark the pen leaves resting between two stretches when the
@@ -149,23 +90,156 @@ export function restMark(before: Piece, after: Piece, time: number) {
     : Math.min(1, rest / 700);
 }
 
-/** The see-through mask along one stroke: each stretch's ink by its pen
- *  speed, with darker marks where the pen rested. */
-function inkMask(
-  stroke: { left: number; right: number },
-  stretches: { left: number; right: number; alpha: number; rest: number }[],
+interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** One piece's place, in the line's own pixels, and its ink strength. */
+interface Stretch extends Box {
+  index: number;
+  alpha: number;
+}
+
+/** A row's stroke: where it sits and where along the pen's path (all rows
+ *  end to end) it begins. */
+interface Lane extends Box {
+  start: number;
+  stretches: Stretch[];
+}
+
+interface Layout {
+  lanes: Lane[];
+  length: number;
+  em: number;
+  spans: HTMLElement[];
+}
+
+/** Converts screen positions to the line's own pixels, so strokes line up
+ *  even while the line is scaled. */
+function localFrame(root: HTMLElement) {
+  const box = root.getBoundingClientRect();
+  const scale = box.width / (root.offsetWidth || box.width || 1) || 1;
+  return {
+    x: (x: number) => (x - box.left) / scale,
+    y: (y: number) => (y - box.top) / scale,
+  };
+}
+
+/** Measures the rows and pieces. Strokes are revealed over this fixed
+ *  layout, so ink already laid never moves or stretches. */
+function measure(root: HTMLElement, pieces: Piece[]): Layout {
+  const spans = [...root.querySelectorAll<HTMLElement>(".highlighter-piece")];
+  const frame = localFrame(root);
+  const em = parseFloat(getComputedStyle(root).fontSize) || 16;
+  const stretches: Stretch[] = spans.map((span, index) => {
+    const edges = span.getBoundingClientRect();
+    const left = frame.x(edges.left),
+      right = frame.x(edges.right);
+    return {
+      index,
+      left,
+      right,
+      top: frame.y(edges.top),
+      bottom: frame.y(edges.bottom),
+      alpha: inkAlpha(
+        (right - left) / em,
+        pieces[index].end_ms - pieces[index].start_ms,
+      ),
+    };
+  });
+  const lanes: Lane[] = [];
+  for (const stretch of stretches) {
+    if (stretch.right - stretch.left < 0.5) continue;
+    const lane = lanes.find(
+      (lane) =>
+        Math.abs(lane.top - stretch.top) < (stretch.bottom - stretch.top) / 2,
+    );
+    if (lane) {
+      lane.left = Math.min(lane.left, stretch.left);
+      lane.right = Math.max(lane.right, stretch.right);
+      lane.bottom = Math.max(lane.bottom, stretch.bottom);
+      lane.stretches.push(stretch);
+    } else lanes.push({ ...stretch, start: 0, stretches: [stretch] });
+  }
+  lanes.sort((a, b) => a.top - b.top);
+  let length = 0;
+  for (const lane of lanes) {
+    lane.start = length;
+    length += lane.right - lane.left;
+  }
+  return { lanes, length, em, spans };
+}
+
+/** How far along the pen's path the tip is at `time`. */
+function pathAt(
+  root: HTMLElement,
+  layout: Layout,
+  pieces: Piece[],
+  time: number,
+) {
+  if (time === -Infinity) return 0;
+  const current = pieces.findIndex((piece) => time < piece.end_ms);
+  if (current === -1) return layout.length;
+  const span = layout.spans[current],
+    text = span?.firstChild;
+  if (!span || !text) return 0;
+  const letters =
+    inkAt(pieces[current], time) * (text.textContent?.length ?? 0);
+  const frame = localFrame(root);
+  // The tip glides through each letter rather than jumping letter by
+  // letter: it sits between the ends of the letters on either side.
+  const range = document.createRange();
+  const after = (count: number) => {
+    if (!count) {
+      const start = span.getClientRects()[0];
+      return start ? { x: frame.x(start.left), y: frame.y(start.top) } : null;
+    }
+    range.setStart(text, 0);
+    range.setEnd(text, Math.min(count, text.textContent?.length ?? 0));
+    const boxes = range.getClientRects(),
+      end = boxes[boxes.length - 1];
+    return end ? { x: frame.x(end.right), y: frame.y(end.top) } : null;
+  };
+  const whole = Math.floor(letters);
+  let tip = after(whole);
+  const next = letters > whole ? after(whole + 1) : null;
+  if (tip && next && Math.abs(next.y - tip.y) < 2)
+    tip = { x: tip.x + (next.x - tip.x) * (letters - whole), y: tip.y };
+  if (!tip) return 0;
+  const lane = layout.lanes.find(
+    (lane) => Math.abs(lane.top - tip.y) < (lane.bottom - lane.top) / 2,
+  );
+  if (!lane) return 0;
+  return (
+    lane.start +
+    Math.min(lane.right - lane.left, Math.max(0, tip.x - lane.left))
+  );
+}
+
+/** The ink along one row, as a mask in that row's own pixels: each
+ *  stretch's strength by its pen speed, stronger where the pen rested. */
+function laneMask(
+  lane: Lane,
+  offset: number,
+  pieces: Piece[],
   em: number,
+  time: number,
 ) {
   const stops: [number, number][] = [];
-  for (const { left, right, alpha, rest } of stretches) {
-    stops.push([(left + right) / 2 - stroke.left, alpha]);
+  for (const stretch of lane.stretches) {
+    stops.push([(stretch.left + stretch.right) / 2 - offset, stretch.alpha]);
+    const next = pieces[stretch.index + 1];
+    const rest = next ? restMark(pieces[stretch.index], next, time) : 0;
     if (rest) {
-      const at = right - stroke.left,
-        peak = Math.min(0.95, alpha + 0.55 * rest);
+      const at = stretch.right - offset,
+        peak = Math.min(0.75, stretch.alpha + 0.3 * rest);
       stops.push(
-        [at - 0.3 * em, alpha],
-        [at - 0.08 * em, peak],
-        [at + 0.04 * em, peak],
+        [at - 0.3 * em, stretch.alpha],
+        [at - 0.1 * em, peak],
+        [at + 0.05 * em, peak],
       );
     }
   }
@@ -176,83 +250,51 @@ function inkMask(
     .join(", ")})`;
 }
 
-/** Small steady variations per row, so strokes look drawn by hand. */
-function wobble(seed: number) {
-  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  return value - Math.floor(value) - 0.5;
-}
-
-/** Draws the strokes for `time` into `ink`, reusing its stroke elements. */
-function drawInk(
-  root: HTMLElement,
+/** Shows the ink revealed up to `path` along the pen's path. Each row has
+ *  one band laid over the whole row and clipped at the tip, plus the
+ *  brighter pen tip: moving with the pen, or left where it lifted at the
+ *  row's end. */
+function paint(
   ink: HTMLElement,
+  layout: Layout,
   pieces: Piece[],
+  path: number,
   time: number,
-  seed: number,
 ) {
-  const spans = [...root.querySelectorAll<HTMLElement>(".highlighter-piece")];
-  const tip = time === -Infinity ? null : tipAt(spans, pieces, time);
-  const strokes: (Row & { mask: string })[] = [];
-  if (tip) {
-    const box = root.getBoundingClientRect();
-    const em = parseFloat(getComputedStyle(root).fontSize) || 16;
-    const stretches = spans.map((span, index) => {
-      const piece = pieces[index],
-        edges = span.getBoundingClientRect();
-      return {
-        left: edges.left,
-        right: edges.right,
-        top: edges.top,
-        alpha: inkAlpha(edges.width / em, piece.end_ms - piece.start_ms),
-        rest:
-          index < pieces.length - 1
-            ? restMark(piece, pieces[index + 1], time)
-            : 0,
-      };
-    });
-    for (const row of textRows(spans)) {
-      const done = row.top < tip.top - (row.bottom - row.top) / 2;
-      const here =
-        !done && Math.abs(row.top - tip.top) < (row.bottom - row.top) / 2;
-      if (!done && !here) break;
-      const right = here ? Math.min(tip.x, row.right) : row.right;
-      if (right <= row.left) continue;
-      const stroke = {
-        left: row.left - 0.14 * em,
-        right: right + (here && tip.x < row.right ? 0 : 0.14 * em),
-      };
-      strokes.push({
-        left: stroke.left - box.left,
-        right: stroke.right - box.left,
-        top: row.top - box.top,
-        bottom: row.bottom - box.top,
-        mask: inkMask(
-          stroke,
-          stretches.filter(
-            (stretch) =>
-              Math.abs(stretch.top - row.top) < (row.bottom - row.top) / 2 &&
-              stretch.left < right,
-          ),
-          em,
-        ),
-      });
-    }
-  }
-  while (ink.children.length > strokes.length) ink.lastChild!.remove();
-  strokes.forEach((stroke, index) => {
-    const element =
-      (ink.children[index] as HTMLElement | undefined) ??
+  const { em } = layout;
+  const lead = 0.16 * em,
+    tail = 0.1 * em,
+    nib = 0.42 * em;
+  const shown = layout.lanes.filter((lane) => path > lane.start + 0.5);
+  while (ink.children.length > shown.length * 2) ink.lastChild!.remove();
+  shown.forEach((lane, index) => {
+    const band =
+      (ink.children[index * 2] as HTMLElement | undefined) ??
       ink.appendChild(document.createElement("span"));
-    element.className = "highlighter-stroke";
-    const height = stroke.bottom - stroke.top;
-    const shift = wobble(seed + index);
-    element.style.left = `${stroke.left}px`;
-    element.style.width = `${stroke.right - stroke.left}px`;
-    element.style.top = `${stroke.top + height * (0.14 + shift * 0.04)}px`;
-    element.style.height = `${height * (0.78 + wobble(seed - index) * 0.05)}px`;
-    element.style.transform = `rotate(${shift * 0.9}deg)`;
-    element.style.maskImage = stroke.mask;
-    element.style.webkitMaskImage = stroke.mask;
+    const tip =
+      (ink.children[index * 2 + 1] as HTMLElement | undefined) ??
+      ink.appendChild(document.createElement("span"));
+    band.className = "highlighter-stroke";
+    tip.className = "highlighter-tip";
+    const width = lane.right - lane.left,
+      height = lane.bottom - lane.top;
+    const reveal = Math.min(width, path - lane.start);
+    const left = lane.left - lead,
+      full = width + lead + tail,
+      top = lane.top + height * 0.09,
+      tall = height * 0.84;
+    const end = lead + reveal + (reveal >= width - 0.5 ? tail : 0);
+    band.style.transform = `translate(${left}px, ${top}px) skewX(-8deg)`;
+    band.style.width = `${full}px`;
+    band.style.height = `${tall}px`;
+    band.style.clipPath = `inset(0 ${Math.max(0, full - end).toFixed(1)}px 0 0 round ${(0.14 * em).toFixed(1)}px)`;
+    const mask = laneMask(lane, left, pieces, em, time);
+    band.style.maskImage = mask;
+    band.style.webkitMaskImage = mask;
+    const nibWidth = Math.min(nib, end);
+    tip.style.transform = `translate(${left + end - nibWidth}px, ${top}px) skewX(-8deg)`;
+    tip.style.width = `${nibWidth}px`;
+    tip.style.height = `${tall}px`;
   });
 }
 
@@ -269,26 +311,61 @@ export const HighlighterWords = memo(function HighlighterWords({
   const pieces = useMemo(() => highlighterPieces(line), [line]);
   const root = useRef<HTMLSpanElement>(null),
     ink = useRef<HTMLSpanElement>(null),
+    layout = useRef<Layout>(undefined),
+    // The pen glides after the song's position instead of snapping to it.
+    pen = useRef({ path: 0, at: 0, frame: 0 }),
     latest = useRef(time);
   latest.current = time;
-  const seed = line.start_ms % 997;
   useLayoutEffect(() => {
-    if (root.current && ink.current)
-      drawInk(root.current, ink.current, pieces, time, seed);
-  }, [pieces, time, seed]);
+    const element = root.current,
+      sheet = ink.current;
+    if (!element || !sheet) return;
+    const state = pen.current;
+    const step = (now: number) => {
+      state.frame = 0;
+      const current = (layout.current ??= measure(element, pieces));
+      const target = pathAt(element, current, pieces, latest.current);
+      const elapsed = Math.min(100, now - (state.at || now));
+      state.at = now;
+      // A seek back, or a line that is wholly sung or unsung, lands at
+      // once; otherwise the pen eases toward the song's position.
+      state.path =
+        target < state.path - 1 || !Number.isFinite(latest.current)
+          ? target
+          : state.path + (target - state.path) * (1 - Math.exp(-elapsed / 45));
+      paint(sheet, current, pieces, state.path, latest.current);
+      if (Math.abs(target - state.path) > 0.3)
+        state.frame = requestAnimationFrame(step);
+      else state.at = 0;
+    };
+    cancelAnimationFrame(state.frame);
+    step(performance.now());
+    return () => cancelAnimationFrame(state.frame);
+  }, [pieces, time]);
   // Rows move when the window or text size changes.
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
     const observer = new ResizeObserver(() => {
-      if (ink.current)
-        drawInk(element, ink.current, pieces, latest.current, seed);
+      if (!ink.current) return;
+      layout.current = measure(element, pieces);
+      paint(
+        ink.current,
+        layout.current,
+        pieces,
+        Math.min(pen.current.path, layout.current.length),
+        latest.current,
+      );
     });
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [pieces, seed]);
+    return () => {
+      observer.disconnect();
+      layout.current = undefined;
+    };
+  }, [pieces]);
   return (
     <span className="highlighter-words" ref={root}>
+      <span className="highlighter-ink" aria-hidden="true" ref={ink} />
       {pieces.map((piece, index) => (
         <span
           key={index}
@@ -298,7 +375,6 @@ export const HighlighterWords = memo(function HighlighterWords({
           {piece.text}
         </span>
       ))}
-      <span className="highlighter-ink" aria-hidden="true" ref={ink} />
     </span>
   );
 });

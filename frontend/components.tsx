@@ -497,7 +497,11 @@ export function LyricsDisplay({
   };
   // Early scroll follows the line about to be sung; highlighting still
   // follows the real song time.
-  const scrollTime = positionMs + (settings.lyrics_early_scroll ? 350 : 0);
+  const scrollTime =
+    positionMs +
+    (settings.lyrics_early_scroll
+      ? (settings.lyrics_early_scroll_ms ?? 250)
+      : 0);
   const active = activeLines(lyrics.lines, scrollTime);
   const primary =
     active.find((index) => !lyrics.lines[index].background) ??

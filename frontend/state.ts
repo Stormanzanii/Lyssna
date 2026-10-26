@@ -144,6 +144,7 @@ export const emptyState: AppState = {
     lyrics_simple: false,
     lyrics_line_hover: false,
     lyrics_early_scroll: false,
+    lyrics_early_scroll_ms: 250,
     lyrics_hide_year: false,
     lyrics_hide_npv: false,
     lyrics_hide_npv_empty: false,

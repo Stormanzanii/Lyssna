@@ -151,6 +151,8 @@ pub struct Settings {
     pub lyrics_simple: bool,
     pub lyrics_line_hover: bool,
     pub lyrics_early_scroll: bool,
+    /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
+    pub lyrics_early_scroll_ms: u16,
     pub lyrics_hide_year: bool,
     pub lyrics_hide_npv: bool,
     pub lyrics_hide_npv_empty: bool,
@@ -221,6 +223,7 @@ impl Default for Settings {
             lyrics_simple: false,
             lyrics_line_hover: false,
             lyrics_early_scroll: false,
+            lyrics_early_scroll_ms: 250,
             lyrics_hide_year: false,
             lyrics_hide_npv: false,
             lyrics_hide_npv_empty: false,
@@ -283,6 +286,10 @@ impl Settings {
             0
         }
     }
+    /// Keeps Spicy Lyrics display options inside the ranges Settings offers.
+    pub fn clean_lyrics_options(&mut self) {
+        self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
+    }
     pub fn load() -> Result<Self> {
         let path = data_dir()?.join("settings.json");
         let mut settings: Self = if path.exists() {
@@ -297,6 +304,7 @@ impl Settings {
         settings.lyric_size = settings.lyric_size.clamp(18.0, 60.0);
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        settings.clean_lyrics_options();
         if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
             settings.lyrics_background = "animated".into();
         }
@@ -398,6 +406,16 @@ mod tests {
         let saved = serde_json::to_value(&settings).unwrap();
         assert_eq!(saved["space_gravity"], true);
         assert!(saved.get("floating_lyrics").is_none());
+    }
+
+    #[test]
+    fn lyrics_options_default_like_spicy_lyrics_and_stay_in_range() {
+        let older: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(older.lyrics_early_scroll_ms, 250);
+        let mut wild: Settings =
+            serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
+        wild.clean_lyrics_options();
+        assert_eq!(wild.lyrics_early_scroll_ms, 800);
     }
 
     #[test]

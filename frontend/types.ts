@@ -126,6 +126,8 @@ export interface Settings {
   lyrics_simple?: boolean;
   lyrics_line_hover?: boolean;
   lyrics_early_scroll?: boolean;
+  /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */
+  lyrics_early_scroll_ms?: number;
   lyrics_hide_year?: boolean;
   lyrics_hide_npv?: boolean;
   lyrics_hide_npv_empty?: boolean;

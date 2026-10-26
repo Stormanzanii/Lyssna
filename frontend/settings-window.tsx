@@ -111,6 +111,9 @@ export const lastSettingsTab = () => readPlace().tab;
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
 }[keyof Settings];
+type Amount = {
+  [K in keyof Settings]-?: Settings[K] extends number | undefined ? K : never;
+}[keyof Settings];
 
 /** Every SpotiFlex setting in one window, laid out like Spicy Lyrics'
  *  settings panel: category tabs, search across all of them, then rows
@@ -263,6 +266,46 @@ export function SettingsWindow({
       />
     </SettingRow>
   );
+  /** A slider row; `off` dims it while the option it tunes is turned off. */
+  const range = (
+    key: Amount,
+    label: string,
+    help: string,
+    keywords: string,
+    [min, max, step]: [number, number, number],
+    fallback: number,
+    unit = "",
+    off = false,
+  ) => {
+    const value = settings[key] ?? fallback;
+    return (
+      <SettingRow key={key} label={label} help={help} keywords={keywords}>
+        <span className={`settings-range ${off ? "off" : ""}`}>
+          <input
+            type="range"
+            aria-label={label}
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            disabled={off}
+            style={
+              {
+                "--fill": `${((value - min) / (max - min)) * 100}%`,
+              } as CSSProperties
+            }
+            onChange={(event) =>
+              onSettings({ [key]: Number(event.target.value) })
+            }
+          />
+          <output>
+            {value}
+            {unit}
+          </output>
+        </span>
+      </SettingRow>
+    );
+  };
   const lyricSize = settings.lyric_size || 36;
   const order = settings.lyrics_source_order?.length
     ? settings.lyrics_source_order
@@ -814,6 +857,16 @@ export function SettingsWindow({
           "Early scroll",
           "Start moving to the next line a moment before it is sung.",
           "scroll ahead",
+        ),
+        range(
+          "lyrics_early_scroll_ms",
+          "Early scroll time",
+          "How far ahead Early scroll moves to the next line.",
+          "scroll ahead lead milliseconds",
+          [0, 800, 10],
+          250,
+          " ms",
+          !settings.lyrics_early_scroll,
         ),
         flag(
           "lyrics_right_align",

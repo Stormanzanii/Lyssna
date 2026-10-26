@@ -2165,6 +2165,7 @@ fn save_settings(
         };
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
+        settings.clean_lyrics_options();
         settings.lyrics_source_order =
             crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
         crate::config::clean_song_sorts(&mut settings.song_sorts);

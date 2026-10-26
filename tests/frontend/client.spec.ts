@@ -9651,3 +9651,26 @@ test("What's New waits for the session when the app opens on it", async ({
   );
   await expect(feed).toContainText("Late Release");
 });
+
+test("Early scroll time stays off until Early scroll is on, then saves", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  const slider = page.getByLabel("Early scroll time", { exact: true });
+  await expect(slider).toBeDisabled();
+  await expect(slider).toHaveValue("250");
+  await page.getByRole("switch", { name: "Early scroll", exact: true }).click();
+  await expect(slider).toBeEnabled();
+  await slider.fill("500");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyrics_early_scroll_ms,
+      ),
+    )
+    .toBe(500);
+});

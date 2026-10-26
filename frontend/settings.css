@@ -158,10 +158,17 @@
   box-shadow: 0 2px 4px #0006;
 }
 .settings-range output {
-  width: 24px;
+  min-width: 24px;
+  white-space: nowrap;
   font-size: 14px;
   color: #b3b3b3;
   font-variant-numeric: tabular-nums;
+}
+.settings-range.off {
+  opacity: 0.45;
+}
+.settings-range.off input {
+  pointer-events: none;
 }
 .settings-number {
   display: flex;

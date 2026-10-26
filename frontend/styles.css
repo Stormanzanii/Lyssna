@@ -5723,3 +5723,18 @@ input.volume-range:active::-webkit-slider-thumb {
   scale: 1;
   opacity: 0.497;
 }
+/* Cover Art Animation: the old artwork sits over the new one and fades out
+   once the new one has loaded. */
+.cover .cover-previous {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cover .cover-previous.fading {
+  animation: cover-fade-out 0.5s ease forwards;
+}
+@keyframes cover-fade-out {
+  to {
+    opacity: 0;
+  }
+}

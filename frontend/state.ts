@@ -130,6 +130,7 @@ export const emptyState: AppState = {
     lyric_offset_ms: 0,
     romanized: false,
     reduce_motion: false,
+    cover_animation: true,
     liquid_glass: false,
     canvas_lyrics: true,
     space_gravity: false,

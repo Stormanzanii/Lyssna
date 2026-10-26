@@ -111,6 +111,7 @@ export interface Settings {
   lyric_offset_ms: number;
   romanized: boolean;
   reduce_motion: boolean;
+  cover_animation?: boolean;
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
   space_gravity?: boolean;

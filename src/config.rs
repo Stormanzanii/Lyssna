@@ -132,6 +132,8 @@ pub struct Settings {
     pub lyric_offset_ms: i64,
     pub romanized: bool,
     pub reduce_motion: bool,
+    /// The lyrics page artwork crossfades when the song changes.
+    pub cover_animation: bool,
     pub liquid_glass: bool,
     pub canvas_lyrics: bool,
     /// Space Gravity lyrics; replaced the earlier floating lyrics option.
@@ -216,6 +218,7 @@ impl Default for Settings {
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,
+            cover_animation: true,
             liquid_glass: false,
             canvas_lyrics: true,
             space_gravity: false,
@@ -423,6 +426,7 @@ mod tests {
         let older: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(older.lyrics_early_scroll_ms, 250);
         assert!(older.lyrics_skeleton);
+        assert!(older.cover_animation);
         let mut wild: Settings =
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();

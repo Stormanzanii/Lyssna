@@ -934,6 +934,12 @@ export function SettingsWindow({
           "Play the track's Canvas video behind the lyrics page.",
           "video background",
         ),
+        flag(
+          "cover_animation",
+          "Cover art animation",
+          "Crossfade the artwork beside the lyrics when the song changes.",
+          "cover artwork album fade transition",
+        ),
       ],
     ],
     [

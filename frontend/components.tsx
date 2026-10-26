@@ -95,23 +95,32 @@ function setSourceSoon(element: HTMLImageElement, url: string) {
 export const titleSize = (title: string) =>
   title.length > 28 ? "long-title" : title.length > 14 ? "medium-title" : "";
 
+/** Whether track artwork crossfades on change: Cover Art Animation. */
+export const coverFade = (settings: Settings) =>
+  settings.cover_animation !== false && !settings.reduce_motion;
+
 export function Cover({
   images,
   className = "",
   onClick,
   contextRoute,
   contextName,
+  fade = false,
 }: {
   images?: { url: string; width?: number | null }[];
   className?: string;
   onClick?: () => void;
   contextRoute?: string;
   contextName?: string;
+  /** Crossfade from the old artwork when it changes (Cover Art Animation). */
+  fade?: boolean;
 }) {
   const src = imageOf(images);
   const picture = useRef<HTMLImageElement>(null);
   const attempted = useRef(new Set<string>());
   const [failed, setFailed] = useState(false);
+  // The artwork being replaced, held over the new one until it has loaded.
+  const [previous, setPrevious] = useState<{ url: string; fading: boolean }>();
   const sources = images?.map((image) => image.url).join(" ");
   // Load the smallest Spotify size that fills the laid-out cover. Set here,
   // not through srcset/sizes="auto": Chromium keeps every image with
@@ -121,6 +130,8 @@ export function Cover({
     setFailed(false);
     const element = picture.current;
     if (!element) return;
+    if (fade && element.complete && element.currentSrc)
+      setPrevious({ url: element.currentSrc, fading: false });
     const width = element.parentElement?.clientWidth ?? 0;
     const url = artworkFor(
       images,
@@ -140,6 +151,9 @@ export function Cover({
         loading="lazy"
         decoding="async"
         style={failed ? { display: "none" } : undefined}
+        onLoad={() =>
+          setPrevious((old) => old && { url: old.url, fading: true })
+        }
         onError={(event) => {
           const next = images?.find(
             (image) =>
@@ -148,9 +162,21 @@ export function Cover({
           if (next) {
             attempted.current.add(next);
             event.currentTarget.src = next;
-          } else setFailed(true);
+          } else {
+            setFailed(true);
+            setPrevious(undefined);
+          }
         }}
       />
+      {previous && (
+        <img
+          className={`cover-previous ${previous.fading ? "fading" : ""}`}
+          src={previous.url}
+          alt=""
+          draggable={false}
+          onAnimationEnd={() => setPrevious(undefined)}
+        />
+      )}
       {failed && <Music2 aria-hidden="true" />}
     </>
   ) : (
@@ -1453,6 +1479,7 @@ function SongLyricsPage({
               <div className="lyrics-media">
                 <Cover
                   images={track.album.images}
+                  fade={coverFade(state.settings)}
                   onClick={() => onAlbum(track.album)}
                 />
                 {immersive &&

@@ -9783,3 +9783,47 @@ test("minimal lyrics mode hides sung lines in full screen only", async ({
   await page.keyboard.press("Escape");
   await expect(past).toHaveCSS("opacity", "0.497");
 });
+
+test("lyrics artwork crossfades to the next song's cover", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const cover = page.locator(".lyrics-media .cover");
+  await expect
+    .poll(() =>
+      cover
+        .locator("img")
+        .first()
+        .evaluate((image) => {
+          const element = image as HTMLImageElement;
+          return element.complete && element.naturalWidth > 0;
+        }),
+    )
+    .toBe(true);
+  await page.evaluate(
+    ({ playback, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: {
+            ...track,
+            uri: "spotify:track:2123456789abcdefghijkl",
+            id: "2123456789abcdefghijkl",
+            album: {
+              ...track.album,
+              images: [{ url: "https://artwork.example.test/next.svg" }],
+            },
+          },
+        },
+        observed_at: Date.now(),
+        changed: true,
+      }),
+    { playback: emptyState.playback, track },
+  );
+  await expect(cover.locator(".cover-previous")).toHaveCount(1);
+  await expect(cover.locator(".cover-previous")).toHaveCount(0);
+  await expect(cover.locator("img")).toHaveAttribute(
+    "src",
+    "https://artwork.example.test/next.svg",
+  );
+});

@@ -4702,7 +4702,9 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
     ["안녕하세요", "", "annyeonghaseyo"],
     ["Привет", "", "Privet"],
     ["مرحبا", "", "mrHb"],
-    ["你好", "", "Ni Hao"],
+    ["你好", "", "nǐ-hǎo"],
+    // Kana makes the song Japanese, so its kanji read as Japanese too.
+    ["東京へ行く", "", "tōkyō e iku"],
     ["東京", "Tokyo", "Tokyo"],
   ];
   const emit = async (text: string, reading: string) => {
@@ -4753,12 +4755,80 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
   await showLyrics(page);
   for (const [text, reading, expected] of samples) {
     await emit(text, reading);
-    await expect(page.locator(".gravity-word:not(.exiting)")).toHaveText([
-      expected,
-    ]);
+    // Space Gravity floats each word (and hyphenated part) on its own.
+    await expect
+      .poll(async () =>
+        (await page.locator(".gravity-word:not(.exiting)").allTextContents())
+          .join("")
+          .replace(/\s/g, ""),
+      )
+      .toBe(expected.replace(/\s/g, ""));
   }
   await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".lyric-preview .lyric-main")).toHaveText("Tokyo");
+});
+
+test("turning romanization on keeps the lyrics in place", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Test",
+        synced: true,
+        instrumental: false,
+        lines: Array.from({ length: 30 }, (_, index) => ({
+          // Romanized Hangul runs about three times as wide, so lines rewrap.
+          text: "사랑해요 보고싶어요 안녕하세요",
+          romanization: "",
+          translation: "",
+          start_ms: index * 2000,
+          end_ms: index * 2000 + 1900,
+          words: [],
+          background: false,
+          opposite: false,
+        })),
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 40500,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const scroller = page.locator(".lyrics-page .lyric-scroll").first();
+  const top = () => scroller.evaluate((node) => node.scrollTop);
+  let settled = -1;
+  await expect
+    .poll(async () => {
+      const now = await top();
+      const same = now === settled;
+      settled = now;
+      return same && now > 0;
+    })
+    .toBe(true);
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Romanization", { exact: true })
+    .click();
+  await expect(page.locator(".lyrics-page .lyric-main").first()).toContainText(
+    "saranghaeyo",
+  );
+  // Settled by the next frame: no slide to the rewrapped line.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const first = await top();
+  await page.waitForTimeout(500);
+  expect(Math.abs((await top()) - first)).toBeLessThan(2);
 });
 
 test("lyrics toolbar toggles romanization, word sync and layout", async ({

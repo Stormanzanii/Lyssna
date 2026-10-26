@@ -14,6 +14,7 @@ import { artworkFor } from "./artwork";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
+import { useRomanization } from "./romanization";
 import { filterWords } from "./word-filter";
 import { frameDue } from "./frame-cap";
 import { useArtworkColor } from "./artwork-color";
@@ -1096,6 +1097,8 @@ function TimedLyricsPreview({
   onPlayer: (request: PlayerRequest) => void;
 }) {
   const current = usePosition(state) + state.settings.lyric_offset_ms;
+  // Re-render when romanized lyrics finish converting.
+  useRomanization();
   const lyrics = filterWords(
     displayLyrics(
       state.lyrics,
@@ -1407,6 +1410,8 @@ function SongLyricsPage({
     !state.lyrics.instrumental &&
     (state.lyrics.synced || track?.duration_ms)
   );
+  // Re-render when romanized lyrics finish converting.
+  useRomanization();
   const lyrics = filterWords(
     displayLyrics(
       state.lyrics,

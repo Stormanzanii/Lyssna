@@ -5715,8 +5715,10 @@ input.volume-range:active::-webkit-slider-thumb {
   scale: 0.95;
   opacity: 0;
 }
-/* A line sung while an earlier one still plays stays faintly visible. */
-.immersive .lyrics-display.minimal:not(.static-lyrics) .lyric-line.active ~ .lyric-line.past {
+/* Keep overlapping lines: a line sung while an earlier one still plays
+   stays faintly visible at full size instead of fading away. */
+.immersive .lyrics-display.minimal.keep-overlaps:not(.static-lyrics) .lyric-line.active ~ .lyric-line.past {
+  scale: 1;
   opacity: 0.45;
 }
 .immersive .lyrics-display.minimal.all-sung .lyric-line.past {

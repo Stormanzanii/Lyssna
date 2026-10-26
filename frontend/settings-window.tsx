@@ -889,6 +889,12 @@ export function SettingsWindow({
           "minimal fullscreen full screen hide sung",
         ),
         flag(
+          "lyrics_keep_overlaps",
+          "Keep overlapping lines",
+          "In Minimal lyrics mode, a line sung over an earlier one stays dimmed instead of fading away.",
+          "minimal overlapping lines background vocals keep",
+        ),
+        flag(
           "lyrics_early_scroll",
           "Early scroll",
           "Start moving to the next line a moment before it is sung.",

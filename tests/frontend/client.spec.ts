@@ -10304,3 +10304,57 @@ test("unique word filters change the case of every lyric", async ({ page }) => {
     .selectOption("lower");
   await expect(line).toContainText("test lyric line 1");
 });
+
+test("minimal mode keeps overlapping lines dimmed unless told not to", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Minimal lyrics mode" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  await page.evaluate((uri) => {
+    const line = (text: string, start: number, end: number) => ({
+      text,
+      start_ms: start,
+      end_ms: end,
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: [],
+    });
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          line("Long lead", 1000, 20000),
+          line("Short overlap", 2000, 3000),
+          line("Later", 30000, 31000),
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 5000,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  await page.keyboard.press("F11");
+  const overlap = page.locator(".lyric-line", { hasText: "Short overlap" });
+  await expect(overlap).toHaveClass(/past/);
+  await expect(overlap).toHaveCSS("opacity", "0.45");
+  await page.keyboard.press("Escape");
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Keep overlapping lines" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.keyboard.press("F11");
+  await expect(overlap).toHaveCSS("opacity", "0");
+});

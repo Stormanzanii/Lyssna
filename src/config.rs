@@ -200,6 +200,8 @@ pub struct Settings {
     /// In full screen, sung lines fade away and the rest dim, as in Spicy
     /// Lyrics' Minimal Lyrics Mode.
     pub lyrics_minimal: bool,
+    /// In Minimal lyrics mode, lines sung over an earlier line stay dimmed.
+    pub lyrics_keep_overlaps: bool,
     /// Unique Word Filters: "off", "lower" or "upper" case lyrics.
     pub lyrics_word_filter: String,
     pub lyrics_line_hover: bool,
@@ -311,6 +313,7 @@ impl Default for Settings {
             lyrics_credits_follow: false,
             lyrics_simple: false,
             lyrics_minimal: false,
+            lyrics_keep_overlaps: true,
             lyrics_word_filter: "off".into(),
             lyrics_line_hover: false,
             lyrics_skeleton: true,
@@ -534,6 +537,7 @@ mod tests {
         assert!(older.lyrics_follow_button);
         assert!(older.npv_ambience);
         assert!(older.glass_seek);
+        assert!(older.lyrics_keep_overlaps);
         assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
         let chosen: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();

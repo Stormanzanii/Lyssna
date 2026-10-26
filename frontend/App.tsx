@@ -1250,7 +1250,10 @@ function App() {
         },
         {
           label: "Settings",
-          onSelect: () => setSettingsTab(lastSettingsTab()),
+          onSelect: () =>
+            setSettingsTab(
+              lastSettingsTab(state.settings.settings_remember_place !== false),
+            ),
         },
       ],
     },
@@ -2457,7 +2460,12 @@ function App() {
                 setProfileView({ user: state.profile.id, hint: state.profile });
                 setCenter("profile");
               } else if (action === "recents") navigate("recent");
-              else if (action === "settings") setSettingsTab(lastSettingsTab());
+              else if (action === "settings")
+                setSettingsTab(
+                  lastSettingsTab(
+                    state.settings.settings_remember_place !== false,
+                  ),
+                );
               else void call("sign_out");
             }}
           />
@@ -2777,7 +2785,13 @@ function App() {
                   className="icon-button"
                   title="SpotiFlex settings"
                   data-icon="settings"
-                  onClick={() => setSettingsTab(lastSettingsTab())}
+                  onClick={() =>
+                    setSettingsTab(
+                      lastSettingsTab(
+                        state.settings.settings_remember_place !== false,
+                      ),
+                    )
+                  }
                 >
                   <SettingsIcon size={18} />
                 </button>

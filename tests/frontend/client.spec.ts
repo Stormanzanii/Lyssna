@@ -10230,3 +10230,19 @@ test("a Musixmatch token is saved without being shown again", async ({
     )
     .toEqual(["abcdefghij0123456789abcd", ""]);
 });
+
+test("Settings can forget where it was closed", async ({ page }) => {
+  await startClient(page);
+  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  await openSettings(page, "Advanced");
+  await page
+    .getByRole("switch", { name: "Remember settings location" })
+    .click();
+  await page.getByRole("tab", { name: "Lyrics", exact: true }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await expect(
+    dialog.getByRole("tab", { name: "General", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+});

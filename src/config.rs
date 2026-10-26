@@ -235,6 +235,8 @@ pub struct Settings {
     pub lyrics_prefer_apple: bool,
     /// Ignore Musixmatch Word Sync: use only Musixmatch's line timing.
     pub lyrics_musixmatch_lines_only: bool,
+    /// Settings reopens on the tab and scroll position it was closed at.
+    pub settings_remember_place: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -328,6 +330,7 @@ impl Default for Settings {
                 .iter()
                 .map(|id| (*id).into())
                 .collect(),
+            settings_remember_place: true,
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),
@@ -537,6 +540,7 @@ mod tests {
         assert_eq!(action.lyrics_cache_action, "song");
         assert!(older.lyrics_cache_button);
         assert!(older.lyrics_prefer_apple);
+        assert!(older.settings_remember_place);
     }
 
     #[test]

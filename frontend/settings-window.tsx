@@ -21,6 +21,7 @@ import {
   Palette,
   X,
   AlignLeft,
+  Wrench,
 } from "lucide-react";
 import type { AppState } from "./state";
 import type { Settings, SpotifyPlus } from "./types";
@@ -78,6 +79,7 @@ const TABS = [
   ["Effects", FlaskConical],
   ["Layout", AppWindow],
   ["Sources", FileText],
+  ["Advanced", Wrench],
 ] as const;
 /** About opens from the footer card rather than the tab bar. */
 export type SettingsTab = (typeof TABS)[number][0] | "About";
@@ -106,8 +108,10 @@ function writePlace(tab: Tab, scroll: number) {
     // Remembering the place is a convenience only.
   }
 }
-/** The tab Settings was last left on. */
-export const lastSettingsTab = () => readPlace().tab;
+/** The tab Settings was last left on, or General when it should not be
+ *  remembered. */
+export const lastSettingsTab = (remember = true): Tab =>
+  remember ? readPlace().tab : "General";
 
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
@@ -150,7 +154,10 @@ export function SettingsWindow({
   // Back on the tab it was left at, Settings scrolls to where it was.
   useLayoutEffect(() => {
     const place = readPlace();
-    if (place.tab !== initialTab) {
+    if (
+      place.tab !== initialTab ||
+      state.settings.settings_remember_place === false
+    ) {
       writePlace(initialTab, 0);
       return;
     }
@@ -1266,6 +1273,18 @@ export function SettingsWindow({
         >
           <Credits onOpen={onOpen} />
         </SettingRow>,
+      ],
+    ],
+    [
+      "Advanced",
+      "Settings window",
+      [
+        flag(
+          "settings_remember_place",
+          "Remember settings location",
+          "Reopen Settings on the tab and at the place it was closed.",
+          "settings menu tab location remember reopen",
+        ),
       ],
     ],
   ];

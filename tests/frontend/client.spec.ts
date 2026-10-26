@@ -10246,3 +10246,26 @@ test("Settings can forget where it was closed", async ({ page }) => {
     dialog.getByRole("tab", { name: "General", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
 });
+
+test("developer tools open only in Developer mode", async ({ page }) => {
+  await startClient(page);
+  const opened = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (call: any) => call.command === "open_devtools",
+        ).length,
+    );
+  await page.keyboard.press("F12");
+  expect(await opened()).toBe(0);
+  await openSettings(page, "Advanced");
+  await expect(page.getByText("Developer tools", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("switch", { name: "Developer mode" }).click();
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await expect.poll(opened).toBe(1);
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.keyboard.press("F12");
+  await expect.poll(opened).toBe(2);
+});

@@ -1287,6 +1287,33 @@ export function SettingsWindow({
         ),
       ],
     ],
+    [
+      "Advanced",
+      "Developer",
+      [
+        flag(
+          "developer_mode",
+          "Developer mode",
+          "Allow the developer tools, opened with F12 or the button below, for inspecting the interface.",
+          "developer mode devtools debug inspect console",
+        ),
+        settings.developer_mode ? (
+          <SettingRow
+            key="devtools"
+            label="Developer tools"
+            help="Inspect SpotiFlex's interface. Anything you run there acts as you."
+            keywords="developer devtools debug inspect console"
+          >
+            <button
+              className="pill outline"
+              onClick={() => void onCall("open_devtools")}
+            >
+              Open
+            </button>
+          </SettingRow>
+        ) : null,
+      ],
+    ],
   ];
   const about = tab === "About" && !searching;
   const visible = sections.filter(([key]) => searching || key === tab);

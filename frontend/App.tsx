@@ -1455,6 +1455,11 @@ function App() {
     // Checked while capturing, before a dialog's own Escape removes it.
     const exitFully = !!state.settings.lyrics_escape_exits;
     const handler = (event: KeyboardEvent) => {
+      if (event.key === "F12" && state.settings.developer_mode) {
+        event.preventDefault();
+        void call("open_devtools");
+        return;
+      }
       if (event.key === "F11" || (event.key === "Escape" && immersive)) {
         event.preventDefault();
         void fullscreen(event.key === "Escape" ? false : undefined);
@@ -1478,7 +1483,12 @@ function App() {
       window.removeEventListener("keydown", handler);
       window.removeEventListener("keydown", leave, true);
     };
-  }, [immersive, center, state.settings.lyrics_escape_exits]);
+  }, [
+    immersive,
+    center,
+    state.settings.lyrics_escape_exits,
+    state.settings.developer_mode,
+  ]);
   const playlist = state.playlists.find(
     (playlist) => state.route === `playlist:${playlist.id}`,
   );

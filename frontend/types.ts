@@ -155,6 +155,7 @@ export interface Settings {
   lyrics_prefer_apple?: boolean;
   lyrics_musixmatch_lines_only?: boolean;
   settings_remember_place?: boolean;
+  developer_mode?: boolean;
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;

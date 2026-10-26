@@ -27,7 +27,7 @@ ed25519-dalek = "2.2"
 flate2 = "1"
 eframe = { version = "0.33", optional = true, default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 egui_extras = { version = "0.33", optional = true, features = ["image", "http"] }
-tauri = { version = "2", optional = true, features = ["image-ico", "tray-icon"] }
+tauri = { version = "2", optional = true, features = ["devtools", "image-ico", "tray-icon"] }
 tauri-plugin-window-state = { version = "2", optional = true }
 tauri-plugin-single-instance = { version = "2", optional = true }
 getrandom = "0.3"

@@ -237,6 +237,9 @@ pub struct Settings {
     pub lyrics_musixmatch_lines_only: bool,
     /// Settings reopens on the tab and scroll position it was closed at.
     pub settings_remember_place: bool,
+    /// Developer mode: F12 and Settings > Advanced open the WebView's
+    /// developer tools.
+    pub developer_mode: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -331,6 +334,7 @@ impl Default for Settings {
                 .map(|id| (*id).into())
                 .collect(),
             settings_remember_place: true,
+            developer_mode: false,
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),

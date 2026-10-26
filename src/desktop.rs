@@ -2990,6 +2990,22 @@ static FULLSCREEN_RESTORE: Mutex<Option<Option<[i32; 4]>>> = Mutex::new(None);
 /// which shrank it to its restore size and grew it again. On Windows the
 /// restore rectangle is set to the work area for the switch, so restoring
 /// and maximizing do not move the window; it only grows over the taskbar.
+/// Opens the WebView's developer tools, only while Developer mode is on.
+#[tauri::command]
+fn open_devtools(
+    state: State<'_, Desktop>,
+    window: tauri::WebviewWindow,
+) -> std::result::Result<(), String> {
+    if !lock(&state.0.snapshot)
+        .map_err(error)?
+        .settings
+        .developer_mode
+    {
+        return Err("Turn on Developer mode in Settings > Advanced first".into());
+    }
+    window.open_devtools();
+    Ok(())
+}
 #[tauri::command]
 async fn window_fullscreen(
     enabled: bool,
@@ -3449,6 +3465,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             whats_new,
             library_items,
             clear_lyrics_cache,
+            open_devtools,
             musixmatch_token_saved,
             save_musixmatch_token,
             renew_musixmatch_token,

@@ -3,7 +3,8 @@
  * a gutter whether or not anything scrolls; these draw a rounded thumb over
  * the panel's edge, shown while the pointer is over the panel.
  */
-const SCROLLERS = ".library-list, .browse-scroll, .now-playing-scroll";
+const SCROLLERS =
+  ".library-list, .browse-scroll, .now-playing-scroll, .artist-about-dialog";
 const MIN_THUMB = 32;
 // Gap between the thumb and the panel's top, bottom and right edges.
 const INSET = 4;

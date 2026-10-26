@@ -6482,6 +6482,8 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   // Spotify's About window is a compact sheet, not most of the screen.
   const sheet = (await dialog.boundingBox())!;
   expect(sheet.width).toBeLessThanOrEqual(900);
+  // Its scroller uses the same slim overlay thumb as the panels.
+  await expect(dialog).toHaveClass(/overlay-scrolled/);
   await page.screenshot({ path: "target/diagnostics/artist-about.png" });
   await expect(dialog.locator(".artist-fact")).toHaveText([
     "112,804,519Followers",
@@ -8092,10 +8094,10 @@ test("panels use a hover-only overlay scrollbar that takes no space", async ({
   await expect(bar).toHaveCSS("opacity", "1");
   const thumb = bar.locator(".overlay-scrollbar-thumb");
   const box = (await thumb.boundingBox())!;
-  expect(box.width).toBe(12);
-  await page.mouse.move(box.x + 6, box.y + 10);
+  expect(box.width).toBe(8);
+  await page.mouse.move(box.x + 4, box.y + 10);
   await page.mouse.down();
-  await page.mouse.move(box.x + 6, box.y + 110, { steps: 5 });
+  await page.mouse.move(box.x + 4, box.y + 110, { steps: 5 });
   await page.mouse.up();
   expect(
     await scroller.evaluate((element) => element.scrollTop),

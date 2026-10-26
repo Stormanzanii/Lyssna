@@ -4668,10 +4668,11 @@ input[type="range"]:hover {
   scrollbar-width: none;
   scrollbar-gutter: auto !important;
 }
+/* Spotify's thumb is 8px wide. */
 .overlay-scrollbar {
   position: absolute;
   z-index: 5;
-  width: 12px;
+  width: 8px;
   opacity: 0;
   transition: opacity 0.3s ease;
   touch-action: none;

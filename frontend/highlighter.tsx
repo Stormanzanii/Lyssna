@@ -14,9 +14,9 @@ import type { Line } from "./types";
  * band drifts a little across the row, its edges waver and carry a darker
  * line, the ink has a fine grain, and it starts a touch heavier. Ink is laid in place
  * and revealed as the pen passes, so what is drawn never moves or
- * stretches. Like a real pen, slow stretches leave stronger ink than
- * quick ones, and where the singing pauses mid-line the resting tip leaves
- * a stronger mark. The pen glides after the song instead of snapping, and
+ * stretches. Like a real pen, ink darkens where the pen lingers: a slow
+ * word deepens while it is drawn, and where the singing pauses mid-line
+ * the resting tip soaks in a darker mark. The pen glides after the song instead of snapping, and
  * sung lines keep their ink. Timed syllables set the pace; a line without
  * them is shared out over its words by letter count. */
 
@@ -90,7 +90,15 @@ export function inkAt(piece: Piece, time: number) {
  *  `durationMs`: a slow pen leaves more ink, a quick one less. */
 export function inkAlpha(widthEm: number, durationMs: number) {
   const speed = widthEm / Math.max(0.05, durationMs / 1000);
-  return Math.min(0.78, Math.max(0.5, 0.78 - 0.03 * speed));
+  return Math.min(0.8, Math.max(0.66, 0.8 - 0.016 * speed));
+}
+
+/** How much darker the ink turns over a stretch drawn `widthEm` wide in
+ *  `durationMs`, 0 to 0.42: a pen that lingers soaks in and deepens the
+ *  colour, a quick one leaves it light. */
+export function inkDepth(widthEm: number, durationMs: number) {
+  const speed = widthEm / Math.max(0.05, durationMs / 1000);
+  return Math.min(0.42, Math.max(0, 0.42 - 0.05 * speed));
 }
 
 /** How strong a mark the pen leaves resting between two stretches when the
@@ -113,6 +121,7 @@ interface Box {
 interface Stretch extends Box {
   index: number;
   alpha: number;
+  width: number;
 }
 
 /** A row's stroke: where it sits and where along the pen's path (all rows
@@ -160,6 +169,7 @@ function measure(root: HTMLElement, pieces: Piece[]): Layout {
         (right - left) / em,
         pieces[index].end_ms - pieces[index].start_ms,
       ),
+      width: (right - left) / em,
     };
   });
   const lanes: Lane[] = [];
@@ -273,6 +283,45 @@ function laneMask(
     .join(", ")})`;
 }
 
+/** How dark the ink has turned along one row, as a shading gradient in
+ *  the row's own pixels. Slow stretches turn darker than quick ones, ink
+ *  soaks in darker the longer it has been down, so a held word darkens as
+ *  it is drawn, and a rest between words soaks in darker still. */
+function laneShade(
+  lane: Lane,
+  offset: number,
+  pieces: Piece[],
+  em: number,
+  time: number,
+) {
+  const stops: [number, number][] = [];
+  for (const stretch of lane.stretches) {
+    const piece = pieces[stretch.index];
+    if (time <= piece.start_ms) continue;
+    // Ink soaks in over the time since the pen reached the stretch.
+    const soaked = 1 - Math.exp(-(time - piece.start_ms) / 700);
+    const depth =
+      inkDepth(stretch.width, piece.end_ms - piece.start_ms) * soaked;
+    stops.push([(stretch.left + stretch.right) / 2 - offset, depth]);
+    const next = pieces[stretch.index + 1];
+    const rest = next ? restMark(piece, next, time) : 0;
+    if (rest) {
+      const at = stretch.right - offset;
+      stops.push(
+        [at - 0.3 * em, depth],
+        [at - 0.08 * em, Math.min(0.55, depth + 0.25 * rest)],
+        [at + 0.04 * em, Math.min(0.55, depth + 0.25 * rest)],
+      );
+    }
+  }
+  if (!stops.length) return "none";
+  stops.sort((a, b) => a[0] - b[0]);
+  if (stops.length === 1) stops.push([stops[0][0] + 1, stops[0][1]]);
+  return `linear-gradient(90deg, ${stops
+    .map(([x, depth]) => `rgb(0 0 0 / ${depth.toFixed(3)}) ${x.toFixed(1)}px`)
+    .join(", ")})`;
+}
+
 /** The felt tip's edges never run quite straight: a gently wavering band
  *  shape, tiled along the row at a fixed size so it never stretches. */
 const WAVER = `url("data:image/svg+xml,${encodeURIComponent(
@@ -329,6 +378,7 @@ function paint(
     band.style.width = `${full}px`;
     band.style.height = `${tall}px`;
     band.style.clipPath = `inset(0 ${Math.max(0, full - end).toFixed(1)}px 0 0 round ${(0.14 * em).toFixed(1)}px)`;
+    band.style.setProperty("--shade", laneShade(lane, left, pieces, em, time));
     const mask = `${laneMask(lane, left, pieces, em, time)}, ${WAVER}`;
     const size = `100% 100%, ${(2.8 * em).toFixed(1)}px 100%`;
     const place = `0 0, ${((wobble(seed - index) + 0.5) * 2.8 * em).toFixed(1)}px 0`;

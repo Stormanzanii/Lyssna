@@ -3,6 +3,7 @@ import {
   highlighterPieces,
   inkAlpha,
   inkAt,
+  inkDepth,
   markerColour,
   restMark,
 } from "./highlighter";
@@ -63,8 +64,17 @@ describe("highlighter", () => {
 
   it("lays darker ink where the pen moves slowly", () => {
     expect(inkAlpha(2, 2000)).toBeGreaterThan(inkAlpha(2, 300));
-    expect(inkAlpha(2, 20)).toBe(0.5);
-    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.78, 1);
+    expect(inkAlpha(2, 20)).toBe(0.66);
+    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.8, 1);
+  });
+
+  it("turns the ink darker the longer the pen lingers", () => {
+    // A word held for two seconds goes darker than one sung in a flash.
+    expect(inkDepth(2, 2000)).toBeGreaterThan(inkDepth(2, 250));
+    expect(inkDepth(2, 100)).toBe(0);
+    // While a slow word is drawn, the same inked width taking longer is
+    // darker.
+    expect(inkDepth(0.5, 1500)).toBeGreaterThan(inkDepth(0.5, 300));
   });
 
   it("leaves a mark that grows while the pen rests in a pause", () => {

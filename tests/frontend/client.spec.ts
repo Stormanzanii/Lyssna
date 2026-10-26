@@ -10918,6 +10918,45 @@ test("highlighter ink darkens when slow and marks a pause", async ({
   // darker mark than either.
   expect(quick).toBeLessThan(held);
   expect(mark).toBeGreaterThan(held);
+  // The ink itself turns darker over the held word than the quick ones.
+  const shades = async () =>
+    (
+      await strokes.evaluateAll((elements) =>
+        elements.map((element) =>
+          (element as HTMLElement).style.getPropertyValue("--shade"),
+        ),
+      )
+    ).map((shade) =>
+      (
+        shade.match(/rgba?\(0, 0, 0, [\d.]+\)|rgb\(0 0 0 \/ [\d.]+\)/g) ?? []
+      ).map((stop) => Number(stop.match(/[\d.]+(?=\)$)/)![0])),
+    );
+  const finished = await shades();
+  expect(finished[0][0]).toBeLessThan(finished.at(-1)!.at(-1)!);
+  // While a slow word is being drawn, it darkens the longer it is held.
+  const holdAt = (progress_ms: number) =>
+    page.evaluate(
+      ({ track, playback, progress_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...playback,
+            item: track,
+            is_playing: false,
+            progress_ms,
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { track, playback: emptyState.playback, progress_ms },
+    );
+  await holdAt(1800);
+  await page.waitForTimeout(300);
+  const early = (await shades()).at(-1)!.at(-1)!;
+  await holdAt(3000);
+  await expect
+    .poll(async () => (await shades()).at(-1)!.at(-1)!)
+    .toBeGreaterThan(early);
 });
 
 test("highlighter tip glides and ink stays through the next line", async ({

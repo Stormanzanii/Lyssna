@@ -134,6 +134,7 @@ export const emptyState: AppState = {
     liquid_glass: false,
     canvas_lyrics: true,
     npv_ambience: true,
+    glass_seek: true,
     space_gravity: false,
     lyrics_translations: false,
     experimental_word_sync: false,

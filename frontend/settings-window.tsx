@@ -977,6 +977,12 @@ export function SettingsWindow({
           "now playing sidebar ambience background dynamic",
         ),
         flag(
+          "glass_seek",
+          "Glass seek bar",
+          "Give the full screen seek bar a frosted glass track and a glowing fill.",
+          "seek bar slider progress glass styling fullscreen full screen",
+        ),
+        flag(
           "cover_animation",
           "Cover art animation",
           "Crossfade the artwork beside the lyrics when the song changes.",

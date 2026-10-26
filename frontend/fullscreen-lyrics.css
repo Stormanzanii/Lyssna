@@ -433,3 +433,14 @@
   pointer-events: none;
   transition: translate 450ms cubic-bezier(0.55, 0, 1, 0.45);
 }
+/* Glass seek bar off: a plain track and fill, without blur or glow. */
+.flat-seek .lyrics-glass-seek {
+  background: #ffffff33;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.flat-seek .lyrics-glass-fill {
+  background: #fff;
+  box-shadow: none;
+}

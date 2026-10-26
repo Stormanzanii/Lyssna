@@ -176,6 +176,8 @@ pub struct Settings {
     pub canvas_lyrics: bool,
     /// The Now playing panel draws the moving artwork behind itself.
     pub npv_ambience: bool,
+    /// The full screen seek bar is frosted glass with a glowing fill.
+    pub glass_seek: bool,
     /// Space Gravity lyrics; replaced the earlier floating lyrics option.
     #[serde(alias = "floating_lyrics")]
     pub space_gravity: bool,
@@ -293,6 +295,7 @@ impl Default for Settings {
             liquid_glass: false,
             canvas_lyrics: true,
             npv_ambience: true,
+            glass_seek: true,
             space_gravity: false,
             lyrics_translations: false,
             experimental_word_sync: false,
@@ -524,6 +527,7 @@ mod tests {
         assert!(older.cover_animation);
         assert!(older.lyrics_follow_button);
         assert!(older.npv_ambience);
+        assert!(older.glass_seek);
         assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
         let chosen: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();

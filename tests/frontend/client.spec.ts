@@ -10269,3 +10269,19 @@ test("developer tools open only in Developer mode", async ({ page }) => {
   await page.keyboard.press("F12");
   await expect.poll(opened).toBe(2);
 });
+
+test("the full screen seek bar can drop its glass styling", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  const seek = page.locator(".lyrics-glass-seek");
+  await expect(seek).not.toHaveCSS("backdrop-filter", "none");
+  await page.keyboard.press("Escape");
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Glass seek bar" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.keyboard.press("F11");
+  await expect(seek).toHaveCSS("backdrop-filter", "none");
+});

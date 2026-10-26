@@ -1438,7 +1438,7 @@ function SongLyricsPage({
   return (
     <section
       ref={page}
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""} ${state.settings.lyrics_toolbar_bottom ? "toolbar-bottom" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""} ${state.settings.lyrics_toolbar_bottom ? "toolbar-bottom" : ""} ${state.settings.glass_seek === false ? "flat-seek" : ""}`}
       style={
         {
           // Shared by the lyric lines and, in Space Gravity, its countdown.

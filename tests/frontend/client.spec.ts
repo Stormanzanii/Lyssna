@@ -10522,3 +10522,31 @@ test("settings can be hidden and shown again", async ({ page }) => {
   await openSettings(page, "Lyrics");
   await expect(row).toBeVisible();
 });
+
+test("every settings tab keeps its icon and label", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Appearance");
+  // Narrow windows drop the icons so all eight labels still fit.
+  for (const [width, icons] of [
+    [700, false],
+    [1024, true],
+    [1920, true],
+  ] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    const tabs = await page
+      .locator(".lyrics-settings-tabs button")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => ({
+          label: button.textContent,
+          icon: button.querySelector("svg")?.getBoundingClientRect().width,
+          clipped: button.scrollWidth - button.clientWidth,
+        })),
+      );
+    for (const tab of tabs) {
+      if (icons)
+        expect(tab.icon, `${tab.label} icon at ${width}px`).toBeGreaterThan(12);
+      else expect(tab.icon ?? 0, `${tab.label} icon at ${width}px`).toBe(0);
+      expect(tab.clipped, `${tab.label} label at ${width}px`).toBeLessThan(1);
+    }
+  }
+});

@@ -155,6 +155,19 @@ describe("Space Gravity spawning", () => {
     expect(right.places[0].x).toBe(200);
   });
 
+  it("spreads a line out with gaps, centred, over a canvas", () => {
+    const sizes = [
+      { width: 100, height: 40 },
+      { width: 100, height: 40 },
+      { width: 100, height: 40 },
+    ];
+    const spread = lineLayout(sizes, 300, false, 44);
+    // Two words and a gap fit a row, centred in the 300 px width.
+    expect(spread.places.map((place) => place.x)).toEqual([78, 222, 150]);
+    expect(spread.places[2].y - spread.places[0].y).toBe(84);
+    expect(spread.height).toBe(124);
+  });
+
   it("finds room beside words already on screen", () => {
     const first = body(1);
     first.naturalX = first.x = 400;

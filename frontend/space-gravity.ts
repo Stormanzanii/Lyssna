@@ -636,27 +636,34 @@ export function lineLayout(
   sizes: { width: number; height: number }[],
   width: number,
   opposite = false,
+  /** Space between words and rows; spread lines are also centred. */
+  gap = 0,
 ) {
   const rows: { items: number[]; width: number; height: number }[] = [];
   sizes.forEach((size, index) => {
     const row = rows.at(-1);
-    if (row && row.width + size.width <= width) {
+    if (row && row.width + gap + size.width <= width) {
       row.items.push(index);
-      row.width += size.width;
+      row.width += gap + size.width;
       row.height = Math.max(row.height, size.height);
     } else
       rows.push({ items: [index], width: size.width, height: size.height });
   });
   const places: { x: number; y: number }[] = [];
   let top = 0;
-  for (const row of rows) {
-    let x = opposite ? Math.max(0, width - row.width) : 0;
+  for (const [number, row] of rows.entries()) {
+    if (number) top += gap;
+    let x = opposite
+      ? Math.max(0, width - row.width)
+      : gap
+        ? Math.max(0, (width - row.width) / 2)
+        : 0;
     for (const index of row.items) {
       places[index] = {
         x: x + sizes[index].width / 2,
         y: top + sizes[index].height / 2,
       };
-      x += sizes[index].width;
+      x += sizes[index].width + gap;
     }
     top += row.height;
   }

@@ -9757,3 +9757,29 @@ test("credits follow a duet that ends on the right when asked", async ({
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(credits).toHaveCSS("text-align", "start");
 });
+
+test("minimal lyrics mode hides sung lines in full screen only", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Minimal lyrics mode" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  const display = page.locator(".lyrics-display");
+  await expect(display).toHaveClass(/minimal/);
+  const past = display.locator(".lyric-line.past").first();
+  const active = display.locator(".lyric-line.active").first();
+  const coming = display.locator(".lyric-line:not(.past):not(.active)").last();
+  await expect(past).toHaveCSS("opacity", "0.497");
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect(past).toHaveCSS("opacity", "0");
+  await expect(coming).toHaveCSS("opacity", "0.5");
+  await expect(active).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Escape");
+  await expect(past).toHaveCSS("opacity", "0.497");
+});

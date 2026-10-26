@@ -125,6 +125,7 @@ export interface Settings {
   lyrics_wide_duet?: boolean;
   lyrics_credits_follow?: boolean;
   lyrics_simple?: boolean;
+  lyrics_minimal?: boolean;
   lyrics_line_hover?: boolean;
   lyrics_skeleton?: boolean;
   lyrics_early_scroll?: boolean;

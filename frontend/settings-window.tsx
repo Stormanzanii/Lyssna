@@ -853,6 +853,12 @@ export function SettingsWindow({
           "simple minimal animation",
         ),
         flag(
+          "lyrics_minimal",
+          "Minimal lyrics mode",
+          "In full screen, sung lines fade away and the lines still to come stay dim.",
+          "minimal fullscreen full screen hide sung",
+        ),
+        flag(
           "lyrics_early_scroll",
           "Early scroll",
           "Start moving to the next line a moment before it is sung.",

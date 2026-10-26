@@ -592,9 +592,14 @@ export function LyricsDisplay({
         ? Math.min(40, container.clientHeight * 0.14)
         : container.clientHeight / 2;
       const centred = !card;
+      // Minimal lyrics in full screen begin lower, as in Spicy Lyrics.
+      const opening =
+        settings.lyrics_minimal && !compact && container.closest(".immersive")
+          ? 0.4
+          : 0.28;
       container.style.setProperty(
         "--lead-top",
-        `${card ? 8 : compact || !stacked ? container.clientHeight * 0.28 : Math.max(0, focus - (lines.current[0]?.offsetHeight ?? 0) / 2)}px`,
+        `${card ? 8 : compact || !stacked ? container.clientHeight * opening : Math.max(0, focus - (lines.current[0]?.offsetHeight ?? 0) / 2)}px`,
       );
       spring.current.target = Math.max(
         0,
@@ -647,6 +652,7 @@ export function LyricsDisplay({
     settings.lyric_size,
     settings.romanized,
     settings.lyrics_translations,
+    settings.lyrics_minimal,
     footerMode,
     gap?.start,
   ]);
@@ -679,7 +685,7 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_minimal && !compact ? "minimal" : ""} ${lyrics.synced && lyrics.lines.length && positionMs >= Math.max(...lyrics.lines.map(vocalEnd)) ? "all-sung" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
       data-following={following}
       style={
         compact

@@ -5698,3 +5698,28 @@ input.volume-range:active::-webkit-slider-thumb {
 .credits-right .lyric-end-credits .lyric-source {
   text-align: right;
 }
+/* Minimal lyrics mode, full screen only as in Spicy Lyrics: sung lines
+   shrink away, lines to come wait dimmed and a touch smaller, and once the
+   song's lines are all sung they settle back at the sung opacity. */
+.immersive .lyrics-display.minimal:not(.static-lyrics) .lyric-line {
+  transition:
+    scale 0.4s ease-in-out,
+    opacity 0.4s linear,
+    filter 0.5s cubic-bezier(0.61, 1, 0.88, 1);
+}
+.immersive .lyrics-display.minimal:not(.static-lyrics) .lyric-line:not(.active) {
+  scale: 0.965;
+  opacity: 0.5;
+}
+.immersive .lyrics-display.minimal:not(.static-lyrics) .lyric-line.past {
+  scale: 0.95;
+  opacity: 0;
+}
+/* A line sung while an earlier one still plays stays faintly visible. */
+.immersive .lyrics-display.minimal:not(.static-lyrics) .lyric-line.active ~ .lyric-line.past {
+  opacity: 0.45;
+}
+.immersive .lyrics-display.minimal.all-sung .lyric-line.past {
+  scale: 1;
+  opacity: 0.497;
+}

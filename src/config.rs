@@ -151,6 +151,9 @@ pub struct Settings {
     /// Credits sit on the side of the song's last lead line.
     pub lyrics_credits_follow: bool,
     pub lyrics_simple: bool,
+    /// In full screen, sung lines fade away and the rest dim, as in Spicy
+    /// Lyrics' Minimal Lyrics Mode.
+    pub lyrics_minimal: bool,
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
     pub lyrics_skeleton: bool,
@@ -226,6 +229,7 @@ impl Default for Settings {
             lyrics_wide_duet: true,
             lyrics_credits_follow: false,
             lyrics_simple: false,
+            lyrics_minimal: false,
             lyrics_line_hover: false,
             lyrics_skeleton: true,
             lyrics_early_scroll: false,

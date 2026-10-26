@@ -143,6 +143,7 @@ export const emptyState: AppState = {
     lyrics_wide_duet: true,
     lyrics_credits_follow: false,
     lyrics_simple: false,
+    lyrics_minimal: false,
     lyrics_line_hover: false,
     lyrics_skeleton: true,
     lyrics_early_scroll: false,

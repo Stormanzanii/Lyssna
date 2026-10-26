@@ -28,6 +28,9 @@ import {
   ChevronDown,
   X,
   Heart,
+  PanelLeftOpen,
+  UnfoldVertical,
+  FoldVertical,
 } from "lucide-react";
 import { DJArtwork, DJ_COVER } from "./brand";
 import {
@@ -978,6 +981,86 @@ function TimedLyricsPreview({
   ) : null;
 }
 
+const LYRICS_CARD_KEY = "spotiflex.npv-lyrics-card";
+type LyricsCardView = { open: boolean; expanded: boolean };
+function savedCardView(): LyricsCardView {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LYRICS_CARD_KEY) ?? "{}");
+    return { open: saved.open !== false, expanded: saved.expanded === true };
+  } catch {
+    return { open: true, expanded: false };
+  }
+}
+/** Spicy Lyrics' Now Playing lyrics card: open the lyrics page, expand the
+ * card over the whole panel, or fold it down to its header. */
+function LyricsCard({
+  state,
+  onPlayer,
+  onLyrics,
+  onExpand,
+}: {
+  state: AppState;
+  onPlayer: (request: PlayerRequest) => void;
+  onLyrics: () => void;
+  onExpand: (expanded: boolean) => void;
+}) {
+  const [view, setView] = useState(savedCardView);
+  const expanded = view.open && view.expanded;
+  useEffect(() => {
+    try {
+      localStorage.setItem(LYRICS_CARD_KEY, JSON.stringify(view));
+    } catch {
+      // A remembered layout is a convenience; the card works without it.
+    }
+  }, [view]);
+  useEffect(() => {
+    onExpand(expanded);
+    return () => onExpand(false);
+  }, [expanded, onExpand]);
+  return (
+    <article
+      className={`now-card lyric-preview ${view.open ? "" : "collapsed"} ${expanded ? "expanded" : ""}`}
+    >
+      <div className="card-heading">
+        <span>Lyrics</span>
+        <div className="lyric-card-controls">
+          <button
+            className="lyric-card-control"
+            onClick={onLyrics}
+            title="Open lyrics"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+          <button
+            className="lyric-card-control"
+            onClick={() =>
+              // Expanding a folded card opens it in the same step.
+              setView({ open: true, expanded: !expanded })
+            }
+            title={expanded ? "Exit expanded lyrics" : "Expand lyrics"}
+            aria-pressed={expanded}
+          >
+            {expanded ? (
+              <FoldVertical size={18} />
+            ) : (
+              <UnfoldVertical size={18} />
+            )}
+          </button>
+          <button
+            className="lyric-card-control lyric-card-toggle"
+            onClick={() => setView({ open: !view.open, expanded: false })}
+            title={view.open ? "Hide lyrics" : "Show lyrics"}
+            aria-expanded={view.open}
+          >
+            <ChevronUp size={18} />
+          </button>
+        </div>
+      </div>
+      {view.open && <TimedLyricsPreview state={state} onPlayer={onPlayer} />}
+    </article>
+  );
+}
+
 type Links = {
   onAlbum: (album: Album) => void;
   onArtist: (artist: Artist) => void;
@@ -1588,6 +1671,7 @@ export function NowPlaying({
   const artist = state.details.artists[0] ?? track?.artists[0],
     next = state.details.queue[0];
   const saved = track && state.saved[track.uri];
+  const [lyricsExpanded, setLyricsExpanded] = useState(false);
   if (state.narrating)
     return (
       <aside className="now-playing dj-view">
@@ -1632,7 +1716,9 @@ export function NowPlaying({
     </div>
   );
   return (
-    <aside className={`now-playing ${canvas ? "has-canvas" : ""}`}>
+    <aside
+      className={`now-playing ${canvas ? "has-canvas" : ""} ${lyricsExpanded ? "lyrics-expanded" : ""}`}
+    >
       <Ambience
         track={track}
         reduceMotion={state.settings.reduce_motion}
@@ -1698,19 +1784,12 @@ export function NowPlaying({
               </button>
             </div>
             {showLyricsPreview && state.lyrics && (
-              <article className="now-card lyric-preview">
-                <div className="card-heading">
-                  <span>Lyrics</span>
-                  <button
-                    className="icon-button"
-                    onClick={onLyrics}
-                    title="Open lyrics"
-                  >
-                    <Maximize2 size={16} />
-                  </button>
-                </div>
-                <TimedLyricsPreview state={state} onPlayer={onPlayer} />
-              </article>
+              <LyricsCard
+                state={state}
+                onPlayer={onPlayer}
+                onLyrics={onLyrics}
+                onExpand={setLyricsExpanded}
+              />
             )}
             {artist && (
               <article className="now-card artist-card">

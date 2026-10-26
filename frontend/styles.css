@@ -3468,17 +3468,97 @@ small {
   }
 }
 .lyric-preview {
-  height: 420px;
+  height: 350px;
   container-type: inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #0000004d;
-  backdrop-filter: blur(18px);
+  /* Spicy Lyrics' card: the panel's white tint over a light blur. */
+  background: #ffffff12;
+  backdrop-filter: blur(12px);
 }
 .lyric-preview > .card-heading {
-  padding: 14px 10px 6px 18px;
+  padding: 10px 12px 4px 18px;
   font-size: 16px;
+}
+.lyric-card-controls {
+  display: flex;
+  gap: 6px;
+}
+/* Glassy round controls, as on Spicy Lyrics' card. */
+.lyric-card-control {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #ffffff0f;
+  box-shadow:
+    inset 0 1px 0 #ffffff5c,
+    inset 0 0 0 1px #ffffff29,
+    inset 0 -1px 0 #ffffff2e;
+  cursor: pointer;
+  transition:
+    scale 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.3s ease;
+}
+.lyric-card-control:hover {
+  scale: 1.05;
+  background: #ffffff1f;
+}
+.lyric-card-control:active {
+  scale: 0.94;
+}
+.lyric-card-toggle svg {
+  transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.lyric-preview.collapsed {
+  height: auto;
+}
+.lyric-preview.collapsed > .card-heading {
+  padding-block: 10px;
+}
+.lyric-preview.collapsed .lyric-card-toggle svg {
+  transform: rotate(180deg);
+}
+/* Expanded: the card takes the whole panel, controls float over the top
+   and show on hover. */
+.now-playing.lyrics-expanded .now-playing-scroll {
+  overflow: hidden;
+  padding: 0;
+}
+.now-playing.lyrics-expanded .now-playing-scroll > :not(.lyric-preview) {
+  display: none;
+}
+.lyric-preview.expanded {
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+.lyric-preview.expanded > .card-heading {
+  position: absolute;
+  top: 16px;
+  inset-inline: 0;
+  z-index: 2;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.lyric-preview.expanded > .card-heading > span {
+  display: none;
+}
+.lyric-preview.expanded:hover > .card-heading {
+  opacity: 0.7;
+}
+.lyric-preview.expanded > .card-heading:hover,
+.lyric-preview.expanded > .card-heading:focus-within {
+  opacity: 1;
 }
 .lyric-preview > .lyrics-display {
   flex: 1;

@@ -7959,6 +7959,42 @@ test("long song titles fade at both edges while they scroll", async ({
   expect(Math.abs(look.start)).toBeLessThanOrEqual(1);
 });
 
+test("the Now playing lyrics card opens, expands and folds like Spicy Lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const card = page.locator(".now-playing .lyric-preview");
+  await expect(card).toBeVisible();
+  const controls = card.locator(".lyric-card-control");
+  await expect(controls).toHaveCount(3);
+  await card.screenshot({ path: "target/diagnostics/npv-lyrics-card.png" });
+  // Expand: the card fills the panel and everything else steps aside.
+  await card.getByTitle("Expand lyrics").click();
+  await expect(page.locator(".now-playing")).toHaveClass(/lyrics-expanded/);
+  await expect(page.locator(".now-playing .artist-card")).toBeHidden();
+  const panel = (await page.locator(".now-playing").boundingBox())!;
+  const expanded = (await card.boundingBox())!;
+  expect(expanded.height).toBeGreaterThan(panel.height - 4);
+  await card.hover();
+  await card.getByTitle("Exit expanded lyrics").click();
+  await expect(page.locator(".now-playing")).not.toHaveClass(/lyrics-expanded/);
+  // Fold: header only.
+  await card.getByTitle("Hide lyrics").click();
+  await expect(card.locator(".lyrics-display")).toHaveCount(0);
+  expect((await card.boundingBox())!.height).toBeLessThan(80);
+  await card.getByTitle("Show lyrics").click();
+  await expect(card.locator(".lyrics-display")).toBeVisible();
+  await card.getByTitle("Open lyrics").click();
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+});
+
 test("panels use a hover-only overlay scrollbar that takes no space", async ({
   page,
 }) => {
@@ -7970,7 +8006,7 @@ test("panels use a hover-only overlay scrollbar that takes no space", async ({
   // No gutter: the native bar is gone.
   expect(
     await scroller.evaluate(
-      (element) => element.offsetWidth - element.clientWidth,
+      (element) => (element as HTMLElement).offsetWidth - element.clientWidth,
     ),
   ).toBe(0);
   await page.mouse.move(5, 5);

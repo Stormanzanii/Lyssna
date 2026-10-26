@@ -36,7 +36,8 @@ struct Delta {
 }
 
 struct Mirror {
-    uris: HashSet<String>,
+    /// Each saved item and when it was added, in Unix seconds.
+    uris: HashMap<String, i32>,
     sync: String,
     checked: Instant,
 }
@@ -80,7 +81,7 @@ pub async fn contains(session: &Session, uris: &[String]) -> Result<Vec<bool>> {
         .map(|(uri, set)| {
             mirrors
                 .get(&(account.clone(), set))
-                .is_some_and(|mirror| mirror.uris.contains(uri))
+                .is_some_and(|mirror| mirror.uris.contains_key(uri))
         })
         .collect())
 }
@@ -109,7 +110,7 @@ pub async fn write(session: &Session, uri: &str, saved: bool) -> Result<()> {
     refresh(session, &mut mirrors, &account, set).await?;
     let stored = mirrors
         .get(&(account, set))
-        .is_some_and(|mirror| mirror.uris.contains(uri));
+        .is_some_and(|mirror| mirror.uris.contains_key(uri));
     ensure!(
         stored == saved,
         "Spotify did not confirm the library change"
@@ -139,7 +140,7 @@ async fn refresh(
             return Ok(());
         }
     }
-    let mut uris = HashSet::new();
+    let mut uris = HashMap::new();
     let mut token = String::new();
     let mut sync = String::new();
     let mut seen = HashSet::new();
@@ -173,14 +174,41 @@ async fn refresh(
     anyhow::bail!("Spotify library has too many pages")
 }
 
-fn apply(uris: &mut HashSet<String>, items: Vec<Item>) {
+fn apply(uris: &mut HashMap<String, i32>, items: Vec<Item>) {
     for item in items {
         if item.removed {
             uris.remove(&item.uri);
         } else if uris.len() < 200_000 {
-            uris.insert(item.uri);
+            uris.insert(item.uri, item.added_at);
         }
     }
+}
+
+/// Saved albums or followed artists, most recently added first, as Your
+/// Library lists them.
+pub async fn listed(session: &Session, kind: &str) -> Result<Vec<String>> {
+    let (set, prefix) = match kind {
+        "album" => ("collection", "spotify:album:"),
+        "artist" => ("artist", "spotify:artist:"),
+        _ => anyhow::bail!("Choose albums or artists"),
+    };
+    let account = session.username();
+    let mut mirrors = MIRRORS.lock().await;
+    refresh(session, &mut mirrors, &account, set).await?;
+    Ok(newest_first(
+        mirrors.get(&(account, set)).map(|mirror| &mirror.uris),
+        prefix,
+    ))
+}
+
+fn newest_first(uris: Option<&HashMap<String, i32>>, prefix: &str) -> Vec<String> {
+    let mut items: Vec<_> = uris
+        .into_iter()
+        .flatten()
+        .filter(|(uri, _)| uri.starts_with(prefix))
+        .collect();
+    items.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+    items.into_iter().map(|(uri, _)| uri.clone()).collect()
 }
 
 async fn request(session: &Session, endpoint: &str, body: Vec<u8>) -> Result<Vec<u8>> {
@@ -349,11 +377,28 @@ mod tests {
         .unwrap();
         let delta = decode_delta(&delta).unwrap();
         assert!(delta.possible);
-        let mut uris: HashSet<String> = page.items.into_iter().map(|item| item.uri).collect();
+        let mut uris: HashMap<String, i32> = page
+            .items
+            .into_iter()
+            .map(|item| (item.uri, item.added_at))
+            .collect();
         apply(&mut uris, delta.items);
-        let mut uris: Vec<_> = uris.into_iter().collect();
+        let mut uris: Vec<_> = uris.into_keys().collect();
         uris.sort();
         assert_eq!(uris, ["spotify:track:b", "spotify:track:c"]);
+    }
+    #[test]
+    fn listed_items_are_newest_first_and_of_one_kind() {
+        let uris = HashMap::from([
+            ("spotify:album:old".to_owned(), 10),
+            ("spotify:track:song".to_owned(), 30),
+            ("spotify:album:new".to_owned(), 20),
+        ]);
+        assert_eq!(
+            newest_first(Some(&uris), "spotify:album:"),
+            ["spotify:album:new", "spotify:album:old"]
+        );
+        assert!(newest_first(None, "spotify:album:").is_empty());
     }
     #[test]
     fn write_request_carries_account_set_item_and_update_id() {

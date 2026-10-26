@@ -2576,6 +2576,11 @@ small {
   max-width: 460px;
   margin: 0 auto;
 }
+/* Followed artists in Your Library are round, as in Spotify. */
+.library-item .cover.artist-cover,
+.library-item .cover.artist-cover img {
+  border-radius: 50%;
+}
 /* Only carries the song menu; the title and artists lay out as before. */
 .lyrics-details {
   display: contents;

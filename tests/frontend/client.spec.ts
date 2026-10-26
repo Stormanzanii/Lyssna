@@ -655,6 +655,10 @@ async function startClient(
             });
           if (command === "follow_user") return args.follow;
           if (command === "whats_new") return host.__clientTest.whatsNew ?? [];
+          if (command === "library_items")
+            return (
+              host.__clientTest.libraryItems ?? { albums: [], artists: [] }
+            );
           if (command === "search_page")
             return {
               more: false,
@@ -9464,6 +9468,58 @@ test("the bell opens What's New with new and earlier releases", async ({
     )
     .toBe(true);
 });
+test("Your Library lists saved albums and followed artists", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    (window as any).__clientTest.libraryItems = {
+      albums: [
+        {
+          id: "5jGFlFGPRbQYzKUM5ux9v3",
+          uri: "spotify:album:5jGFlFGPRbQYzKUM5ux9v3",
+          name: "Saved Single",
+          images: [],
+          artists: [
+            { id: "0pWR7TsFhvSCnbmHDjWgrE", uri: "", name: "Creepy Nuts" },
+          ],
+        },
+      ],
+      artists: [
+        {
+          id: "0pWR7TsFhvSCnbmHDjWgrE",
+          uri: "spotify:artist:0pWR7TsFhvSCnbmHDjWgrE",
+          name: "Creepy Nuts",
+          images: [],
+        },
+      ],
+    };
+  });
+  const library = page.locator(".library-panel");
+  await library.getByRole("button", { name: "Albums", exact: true }).click();
+  const album = library.locator(".library-item", { hasText: "Saved Single" });
+  await expect(album).toContainText("Album · Creepy Nuts");
+  await expect(library.locator(".library-liked")).toBeHidden();
+  await library.getByRole("button", { name: "Artists", exact: true }).click();
+  const artist = library.locator(".library-item", { hasText: "Creepy Nuts" });
+  await expect(artist).toContainText("Artist");
+  await expect(artist.locator(".cover")).toHaveClass(/artist-cover/);
+  await artist.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (entry: any) =>
+            entry.command === "browse" &&
+            JSON.stringify(entry.args).includes(
+              "artist:0pWR7TsFhvSCnbmHDjWgrE",
+            ),
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("What's New waits for the session when the app opens on it", async ({
   page,
 }) => {

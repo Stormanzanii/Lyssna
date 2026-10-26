@@ -2768,6 +2768,25 @@ async fn user_profile(
     .map_err(error)?
     .map_err(|_| "Profile unavailable. Try again shortly.".to_owned())
 }
+/// Saved albums and followed artists, newest first, for Your Library.
+#[tauri::command]
+async fn library_items(
+    state: State<'_, Desktop>,
+) -> std::result::Result<crate::library_items::LibraryItems, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || controls.run(crate::library_items::fetch))
+        .await
+        .map_err(error)?
+        .map_err(|_| "Albums and artists are unavailable. Try again shortly.".to_owned())
+}
 /// New releases from followed artists, as Spotify's What's New panel.
 #[tauri::command]
 async fn whats_new(
@@ -3393,6 +3412,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             autostart,
             set_autostart,
             whats_new,
+            library_items,
             clear_lyrics_cache,
             import_lyrics,
             reset_lyrics,

@@ -279,6 +279,11 @@ function App() {
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryFilter, setLibraryFilter] = useState("all");
+  // Saved albums and followed artists, loaded when their chip is chosen.
+  const [savedCollection, setSavedCollection] = useState<{
+    albums: Album[];
+    artists: Artist[];
+  } | null>(null);
   // The Spotify folders opened in Your Library, outermost first.
   const [folderPath, setFolderPath] = useState<string[]>([]);
   // Where a press on the empty top bar began, until it becomes a drag.
@@ -1758,8 +1763,40 @@ function App() {
         ? playlist.owner.id === state.profile?.id
         : libraryFilter === "collaborative"
           ? playlist.collaborative
-          : true,
+          : libraryFilter === "all",
     );
+  const showingCollection =
+    libraryFilter === "albums" || libraryFilter === "artists";
+  // Saving or following elsewhere changes what these chips list.
+  const collectionKey = Object.keys(state.saved)
+    .filter((uri) => state.saved[uri] && /^spotify:(album|artist):/.test(uri))
+    .sort()
+    .join();
+  useEffect(() => {
+    if (!showingCollection || !state.profile || !state.native_ready) return;
+    let active = true;
+    rpc<{ albums: Album[]; artists: Artist[] }>("library_items")
+      .then((items) => active && setSavedCollection(items))
+      .catch(
+        () =>
+          active &&
+          setSavedCollection((items) => items ?? { albums: [], artists: [] }),
+      );
+    return () => {
+      active = false;
+    };
+  }, [showingCollection, state.profile?.id, state.native_ready, collectionKey]);
+  const collectionRows = !showingCollection
+    ? []
+    : libraryFilter === "albums"
+      ? (savedCollection?.albums ?? []).filter((album) =>
+          `${album.name} ${(album.artists ?? []).map((artist) => artist.name).join(" ")}`
+            .toLowerCase()
+            .includes(libraryQuery.toLowerCase()),
+        )
+      : (savedCollection?.artists ?? []).filter((artist) =>
+          artist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
+        );
   // Show the artist's sticky bar once the header has scrolled under it.
   useEffect(() => {
     setHeroGone(false);
@@ -2363,6 +2400,8 @@ function App() {
               ["all", "Playlists"],
               ["owned", "By you"],
               ["collaborative", "Collaborative"],
+              ["albums", "Albums"],
+              ["artists", "Artists"],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -2396,9 +2435,49 @@ function App() {
                 <strong>{openFolder.folder.name}</strong>
               </div>
             )}
+            {showingCollection &&
+              collectionRows.map((item) => {
+                const album = libraryFilter === "albums";
+                const route = `${album ? "album" : "artist"}:${item.id}`;
+                return (
+                  <button
+                    key={item.uri}
+                    className={`library-item ${state.route === route ? "current" : ""}`}
+                    data-context-route={route}
+                    data-context-name={item.name}
+                    onClick={() => navigate(route)}
+                    {...prefetchOn(route)}
+                  >
+                    <Cover
+                      images={item.images}
+                      className={album ? "" : "artist-cover"}
+                    />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {album
+                          ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
+                          : "Artist"}
+                      </small>
+                    </div>
+                  </button>
+                );
+              })}
+            {showingCollection && savedCollection && !collectionRows.length && (
+              <p className="empty-library">
+                {libraryQuery
+                  ? "Nothing matches."
+                  : libraryFilter === "albums"
+                    ? "Albums you save appear here."
+                    : "Artists you follow appear here."}
+              </p>
+            )}
+            {showingCollection && !savedCollection && (
+              <p className="empty-library">Loading…</p>
+            )}
             <div
               className={`library-liked ${nowPlayingRoute === "liked" ? "playing" : ""}`}
-              hidden={!!openFolder}
+              hidden={!!openFolder || showingCollection}
             >
               <button
                 className={`library-item ${state.route === "liked" ? "current" : ""}`}
@@ -2429,6 +2508,7 @@ function App() {
               libraryEntries.map(libraryEntry)
             )}
             {!openFolder &&
+              !showingCollection &&
               state.settings.folders.map((folder, index) => (
                 <details
                   className="library-folder"
@@ -2460,9 +2540,11 @@ function App() {
                     ))}
                 </details>
               ))}
-            {!visibleLibrary.length && state.playlists.length > 0 && (
-              <p className="empty-library">No playlists match.</p>
-            )}
+            {!showingCollection &&
+              !visibleLibrary.length &&
+              state.playlists.length > 0 && (
+                <p className="empty-library">No playlists match.</p>
+              )}
           </div>
         </aside>
         <div

@@ -1,112 +1,149 @@
+<div align="center">
+
+<img src="assets/spotiflex.png" alt="SpotiFlex icon" width="96">
+
 # SpotiFlex
 
-Standalone Rust Spotify client with a Tauri desktop interface and native librespot/Rodio audio. Spicetify and the installed Spotify desktop client are not dependencies.
+**A native Spotify desktop client with Spicy Lyrics built in.**
 
-This is an initial implementation of the core client. Full parity with both reference extensions is still in progress. UI is functional and intentionally leaves visual polish for a later pass. See [feature status](docs/FEATURES.md).
+Rust and Tauri, with its own audio engine. No embedded Spotify web player, no Spicetify.
 
-## Run
+[Download](#install) · [Features](docs/FEATURES.md) · [Build from source](#build-from-source) · [Attribution](NOTICE.md)
 
-Download [SpotiFlex 0.1.0 for Windows](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/spotiflex.exe) and sign in with your own Spotify Premium account. Future releases are checked automatically at startup; an update prompt offers installation and restart after verification.
+[![Release](https://img.shields.io/badge/release-0.1.1-1ed760)](#install)
+[![Rust](https://img.shields.io/badge/Rust-1.98-orange?logo=rust)](Cargo.toml)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS-lightgrey)](#build-from-source)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-To build from source:
+</div>
 
-On Windows, install Rust, Node.js 24, WebView2, Visual Studio C++ build tools, CMake and LLVM (including libclang). The build script finds the CMake bundled with Visual Studio and LLVM in its default folder; otherwise put CMake on PATH and set `LIBCLANG_PATH` to the directory containing `libclang.dll`. To build and install the latest commit:
+SpotiFlex plays Spotify through [librespot](https://github.com/librespot-org/librespot) and draws its own interface in the familiar layout: library on the left, browsing in the middle, player along the bottom, lyrics on the right. Word-synced lyrics, the Spicy Lyrics animator, Space Gravity and Spotify Canvas backdrops are part of the client rather than an extension injected into Spotify.
 
-```powershell
-.\build.ps1
-```
+**Spotify Premium is required.** Free accounts cannot stream through librespot.
 
-By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, builds a release executable, installs it to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe` and starts it. A running copy from that folder is closed first. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or commit is restored afterward, including on failure. Nothing is pushed, and credentials and app data are left alone. Builds from this script turn automatic updates off, so a release never replaces them; run the script again to update.
+> [!NOTE]
+> SpotiFlex is in early development. It does not yet match every feature of Spotify or of the Spicy Lyrics and Spotify Plus extensions it reimplements. [docs/FEATURES.md](docs/FEATURES.md) tracks what works and what is missing.
 
-Use `.\build.ps1 local` to build the current checkout, including uncommitted changes. `.\build.ps1 <branch>` fetches that branch from `origin`, or builds it as is when it only exists locally; `.\build.ps1 <commit>` builds a locally available commit. Add `-NoLaunch` to install without starting it. If PowerShell blocks the script, run `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
+## What it does
 
-To build by hand instead:
+| Feature | What you get |
+| --- | --- |
+| Lyrics | Word- and syllable-synced lyrics from six sources (Spicy Lyrics, Musixmatch, Apple Music, Spotify, LRCLIB, Netease), the Spicy Lyrics animator with adjustable presets, Space Gravity, fullscreen mode, local LRC and TTML imports, and community credits with Discord usernames |
+| Playback | Native audio with gapless playback, optional crossfade (1 to 12 seconds), Spotify Connect control of other devices, and media keys |
+| Library | Playlists, Spotify folders, saved albums and followed artists in Spotify's Recents order, with Playlists, By you, Collaborative, Albums and Artists filters |
+| Now playing | Album or Canvas ambience, a lyrics card that expands to fill the panel, artist and credits cards |
+| Home and browsing | Spotify's Home feed, artist and album pages, search, Recents and the What's New feed behind the bell |
+| Window | Optional tray mode that keeps music playing after the window closes, and opening at sign-in (normal or minimized) |
+| Updates | Signed automatic updates for Windows; each executable is checked against an Ed25519 signature and a SHA-256 hash before it replaces the old one |
 
-```powershell
-npm ci
-npm run build
-cargo run --locked
-```
+## Install
 
-For an optimized executable:
+| Platform | How |
+| --- | --- |
+| Windows 10 and 11 (x64) | Download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). Later versions install from the in-app update prompt. |
+| macOS 12 or later (Apple Silicon and Intel) | [Build from source](#build-from-source). Releases are Windows-only for now. |
 
-```powershell
-npm run build
-cargo build --release --locked
-.\target\release\spotiflex.exe
-```
+## Get started
 
-Voice recognition loads a verified 190 MB English model when microphone input is requested and releases it when Ask DJ closes. Missing weights download once and remain on disk. Recognition runs locally. The UI waits for preparation before opening Windows Default microphone and shows when it starts listening. Microphone audio stays in memory and is never uploaded; the recognized request is sent to Spotify automatically after speech ends.
+1. Open SpotiFlex. A setup window appears and stays until you sign in; it has no skip button.
+2. Choose **Sign in with Spotify** and approve the connection in your browser with a Premium account.
+3. Return to SpotiFlex. The client unlocks once Spotify has authenticated the account, and loads every playlist in your library.
+4. Open **Settings** from the account menu to set up lyrics, crossfade, tray mode and the rest.
 
-### macOS
+No Spotify developer app or Client ID is needed. Sign-in uses OAuth with PKCE and a state-checked loopback callback, and later launches reuse the saved session.
 
-macOS 12 or later is supported on Apple Silicon and Intel. Install Xcode Command Line Tools, Rustup, Node.js 24 or later, and CMake (`brew install cmake`). Build on a Mac:
+## Privacy
 
-```sh
-./build.sh
-```
+Spotify credentials stay on your computer: Windows Credential Manager on Windows, AES-256-GCM encrypted files on macOS. Lyrics requests carry the Spotify track ID, and Spotify tokens are never sent to Spicy Lyrics.
 
-By default the script requires a clean worktree, switches to `main`, pulls `origin/main` with fast-forward only, restores npm dependencies, and builds/installs the app. It installs the Rust version required by `Cargo.toml` if needed, or uses an explicit `RUSTUP_TOOLCHAIN`. The original branch or detached commit is restored afterward, including on failure. Nothing is pushed.
+<details>
+<summary>Lyrics lookups: who receives what</summary>
 
-Use `./build.sh local` to build the current checkout without pulling, including uncommitted changes. `./build.sh <branch>` fetches that branch from `origin`, or builds it as is when it only exists locally; `./build.sh <commit>` builds a locally available commit.
+Every build includes SpotiFlex's publishable Spicy Lyrics client key, so you do not need a Spicy Lyrics account. Lyric sources receive the track ID, title and artist they need to find a match. Answers are cached on disk for three days, separately for each source; **Settings > Storage** clears them.
 
-macOS app credentials use AES-256-GCM encrypted local files under `~/Library/Application Support/SpotiFlex/credentials/`. The directory is restricted to your OS account (`0700`), and the encryption key and credential files are private (`0600`). Each write uses a new cryptographic nonce and atomic replacement. Account and service identities are authenticated with the ciphertext. The app does not read or migrate existing Keychain credentials; sign in with Spotify once after switching to this storage. Keep `device.key` with the encrypted files when backing up this directory.
+Community credits show the maker's Discord username by looking up their public spicylyrics.org profile, as EeveeSpotifyReincarnated does. **Settings > Display** turns this off.
 
-Local builds reuse a self-signed certificate for code signing and native macOS permission continuity. Signing material stays outside the repository, separate from app credentials. An explicit `APPLE_SIGNING_IDENTITY` or `APPLE_CERTIFICATE` takes precedence. `SPOTIFLEX_ADHOC_SIGNING=1` opts out for disposable builds.
-
-Local builds produce only an app bundle, verify its signature, quit existing installed/build instances, replace `/Applications/SpotiFlex.app`, and open it. The generated duplicate app and old disk images are removed after installation. CI keeps `target/release/bundle/macos/SpotiFlex.app` for archiving.
-
-macOS builds use system WebKit, native window controls integrated into the navigation toolbar, standard application menus in the macOS menu bar, and Command shortcuts. Credentials are encrypted locally without Keychain access. Media keys and Now Playing controls are supported. Ask DJ voice recognition runs locally; macOS requests microphone permission the first time you use it.
-
-The **Build macOS app** GitHub Actions workflow builds separate Apple Silicon and Intel `.app.zip` artifacts only when manually dispatched. Pushes and pull requests do not start builds. CI builds use ad-hoc signatures and are not notarized for public distribution. Public distribution should use a consistent Developer ID signing identity. If Gatekeeper blocks a downloaded build, use **System Settings > Privacy & Security > Open Anyway**. Automatic updates currently serve Windows executables only, so macOS builds must be updated manually.
-
-## First sign-in
-
-Spotify Premium is required. First launch presents a mandatory setup modal. It has no skip or close button, and ignores Escape and outside clicks. The client unlocks after Spotify sign-in succeeds. Normal application exit remains available.
-
-1. Choose **Sign in with Spotify**. Your browser opens Spotify's authorization page.
-2. Sign in with your Premium account and approve the connection.
-3. Return to SpotiFlex. The client unlocks only after Spotify authenticates the account.
-
-No developer app or Client ID is required for the default connection. Browser authorization uses PKCE with a state-checked loopback callback. Reusable native credentials and the selected account stay in Windows Credential Manager or encrypted local storage on macOS. Later launches authenticate the saved session before unlocking; network failures keep the saved login and allow retry. Existing installations can migrate their saved native audio login without opening another browser window. Sign-out removes the selected account and its saved native credentials.
-
-**Developer connection (optional)** retains the previous Web API login. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register `http://127.0.0.1:43821/callback`, then enter its Client ID in that optional setup section. Spotify's development-mode allowlist and quotas still apply to that connection. No client secret is needed. `SPOTIFY_CLIENT_ID` supplies this optional field only.
-
-Native mode uses the existing librespot session for browsing, library changes, audio and Connect controls. It does not silently retry through the public Web API. Spotify's internal services are undocumented and can change; this implementation is not an approved Spotify SDK integration. A new account outside the developer app's allowlist still needs end-to-end sign-in verification. Remote controls have protocol and state tests; live verification on other devices remains outstanding. **Settings > Reconnect native audio** retries audio connection without changing the sign-in method.
-
-## Lyrics
-
-All standard builds include SpotiFlex's publishable Spicy Lyrics client key. Users do not need a separate Spicy Lyrics account or API key. Requests contain the Spotify track ID; Spotify access tokens, refresh tokens, and client secrets are not sent to Spicy Lyrics.
-
-The public client key in `config/spicy-lyrics-client-key.txt` is the default for local and release builds. Maintainers can override it with `SPOTIFLEX_SPICY_LYRICS_KEY`; the release workflow uses the repository variable when set. Only publishable `sl_pk_` keys are accepted, and build validation rejects secret `sl_sk_` keys. Signing out preserves this application-wide provider configuration, so Settings does not ask for a lyrics key after another sign-in.
-
-Existing self-hosted deployments can still provision their protected HTTPS host through standard input. This legacy mode requires explicit consent before sharing a short-lived Spotify access token:
+Self-hosted lyrics deployments can still be provisioned through standard input. That legacy mode asks for explicit consent before it sends a short-lived Spotify access token to the configured host, and it never sends refresh tokens or client secrets:
 
 ```powershell
 Read-Host 'HTTPS lyrics host' | .\target\debug\spotiflex.exe --set-lyrics-host --allow-spotify-access-token
 ```
 
-Self-hosted deployments provision their host on each machine. The credential store keeps it outside source; desktop DNS and network traffic still reveal the destination.
+The host is kept in the credential store, not in source. Your DNS and network traffic still reveal where requests go.
 
-Import `.lrc`, `.ttml`, or `.xml` from the lyrics panel to associate a local lyric file with the current track. Local imports take priority. Remote lyrics cache for three days, separately for each provider.
+</details>
+
+<details>
+<summary>Spotify services and the optional developer connection</summary>
+
+Browsing, library changes, audio and Connect control go through the librespot session, using the same internal services as Spotify's desktop client. Those services are undocumented and can change; this is not an approved Spotify SDK integration.
+
+An optional developer connection keeps the older Web API login. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register `http://127.0.0.1:43821/callback`, and enter its Client ID in setup. Spotify's development-mode allowlist and quotas apply to it. No client secret is needed.
+
+</details>
+
+## Build from source
+
+Windows needs Rust, Node.js 24, WebView2, the Visual Studio C++ build tools, CMake and LLVM (for libclang). Then:
+
+```powershell
+.\build.ps1          # build and install the latest main
+.\build.ps1 local    # build the current checkout, uncommitted changes included
+```
+
+On macOS, install the Xcode Command Line Tools, Rustup, Node.js 24 and CMake (`brew install cmake`), then run `./build.sh` or `./build.sh local`.
+
+<details>
+<summary>What the build scripts do</summary>
+
+By default each script requires a clean worktree, switches to `main`, fast-forwards from `origin/main`, restores npm dependencies, and builds a release. It installs the Rust version that `Cargo.toml` requires unless `RUSTUP_TOOLCHAIN` is set, and restores your original branch afterwards, including on failure. Nothing is pushed, and credentials and app data are left alone.
+
+- **Windows** installs to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe`, closes a running copy first, and starts the new one. `-NoLaunch` installs without starting it. Builds from this script turn automatic updates off; run it again to update. If PowerShell blocks the script, use `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script finds Visual Studio's bundled CMake and LLVM's default folder; otherwise put CMake on `PATH` and set `LIBCLANG_PATH` to the folder that contains `libclang.dll`.
+- **macOS** signs the bundle with a reusable self-signed certificate (an explicit `APPLE_SIGNING_IDENTITY` or `APPLE_CERTIFICATE` takes precedence, and `SPOTIFLEX_ADHOC_SIGNING=1` opts out), replaces `/Applications/SpotiFlex.app` and opens it. Credentials live encrypted under `~/Library/Application Support/SpotiFlex/credentials/`; keep `device.key` with them when backing up.
+- `.\build.ps1 <branch>` or `./build.sh <branch>` builds another branch; a commit hash builds that commit.
+
+To build by hand:
+
+```powershell
+npm ci
+npm run build
+cargo build --release --locked
+.\target\release\spotiflex.exe
+```
+
+</details>
+
+<details>
+<summary>Releases and CI</summary>
+
+The release workflow builds and tests the client, signs the update manifest, uploads the executable and source archive to the `spotiflex-releases` bucket, and activates the stable channel last. [docs/UPDATES.md](docs/UPDATES.md) has the maintainer steps. The **Build macOS app** workflow produces ad-hoc signed Apple Silicon and Intel `.app.zip` files when dispatched by hand; they are not notarized, and macOS builds do not update automatically.
+
+</details>
 
 ## Development
 
 ```powershell
-npm run build
-npm test
-npm run test:e2e
+npm test                 # frontend unit tests (Vitest)
+npm run test:e2e         # browser tests against a mocked desktop bridge (Playwright)
 cargo fmt --check
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-The previous egui interface remains available with `cargo run --locked --no-default-features --features legacy-ui`.
+At the time of writing, 234 Rust tests, 185 frontend unit tests and 183 browser tests pass. The browser tests use a mocked bridge, so they do not prove live Spotify behaviour. Keep `Cargo.lock` when updating dependencies: it pins `vergen` to 9.0.6 because librespot 0.8's build script breaks with vergen 9.1.0.
 
-`Cargo.lock` pins `vergen` to 9.0.6 because librespot 0.8's build script is incompatible with the `vergen-lib` dependency split in vergen 9.1.0. Keep the lockfile when updating dependencies.
+<details>
+<summary>Current limits</summary>
 
-Native migration validation: 172 Rust tests, 132 frontend unit tests, 105 browser tests and 16 Connect tests pass, together with formatting and Clippy. A read-only live check verified saved native login, library, likes, search, Home and album browsing without developer Web API access. Fresh browser login on an account outside the developer allowlist and remote-device command acceptance remain unverified. Audible playback quality on other computers still needs manual verification. See [feature status](docs/FEATURES.md) and [attribution](NOTICE.md).
+- Remote-device commands and audio quality on other computers have not been verified by hand.
+- Sign-in has not been tested end to end on an account outside the developer app's allowlist.
+- Library ordering uses the last 50 played contexts from Spotify's play history; older items are ordered by when they were added.
+- Spotify's public API does not expose folder metadata, so folders are read from Spotify's rootlist service.
 
-## App updates
+The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
-Native signed updates use R2 through `updates.clypdat.xyz`. New versions download automatically and open a prompt with signed release notes. **Install and restart** applies the verified executable; **Not now** defers that version until the next launch. Manual checks and installation remain under **Settings > About SpotiFlex**. Ed25519 signatures and SHA-256 hashes are verified before installation. The release workflow and maintainer instructions are in [UPDATES.md](docs/UPDATES.md).
+</details>
+
+---
+
+SpotiFlex is licensed under the [GNU AGPL v3](LICENSE). The lyrics features reimplement behaviour from [iPixelGalaxy/spicy-lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) and the pixels-spicy-lyrics fork (both AGPL-3.0), community usernames follow [EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated) (GPL-3.0), and interface ideas come from [iPixelGalaxy/spotify-plus](https://github.com/iPixelGalaxy/spotify-plus); no upstream source or assets are copied. Playback uses librespot (MIT). [NOTICE.md](NOTICE.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) list every source and license. Spotify is a trademark of Spotify AB; SpotiFlex is an independent client and is not affiliated with Spotify AB.

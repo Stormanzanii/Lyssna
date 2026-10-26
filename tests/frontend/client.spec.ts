@@ -9979,3 +9979,15 @@ test("the return-to-lyric button can be turned off", async ({ page }) => {
   await expect(display).toHaveAttribute("data-following", "false");
   await expect(back).toHaveCount(0);
 });
+
+test("Now playing's dynamic background can be turned off", async ({ page }) => {
+  await startClient(page);
+  const panel = page.locator("aside.now-playing");
+  await expect(panel.locator(".ambience")).toHaveCount(1);
+  await openSettings(page, "Effects");
+  await page
+    .getByRole("switch", { name: "Dynamic background in Now playing" })
+    .click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(panel.locator(".ambience")).toHaveCount(0);
+});

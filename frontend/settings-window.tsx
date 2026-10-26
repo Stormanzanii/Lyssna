@@ -941,6 +941,12 @@ export function SettingsWindow({
           "video background",
         ),
         flag(
+          "npv_ambience",
+          "Dynamic background in Now playing",
+          "Draw the moving artwork, or the Canvas, behind the Now playing panel.",
+          "now playing sidebar ambience background dynamic",
+        ),
+        flag(
           "cover_animation",
           "Cover art animation",
           "Crossfade the artwork beside the lyrics when the song changes.",

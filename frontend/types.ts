@@ -114,6 +114,7 @@ export interface Settings {
   cover_animation?: boolean;
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;
+  npv_ambience?: boolean;
   space_gravity?: boolean;
   lyrics_translations?: boolean;
   lyrics_animator?: AnimatorSettings;

@@ -1866,14 +1866,16 @@ export function NowPlaying({
     <aside
       className={`now-playing ${canvas ? "has-canvas" : ""} ${lyricsExpanded ? "lyrics-expanded" : ""}`}
     >
-      <Ambience
-        track={track}
-        reduceMotion={state.settings.reduce_motion}
-        animate={state.playback.is_playing}
-        // Only while Now playing shows the Canvas itself; with it on the
-        // lyrics page, the panel keeps the album artwork's ambience.
-        followCanvas={canvas}
-      />
+      {state.settings.npv_ambience !== false && (
+        <Ambience
+          track={track}
+          reduceMotion={state.settings.reduce_motion}
+          animate={state.playback.is_playing}
+          // Only while Now playing shows the Canvas itself; with it on the
+          // lyrics page, the panel keeps the album artwork's ambience.
+          followCanvas={canvas}
+        />
+      )}
       <div className="now-playing-scroll">
         {!canvas && heading}
         {track ? (

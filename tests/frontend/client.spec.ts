@@ -8354,6 +8354,17 @@ for (const canvas of [false, true]) {
     await page.mouse.move(900, 300);
     await expect(controls).toHaveCSS("opacity", "1");
     const awakeTitle = (await title.boundingBox())!;
+    if (canvas) {
+      // Lyrics start just inside the Canvas fade, as outside full screen.
+      const video = (await section
+        .locator(".lyrics-canvas-cover")
+        .boundingBox())!;
+      const lyrics = (await section.locator(".lyrics-body").boundingBox())!;
+      const fadeEnd = video.x + video.width;
+      expect(fadeEnd).toBeLessThanOrEqual(1920 * 0.46);
+      expect(lyrics.x).toBeLessThan(fadeEnd);
+      expect(lyrics.x).toBeGreaterThan(fadeEnd - 1920 * 0.04);
+    }
     if (!canvas) {
       const cover = (await section
         .locator(".lyrics-media > .cover")

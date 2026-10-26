@@ -174,10 +174,21 @@
 .immersive .lyrics-fullscreen-buttons .icon-button.active {
   filter: drop-shadow(0 0 4px #ffffff80);
 }
+/* Full screen Canvas: the video fades out a little further left than in the
+   window, and the lyrics column starts just inside that fade, as it does
+   outside full screen. */
+.immersive .canvas-lyrics:not(.narrow) {
+  --canvas-width: 45%;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 3%;
+}
+.immersive .canvas-lyrics.artwork-right:not(.narrow) {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+}
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
   bottom: 28px;
-  width: min(46%, 780px);
+  width: min(38%, 780px);
   gap: 10px;
 }
 /* Full screen Canvas controls read from across the room, like Spotify's. */
@@ -221,7 +232,7 @@
 }
 .immersive .canvas-lyrics:not(.narrow) :is(.lyrics-title, .lyrics-artists) {
   left: var(--fullscreen-gutter);
-  width: min(46%, 780px);
+  width: min(38%, 780px);
   max-width: none;
   translate: 0 calc(-1 * var(--lyrics-dock-lift));
   transition: translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1) 200ms;

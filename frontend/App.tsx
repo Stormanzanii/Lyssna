@@ -2590,6 +2590,8 @@ function App() {
           ) : state.route === "whats-new" ? (
             <div className="browse-scroll" ref={mainScroll}>
               <WhatsNewPage
+                account={state.profile?.id}
+                ready={state.native_ready}
                 saved={state.saved}
                 onOpen={(route) => navigate(route)}
                 onPlay={(uri) => play({ command: "play_home", context: uri })}

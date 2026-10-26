@@ -9283,3 +9283,42 @@ test("the bell opens What's New with new and earlier releases", async ({
     )
     .toBe(true);
 });
+test("What's New waits for the session when the app opens on it", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = window as any;
+    host.__clientTest.emit({ type: "native", ready: false, status: "" });
+    host.__clientTest.whatsNew = [
+      {
+        id: "music_release:late",
+        uri: "spotify:album:5jGFlFGPRbQYzKUM5ux9v3",
+        name: "Late Release",
+        album_type: "SINGLE",
+        artists: [],
+        images: [],
+        released: new Date().toISOString(),
+        new: true,
+      },
+    ];
+  });
+  await page.getByRole("button", { name: "What's New" }).click();
+  const feed = page.locator(".whats-new-page");
+  await expect(feed).toContainText("Loading");
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (entry: any) => entry.command === "whats_new",
+      ),
+    ),
+  ).toBe(false);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "native",
+      ready: true,
+      status: "",
+    }),
+  );
+  await expect(feed).toContainText("Late Release");
+});

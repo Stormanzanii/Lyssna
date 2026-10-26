@@ -39,11 +39,17 @@ const typeName = (type: string) =>
 /** The bell's page: new releases from artists you follow, newest unseen
  * first, as Spotify's What's New. */
 export function WhatsNewPage({
+  account,
+  ready,
   saved,
   onOpen,
   onPlay,
   onSave,
 }: {
+  /** Signed-in profile; the feed waits for it on launch. */
+  account?: string;
+  /** Native Spotify session connected. */
+  ready: boolean;
   saved: Record<string, boolean>;
   onOpen: (route: string) => void;
   onPlay: (uri: string) => void;
@@ -52,7 +58,10 @@ export function WhatsNewPage({
   const [releases, setReleases] = useState<Release[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
+    // Launching onto this page renders it before the session is restored.
+    if (!account || !ready) return;
     let active = true;
+    setError("");
     rpc<Release[]>("whats_new")
       .then((items) => {
         if (!active) return;
@@ -64,7 +73,7 @@ export function WhatsNewPage({
     return () => {
       active = false;
     };
-  }, []);
+  }, [account, ready]);
   // Spotify marks items seen once any client shows them, so recent releases
   // also count as new: a week, as in Spotify's own New section.
   const isFresh = (item: Release) =>

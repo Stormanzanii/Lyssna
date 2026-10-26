@@ -174,6 +174,7 @@ export const emptyState: AppState = {
     ],
     lyrics_sources_disabled: ["lrclib", "netease"],
     lyrics_prefer_apple: true,
+    lyrics_musixmatch_lines_only: false,
     ui_font: "",
     lyric_font: "",
     audio_output: null,

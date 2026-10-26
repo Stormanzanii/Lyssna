@@ -10171,3 +10171,23 @@ test("Apple Music quality priority is on until turned off", async ({
     )
     .toBe(false);
 });
+
+test("Musixmatch word sync can be ignored", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Sources");
+  const toggle = page.getByRole("switch", {
+    name: "Ignore Musixmatch word sync",
+  });
+  await expect(toggle).not.toBeChecked();
+  await toggle.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyrics_musixmatch_lines_only,
+      ),
+    )
+    .toBe(true);
+});

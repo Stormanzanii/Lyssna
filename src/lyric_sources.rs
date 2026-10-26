@@ -41,6 +41,16 @@ pub const DEFAULT_DISABLED: [&str; 2] = ["lrclib", "netease"];
 
 static ACTIVE: Mutex<Option<Vec<String>>> = Mutex::new(None);
 static PREFER_APPLE: AtomicBool = AtomicBool::new(true);
+static MUSIXMATCH_WORDS: AtomicBool = AtomicBool::new(true);
+
+/// Ignore Musixmatch Word Sync, inverted: whether Musixmatch's word timing
+/// (richsync) is used, or only its line timing.
+pub fn set_musixmatch_words(words: bool) {
+    MUSIXMATCH_WORDS.store(words, Ordering::Relaxed);
+}
+pub fn musixmatch_words() -> bool {
+    MUSIXMATCH_WORDS.load(Ordering::Relaxed)
+}
 
 /// Prioritize Apple Music Quality, as in the fork: Apple's answer wins
 /// when it scores higher than the pick, or ties and has real gaps between
@@ -464,9 +474,9 @@ fn musixmatch_get(client: &Client, method: &str, query: &[(&str, String)]) -> Re
     Ok(value)
 }
 
-/// Looks the song up on Musixmatch: word-synced first, then line-synced,
-/// then plain lyrics.
-pub fn musixmatch(client: &Client, track: &Track) -> Result<Lyrics> {
+/// Looks the song up on Musixmatch: word-synced first (unless `words` is
+/// off), then line-synced, then plain lyrics.
+pub fn musixmatch(client: &Client, track: &Track, words: bool) -> Result<Lyrics> {
     let artist = track
         .artists
         .iter()
@@ -532,7 +542,8 @@ pub fn musixmatch(client: &Client, track: &Track) -> Result<Lyrics> {
             ..Lyrics::default()
         });
     }
-    if flag("has_richsync")
+    if words
+        && flag("has_richsync")
         && let Some(common) = meta["commontrack_id"].as_u64()
         && let Ok(rich) = musixmatch_get(
             client,
@@ -1019,7 +1030,7 @@ mod tests {
             ..Default::default()
         };
         for (name, result) in [
-            ("musixmatch", musixmatch(&client, &track)),
+            ("musixmatch", musixmatch(&client, &track, true)),
             ("lrclib", lrclib(&client, &track)),
             ("netease", netease(&client, &track)),
         ] {

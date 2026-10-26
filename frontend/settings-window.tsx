@@ -1180,6 +1180,12 @@ export function SettingsWindow({
           "Use Apple Music's lyrics when they are better timed than the chosen source, or as well timed with real pauses between lines.",
           "apple music quality priority source",
         ),
+        flag(
+          "lyrics_musixmatch_lines_only",
+          "Ignore Musixmatch word sync",
+          "Use only Musixmatch's line timing, even when it has word timing.",
+          "musixmatch word sync richsync line timing",
+        ),
       ],
     ],
     [

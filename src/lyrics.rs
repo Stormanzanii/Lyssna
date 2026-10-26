@@ -908,15 +908,22 @@ fn fetch_from(
         crate::lyric_sources::split_provider(lyrics, source)
             .with_context(|| format!("No {source} lyrics from the provider"))
     };
-    let (sources, prefer_apple) = (
+    let (sources, prefer_apple, words) = (
         crate::lyric_sources::enabled(),
         crate::lyric_sources::prefer_apple(),
+        crate::lyric_sources::musixmatch_words(),
     );
     crate::lyric_sources::fetch_best(&sources, prefer_apple, &|source| match source {
         "spicy" | "apple" => from_provider(source),
-        "musixmatch" => cached("musixmatch", &|| {
-            crate::lyric_sources::musixmatch(client, track)
-        }),
+        // Line-only answers are cached apart, so switching shows the other.
+        "musixmatch" => cached(
+            if words {
+                "musixmatch"
+            } else {
+                "musixmatch-lines"
+            },
+            &|| crate::lyric_sources::musixmatch(client, track, words),
+        ),
         "spotify" => cached("spotify", &|| crate::lyric_sources::spotify(native, track)),
         "lrclib" => cached("lrclib", &|| crate::lyric_sources::lrclib(client, track)),
         "netease" => cached("netease", &|| crate::lyric_sources::netease(client, track)),

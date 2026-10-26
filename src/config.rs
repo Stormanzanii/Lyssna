@@ -233,6 +233,8 @@ pub struct Settings {
     /// Prioritize Apple Music Quality: Apple's answer wins higher scores and
     /// ties with gaps between lines.
     pub lyrics_prefer_apple: bool,
+    /// Ignore Musixmatch Word Sync: use only Musixmatch's line timing.
+    pub lyrics_musixmatch_lines_only: bool,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -321,6 +323,7 @@ impl Default for Settings {
                 .map(|id| (*id).into())
                 .collect(),
             lyrics_prefer_apple: true,
+            lyrics_musixmatch_lines_only: false,
             lyrics_sources_disabled: crate::lyric_sources::DEFAULT_DISABLED
                 .iter()
                 .map(|id| (*id).into())

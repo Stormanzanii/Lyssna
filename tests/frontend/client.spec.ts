@@ -7892,6 +7892,41 @@ test("custom header fonts retain italic overhang and artist descenders", async (
   });
 });
 
+test("long song titles fade at both edges while they scroll", async ({
+  page,
+}) => {
+  await startClient(page);
+  const name =
+    "High Forever - Marlon Hoffstadt Remix (Extended Edition) - Original Mix";
+  await page.evaluate(
+    ({ base, track, name }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, item: { ...track, name } },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track, name },
+  );
+  const title = page.locator(".now-playing .marquee.scrolling").first();
+  await expect(title).toBeVisible();
+  const look = await title.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const content = element.querySelector(".marquee-content")!;
+    const text = content.firstElementChild ?? content;
+    const parent = element.parentElement!.getBoundingClientRect();
+    return {
+      mask: style.maskImage || style.webkitMaskImage,
+      after: getComputedStyle(element, "::after").content,
+      // Text at rest still starts where the panel's content starts.
+      start: text.getBoundingClientRect().left - parent.left,
+    };
+  });
+  expect(look.mask).toContain("linear-gradient");
+  expect(look.after).toBe("none");
+  expect(Math.abs(look.start)).toBeLessThanOrEqual(1);
+});
+
 test("clicking empty top bar space never starts a window drag; moving does", async ({
   page,
 }) => {

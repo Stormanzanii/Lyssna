@@ -2451,15 +2451,29 @@ small {
 .marquee.scrolling:focus-within .marquee-content {
   animation-play-state: paused;
 }
-.marquee.scrolling:after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 10px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, #15151510);
+/* Long titles fade out at both edges while they scroll, as in Spotify and
+   Spicy Lyrics. The content's padding holds the fade and the negative margin
+   cancels it, so text still starts at the usual edge. */
+.marquee.scrolling {
+  --marquee-fade: 18px;
+  margin-inline: calc(-1 * var(--marquee-fade));
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 var(--marquee-fade),
+    #000 calc(100% - var(--marquee-fade)),
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 var(--marquee-fade),
+    #000 calc(100% - var(--marquee-fade)),
+    transparent
+  );
+}
+.marquee.scrolling > .marquee-content {
+  padding-inline: var(--marquee-fade);
 }
 @keyframes marquee {
   0%,
@@ -4793,7 +4807,7 @@ input.volume-range:active::-webkit-slider-thumb {
   text-align: left;
   z-index: 3;
 }
-.canvas-lyrics:not(.narrow) .lyrics-title .marquee-content {
+.canvas-lyrics:not(.narrow) .lyrics-title:not(.scrolling) .marquee-content {
   padding-inline: 0.4rem;
 }
 .canvas-lyrics:not(.narrow) .lyrics-artists {

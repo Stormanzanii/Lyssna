@@ -22,7 +22,7 @@ SpotiFlex plays Spotify through [librespot](https://github.com/librespot-org/lib
 **Spotify Premium is required.** Free accounts cannot stream through librespot.
 
 > [!NOTE]
-> SpotiFlex is in early development. It does not yet match every feature of Spotify or of the Spicy Lyrics and Spotify Plus extensions it reimplements. [docs/FEATURES.md](docs/FEATURES.md) tracks what works and what is missing.
+> SpotiFlex is in early development. It does not yet match every feature of Spotify or of the Spicy Lyrics extension it reimplements. [docs/FEATURES.md](docs/FEATURES.md) tracks what works and what is missing.
 
 ## What it does
 
@@ -144,6 +144,15 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 </details>
 
+## Credits
+
+- **[Spicy Lyrics](https://github.com/Spikerko/spicy-lyrics)** by Spikerko and its contributors, and **[iPixelGalaxy's fork](https://github.com/iPixelGalaxy/spicy-lyrics)**: the lyrics provider, the animator, Space Gravity, fullscreen lyrics and the Canvas backdrop that SpotiFlex reimplements.
+- **[EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated)**: the lookup that shows Discord usernames on community lyrics.
+- **[librespot](https://github.com/librespot-org/librespot)**: Spotify sign-in, streaming and Connect.
+- **[Kawarp](https://github.com/better-lyrics/kawarp)** by Better Lyrics: the warped artwork ambience.
+- **[spr](https://github.com/Fraktality/spr)** by Fraktality: the spring that moves the lyrics.
+- **[Tauri](https://tauri.app)**, **[React](https://react.dev)** and **[Lucide](https://lucide.dev)** icons; **[Inter](https://rsms.me/inter/)** and **[Metropolis](https://fontsource.org/fonts/metropolis)** fonts.
+
 ---
 
-SpotiFlex is licensed under the [GNU AGPL v3](LICENSE). The lyrics features reimplement behaviour from [iPixelGalaxy/spicy-lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) and the pixels-spicy-lyrics fork (both AGPL-3.0), community usernames follow [EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated) (GPL-3.0), and interface ideas come from [iPixelGalaxy/spotify-plus](https://github.com/iPixelGalaxy/spotify-plus); no upstream source or assets are copied. Playback uses librespot (MIT). [NOTICE.md](NOTICE.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) list every source and license. Spotify is a trademark of Spotify AB; SpotiFlex is an independent client and is not affiliated with Spotify AB.
+SpotiFlex is licensed under the [GNU AGPL v3](LICENSE). The lyrics features reimplement behaviour from [iPixelGalaxy/spicy-lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) and the pixels-spicy-lyrics fork (both AGPL-3.0), and community usernames follow [EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated) (GPL-3.0); no upstream source or assets are copied. Playback uses librespot (MIT). [NOTICE.md](NOTICE.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) list every source and license. Spotify is a trademark of Spotify AB; SpotiFlex is an independent client and is not affiliated with Spotify AB.

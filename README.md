@@ -1,62 +1,51 @@
 ![SpotiFlex playing a song with its Spotify Canvas behind word-synced lyrics](.github/assets/app.webp)
 
-<div align="center">
+# <img src="assets/spotiflex.png" alt="" width="36" align="top"> SpotiFlex
 
-<img src="assets/spotiflex.png" alt="SpotiFlex icon" width="96">
+A Spotify desktop client written in Rust, with Spicy Lyrics built in instead of injected. It streams through [librespot](https://github.com/librespot-org/librespot), draws its own Tauri interface in Spotify's layout (library left, browsing centre, player bottom, lyrics right), and needs neither the Spotify app nor Spicetify.
 
-# SpotiFlex
+[![Release 0.1.1](https://img.shields.io/badge/release-0.1.1-1ed760?style=for-the-badge)](#download-and-sign-in)
+[![Windows and macOS](https://img.shields.io/badge/Windows%20%C2%B7%20macOS-2b2b2b?style=for-the-badge)](#building)
+[![AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
 
-**A native Spotify desktop client with Spicy Lyrics built in.**
+> [!IMPORTANT]
+> **You need Spotify Premium.** librespot cannot stream on free accounts. SpotiFlex is also early: some of Spotify's and Spicy Lyrics' features are still missing, and [docs/FEATURES.md](docs/FEATURES.md) lists which.
 
-Rust and Tauri, with its own audio engine. No embedded Spotify web player, no Spicetify.
+## Features
 
-[Download](#install) · [Features](docs/FEATURES.md) · [Build from source](#build-from-source) · [Attribution](NOTICE.md)
+### Lyrics
 
-[![Release](https://img.shields.io/badge/release-0.1.1-1ed760)](#install)
-[![Rust](https://img.shields.io/badge/Rust-1.98-orange?logo=rust)](Cargo.toml)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS-lightgrey)](#build-from-source)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+- Word- and syllable-synced lyrics, taken from whichever of six sources answers best: Spicy Lyrics, Musixmatch, Apple Music, Spotify, LRCLIB or Netease. You choose the order in Settings.
+- The Spicy Lyrics animator, with presets and adjustable motion settings, plus Space Gravity, where words drift across the page.
+- The song's Spotify Canvas plays beside the lyrics and tints the background.
+- Load your own `.lrc` or `.ttml` files, permanently or for one session.
+- Community credits name the maker by their Discord username.
 
-</div>
-
-SpotiFlex plays Spotify through [librespot](https://github.com/librespot-org/librespot) and draws its own interface in the familiar layout: library on the left, browsing in the middle, player along the bottom, lyrics on the right. Word-synced lyrics, the Spicy Lyrics animator, Space Gravity and Spotify Canvas backdrops are part of the client rather than an extension injected into Spotify.
-
-**Spotify Premium is required.** Free accounts cannot stream through librespot.
-
-> [!NOTE]
-> SpotiFlex is in early development. It does not yet match every feature of Spotify or of the Spicy Lyrics extension it reimplements. [docs/FEATURES.md](docs/FEATURES.md) tracks what works and what is missing.
-
-## What it does
-
-| Feature | What you get |
-| --- | --- |
-| Lyrics | Word- and syllable-synced lyrics from six sources (Spicy Lyrics, Musixmatch, Apple Music, Spotify, LRCLIB, Netease), the Spicy Lyrics animator with adjustable presets, Space Gravity, fullscreen mode, local LRC and TTML imports, and community credits with Discord usernames |
-| Playback | Native audio with gapless playback, optional crossfade (1 to 12 seconds), Spotify Connect control of other devices, and media keys |
-| Library | Playlists, Spotify folders, saved albums and followed artists in Spotify's Recents order, with Playlists, By you, Collaborative, Albums and Artists filters |
-| Now playing | Album or Canvas ambience, a lyrics card that expands to fill the panel, artist and credits cards |
-| Home and browsing | Spotify's Home feed, artist and album pages, search, Recents and the What's New feed behind the bell |
-| Window | Optional tray mode that keeps music playing after the window closes, and opening at sign-in (normal or minimized) |
-| Updates | Signed automatic updates for Windows; each executable is checked against an Ed25519 signature and a SHA-256 hash before it replaces the old one |
-
-Full screen (F11) turns the window into the lyrics and the song's Canvas, with playback controls that appear when you move the mouse:
+Press **F11** for full screen. Playback controls appear when you move the mouse and fade when you stop:
 
 ![Full-screen lyrics over a Spotify Canvas](.github/assets/fullscreen.webp)
 
-## Install
+### Listening
 
-| Platform | How |
-| --- | --- |
-| Windows 10 and 11 (x64) | Download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). Later versions install from the in-app update prompt. |
-| macOS 12 or later (Apple Silicon and Intel) | [Build from source](#build-from-source). Releases are Windows-only for now. |
+Gapless playback by default, optional crossfade from 1 to 12 seconds, media keys, and Spotify Connect control of your other devices. Closing the window can leave music playing from the tray, and SpotiFlex can open at sign-in, minimized if you prefer.
 
-## Get started
+### Your library
 
-1. Open SpotiFlex. A setup window appears and stays until you sign in; it has no skip button.
-2. Choose **Sign in with Spotify** and approve the connection in your browser with a Premium account.
-3. Return to SpotiFlex. The client unlocks once Spotify has authenticated the account, and loads every playlist in your library.
-4. Open **Settings** from the account menu to set up lyrics, crossfade, tray mode and the rest.
+Every playlist loads after sign-in, including private and collaborative ones, inside the Spotify folders you made. Saved albums and followed artists sit alongside them in Spotify's Recents order, with filter chips for each kind.
 
-No Spotify developer app or Client ID is needed. Sign-in uses OAuth with PKCE and a state-checked loopback callback, and later launches reuse the saved session.
+### Elsewhere in the app
+
+Spotify's Home feed, search, artist and album pages, Recents, and the What's New feed behind the bell. Now Playing has a lyrics card that can expand to fill the panel. Windows builds update themselves, after checking each download's Ed25519 signature and SHA-256 hash.
+
+## Download and sign in
+
+On Windows 10 or 11 (x64), download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). On macOS 12 or later there is no release yet; see [Building](#building).
+
+1. Open SpotiFlex. A setup window stays up until you sign in.
+2. Choose **Sign in with Spotify** and approve the connection in your browser.
+3. Back in SpotiFlex, the client unlocks once Spotify confirms the account.
+
+Sign-in uses OAuth with PKCE through a state-checked loopback callback. You do not need a Spotify developer app, and later launches reuse the saved session.
 
 ## Privacy
 
@@ -88,7 +77,7 @@ An optional developer connection keeps the older Web API login. Create an app in
 
 </details>
 
-## Build from source
+## Building
 
 Windows needs Rust, Node.js 24, WebView2, the Visual Studio C++ build tools, CMake and LLVM (for libclang). Then:
 

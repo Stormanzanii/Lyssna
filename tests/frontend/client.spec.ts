@@ -4673,10 +4673,26 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   // The line before the one being sung keeps its links...
   await at(7700);
   const kept = page.locator(".gravity-links path:not(.leaving)");
-  await expect(kept).toHaveCount(3);
+  // Two in the earlier line, one into the sung line, one within it.
+  await expect(kept).toHaveCount(4);
+  // A link from a dim word into the sung line is half dim, half bright.
+  const halves = () =>
+    page.evaluate(() => {
+      const path = document.querySelector<SVGPathElement>(
+        '.gravity-links path[data-link="0:2>1:0"]',
+      );
+      const stops = document.querySelectorAll(
+        `#${path?.dataset.gradient} stop`,
+      );
+      return [...stops].map((stop) =>
+        Number(stop.getAttribute("stop-opacity")),
+      );
+    });
+  await expect.poll(async () => (await halves())[0]).toBeLessThan(0.5);
+  await expect.poll(async () => (await halves())[3]).toBeCloseTo(1, 1);
   // ...and older lines' links fade out rather than vanish.
   await at(9600);
-  await expect(kept).toHaveCount(2);
+  await expect(kept).toHaveCount(3);
   await expect(page.locator(".gravity-links path.leaving")).not.toHaveCount(0);
   await expect
     .poll(() =>

@@ -290,6 +290,7 @@ type GravityBody = Body & { spawned: boolean; entryFrame?: number };
 let kept: { signature: string; bodies: Map<string, GravityBody> } | undefined;
 
 const SVG = "http://www.w3.org/2000/svg";
+let linkCount = 0;
 
 /** Where a turned, scaled word's left or right edge meets its middle. */
 function edge(body: Body, side: -1 | 1) {
@@ -309,7 +310,8 @@ const ease = (t: number) =>
  *  next one in the line being sung, drawn across the pause between them
  *  like brainstorm notes. It leaves each word along its own slant, so the
  *  curve flows between them, and follows both as they drift. The line
- *  before keeps its links; older ones fade away. */
+ *  before keeps its links, joined into the sung line; older ones fade
+ *  away. */
 function drawLinks(
   sheet: SVGSVGElement,
   entities: Entity[],
@@ -330,12 +332,12 @@ function drawLinks(
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
-    if (
-      from.lead !== to.lead ||
-      (from.lead !== current && from.lead !== current - 1) ||
-      to.index !== from.index + 1 ||
-      time < from.end
-    )
+    // Links within the sung line and the one before, and the link from
+    // that earlier line into the sung one.
+    const within =
+      from.lead === to.lead && (to.lead === current || to.lead === current - 1);
+    const across = from.lead === current - 1 && to.lead === current;
+    if (!(within || across) || to.index !== from.index + 1 || time < from.end)
       continue;
     const a = bodies.get(from.key),
       b = bodies.get(to.key);
@@ -351,7 +353,19 @@ function drawLinks(
       path.dataset.drawn = "0";
       path.dataset.at = `${now}`;
       path.setAttribute("pathLength", "1");
-      sheet.append(path);
+      // Each link's own gradient carries its two words' strengths.
+      const id = `gravity-link-${(linkCount += 1)}`;
+      const gradient = document.createElementNS(SVG, "linearGradient");
+      gradient.id = id;
+      gradient.setAttribute("gradientUnits", "userSpaceOnUse");
+      for (const offset of ["0", "0.5", "0.5", "1"]) {
+        const stop = document.createElementNS(SVG, "stop");
+        stop.setAttribute("offset", offset);
+        gradient.append(stop);
+      }
+      path.dataset.gradient = id;
+      path.style.stroke = `url(#${id})`;
+      sheet.append(gradient, path);
     }
     path.classList.remove("leaving");
     const start = edge(a, 1),
@@ -377,6 +391,27 @@ function drawLinks(
       "d",
       `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
     );
+    // The link dims with its words: each half takes its own word's
+    // strength, so a link from a dim word to the sung one is half and half.
+    const gradient = sheet.querySelector<SVGLinearGradientElement>(
+      `#${path.dataset.gradient}`,
+    );
+    if (gradient) {
+      gradient.setAttribute("x1", start.x.toFixed(1));
+      gradient.setAttribute("y1", start.y.toFixed(1));
+      gradient.setAttribute("x2", end.x.toFixed(1));
+      gradient.setAttribute("y2", end.y.toFixed(1));
+      const strength = (key: string) =>
+        elements.get(key)
+          ? Number(getComputedStyle(elements.get(key)!).opacity)
+          : 0;
+      const [first, second] = [strength(from.key), strength(to.key)];
+      gradient
+        .querySelectorAll("stop")
+        .forEach((stop, index) =>
+          stop.setAttribute("stop-opacity", `${index < 2 ? first : second}`),
+        );
+    }
     // The pen follows song time softly, so coarse time updates don't step.
     const target = ease(
       Math.min(
@@ -400,7 +435,9 @@ function drawLinks(
       continue;
     path.classList.add("leaving");
     setTimeout(() => {
-      if (path.classList.contains("leaving")) path.remove();
+      if (!path.classList.contains("leaving")) return;
+      sheet.querySelector(`#${path.dataset.gradient}`)?.remove();
+      path.remove();
     }, 1300);
   }
 }

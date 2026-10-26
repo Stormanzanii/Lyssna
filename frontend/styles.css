@@ -6020,3 +6020,6 @@ input[type="range"]:hover {
 .gravity-links path.leaving {
   opacity: 0;
 }
+.gravity-links stop {
+  stop-color: var(--highlighter-ink);
+}

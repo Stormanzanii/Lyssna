@@ -149,6 +149,7 @@ export const emptyState: AppState = {
     lyrics_line_hover: false,
     lyrics_skeleton: true,
     lyrics_early_scroll: false,
+    lyrics_follow_button: true,
     lyrics_early_scroll_ms: 250,
     lyrics_hide_year: false,
     lyrics_hide_npv: false,

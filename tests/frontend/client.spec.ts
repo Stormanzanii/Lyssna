@@ -9958,3 +9958,24 @@ test("lyrics view controls can sit at the bottom", async ({ page }) => {
   const fullBox = (await section.locator(".lyrics-toolbar").boundingBox())!;
   expect(fullBox.y).toBeLessThan(100);
 });
+
+test("the return-to-lyric button can be turned off", async ({ page }) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  const display = page.locator(".lyrics-display");
+  const back = display.getByRole("button", { name: "Return to current lyric" });
+  await display.locator(".lyric-scroll").hover();
+  await page.mouse.wheel(0, 1400);
+  await expect(display).toHaveAttribute("data-following", "false");
+  await expect(back).toBeVisible();
+  await openSettings(page, "Lyrics");
+  await page
+    .getByRole("switch", { name: "Show scroll to active button" })
+    .click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(display).toHaveAttribute("data-following", "false");
+  await expect(back).toHaveCount(0);
+});

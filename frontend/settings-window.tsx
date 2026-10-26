@@ -875,6 +875,12 @@ export function SettingsWindow({
           !settings.lyrics_early_scroll,
         ),
         flag(
+          "lyrics_follow_button",
+          "Show scroll to active button",
+          "While you scroll through lyrics, show a button that returns to the current line.",
+          "scroll return follow current line button arrow",
+        ),
+        flag(
           "lyrics_right_align",
           "Right align lyrics",
           "Line lyrics up on the right instead of the left.",

@@ -818,22 +818,24 @@ export function LyricsDisplay({
           />
         </div>
       )}
-      {!following && lyrics.synced && (
-        <button
-          type="button"
-          className="follow-lyrics"
-          title="Return to current lyric"
-          aria-label="Return to current lyric"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => setFollowing(true)}
-        >
-          {returnDirection === "up" ? (
-            <ChevronUp size={28} strokeWidth={2.5} />
-          ) : (
-            <ChevronDown size={28} strokeWidth={2.5} />
-          )}
-        </button>
-      )}
+      {!following &&
+        lyrics.synced &&
+        settings.lyrics_follow_button !== false && (
+          <button
+            type="button"
+            className="follow-lyrics"
+            title="Return to current lyric"
+            aria-label="Return to current lyric"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setFollowing(true)}
+          >
+            {returnDirection === "up" ? (
+              <ChevronUp size={28} strokeWidth={2.5} />
+            ) : (
+              <ChevronDown size={28} strokeWidth={2.5} />
+            )}
+          </button>
+        )}
     </div>
   );
 }

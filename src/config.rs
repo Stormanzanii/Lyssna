@@ -188,6 +188,8 @@ pub struct Settings {
     /// Placeholder lines while lyrics load, instead of a message.
     pub lyrics_skeleton: bool,
     pub lyrics_early_scroll: bool,
+    /// While browsing lyrics, a button returns to the current line.
+    pub lyrics_follow_button: bool,
     /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
     pub lyrics_early_scroll_ms: u16,
     pub lyrics_hide_year: bool,
@@ -269,6 +271,7 @@ impl Default for Settings {
             lyrics_line_hover: false,
             lyrics_skeleton: true,
             lyrics_early_scroll: false,
+            lyrics_follow_button: true,
             lyrics_early_scroll_ms: 250,
             lyrics_hide_year: false,
             lyrics_hide_npv: false,
@@ -465,6 +468,7 @@ mod tests {
         assert_eq!(older.lyrics_early_scroll_ms, 250);
         assert!(older.lyrics_skeleton);
         assert!(older.cover_animation);
+        assert!(older.lyrics_follow_button);
         assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
         let chosen: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();

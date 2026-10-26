@@ -2244,19 +2244,25 @@ fn retry_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
 /// Ask every source again for the current song, skipping saved answers,
 /// so lyrics uploaded since show without waiting for the cache to expire.
 #[tauri::command]
-fn refresh_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+fn refresh_lyrics(
+    keep_saved: Option<bool>,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(), String> {
     let track = lock(&state.0.snapshot)
         .map_err(error)?
         .playback
         .item
         .clone()
         .ok_or("Play a track first")?;
-    // The lyrics thread runs commands in order: the purge lands before the fetch.
-    state
-        .0
-        .lyrics
-        .send(LyricCommand::ForgetCached(track.clone()))
-        .map_err(error)?;
+    // The lyrics thread runs commands in order: the purge lands before the
+    // fetch. Keeping the saved copy only reloads the song's lyrics.
+    if !keep_saved.unwrap_or(false) {
+        state
+            .0
+            .lyrics
+            .send(LyricCommand::ForgetCached(track.clone()))
+            .map_err(error)?;
+    }
     state
         .0
         .commands

@@ -131,6 +131,8 @@ export interface Settings {
   lyrics_minimal?: boolean;
   lyrics_line_hover?: boolean;
   lyrics_skeleton?: boolean;
+  lyrics_cache_button?: boolean;
+  lyrics_cache_action?: "song" | "reload" | "all";
   lyrics_early_scroll?: boolean;
   lyrics_follow_button?: boolean;
   /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */

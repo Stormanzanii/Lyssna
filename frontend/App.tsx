@@ -225,6 +225,18 @@ type EntityMenu = {
   y: number;
 };
 const windowHandle = () => getCurrentWindow();
+/** What the lyrics toolbar's cache button clears before fetching again. */
+const CACHE_ACTIONS = {
+  song: {
+    title: "Refresh lyrics (clears this song's saved copy)",
+  },
+  reload: {
+    title: "Reload lyrics (keeps saved copies)",
+  },
+  all: {
+    title: "Refresh lyrics (clears every saved copy)",
+  },
+} as const;
 /** How long the lyrics take to slide away when full screen closes. */
 const FULLSCREEN_EXIT_MS = 450;
 /** Fit menus using their rendered size, including newly added actions. */
@@ -623,6 +635,7 @@ function App() {
     [call],
   );
   // Styles that differ between animator presets key off the root.
+  const cacheAction = state.settings.lyrics_cache_action ?? "song";
   const animatorPreset = presetOf(state.settings.lyrics_animator);
   useEffect(() => {
     document.documentElement.dataset.animator = animatorPreset;
@@ -2734,18 +2747,24 @@ function App() {
                 >
                   <UploadIcon />
                 </button>
-                <button
-                  className="icon-button"
-                  title="Refresh lyrics (clears this song's saved copy)"
-                  data-icon="retry"
-                  onClick={() =>
-                    void call("refresh_lyrics").then(() =>
-                      notify("Fetching fresh lyrics…"),
-                    )
-                  }
-                >
-                  <RetryIcon />
-                </button>
+                {state.settings.lyrics_cache_button !== false && (
+                  <button
+                    className="icon-button"
+                    title={CACHE_ACTIONS[cacheAction].title}
+                    data-icon="retry"
+                    onClick={() =>
+                      void (
+                        cacheAction === "all"
+                          ? call("clear_lyrics_cache")
+                          : call("refresh_lyrics", {
+                              keepSaved: cacheAction === "reload",
+                            })
+                      ).then(() => notify("Fetching fresh lyrics…"))
+                    }
+                  >
+                    <RetryIcon />
+                  </button>
+                )}
                 <button
                   className="icon-button"
                   title="Full screen"

@@ -201,6 +201,11 @@ pub struct Settings {
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
     pub lyrics_skeleton: bool,
+    /// The lyrics toolbar's cache button and what it clears: "song" (this
+    /// song's saved copy), "reload" (nothing saved) or "all" (every saved
+    /// copy). The song's lyrics are fetched again after each.
+    pub lyrics_cache_button: bool,
+    pub lyrics_cache_action: String,
     pub lyrics_early_scroll: bool,
     /// While browsing lyrics, a button returns to the current line.
     pub lyrics_follow_button: bool,
@@ -293,6 +298,8 @@ impl Default for Settings {
             lyrics_minimal: false,
             lyrics_line_hover: false,
             lyrics_skeleton: true,
+            lyrics_cache_button: true,
+            lyrics_cache_action: "song".into(),
             lyrics_early_scroll: false,
             lyrics_follow_button: true,
             lyrics_early_scroll_ms: 250,
@@ -367,6 +374,9 @@ impl Settings {
     /// Keeps Spicy Lyrics display options inside the ranges Settings offers.
     pub fn clean_lyrics_options(&mut self) {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
+        if !["song", "reload", "all"].contains(&self.lyrics_cache_action.as_str()) {
+            self.lyrics_cache_action = "song".into();
+        }
         if std::mem::take(&mut self.lyrics_hide_year) {
             self.lyrics_year_position = YearPosition::Off;
         }
@@ -514,6 +524,11 @@ mod tests {
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();
         assert_eq!(wild.lyrics_early_scroll_ms, 800);
+        let mut action: Settings =
+            serde_json::from_str(r#"{"lyrics_cache_action":"wipe"}"#).unwrap();
+        action.clean_lyrics_options();
+        assert_eq!(action.lyrics_cache_action, "song");
+        assert!(older.lyrics_cache_button);
     }
 
     #[test]

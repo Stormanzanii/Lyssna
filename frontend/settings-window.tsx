@@ -1190,6 +1190,34 @@ export function SettingsWindow({
             Load
           </button>
         </SettingRow>,
+        flag(
+          "lyrics_cache_button",
+          "Lyrics cache button",
+          "Show the refresh button in the lyrics toolbar.",
+          "cache refresh button toolbar clear reload",
+        ),
+        <SettingRow
+          key="cache-action"
+          label="Lyrics cache button action"
+          help="What the toolbar's refresh button clears before fetching the song's lyrics again."
+          keywords="cache refresh button toolbar clear reload saved"
+        >
+          <select
+            className="settings-select"
+            aria-label="Lyrics cache button action"
+            value={settings.lyrics_cache_action ?? "song"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_cache_action: event.target
+                  .value as Settings["lyrics_cache_action"],
+              })
+            }
+          >
+            <option value="song">Clear current song</option>
+            <option value="reload">Reload current song</option>
+            <option value="all">Clear all saved lyrics</option>
+          </select>
+        </SettingRow>,
         <SettingRow
           key="database"
           label="Browse TTML Database"

@@ -2672,12 +2672,34 @@ fn create_playlist(
 }
 /// Hides scrollbars in the creator profile sheet; wheel and touch scrolling
 /// still work.
-const HIDE_SCROLLBARS: &str = r#"(() => {
+/// Runs in creator profile windows. Hides scrollbars and keeps the profile
+/// in its embed layout: after the site's verification check, or a `/uid/`
+/// link, the site's router lands on the full `/{name}` page, whose banner
+/// covers the top of the sheet. That page is swapped for `/embed/{name}`,
+/// and the banner is hidden in case it shows anyway.
+const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const style = document.createElement("style");
-  style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}";
+  style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
+    "[data-profile-variant]{--profile-banner-h:5rem!important}" +
+    "[data-profile-variant]>[aria-hidden=true][class*=profile-banner-h]{display:none!important}";
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });
+  const routes = new Set(["app", "authcycle", "embed", "goog", "guides", "identity", "legal", "stats", "uid"]);
+  const toEmbed = () => {
+    const name = location.pathname.match(/^\/([^/]+)\/?$/)?.[1];
+    if (name && !routes.has(name.toLowerCase())) location.replace("/embed/" + name);
+  };
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function (...args) {
+      const result = original.apply(this, args);
+      toEmbed();
+      return result;
+    };
+  }
+  addEventListener("popstate", toEmbed);
+  toEmbed();
 })();"#;
 #[tauri::command]
 async fn open_creator_profile(
@@ -2739,7 +2761,7 @@ async fn open_creator_profile(
                 .shadow(true)
                 .visible(false)
                 .parent(&main)?
-                .initialization_script(HIDE_SCROLLBARS)
+                .initialization_script(PROFILE_WINDOW_SCRIPT)
                 .on_navigation(|url| {
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
                 })

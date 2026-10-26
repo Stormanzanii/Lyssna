@@ -2451,29 +2451,66 @@ small {
 .marquee.scrolling:focus-within .marquee-content {
   animation-play-state: paused;
 }
-/* Long titles fade out at both edges while they scroll, as in Spotify and
-   Spicy Lyrics. The content's padding holds the fade and the negative margin
-   cancels it, so text still starts at the usual edge. */
+/* Long titles fade out at their edges while they scroll, as in Spotify and
+   Spicy Lyrics. Each fade shows only while text runs past that edge: none
+   on the left at rest, none on the right once the end has arrived. */
+@property --marquee-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --marquee-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 18px;
+}
 .marquee.scrolling {
-  --marquee-fade: 18px;
-  margin-inline: calc(-1 * var(--marquee-fade));
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent,
-    #000 var(--marquee-fade),
-    #000 calc(100% - var(--marquee-fade)),
+    #000 var(--marquee-start),
+    #000 calc(100% - var(--marquee-end)),
     transparent
   );
   mask-image: linear-gradient(
     90deg,
     transparent,
-    #000 var(--marquee-fade),
-    #000 calc(100% - var(--marquee-fade)),
+    #000 var(--marquee-start),
+    #000 calc(100% - var(--marquee-end)),
     transparent
   );
+  animation: marquee-edges var(--duration) linear infinite;
 }
-.marquee.scrolling > .marquee-content {
-  padding-inline: var(--marquee-fade);
+.marquee.scrolling:hover,
+.marquee.scrolling:focus-within {
+  animation-play-state: paused;
+}
+/* Matches the marquee keyframes below. */
+@keyframes marquee-edges {
+  0%,
+  12% {
+    --marquee-start: 0px;
+    --marquee-end: 18px;
+  }
+  15%,
+  42% {
+    --marquee-start: 18px;
+    --marquee-end: 18px;
+  }
+  45%,
+  58% {
+    --marquee-start: 18px;
+    --marquee-end: 0px;
+  }
+  61%,
+  97% {
+    --marquee-start: 18px;
+    --marquee-end: 18px;
+  }
+  100% {
+    --marquee-start: 0px;
+    --marquee-end: 18px;
+  }
 }
 @keyframes marquee {
   0%,
@@ -4920,7 +4957,7 @@ input.volume-range:active::-webkit-slider-thumb {
   text-align: left;
   z-index: 3;
 }
-.canvas-lyrics:not(.narrow) .lyrics-title:not(.scrolling) .marquee-content {
+.canvas-lyrics:not(.narrow) .lyrics-title .marquee-content {
   padding-inline: 0.4rem;
 }
 .canvas-lyrics:not(.narrow) .lyrics-artists {

@@ -7952,11 +7952,14 @@ test("long song titles fade at both edges while they scroll", async ({
       after: getComputedStyle(element, "::after").content,
       // Text at rest still starts where the panel's content starts.
       start: text.getBoundingClientRect().left - parent.left,
+      // Scrolling text never spills past the column into the padding.
+      spill: parent.left - element.getBoundingClientRect().left,
     };
   });
   expect(look.mask).toContain("linear-gradient");
   expect(look.after).toBe("none");
   expect(Math.abs(look.start)).toBeLessThanOrEqual(1);
+  expect(look.spill).toBeLessThanOrEqual(0);
 });
 
 test("the Now playing lyrics card opens, expands and folds like Spicy Lyrics", async ({

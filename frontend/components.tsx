@@ -1539,6 +1539,7 @@ function CanvasArtwork({
       <video
         ref={video}
         data-canvas-video
+        crossOrigin="anonymous"
         src={url}
         muted
         loop

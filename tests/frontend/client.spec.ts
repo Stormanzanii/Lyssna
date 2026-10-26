@@ -8009,7 +8009,7 @@ test("the Now playing lyrics card opens, expands and folds like Spicy Lyrics", a
     .evaluate((element) =>
       parseFloat(getComputedStyle(element).getPropertyValue("--lead-top")),
     );
-  expect(lead).toBeLessThanOrEqual(40);
+  expect(lead).toBeLessThanOrEqual(8);
   // Expand: the card fills the panel and everything else steps aside.
   await card.getByTitle("Expand lyrics").click();
   await expect(page.locator(".now-playing")).toHaveClass(/lyrics-expanded/);
@@ -8017,6 +8017,19 @@ test("the Now playing lyrics card opens, expands and folds like Spicy Lyrics", a
   const panel = (await page.locator(".now-playing").boundingBox())!;
   const expanded = (await card.boundingBox())!;
   expect(expanded.height).toBeGreaterThan(panel.height - 4);
+  // Expanded, the song starts a third down, like the lyrics page.
+  await expect
+    .poll(() =>
+      card
+        .locator(".lyric-scroll")
+        .evaluate(
+          (element) =>
+            parseFloat(
+              getComputedStyle(element).getPropertyValue("--lead-top"),
+            ) / element.clientHeight,
+        ),
+    )
+    .toBeGreaterThan(0.25);
   await card.hover();
   await card.getByTitle("Exit expanded lyrics").click();
   await expect(page.locator(".now-playing")).not.toHaveClass(/lyrics-expanded/);

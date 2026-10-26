@@ -579,15 +579,18 @@ export function LyricsDisplay({
         ?.classList.contains("narrow");
       // Playback follows the line's centre, independent of artwork. Wide
       // lyrics still begin above centre and stop at the padded credits.
-      // Compact cards keep one faded line above the current one, as Spicy
-      // Lyrics' card does, instead of a band of empty space.
-      const focus = compact
+      // The Now playing card starts right under its header and keeps one
+      // faded line above the current one, as Spicy Lyrics' card does.
+      // Expanded over the whole panel, it reads like the lyrics page: the
+      // song starts a third down and the current line stays centred.
+      const card = compact && !container.closest(".lyric-preview.expanded");
+      const focus = card
         ? Math.min(40, container.clientHeight * 0.14)
         : container.clientHeight / 2;
-      const centred = !compact;
+      const centred = !card;
       container.style.setProperty(
         "--lead-top",
-        `${centred && !stacked ? container.clientHeight * 0.28 : Math.max(0, focus - (centred ? (lines.current[0]?.offsetHeight ?? 0) / 2 : 0))}px`,
+        `${card ? 8 : compact || !stacked ? container.clientHeight * 0.28 : Math.max(0, focus - (lines.current[0]?.offsetHeight ?? 0) / 2)}px`,
       );
       spring.current.target = Math.max(
         0,

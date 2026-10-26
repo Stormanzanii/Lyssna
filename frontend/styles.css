@@ -423,10 +423,6 @@ small {
 .library-cover-play:hover svg {
   scale: 1.08;
 }
-.compact-library .library-cover-play {
-  left: 50%;
-  translate: -50% -50%;
-}
 .pinned-mark {
   color: #1ed760;
   vertical-align: middle;
@@ -925,7 +921,8 @@ small {
 .compact-library .library-item > div:last-child {
   display: none;
 }
-.compact-library .library-item {
+.compact-library .library-item,
+.compact-library .library-liked.playing .library-item {
   padding: 8px 0;
   justify-content: center;
 }

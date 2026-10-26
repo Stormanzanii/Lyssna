@@ -1934,6 +1934,9 @@ function App() {
       <Volume2 className="library-playing" size={16} aria-label="Playing" />
     );
   const coverPlay = (name: string, start: () => void, route: string) => {
+    // Compact library rows open their playlist, as in Spotify; there is no
+    // room to tell playing from opening apart.
+    if (state.settings.compact_library) return null;
     const active = nowPlayingRoute === route,
       pausing = active && state.playback.is_playing;
     return (

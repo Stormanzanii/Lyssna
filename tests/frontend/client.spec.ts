@@ -8136,7 +8136,7 @@ test("clicking empty top bar space never starts a window drag; moving does", asy
   await expect.poll(drags).toBe(1);
 });
 
-test("compact library play overlays stay inside their artwork", async ({
+test("compact library rows open instead of playing, covers centred", async ({
   page,
 }) => {
   await startClient(page);
@@ -8159,17 +8159,49 @@ test("compact library play overlays stay inside their artwork", async ({
       ],
     });
   }, emptyState.settings);
-  for (const row of [
-    page.locator(".library-liked"),
-    page.locator('[data-playlist-id="compact-playlist"]'),
-  ]) {
+  const library = page.locator(".library-panel");
+  const liked = page.locator(".library-liked");
+  const playlist = page.locator('[data-playlist-id="compact-playlist"]');
+  // Liked Songs playing must not push its cover off centre.
+  await page.evaluate(
+    ({ track, playback }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: true,
+          context: "spotify:user:test-user:collection",
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { track, playback: emptyState.playback },
+  );
+  const panel = (await library.boundingBox())!;
+  for (const row of [liked, playlist]) {
     await row.hover();
+    await expect(row.locator(".library-cover-play")).toHaveCount(0);
     const cover = (await row.locator(".liked-cover, .cover").boundingBox())!;
-    const play = (await row.locator(".library-cover-play").boundingBox())!;
-    expect(Math.abs(play.x - cover.x)).toBeLessThan(1);
-    expect(Math.abs(play.y - cover.y)).toBeLessThan(1);
     expect(cover.width).toBe(48);
+    expect(
+      Math.abs(cover.x + cover.width / 2 - (panel.x + panel.width / 2)),
+    ).toBeLessThan(3);
   }
+  // Clicking a cover opens the playlist rather than playing it.
+  const requests = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "player",
+        ).length,
+    );
+  const before = await requests();
+  await playlist.locator(".cover").click();
+  await expect(
+    page.locator(".center-panel h1", { hasText: "Compact playlist" }),
+  ).toBeVisible();
+  expect(await requests()).toBe(before);
   await page
     .locator(".library-panel")
     .screenshot({ path: "target/diagnostics/compact-library.png" });

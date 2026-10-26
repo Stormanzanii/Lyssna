@@ -210,6 +210,12 @@ const NON_TEXT_INPUTS = new Set([
   "file",
 ]);
 
+/** Whether a key event belongs to typing rather than the app's shortcuts. */
+const isTextInput = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (!!target.closest('textarea,select,[contenteditable="true"]') ||
+    (target instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(target.type)));
+
 type Center = "browse" | "lyrics" | "profile";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
@@ -890,11 +896,7 @@ function App() {
       if (document.querySelector("dialog[open]")) return;
       // Only typing keeps Space and Escape; a focused button or slider still
       // leaves Space for play and pause.
-      const target = event.target as HTMLElement | null,
-        editing =
-          !!target?.closest('textarea,select,[contenteditable="true"]') ||
-          (target instanceof HTMLInputElement &&
-            !NON_TEXT_INPUTS.has(target.type));
+      const editing = isTextInput(event.target);
       if (
         (event.ctrlKey || event.metaKey) &&
         ["k", "l"].includes(event.key.toLowerCase())
@@ -1432,15 +1434,35 @@ function App() {
     animatorFullscreen.current = false;
   };
   useEffect(() => {
+    // Escape Key Function: Exit fully also leaves the lyrics page, in or
+    // out of full screen, unless a dialog, menu or text field has Escape.
+    // Checked while capturing, before a dialog's own Escape removes it.
+    const exitFully = !!state.settings.lyrics_escape_exits;
     const handler = (event: KeyboardEvent) => {
       if (event.key === "F11" || (event.key === "Escape" && immersive)) {
         event.preventDefault();
         void fullscreen(event.key === "Escape" ? false : undefined);
+        if (event.key === "Escape" && exitFully) setCenter("browse");
       }
     };
+    const leave = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        exitFully &&
+        !immersive &&
+        center === "lyrics" &&
+        !isTextInput(event.target) &&
+        !document.querySelector('dialog[open], [role="dialog"], [role="menu"]')
+      )
+        setCenter("browse");
+    };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [immersive]);
+    window.addEventListener("keydown", leave, true);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", leave, true);
+    };
+  }, [immersive, center, state.settings.lyrics_escape_exits]);
   const playlist = state.playlists.find(
     (playlist) => state.route === `playlist:${playlist.id}`,
   );

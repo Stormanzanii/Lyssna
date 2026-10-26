@@ -146,6 +146,7 @@ export interface Settings {
   fullscreen_always_show?: "none" | "controls" | "time" | "both";
   fullscreen_volume?: "off" | "left" | "right" | "below";
   fullscreen_animate_close?: boolean;
+  lyrics_escape_exits?: boolean;
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];
   ui_font?: string;

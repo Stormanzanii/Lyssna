@@ -10041,3 +10041,31 @@ test("community profiles can open in the browser", async ({ page }) => {
     .poll(calls)
     .toEqual([["open_link", "https://spicylyrics.org/profile/Maker"]]);
 });
+
+test("Escape can leave the lyrics page as well as full screen", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Escape key function", { exact: true })
+    .selectOption("fully");
+  // Escape closes Settings first without leaving the lyrics.
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  await expect(page.locator(".lyrics-page")).toHaveCount(0);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyrics-page")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".lyrics-page")).toHaveCount(0);
+});

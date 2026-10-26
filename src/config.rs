@@ -204,6 +204,8 @@ pub struct Settings {
     pub fullscreen_volume: FullscreenVolume,
     /// Lyrics slide down out of view before full screen closes.
     pub fullscreen_animate_close: bool,
+    /// Escape leaves the lyrics page too, closing full screen on the way.
+    pub lyrics_escape_exits: bool,
     pub lyrics_animator: LyricsAnimator,
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
@@ -287,6 +289,7 @@ impl Default for Settings {
             fullscreen_always_show: FullscreenAlwaysShow::None,
             fullscreen_volume: FullscreenVolume::Off,
             fullscreen_animate_close: false,
+            lyrics_escape_exits: false,
             lyrics_source_order: crate::lyric_sources::DEFAULT_ORDER
                 .iter()
                 .map(|id| (*id).into())

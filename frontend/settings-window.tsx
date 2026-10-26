@@ -1048,6 +1048,26 @@ export function SettingsWindow({
             <option value="below">Below</option>
           </select>
         </SettingRow>,
+        <SettingRow
+          key="escape"
+          label="Escape key function"
+          help="What Escape does on the lyrics page: leave full screen only, or leave the lyrics too."
+          keywords="escape key esc exit fullscreen full screen lyrics close"
+        >
+          <select
+            className="settings-select"
+            aria-label="Escape key function"
+            value={settings.lyrics_escape_exits ? "fully" : "fullscreen"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_escape_exits: event.target.value === "fully",
+              })
+            }
+          >
+            <option value="fullscreen">Exit full screen</option>
+            <option value="fully">Exit fully</option>
+          </select>
+        </SettingRow>,
         flag(
           "fullscreen_animate_close",
           "Animate closing full screen",

@@ -200,6 +200,8 @@ pub struct Settings {
     /// In full screen, sung lines fade away and the rest dim, as in Spicy
     /// Lyrics' Minimal Lyrics Mode.
     pub lyrics_minimal: bool,
+    /// Unique Word Filters: "off", "lower" or "upper" case lyrics.
+    pub lyrics_word_filter: String,
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
     pub lyrics_skeleton: bool,
@@ -309,6 +311,7 @@ impl Default for Settings {
             lyrics_credits_follow: false,
             lyrics_simple: false,
             lyrics_minimal: false,
+            lyrics_word_filter: "off".into(),
             lyrics_line_hover: false,
             lyrics_skeleton: true,
             lyrics_cache_button: true,
@@ -391,6 +394,9 @@ impl Settings {
     /// Keeps Spicy Lyrics display options inside the ranges Settings offers.
     pub fn clean_lyrics_options(&mut self) {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
+        if !["off", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
+            self.lyrics_word_filter = "off".into();
+        }
         if !["song", "reload", "all"].contains(&self.lyrics_cache_action.as_str()) {
             self.lyrics_cache_action = "song".into();
         }
@@ -546,6 +552,10 @@ mod tests {
             serde_json::from_str(r#"{"lyrics_cache_action":"wipe"}"#).unwrap();
         action.clean_lyrics_options();
         assert_eq!(action.lyrics_cache_action, "song");
+        let mut filter: Settings =
+            serde_json::from_str(r#"{"lyrics_word_filter":"Gibberish"}"#).unwrap();
+        filter.clean_lyrics_options();
+        assert_eq!(filter.lyrics_word_filter, "off");
         assert!(older.lyrics_cache_button);
         assert!(older.lyrics_prefer_apple);
         assert!(older.settings_remember_place);

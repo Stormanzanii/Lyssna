@@ -964,6 +964,28 @@ export function SettingsWindow({
           onChange={(lyrics_animator) => onSettings({ lyrics_animator })}
           onManage={onManageAnimator}
         />,
+        <SettingRow
+          key="word-filter"
+          label="Unique word filters"
+          help="Show every lyric word in lower case or upper case."
+          keywords="word filter lowercase uppercase case meme"
+        >
+          <select
+            className="settings-select"
+            aria-label="Unique word filters"
+            value={settings.lyrics_word_filter ?? "off"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_word_filter: event.target
+                  .value as Settings["lyrics_word_filter"],
+              })
+            }
+          >
+            <option value="off">Off</option>
+            <option value="lower">all lowercase</option>
+            <option value="upper">ALL UPPERCASE</option>
+          </select>
+        </SettingRow>,
         flag(
           "canvas_lyrics",
           "Canvas in lyrics",

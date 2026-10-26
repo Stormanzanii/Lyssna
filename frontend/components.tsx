@@ -14,6 +14,7 @@ import { artworkFor } from "./artwork";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
+import { filterWords } from "./word-filter";
 import { useArtworkColor } from "./artwork-color";
 import {
   BadgeCheck,
@@ -1015,11 +1016,14 @@ function TimedLyricsPreview({
   onPlayer: (request: PlayerRequest) => void;
 }) {
   const current = usePosition(state) + state.settings.lyric_offset_ms;
-  const lyrics = displayLyrics(
-    state.lyrics,
-    !!state.settings.experimental_word_sync,
-    state.settings.romanized,
-    state.playback.item?.duration_ms,
+  const lyrics = filterWords(
+    displayLyrics(
+      state.lyrics,
+      !!state.settings.experimental_word_sync,
+      state.settings.romanized,
+      state.playback.item?.duration_ms,
+    ),
+    state.settings.lyrics_word_filter,
   );
   return lyrics ? (
     <LyricsDisplay
@@ -1323,11 +1327,14 @@ function SongLyricsPage({
     !state.lyrics.instrumental &&
     (state.lyrics.synced || track?.duration_ms)
   );
-  const lyrics = displayLyrics(
-    state.lyrics,
-    !!state.settings.experimental_word_sync || gravity,
-    state.settings.romanized,
-    track?.duration_ms,
+  const lyrics = filterWords(
+    displayLyrics(
+      state.lyrics,
+      !!state.settings.experimental_word_sync || gravity,
+      state.settings.romanized,
+      track?.duration_ms,
+    ),
+    state.settings.lyrics_word_filter,
   );
   const year = state.settings.lyrics_year_position ?? "left";
   const fullscreenControls = track ? (

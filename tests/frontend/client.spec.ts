@@ -10285,3 +10285,22 @@ test("the full screen seek bar can drop its glass styling", async ({
   await page.keyboard.press("F11");
   await expect(seek).toHaveCSS("backdrop-filter", "none");
 });
+
+test("unique word filters change the case of every lyric", async ({ page }) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  const line = page.locator(".lyrics-display .lyric-line").first();
+  await expect(line).toContainText("Test lyric line 1");
+  await openSettings(page, "Effects");
+  await page
+    .getByLabel("Unique word filters", { exact: true })
+    .selectOption("upper");
+  await expect(line).toContainText("TEST LYRIC LINE 1");
+  await page
+    .getByLabel("Unique word filters", { exact: true })
+    .selectOption("lower");
+  await expect(line).toContainText("test lyric line 1");
+});

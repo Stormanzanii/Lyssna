@@ -148,6 +148,7 @@ export const emptyState: AppState = {
     lyrics_credits_follow: false,
     lyrics_simple: false,
     lyrics_minimal: false,
+    lyrics_word_filter: "off",
     lyrics_line_hover: false,
     lyrics_skeleton: true,
     lyrics_cache_button: true,

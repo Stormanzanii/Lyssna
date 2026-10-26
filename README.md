@@ -140,25 +140,37 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Credits
 
+<div align="center">
 <table>
   <tr>
-    <td align="center" width="160"><a href="https://github.com/Stormanzanii"><img src="https://github.com/Stormanzanii.png?size=160" width="80" alt=""><br><b>Arashii</b></a><br><sub>Creator of SpotiFlex</sub></td>
-    <td align="center" width="160"><a href="https://github.com/iPixelGalaxy"><img src="https://github.com/iPixelGalaxy.png?size=160" width="80" alt=""><br><b>iPixelGalaxy</b></a><br><sub>Spotify+ and the Spicy Lyrics fork</sub></td>
-    <td align="center" width="160"><a href="https://github.com/Spikerko"><img src="https://github.com/Spikerko.png?size=160" width="80" alt=""><br><b>Spikerko</b></a><br><sub>Creator of Spicy Lyrics</sub></td>
+    <td align="center" valign="top" width="200">
+      <a href="https://github.com/Stormanzanii"><img src="https://images.weserv.nl/?url=github.com/Stormanzanii.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="Arashii"></a><br>
+      <b>Arashii</b><br>
+      <sub>Creator of SpotiFlex</sub>
+    </td>
+    <td align="center" valign="top" width="200">
+      <a href="https://github.com/iPixelGalaxy"><img src="https://images.weserv.nl/?url=github.com/iPixelGalaxy.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="iPixelGalaxy"></a><br>
+      <b>iPixelGalaxy</b><br>
+      <sub>Spicy Lyrics fork and Spotify+</sub>
+    </td>
+    <td align="center" valign="top" width="200">
+      <a href="https://github.com/Spikerko"><img src="https://images.weserv.nl/?url=github.com/Spikerko.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="Spikerko"></a><br>
+      <b>Spikerko</b><br>
+      <sub>Creator of Spicy Lyrics</sub>
+    </td>
   </tr>
 </table>
+</div>
 
-SpotiFlex is built on:
+**Built on**
 
-| Project | By | Licence | Used for |
-| --- | --- | --- | --- |
-| [Spotify+](https://github.com/iPixelGalaxy/spotify-plus) | iPixelGalaxy | None declared | The Add to playlist folders menu, reimplemented from its feature descriptions |
-| [Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) | Spikerko, fork by iPixelGalaxy | AGPL-3.0 | Lyrics display, Space Gravity, word sync and the TTML tools |
-| [librespot](https://github.com/librespot-org/librespot) | librespot contributors | MIT | Spotify playback and Connect |
-| [spr](https://github.com/Fraktality/spr) | Fraktality | MIT | The spring that animates lyrics |
-| [Kawarp](https://github.com/better-lyrics/kawarp) | Better Lyrics | MIT | The warped artwork and Canvas ambience |
+- **[Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-lyrics)** · Spikerko, fork by iPixelGalaxy · AGPL-3.0<br>Lyrics display, Space Gravity, word sync and the TTML tools.
+- **[Spotify+](https://github.com/iPixelGalaxy/spotify-plus)** · iPixelGalaxy · no licence declared<br>The Add to playlist folders menu.
+- **[librespot](https://github.com/librespot-org/librespot)** · librespot contributors · MIT<br>Spotify playback and Connect.
+- **[spr](https://github.com/Fraktality/spr)** · Fraktality · MIT<br>The spring that animates lyrics.
+- **[Kawarp](https://github.com/better-lyrics/kawarp)** · Better Lyrics · MIT<br>The warped artwork and Canvas ambience.
 
-No upstream source or assets are copied from Spotify+ or Spicy Lyrics; SpotiFlex reimplements their behaviour.
+SpotiFlex reimplements Spicy Lyrics' and Spotify+'s behaviour; it copies no source or assets from either.
 
 ## License
 

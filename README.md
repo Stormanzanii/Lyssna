@@ -1,51 +1,46 @@
-![SpotiFlex playing a song with its Spotify Canvas behind word-synced lyrics](.github/assets/app.webp)
+![SpotiFlex playing a song, with its Spotify Canvas behind word-synced lyrics](.github/assets/app.avif)
 
-# <img src="assets/spotiflex.png" alt="" width="36" align="top"> SpotiFlex
+<div align="center">
 
-A Spotify desktop client written in Rust, with Spicy Lyrics built in instead of injected. It streams through [librespot](https://github.com/librespot-org/librespot), draws its own Tauri interface in Spotify's layout (library left, browsing centre, player bottom, lyrics right), and needs neither the Spotify app nor Spicetify.
+# SpotiFlex
 
-[![Release 0.1.1](https://img.shields.io/badge/release-0.1.1-1ed760?style=for-the-badge)](#download-and-sign-in)
-[![Windows and macOS](https://img.shields.io/badge/Windows%20%C2%B7%20macOS-2b2b2b?style=for-the-badge)](#building)
-[![AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
+**Spotify on your desktop, with Spicy Lyrics built in.**
+
+[![Release](https://img.shields.io/badge/release-0.1.1-1ed760?style=for-the-badge)](#get-started)
+[![Windows · macOS](https://img.shields.io/badge/Windows%20%C2%B7%20macOS-2b2b2b?style=for-the-badge)](#build-from-source)
+[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-dea584?style=for-the-badge&logo=rust&logoColor=white)](Cargo.toml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
+
+[Download](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe) · [Features](docs/FEATURES.md) · [Build from source](#build-from-source) · [Credits](#credits)
+
+</div>
 
 > [!IMPORTANT]
-> **You need Spotify Premium.** librespot cannot stream on free accounts. SpotiFlex is also early: some of Spotify's and Spicy Lyrics' features are still missing, and [docs/FEATURES.md](docs/FEATURES.md) lists which.
+> **Spotify Premium is required.** librespot, which SpotiFlex streams through, cannot play on free accounts.
 
-## Features
+## What it is
 
-### Lyrics
+A Spotify client written in Rust. It streams through [librespot](https://github.com/librespot-org/librespot) and draws its own interface in Spotify's layout, so it needs neither the Spotify app nor Spicetify.
 
-- Word- and syllable-synced lyrics, taken from whichever of six sources answers best: Spicy Lyrics, Musixmatch, Apple Music, Spotify, LRCLIB or Netease. You choose the order in Settings.
-- The Spicy Lyrics animator, with presets and adjustable motion settings, plus Space Gravity, where words drift across the page.
-- The song's Spotify Canvas plays beside the lyrics and tints the background.
-- Load your own `.lrc` or `.ttml` files, permanently or for one session.
-- Community credits name the maker by their Discord username.
+| Feature | What you get |
+| --- | --- |
+| **Lyrics** | Word- and syllable-synced lyrics from six sources (Spicy Lyrics, Musixmatch, Apple Music, Spotify, LRCLIB, Netease), the Spicy Lyrics animator, Space Gravity, full screen (F11), your own LRC and TTML files, and community credits |
+| **Canvas** | The song's Spotify Canvas beside the lyrics, tinting the background and the Now Playing panel |
+| **Listening** | Gapless playback, crossfade from 1 to 12 seconds, media keys, Spotify Connect, and optional playback from the tray after closing the window |
+| **Library** | Every playlist and Spotify folder, plus saved albums and followed artists, in Spotify's Recents order |
+| **Updates** | Signed automatic updates on Windows, checked against an Ed25519 signature and SHA-256 hash before installing |
 
-Press **F11** for full screen. Playback controls appear when you move the mouse and fade when you stop:
+> [!NOTE]
+> **Early development.** Some of Spotify's and Spicy Lyrics' features are still missing. [docs/FEATURES.md](docs/FEATURES.md) lists what works and what does not.
 
-![Full-screen lyrics over a Spotify Canvas](.github/assets/fullscreen.webp)
+## Get started
 
-### Listening
+1. **Install.** On Windows 10 or 11 (x64), download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). On macOS 12 or later, [build from source](#build-from-source).
+2. **Sign in.** Choose **Sign in with Spotify** and approve the connection in your browser. The setup window stays up until Spotify confirms the account.
+3. **Play something.** Your playlists, albums and artists load into the library on the left.
+4. **Make it yours.** Open **Settings** from the account menu for lyrics sources, the animator, crossfade and tray behaviour.
 
-Gapless playback by default, optional crossfade from 1 to 12 seconds, media keys, and Spotify Connect control of your other devices. Closing the window can leave music playing from the tray, and SpotiFlex can open at sign-in, minimized if you prefer.
-
-### Your library
-
-Every playlist loads after sign-in, including private and collaborative ones, inside the Spotify folders you made. Saved albums and followed artists sit alongside them in Spotify's Recents order, with filter chips for each kind.
-
-### Elsewhere in the app
-
-Spotify's Home feed, search, artist and album pages, Recents, and the What's New feed behind the bell. Now Playing has a lyrics card that can expand to fill the panel. Windows builds update themselves, after checking each download's Ed25519 signature and SHA-256 hash.
-
-## Download and sign in
-
-On Windows 10 or 11 (x64), download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). On macOS 12 or later there is no release yet; see [Building](#building).
-
-1. Open SpotiFlex. A setup window stays up until you sign in.
-2. Choose **Sign in with Spotify** and approve the connection in your browser.
-3. Back in SpotiFlex, the client unlocks once Spotify confirms the account.
-
-Sign-in uses OAuth with PKCE through a state-checked loopback callback. You do not need a Spotify developer app, and later launches reuse the saved session.
+Sign-in uses OAuth with PKCE through a state-checked loopback callback. No Spotify developer app is needed, and later launches reuse the saved session.
 
 ## Privacy
 
@@ -56,7 +51,7 @@ Spotify credentials stay on your computer: Windows Credential Manager on Windows
 
 Every build includes SpotiFlex's publishable Spicy Lyrics client key, so you do not need a Spicy Lyrics account. Lyric sources receive the track ID, title and artist they need to find a match. Answers are cached on disk for three days, separately for each source; **Settings > Storage** clears them.
 
-Community credits show the maker's Discord username by looking up their public spicylyrics.org profile, as EeveeSpotifyReincarnated does. **Settings > Display** turns this off.
+Community credits show the maker's Discord username by looking up their public spicylyrics.org profile. **Settings > Display** turns this off.
 
 Self-hosted lyrics deployments can still be provisioned through standard input. That legacy mode asks for explicit consent before it sends a short-lived Spotify access token to the configured host, and it never sends refresh tokens or client secrets:
 
@@ -77,7 +72,7 @@ An optional developer connection keeps the older Web API login. Create an app in
 
 </details>
 
-## Building
+## Build from source
 
 Windows needs Rust, Node.js 24, WebView2, the Visual Studio C++ build tools, CMake and LLVM (for libclang). Then:
 
@@ -141,13 +136,26 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Credits
 
-- **[Spicy Lyrics](https://github.com/Spikerko/spicy-lyrics)** by Spikerko and its contributors, and **[iPixelGalaxy's fork](https://github.com/iPixelGalaxy/spicy-lyrics)**: the lyrics provider, the animator, Space Gravity, fullscreen lyrics and the Canvas backdrop that SpotiFlex reimplements.
-- **[EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated)**: the lookup that shows Discord usernames on community lyrics.
-- **[librespot](https://github.com/librespot-org/librespot)**: Spotify sign-in, streaming and Connect.
-- **[Kawarp](https://github.com/better-lyrics/kawarp)** by Better Lyrics: the warped artwork ambience.
-- **[spr](https://github.com/Fraktality/spr)** by Fraktality: the spring that moves the lyrics.
-- **[Tauri](https://tauri.app)**, **[React](https://react.dev)** and **[Lucide](https://lucide.dev)** icons; **[Inter](https://rsms.me/inter/)** and **[Metropolis](https://fontsource.org/fonts/metropolis)** fonts.
+<table>
+  <tr>
+    <td align="center" width="160"><a href="https://github.com/Stormanzanii"><img src="https://github.com/Stormanzanii.png?size=160" width="80" alt=""><br><b>Arashii</b></a><br><sub>Creator of SpotiFlex</sub></td>
+    <td align="center" width="160"><a href="https://github.com/iPixelGalaxy"><img src="https://github.com/iPixelGalaxy.png?size=160" width="80" alt=""><br><b>iPixelGalaxy</b></a><br><sub>Spotify+ and the Spicy Lyrics fork</sub></td>
+    <td align="center" width="160"><a href="https://github.com/Spikerko"><img src="https://github.com/Spikerko.png?size=160" width="80" alt=""><br><b>Spikerko</b></a><br><sub>Creator of Spicy Lyrics</sub></td>
+  </tr>
+</table>
 
----
+SpotiFlex is built on:
 
-SpotiFlex is licensed under the [GNU AGPL v3](LICENSE). The lyrics features reimplement behaviour from [iPixelGalaxy/spicy-lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) and the pixels-spicy-lyrics fork (both AGPL-3.0), and community usernames follow [EeveeSpotifyReincarnated](https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated) (GPL-3.0); no upstream source or assets are copied. Playback uses librespot (MIT). [NOTICE.md](NOTICE.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) list every source and license. Spotify is a trademark of Spotify AB; SpotiFlex is an independent client and is not affiliated with Spotify AB.
+| Project | By | Licence | Used for |
+| --- | --- | --- | --- |
+| [Spotify+](https://github.com/iPixelGalaxy/spotify-plus) | iPixelGalaxy | None declared | The Add to playlist folders menu, reimplemented from its feature descriptions |
+| [Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-lyrics) | Spikerko, fork by iPixelGalaxy | AGPL-3.0 | Lyrics display, Space Gravity, word sync and the TTML tools |
+| [librespot](https://github.com/librespot-org/librespot) | librespot contributors | MIT | Spotify playback and Connect |
+| [spr](https://github.com/Fraktality/spr) | Fraktality | MIT | The spring that animates lyrics |
+| [Kawarp](https://github.com/better-lyrics/kawarp) | Better Lyrics | MIT | The warped artwork and Canvas ambience |
+
+No upstream source or assets are copied from Spotify+ or Spicy Lyrics; SpotiFlex reimplements their behaviour.
+
+## License
+
+SpotiFlex is free software under the [GNU AGPL v3](LICENSE). [NOTICE.md](NOTICE.md) records each upstream project SpotiFlex references, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) holds the licences of bundled dependencies. Spotify is a trademark of Spotify AB; SpotiFlex is not affiliated with Spotify.

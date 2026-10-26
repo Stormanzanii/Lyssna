@@ -10,7 +10,9 @@ import type { Line } from "./types";
 /* Highlighter: a lyrics player where a marker pen highlights each line as
  * it is sung, after a screen recording of a highlighter-style lyrics
  * view. Each row gets one band of ink behind the text, a slanted rounded
- * stroke, with a brighter rounded pen tip at its end. Ink is laid in place
+ * stroke, with a brighter rounded pen tip at its end. Like a felt tip, the
+ * band drifts a little across the row, its edges waver and carry a darker
+ * line, the ink has a fine grain, and it starts a touch heavier. Ink is laid in place
  * and revealed as the pen passes, so what is drawn never moves or
  * stretches. Like a real pen, slow stretches leave stronger ink than
  * quick ones, and where the singing pauses mid-line the resting tip leaves
@@ -243,11 +245,30 @@ function laneMask(
       );
     }
   }
+  // A little extra ink where the pen first touches down.
+  const first = lane.stretches[0];
+  if (first)
+    stops.push([
+      first.left - offset + 0.06 * em,
+      Math.min(0.75, first.alpha + 0.1),
+    ]);
   stops.sort((a, b) => a[0] - b[0]);
   if (stops.length === 1) stops.push([stops[0][0] + 1, stops[0][1]]);
   return `linear-gradient(90deg, ${stops
     .map(([x, alpha]) => `rgb(0 0 0 / ${alpha.toFixed(3)}) ${x.toFixed(1)}px`)
     .join(", ")})`;
+}
+
+/** The felt tip's edges never run quite straight: a gently wavering band
+ *  shape, tiled along the row at a fixed size so it never stretches. */
+const WAVER = `url("data:image/svg+xml,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M0 3C14 0 32 6 50 2S86 1 100 3L100 97C86 100 66 94 50 98S14 99 0 97Z'/></svg>",
+)}")`;
+
+/** Small steady variations per row, so strokes look drawn by hand. */
+function wobble(seed: number) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value) - 0.5;
 }
 
 /** Shows the ink revealed up to `path` along the pen's path. Each row has
@@ -260,6 +281,7 @@ function paint(
   pieces: Piece[],
   path: number,
   time: number,
+  seed: number,
 ) {
   const { em } = layout;
   const lead = 0.16 * em,
@@ -284,15 +306,22 @@ function paint(
       top = lane.top + height * 0.09,
       tall = height * 0.84;
     const end = lead + reveal + (reveal >= width - 0.5 ? tail : 0);
-    band.style.transform = `translate(${left}px, ${top}px) skewX(-8deg)`;
+    // A hand drifts a little across a row.
+    const tilt = wobble(seed + index) * 0.6,
+      drift = Math.tan((tilt * Math.PI) / 180);
+    band.style.transform = `translate(${left}px, ${top}px) rotate(${tilt.toFixed(2)}deg) skewX(-8deg)`;
     band.style.width = `${full}px`;
     band.style.height = `${tall}px`;
     band.style.clipPath = `inset(0 ${Math.max(0, full - end).toFixed(1)}px 0 0 round ${(0.14 * em).toFixed(1)}px)`;
-    const mask = laneMask(lane, left, pieces, em, time);
-    band.style.maskImage = mask;
-    band.style.webkitMaskImage = mask;
+    const mask = `${laneMask(lane, left, pieces, em, time)}, ${WAVER}`;
+    const size = `100% 100%, ${(2.8 * em).toFixed(1)}px 100%`;
+    const place = `0 0, ${((wobble(seed - index) + 0.5) * 2.8 * em).toFixed(1)}px 0`;
+    band.style.maskImage = band.style.webkitMaskImage = mask;
+    band.style.maskSize = band.style.webkitMaskSize = size;
+    band.style.maskPosition = band.style.webkitMaskPosition = place;
     const nibWidth = Math.min(nib, end);
-    tip.style.transform = `translate(${left + end - nibWidth}px, ${top}px) skewX(-8deg)`;
+    const along = end - nibWidth;
+    tip.style.transform = `translate(${left + along}px, ${top + along * drift}px) rotate(${tilt.toFixed(2)}deg) skewX(-8deg)`;
     tip.style.width = `${nibWidth}px`;
     tip.style.height = `${tall}px`;
     tip.hidden = index !== shown.length - 1;
@@ -317,6 +346,7 @@ export const HighlighterWords = memo(function HighlighterWords({
     pen = useRef({ path: 0, at: 0, frame: 0 }),
     latest = useRef(time);
   latest.current = time;
+  const seed = line.start_ms % 997;
   useLayoutEffect(() => {
     const element = root.current,
       sheet = ink.current;
@@ -334,7 +364,7 @@ export const HighlighterWords = memo(function HighlighterWords({
         target < state.path - 1 || !Number.isFinite(latest.current)
           ? target
           : state.path + (target - state.path) * (1 - Math.exp(-elapsed / 45));
-      paint(sheet, current, pieces, state.path, latest.current);
+      paint(sheet, current, pieces, state.path, latest.current, seed);
       if (Math.abs(target - state.path) > 0.3)
         state.frame = requestAnimationFrame(step);
       else state.at = 0;
@@ -342,7 +372,7 @@ export const HighlighterWords = memo(function HighlighterWords({
     cancelAnimationFrame(state.frame);
     step(performance.now());
     return () => cancelAnimationFrame(state.frame);
-  }, [pieces, time]);
+  }, [pieces, time, seed]);
   // Rows move when the window or text size changes.
   useLayoutEffect(() => {
     const element = root.current;
@@ -356,6 +386,7 @@ export const HighlighterWords = memo(function HighlighterWords({
         pieces,
         Math.min(pen.current.path, layout.current.length),
         latest.current,
+        seed,
       );
     });
     observer.observe(element);
@@ -363,7 +394,7 @@ export const HighlighterWords = memo(function HighlighterWords({
       observer.disconnect();
       layout.current = undefined;
     };
-  }, [pieces]);
+  }, [pieces, seed]);
   return (
     <span className="highlighter-words" ref={root}>
       <span className="highlighter-ink" aria-hidden="true" ref={ink} />

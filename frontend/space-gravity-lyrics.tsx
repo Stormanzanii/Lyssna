@@ -329,16 +329,15 @@ function drawLinks(
     if (entity.start <= time) current = Math.max(current, entity.lead);
   const now = performance.now();
   const wanted = new Set<string>();
-  // Links draw one after another: each starts once its word is sung and
-  // the link before it has landed, so none runs ahead of the chain.
-  let landed = -Infinity;
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
-    if (to.index !== from.index + 1) landed = -Infinity;
-    const begin = Math.max(from.end, landed),
-      finish = begin + Math.max(320, to.start - from.end);
-    landed = finish;
+    // Each link lands on its word just as that word is sung. It sets off
+    // when the word before ends, or a little before that when the words
+    // run back to back, so it never arrives late. A link always starts at
+    // or after the previous one landed, so they draw in order.
+    const finish = to.start,
+      begin = Math.max(from.start, Math.min(from.end, finish - 250));
     // Links within the sung line and the one before, and the link from
     // that earlier line into the sung one.
     const within =
@@ -365,7 +364,8 @@ function drawLinks(
       const gradient = document.createElementNS(SVG, "linearGradient");
       gradient.id = id;
       gradient.setAttribute("gradientUnits", "userSpaceOnUse");
-      for (const offset of ["0", "0.5", "0.5", "1"]) {
+      // The two halves blend across the middle third.
+      for (const offset of ["0", "0.33", "0.67", "1"]) {
         const stop = document.createElementNS(SVG, "stop");
         stop.setAttribute("offset", offset);
         gradient.append(stop);
@@ -428,12 +428,12 @@ function drawLinks(
     }
     // The pen follows song time softly, so coarse time updates don't step.
     const target = ease(
-      Math.min(1, Math.max(0, (time - begin) / (finish - begin))),
+      Math.min(1, Math.max(0, (time - begin) / Math.max(1, finish - begin))),
     );
     const elapsed = Math.min(100, now - Number(path.dataset.at));
     const drawn =
       Number(path.dataset.drawn) +
-      (target - Number(path.dataset.drawn)) * (1 - Math.exp(-elapsed / 60));
+      (target - Number(path.dataset.drawn)) * (1 - Math.exp(-elapsed / 35));
     path.dataset.drawn = `${drawn}`;
     path.dataset.at = `${now}`;
     path.style.strokeDashoffset = `${(1 - drawn).toFixed(3)}`;

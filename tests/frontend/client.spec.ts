@@ -9496,6 +9496,30 @@ test("Your Library lists saved albums and followed artists", async ({
     };
   });
   const library = page.locator(".library-panel");
+  await library.getByTitle("Refresh library").click();
+  // No chip is chosen at first: playlists, albums and artists all show.
+  await expect(library.locator(".library-filters .chip.selected")).toHaveCount(
+    0,
+  );
+  await expect(
+    library.locator(".library-item", { hasText: "Saved Single" }),
+  ).toBeVisible();
+  await expect(library.locator(".library-liked")).toBeVisible();
+  const playlists = library.getByRole("button", {
+    name: "Playlists",
+    exact: true,
+  });
+  await playlists.click();
+  await expect(playlists).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    library.locator(".library-item", { hasText: "Saved Single" }),
+  ).toHaveCount(0);
+  // Clicking it again goes back to everything.
+  await playlists.click();
+  await expect(playlists).toHaveAttribute("aria-pressed", "false");
+  await expect(
+    library.locator(".library-item", { hasText: "Saved Single" }),
+  ).toBeVisible();
   await library.getByRole("button", { name: "Albums", exact: true }).click();
   const album = library.locator(".library-item", { hasText: "Saved Single" });
   await expect(album).toContainText("Album · Creepy Nuts");

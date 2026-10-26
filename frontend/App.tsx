@@ -278,8 +278,10 @@ function App() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
-  const [libraryFilter, setLibraryFilter] = useState("all");
-  // Saved albums and followed artists, loaded when their chip is chosen.
+  // No chip by default: Your Library lists everything, as in Spotify.
+  const [libraryFilter, setLibraryFilter] = useState("");
+  const [collectionReload, setCollectionReload] = useState(0);
+  // Saved albums and followed artists, shown unless a playlist chip is on.
   const [savedCollection, setSavedCollection] = useState<{
     albums: Album[];
     artists: Artist[];
@@ -1763,10 +1765,12 @@ function App() {
         ? playlist.owner.id === state.profile?.id
         : libraryFilter === "collaborative"
           ? playlist.collaborative
-          : libraryFilter === "all",
+          : libraryFilter === "" || libraryFilter === "playlists",
     );
-  const showingCollection =
-    libraryFilter === "albums" || libraryFilter === "artists";
+  const showingPlaylists = ["", "playlists", "owned", "collaborative"].includes(
+    libraryFilter,
+  );
+  const showingCollection = ["", "albums", "artists"].includes(libraryFilter);
   // Saving or following elsewhere changes what these chips list.
   const collectionKey = Object.keys(state.saved)
     .filter((uri) => state.saved[uri] && /^spotify:(album|artist):/.test(uri))
@@ -1785,18 +1789,33 @@ function App() {
     return () => {
       active = false;
     };
-  }, [showingCollection, state.profile?.id, state.native_ready, collectionKey]);
-  const collectionRows = !showingCollection
-    ? []
-    : libraryFilter === "albums"
-      ? (savedCollection?.albums ?? []).filter((album) =>
-          `${album.name} ${(album.artists ?? []).map((artist) => artist.name).join(" ")}`
-            .toLowerCase()
-            .includes(libraryQuery.toLowerCase()),
-        )
-      : (savedCollection?.artists ?? []).filter((artist) =>
-          artist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
-        );
+  }, [
+    showingCollection,
+    state.profile?.id,
+    state.native_ready,
+    collectionKey,
+    collectionReload,
+  ]);
+  const collectionRows: (
+    { kind: "album"; item: Album } | { kind: "artist"; item: Artist }
+  )[] = [
+    ...(libraryFilter !== "artists" && showingCollection
+      ? (savedCollection?.albums ?? [])
+          .filter((album) =>
+            `${album.name} ${(album.artists ?? []).map((artist) => artist.name).join(" ")}`
+              .toLowerCase()
+              .includes(libraryQuery.toLowerCase()),
+          )
+          .map((item) => ({ kind: "album" as const, item }))
+      : []),
+    ...(libraryFilter !== "albums" && showingCollection
+      ? (savedCollection?.artists ?? [])
+          .filter((artist) =>
+            artist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
+          )
+          .map((item) => ({ kind: "artist" as const, item }))
+      : []),
+  ];
   // Show the artist's sticky bar once the header has scrolled under it.
   useEffect(() => {
     setHeroGone(false);
@@ -1932,7 +1951,7 @@ function App() {
   );
   // Searching or filtering lists matching playlists flat, without folders.
   const libraryEntries: LibraryEntry[] =
-    libraryQuery || libraryFilter !== "all"
+    libraryQuery || (libraryFilter !== "" && libraryFilter !== "playlists")
       ? visibleLibrary.map((playlist) => ({ kind: "playlist", playlist }))
       : libraryTree(
           visibleLibrary,
@@ -1942,7 +1961,7 @@ function App() {
         );
   type FolderEntry = Extract<LibraryEntry, { kind: "folder" }>;
   let openFolder: FolderEntry | undefined;
-  if (!libraryQuery && libraryFilter === "all")
+  if (!libraryQuery && (libraryFilter === "" || libraryFilter === "playlists"))
     for (const id of folderPath) {
       const next = (openFolder?.entries ?? libraryEntries).find(
         (entry): entry is FolderEntry =>
@@ -2382,7 +2401,10 @@ function App() {
               <button
                 className="icon-button"
                 title="Refresh library"
-                onClick={() => void call("refresh")}
+                onClick={() => {
+                  setCollectionReload((count) => count + 1);
+                  void call("refresh");
+                }}
               >
                 <RefreshCw size={16} />
               </button>
@@ -2397,7 +2419,7 @@ function App() {
           </div>
           <div className="library-filters">
             {[
-              ["all", "Playlists"],
+              ["playlists", "Playlists"],
               ["owned", "By you"],
               ["collaborative", "Collaborative"],
               ["albums", "Albums"],
@@ -2406,7 +2428,11 @@ function App() {
               <button
                 key={key}
                 className={`chip ${libraryFilter === key ? "selected" : ""}`}
-                onClick={() => setLibraryFilter(key)}
+                aria-pressed={libraryFilter === key}
+                // Clicking the chosen chip again shows everything.
+                onClick={() =>
+                  setLibraryFilter((current) => (current === key ? "" : key))
+                }
               >
                 {label}
               </button>
@@ -2435,49 +2461,9 @@ function App() {
                 <strong>{openFolder.folder.name}</strong>
               </div>
             )}
-            {showingCollection &&
-              collectionRows.map((item) => {
-                const album = libraryFilter === "albums";
-                const route = `${album ? "album" : "artist"}:${item.id}`;
-                return (
-                  <button
-                    key={item.uri}
-                    className={`library-item ${state.route === route ? "current" : ""}`}
-                    data-context-route={route}
-                    data-context-name={item.name}
-                    onClick={() => navigate(route)}
-                    {...prefetchOn(route)}
-                  >
-                    <Cover
-                      images={item.images}
-                      className={album ? "" : "artist-cover"}
-                    />
-                    <div>
-                      <strong>{item.name}</strong>
-                      <small>
-                        {album
-                          ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
-                          : "Artist"}
-                      </small>
-                    </div>
-                  </button>
-                );
-              })}
-            {showingCollection && savedCollection && !collectionRows.length && (
-              <p className="empty-library">
-                {libraryQuery
-                  ? "Nothing matches."
-                  : libraryFilter === "albums"
-                    ? "Albums you save appear here."
-                    : "Artists you follow appear here."}
-              </p>
-            )}
-            {showingCollection && !savedCollection && (
-              <p className="empty-library">Loading…</p>
-            )}
             <div
               className={`library-liked ${nowPlayingRoute === "liked" ? "playing" : ""}`}
-              hidden={!!openFolder || showingCollection}
+              hidden={!!openFolder || !showingPlaylists}
             >
               <button
                 className={`library-item ${state.route === "liked" ? "current" : ""}`}
@@ -2508,7 +2494,7 @@ function App() {
               libraryEntries.map(libraryEntry)
             )}
             {!openFolder &&
-              !showingCollection &&
+              showingPlaylists &&
               state.settings.folders.map((folder, index) => (
                 <details
                   className="library-folder"
@@ -2540,10 +2526,55 @@ function App() {
                     ))}
                 </details>
               ))}
-            {!showingCollection &&
+            {!openFolder &&
+              collectionRows.map(({ kind, item }) => {
+                const route = `${kind}:${item.id}`;
+                return (
+                  <button
+                    key={item.uri}
+                    className={`library-item ${state.route === route ? "current" : ""}`}
+                    data-context-route={route}
+                    data-context-name={item.name}
+                    onClick={() => navigate(route)}
+                    {...prefetchOn(route)}
+                  >
+                    <Cover
+                      images={item.images}
+                      className={kind === "artist" ? "artist-cover" : ""}
+                    />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {kind === "album"
+                          ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
+                          : "Artist"}
+                      </small>
+                    </div>
+                  </button>
+                );
+              })}
+            {(libraryFilter === "albums" || libraryFilter === "artists") &&
+              savedCollection &&
+              !collectionRows.length && (
+                <p className="empty-library">
+                  {libraryQuery
+                    ? "Nothing matches."
+                    : libraryFilter === "albums"
+                      ? "Albums you save appear here."
+                      : "Artists you follow appear here."}
+                </p>
+              )}
+            {(libraryFilter === "albums" || libraryFilter === "artists") &&
+              !savedCollection && <p className="empty-library">Loading…</p>}
+            {showingPlaylists &&
               !visibleLibrary.length &&
+              !collectionRows.length &&
               state.playlists.length > 0 && (
-                <p className="empty-library">No playlists match.</p>
+                <p className="empty-library">
+                  {libraryFilter === ""
+                    ? "Nothing matches."
+                    : "No playlists match."}
+                </p>
               )}
           </div>
         </aside>

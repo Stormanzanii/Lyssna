@@ -139,6 +139,8 @@ export const emptyState: AppState = {
     glass_seek: true,
     space_gravity: false,
     lyrics_highlighter: false,
+    library_sort: "recents",
+    library_view: "list",
     lyrics_highlighter_color: "#d4b80f",
     lyrics_translations: false,
     experimental_word_sync: false,

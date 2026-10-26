@@ -8203,6 +8203,66 @@ test("clicking empty top bar space never starts a window drag; moving does", asy
   await expect.poll(drags).toBe(1);
 });
 
+test("library sort menu orders playlists and switches views", async ({
+  page,
+}) => {
+  await startClient(page);
+  const playlist = (
+    id: string,
+    name: string,
+    owner: string,
+    added_at: number,
+  ) => ({
+    id,
+    name,
+    images: [],
+    owner: { id: owner, display_name: owner },
+    collaborative: false,
+    added_at,
+  });
+  await page.evaluate(
+    (playlists) =>
+      (window as any).__clientTest.emit({ type: "library", playlists }),
+    [
+      playlist("pl-b", "Banana", "zed", 300),
+      playlist("pl-c", "cherry", "amy", 100),
+      playlist("pl-a", "Apple", "mia", 200),
+    ],
+  );
+  const names = () =>
+    page
+      .locator(".library-list [data-playlist-id^='pl-'] strong")
+      .allTextContents();
+  const pick = async (name: string) => {
+    await page.getByTitle("Sort and view").click();
+    await page
+      .getByRole("dialog", { name: "Sort and view" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  };
+  await pick("Alphabetical");
+  await expect.poll(names).toEqual(["Apple", "Banana", "cherry"]);
+  await pick("Creator");
+  await expect.poll(names).toEqual(["cherry", "Apple", "Banana"]);
+  await pick("Recently added");
+  await expect.poll(names).toEqual(["Banana", "Apple", "cherry"]);
+  // Spotify's own order is the library's order.
+  await pick("Custom order");
+  await expect.poll(names).toEqual(["Banana", "cherry", "Apple"]);
+  await expect(page.getByTitle("Sort and view")).toContainText("Custom order");
+  const list = page.locator(".library-list");
+  const cover = page.locator("[data-playlist-id='pl-a'] .cover");
+  await pick("Compact");
+  await expect(list).toHaveClass(/library-view-compact/);
+  await expect(cover).toBeHidden();
+  await pick("Default grid");
+  await expect(list).toHaveClass(/library-view-large_grid/);
+  await expect(cover).toBeVisible();
+  const box = (await cover.boundingBox())!;
+  expect(box.width).toBeGreaterThan(100);
+  expect(Math.abs(box.width - box.height)).toBeLessThan(2);
+});
+
 test("compact library rows open instead of playing, covers centred", async ({
   page,
 }) => {

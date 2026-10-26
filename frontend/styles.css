@@ -5850,3 +5850,147 @@ input[type="range"]:hover {
 .lyrics-display.reduce-motion .highlighter-tip {
   transition: none;
 }
+
+/* Your Library's search with the "Recents ☰" sort and view menu. */
+.library-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 12px 16px;
+}
+.library-tools .library-search {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.compact-library .library-tools {
+  display: none;
+}
+.library-sort .sort-menu-button {
+  height: 28px;
+  font-size: 13px;
+}
+.library-sort-menu {
+  min-width: 200px;
+}
+.library-sort-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.library-view-picker {
+  display: flex;
+  gap: 2px;
+  padding: 4px 8px 8px;
+}
+.library-view-picker button {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 4px;
+  color: #ffffffb3;
+}
+.library-view-picker button:hover {
+  background: #ffffff14;
+  color: #fff;
+}
+.library-view-picker button.active {
+  background: #ffffff1f;
+  color: var(--spotify-green);
+}
+
+/* Compact view: no artwork, one slim line per row. */
+.library-panel:not(.compact-library) .library-view-compact .library-item {
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.library-panel:not(.compact-library)
+  .library-view-compact
+  .library-item
+  > :is(.cover, .liked-cover, .folder-cover, .dj-art),
+.library-panel:not(.compact-library)
+  .library-view-compact
+  .library-cover-play {
+  display: none;
+}
+.library-panel:not(.compact-library)
+  .library-view-compact
+  .library-item
+  > div:last-child {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.library-panel:not(.compact-library) .library-view-compact .library-item strong {
+  flex: 0 1 auto;
+  font-size: 14px;
+}
+.library-panel:not(.compact-library) .library-view-compact .library-item small {
+  flex: 1 1 0;
+  margin: 0;
+  font-size: 13px;
+}
+.library-panel:not(.compact-library)
+  .library-view-compact
+  .library-item
+  small::before {
+  content: "• ";
+}
+
+/* Grid views: artwork tiles with the name below. */
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  align-content: start;
+  gap: 2px;
+}
+.library-panel:not(.compact-library) .library-list.library-view-large_grid {
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+}
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid)
+  > :is(.library-folder-header, .library-folder, .empty-library, p) {
+  grid-column: 1 / -1;
+}
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid)
+  .library-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid)
+  .library-item
+  > :is(.cover, .liked-cover, .folder-cover, .dj-art) {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid)
+  .library-item
+  > div:last-child {
+  flex: none;
+}
+.library-panel:not(.compact-library)
+  .library-list.library-view-grid
+  .library-item
+  :is(strong, small) {
+  font-size: 12px;
+}
+.library-panel:not(.compact-library)
+  .library-list.library-view-grid
+  .library-item
+  small {
+  display: none;
+}
+.library-panel:not(.compact-library)
+  .library-list:is(.library-view-grid, .library-view-large_grid)
+  :is(.library-pin, .library-playing, .library-cover-play) {
+  display: none;
+}

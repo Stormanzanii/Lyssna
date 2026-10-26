@@ -131,3 +131,21 @@ export function saveAccountOrder(
     },
   };
 }
+
+/** Spotify's own Your Library order ("Custom order"): pinned playlists
+ *  first, then saved playlists as Spotify lists them, then the rest. */
+export function customOrder(
+  visible: Playlist[],
+  library: Playlist[],
+  pinned: string[] = [],
+): Playlist[] {
+  const place = new Map(library.map((item, index) => [item.id, index]));
+  const rank = (item: Playlist) =>
+    pinned.includes(item.id)
+      ? -1
+      : (place.get(item.id) ?? Number.MAX_SAFE_INTEGER);
+  return visible
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
+    .map(({ item }) => item);
+}

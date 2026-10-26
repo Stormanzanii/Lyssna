@@ -166,6 +166,11 @@ pub struct Settings {
     pub last_view: String,
     pub show_lyrics: bool,
     pub compact_library: bool,
+    /// Your Library's order: recents, recently_added, alphabetical,
+    /// creator or custom (Spotify's own order, folders included).
+    pub library_sort: String,
+    /// Your Library's rows: compact, list, grid or large_grid.
+    pub library_view: String,
     pub lyric_size: f32,
     pub lyric_offset_ms: i64,
     pub romanized: bool,
@@ -316,6 +321,8 @@ impl Default for Settings {
             last_view: "home".into(),
             show_lyrics: true,
             compact_library: false,
+            library_sort: "recents".into(),
+            library_view: "list".into(),
             lyric_size: 36.0,
             lyric_offset_ms: 0,
             romanized: false,
@@ -443,6 +450,20 @@ impl Settings {
                 && seen.insert(id.clone())
         });
         self.hidden_settings.truncate(200);
+        if ![
+            "recents",
+            "recently_added",
+            "alphabetical",
+            "creator",
+            "custom",
+        ]
+        .contains(&self.library_sort.as_str())
+        {
+            self.library_sort = "recents".into();
+        }
+        if !["compact", "list", "grid", "large_grid"].contains(&self.library_view.as_str()) {
+            self.library_view = "list".into();
+        }
         if !["animated", "static", "cover", "artist", "color", "none"]
             .contains(&self.lyrics_background.as_str())
         {

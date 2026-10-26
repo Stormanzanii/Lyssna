@@ -123,6 +123,10 @@ export interface Settings {
   space_gravity?: boolean;
   /** Highlighter lyrics player: a marker sweeps behind each sung line. */
   lyrics_highlighter?: boolean;
+  /** Your Library's order. */
+  library_sort?: LibrarySort;
+  /** Your Library's rows. */
+  library_view?: LibraryView;
   /** The marker colour: "#rrggbb", or "cover" for the artwork's colour. */
   lyrics_highlighter_color?: string;
   lyrics_translations?: boolean;
@@ -457,3 +461,7 @@ export type AppEvent =
   | { type: "saved"; uri: string; saved: boolean }
   | { type: "saved_many"; items: Record<string, boolean> }
   | { type: "update"; status: string; version?: string; notes?: string };
+
+export type LibrarySort =
+  "recents" | "recently_added" | "alphabetical" | "creator" | "custom";
+export type LibraryView = "compact" | "list" | "grid" | "large_grid";

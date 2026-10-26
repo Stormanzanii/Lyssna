@@ -138,6 +138,7 @@ import { DJButton } from "./dj-button";
 import {
   DJ_ID,
   accountOrder,
+  customOrder,
   libraryItems,
   playlistForManualPlay,
   recordManualPlay,
@@ -189,7 +190,14 @@ import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
 import { libraryTree, type LibraryEntry } from "./library-tree";
-import { byRecents, entryRecency, type Recency } from "./library-recents";
+import {
+  entryAdded,
+  entryRecency,
+  sortLibrary,
+  type LibraryFacts,
+  type Recency,
+} from "./library-recents";
+import { LibrarySortMenu } from "./library-sort-menu";
 import {
   loadRecentSearches,
   rememberSearch,
@@ -1832,6 +1840,8 @@ function App() {
   const songGenres = [
     ...new Set(state.tracks.flatMap((track) => genresFor(track, state.facts))),
   ].sort();
+  const librarySort = state.settings.library_sort ?? "recents";
+  const libraryView = state.settings.library_view ?? "list";
   const visibleLibrary = libraryItems(state)
     .filter((playlist) =>
       playlist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
@@ -2048,7 +2058,13 @@ function App() {
     libraryQuery || (libraryFilter !== "" && libraryFilter !== "playlists")
       ? visibleLibrary.map((playlist) => ({ kind: "playlist", playlist }))
       : libraryTree(
-          visibleLibrary,
+          librarySort === "custom"
+            ? customOrder(
+                visibleLibrary,
+                state.playlists,
+                accountOrder(state).pinned,
+              )
+            : visibleLibrary,
           state.playlists,
           accountOrder(state).pinned,
           state.library_folders,
@@ -2099,15 +2115,42 @@ function App() {
   type LibraryRow =
     | { entry: LibraryEntry; row?: undefined }
     | { entry?: undefined; row: (typeof collectionRows)[number] };
-  const libraryRows = byRecents<LibraryRow>(
+  const entryFacts = (entry: LibraryEntry): LibraryFacts =>
+    entry.kind === "playlist"
+      ? {
+          recent: entryRecency(entry, recency),
+          added: entryAdded(entry),
+          name: entry.playlist.name,
+          creator: entry.playlist.owner.display_name ?? entry.playlist.owner.id,
+        }
+      : {
+          recent: entryRecency(entry, recency),
+          added: entryAdded(entry),
+          name: entry.folder.name,
+          creator: "",
+        };
+  const libraryRows = sortLibrary<LibraryRow>(
     [
       ...libraryEntries.map((entry) => ({ entry })),
       ...collectionRows.map((row) => ({ row })),
     ],
-    (item) =>
-      item.entry
-        ? entryRecency(item.entry, recency)
-        : (recency[item.row.item.uri ?? ""] ?? 0),
+    librarySort,
+    (item) => {
+      if (item.entry) return entryFacts(item.entry);
+      const { kind, item: saved } = item.row;
+      const time = recency[saved.uri ?? ""] ?? 0;
+      return {
+        recent: time,
+        added: time,
+        name: saved.name,
+        creator:
+          kind === "album"
+            ? ((saved as Album).artists ?? [])
+                .map((artist) => artist.name)
+                .join(", ")
+            : saved.name,
+      };
+    },
     ({ entry }) =>
       entry?.kind === "playlist" && pinnedIds.includes(entry.playlist.id),
   );
@@ -2584,16 +2627,24 @@ function App() {
               </button>
             ))}
           </div>
-          <label className="library-search">
-            <Search size={16} />
-            <input
-              placeholder="Search in your library"
-              aria-label="Search library"
-              value={libraryQuery}
-              onChange={(event) => setLibraryQuery(event.target.value)}
+          <div className="library-tools">
+            <label className="library-search">
+              <Search size={16} />
+              <input
+                placeholder="Search in your library"
+                aria-label="Search library"
+                value={libraryQuery}
+                onChange={(event) => setLibraryQuery(event.target.value)}
+              />
+            </label>
+            <LibrarySortMenu
+              sort={librarySort}
+              view={libraryView}
+              onSort={(library_sort) => updateSettings({ library_sort })}
+              onView={(library_view) => updateSettings({ library_view })}
             />
-          </label>
-          <div className="library-list">
+          </div>
+          <div className={`library-list library-view-${libraryView}`}>
             {openFolder && (
               <div className="library-folder-header">
                 <button
@@ -2631,9 +2682,9 @@ function App() {
             </div>
             {openFolder ? (
               <>
-                {byRecents(openFolder.entries, (entry) =>
-                  entryRecency(entry, recency),
-                ).map(libraryEntry)}
+                {sortLibrary(openFolder.entries, librarySort, entryFacts).map(
+                  libraryEntry,
+                )}
                 {!openFolder.entries.length && (
                   <p className="empty-library">This folder is empty.</p>
                 )}

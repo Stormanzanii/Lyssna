@@ -4813,6 +4813,8 @@ test("Space Gravity marker links reach each word as it starts, at the Highlighte
   await expect(page.locator(".gravity-links path:not(.leaving)")).toHaveCount(
     0,
   );
+  // Without the lines, words keep their pen tip.
+  await expect(page.locator(".gravity-lyrics")).not.toHaveClass(/linked/);
   // The options only show with both Space Gravity and the Highlighter on.
   await openSettings(page, "Effects");
   await page.getByRole("switch", { name: "Highlighter" }).click();
@@ -12005,4 +12007,74 @@ test("highlighter cancels queued ink when seeking before a frame", async ({
   // No previously queued finished line may repaint after the rewind.
   await page.waitForTimeout(150);
   await expect(page.locator(".highlighter-stroke")).toHaveCount(0);
+});
+
+test("Space Gravity over a canvas uses the left side too", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await emitCanvas(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Space Gravity").check();
+  await page.keyboard.press("Escape");
+  await showLyrics(page);
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    const lines = Array.from({ length: 12 }, (_, l) => ({
+      text: "",
+      start_ms: l * 2000,
+      end_ms: l * 2000 + 1900,
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: Array.from({ length: 6 }, (_, w) => ({
+        text: (w ? " " : "") + `word${l}${w}`,
+        start_ms: l * 2000 + w * 300,
+        end_ms: l * 2000 + w * 300 + 280,
+      })),
+    }));
+    lines.forEach(
+      (line) => (line.text = line.words.map((w) => w.text).join("")),
+    );
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines,
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1000,
+      playing: true,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  await expect(page.locator(".canvas-lyrics video")).toBeVisible();
+  await page
+    .getByTitle(/screen/i)
+    .first()
+    .click();
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  // Let several lines float in.
+  await page.waitForTimeout(6000);
+  const leftShare = await page.evaluate(() => {
+    const stage = document
+      .querySelector(".gravity-stage")!
+      .getBoundingClientRect();
+    const words = [
+      ...document.querySelectorAll(".gravity-word[data-spawned]:not(.exiting)"),
+    ].map((word) => {
+      const box = word.getBoundingClientRect();
+      return (box.left + box.right) / 2 - stage.left;
+    });
+    return words.filter((x) => x < stage.width / 2).length / words.length;
+  });
+  // Words spread over the canvas instead of crowding the right half.
+  expect(leftShare).toBeGreaterThan(0.3);
 });

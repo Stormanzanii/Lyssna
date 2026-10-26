@@ -6013,8 +6013,6 @@ input[type="range"]:hover {
   stroke-linejoin: round;
   stroke-dasharray: 1 1;
   opacity: 0.5;
-  filter: drop-shadow(0 0 2px
-    color-mix(in srgb, var(--highlighter-ink) 40%, transparent));
   transition: opacity 1.2s ease-out;
 }
 .gravity-links path.leaving {
@@ -6028,7 +6026,7 @@ input[type="range"]:hover {
 }
 /* In Space Gravity the connecting lines carry the pen on from each word,
    so lead words drop the pen tip; backing vocals, which have no lines,
-   keep it. */
-.gravity-lyrics.highlighter .gravity-word:not(.background) .highlighter-tip {
+   keep it, as do all words with the lines turned off. */
+.gravity-lyrics.linked .gravity-word:not(.background) .highlighter-tip {
   display: none;
 }

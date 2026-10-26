@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -24,6 +25,7 @@ import {
   gravityPieces,
   hash,
   lineLayout,
+  random,
   measure,
   spawn,
   speedMultiplier,
@@ -257,10 +259,17 @@ function measureField(stage: HTMLElement): Field {
   const area = { left: 0, top: 0, right: bounds.width, bottom: bounds.height };
   area.bottom = Math.min(area.bottom, footer?.top ?? area.bottom);
   const toolbar = relative(page?.querySelector(".lyrics-toolbar"), box);
+  // Title and artists sit together; the full screen controls can be far
+  // from them (over a canvas, title bottom left and controls top left), so
+  // they block on their own rather than as one box across the page.
   const dock = union(
-    [".lyrics-title", ".lyrics-artists", ".lyrics-fullscreen-controls"].map(
-      (selector) => relative(page?.querySelector(selector), box),
+    [".lyrics-title", ".lyrics-artists"].map((selector) =>
+      relative(page?.querySelector(selector), box),
     ),
+  );
+  const controls = relative(
+    page?.querySelector(".lyrics-fullscreen-controls"),
+    box,
   );
   const cover = canvas
     ? undefined
@@ -280,7 +289,12 @@ function measureField(stage: HTMLElement): Field {
     cover,
     blockers: [
       dock,
-      contains(dock, toolbar) || contains(cover, toolbar) ? undefined : toolbar,
+      controls,
+      contains(dock, toolbar) ||
+      contains(controls, toolbar) ||
+      contains(cover, toolbar)
+        ? undefined
+        : toolbar,
     ].filter((rect): rect is Rect => !!rect),
   };
 }
@@ -291,6 +305,34 @@ let kept: { signature: string; bodies: Map<string, GravityBody> } | undefined;
 
 const SVG = "http://www.w3.org/2000/svg";
 let linkCount = 0;
+
+/** A drawn link's elements and state, kept per sheet so frames never
+ *  search the DOM for them. */
+interface Link {
+  path: SVGPathElement;
+  gradient: SVGLinearGradientElement;
+  stops: SVGStopElement[];
+  /** How far the pen has drawn, 0 to 1, and when it last moved. */
+  drawn: number;
+  at: number;
+  /** Each half's eased strength. */
+  strengths: [number, number];
+  leaving: boolean;
+}
+const sheets = new WeakMap<SVGSVGElement, Map<string, Link>>();
+
+/** How strongly a word shows, from its role, the way the stylesheet sets
+ *  its opacity; read from classes, never computed style, so no frame
+ *  forces a style recalculation. */
+function strengthOf(entity: Entity, elements: Map<string, HTMLElement>) {
+  const classes = elements.get(entity.key)?.classList;
+  if (!classes || classes.contains("exiting")) return 0;
+  return classes.contains("current")
+    ? 1
+    : classes.contains("next")
+      ? 0.34
+      : 0.22;
+}
 
 /** Where a turned, scaled word's left or right edge meets its middle. */
 function edge(body: Body, side: -1 | 1) {
@@ -345,6 +387,8 @@ function drawLinks(
   });
   const now = performance.now();
   const wanted = new Set<string>();
+  let drawn = sheets.get(sheet);
+  if (!drawn) sheets.set(sheet, (drawn = new Map()));
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
@@ -362,14 +406,10 @@ function drawLinks(
     if (!a?.spawned || !b?.spawned) continue;
     const key = `${from.key}>${to.key}`;
     wanted.add(key);
-    let path = sheet.querySelector<SVGPathElement>(
-      `path[data-link="${CSS.escape(key)}"]`,
-    );
-    if (!path) {
-      path = document.createElementNS(SVG, "path");
+    let link = drawn.get(key);
+    if (!link) {
+      const path = document.createElementNS(SVG, "path");
       path.dataset.link = key;
-      path.dataset.drawn = "0";
-      path.dataset.at = `${now}`;
       path.setAttribute("pathLength", "1");
       // Each link's own gradient carries its two words' strengths.
       const id = `gravity-link-${(linkCount += 1)}`;
@@ -377,16 +417,31 @@ function drawLinks(
       gradient.id = id;
       gradient.setAttribute("gradientUnits", "userSpaceOnUse");
       // The two halves blend across the middle third.
-      for (const offset of ["0", "0.33", "0.67", "1"]) {
+      const stops = ["0", "0.33", "0.67", "1"].map((offset) => {
         const stop = document.createElementNS(SVG, "stop");
         stop.setAttribute("offset", offset);
         gradient.append(stop);
-      }
+        return stop;
+      });
       path.dataset.gradient = id;
       path.style.stroke = `url(#${id})`;
       sheet.append(gradient, path);
+      link = {
+        path,
+        gradient,
+        stops,
+        drawn: 0,
+        at: now,
+        strengths: [strengthOf(from, elements), strengthOf(to, elements)],
+        leaving: false,
+      };
+      drawn.set(key, link);
     }
-    path.classList.remove("leaving");
+    if (link.leaving) {
+      link.leaving = false;
+      link.path.classList.remove("leaving");
+    }
+    const { path, gradient } = link;
     const start = edge(a, 1),
       end = edge(b, -1);
     const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
@@ -416,56 +471,86 @@ function drawLinks(
       0.84 *
       width
     ).toFixed(1)}px`;
-    // The link dims with its words: each half takes its own word's
+    gradient.setAttribute("x1", start.x.toFixed(1));
+    gradient.setAttribute("y1", start.y.toFixed(1));
+    gradient.setAttribute("x2", end.x.toFixed(1));
+    gradient.setAttribute("y2", end.y.toFixed(1));
+    const elapsed = Math.min(100, now - link.at);
+    link.at = now;
+    // The link dims with its words: each half eases toward its own word's
     // strength, so a link from a dim word to the sung one is half and half.
-    const gradient = sheet.querySelector<SVGLinearGradientElement>(
-      `#${path.dataset.gradient}`,
-    );
-    if (gradient) {
-      gradient.setAttribute("x1", start.x.toFixed(1));
-      gradient.setAttribute("y1", start.y.toFixed(1));
-      gradient.setAttribute("x2", end.x.toFixed(1));
-      gradient.setAttribute("y2", end.y.toFixed(1));
-      const strength = (key: string) =>
-        elements.get(key)
-          ? Number(getComputedStyle(elements.get(key)!).opacity)
-          : 0;
-      const [first, second] = [strength(from.key), strength(to.key)];
-      // Dim halves sink further, darker and fainter, so the sung line's
-      // links stand out over the line before.
-      gradient.querySelectorAll("stop").forEach((stop, index) => {
-        const strength = index < 2 ? first : second,
-          dim = strength < 0.9;
-        stop.classList.toggle("dim", dim);
-        stop.setAttribute("stop-opacity", `${dim ? strength * 0.6 : strength}`);
-      });
-    }
+    // Dim halves sink further, darker and fainter, so the sung line's links
+    // stand out over the line before.
+    const settle = 1 - Math.exp(-elapsed / 120);
+    [from, to].forEach((entity, side) => {
+      const goal = strengthOf(entity, elements);
+      const strength = (link.strengths[side] +=
+        (goal - link.strengths[side]) * settle);
+      const dim = goal < 0.9,
+        opacity = (dim ? strength * 0.6 : strength).toFixed(2);
+      for (const stop of link.stops.slice(side * 2, side * 2 + 2)) {
+        if (stop.classList.contains("dim") !== dim)
+          stop.classList.toggle("dim", dim);
+        if (stop.getAttribute("stop-opacity") !== opacity)
+          stop.setAttribute("stop-opacity", opacity);
+      }
+    });
     // The pen follows song time softly, so coarse time updates don't step.
     const target = ease(
       Math.min(1, Math.max(0, (time - begin) / Math.max(1, finish - begin))),
     );
-    const elapsed = Math.min(100, now - Number(path.dataset.at));
-    const drawn =
-      Number(path.dataset.drawn) +
-      (target - Number(path.dataset.drawn)) * (1 - Math.exp(-elapsed / 35));
-    path.dataset.drawn = `${drawn}`;
-    path.dataset.at = `${now}`;
-    path.style.strokeDashoffset = `${(1 - drawn).toFixed(3)}`;
+    link.drawn += (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
+    path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
   }
-  for (const path of [...sheet.querySelectorAll<SVGPathElement>("path")]) {
-    if (
-      wanted.has(path.dataset.link ?? "") ||
-      path.classList.contains("leaving")
-    )
-      continue;
-    path.classList.add("leaving");
+  for (const [key, link] of drawn) {
+    if (wanted.has(key) || link.leaving) continue;
+    link.leaving = true;
+    link.path.classList.add("leaving");
     setTimeout(() => {
-      if (!path.classList.contains("leaving")) return;
-      sheet.querySelector(`#${path.dataset.gradient}`)?.remove();
-      path.remove();
+      if (!link.leaving) return;
+      link.gradient.remove();
+      link.path.remove();
+      drawn.delete(key);
     }, 1300);
   }
 }
+
+/** One floating word. Memoised: while a song plays only the words whose
+ *  role or ink changes re-render, not every word on every frame. */
+const GravityWord = memo(function GravityWord({
+  entity,
+  role,
+  exiting,
+  highlighter,
+  inkTime,
+  wordRef,
+  onSeek,
+}: {
+  entity: Entity;
+  role: Role;
+  exiting: boolean;
+  highlighter: boolean;
+  /** Song time for the Highlighter's pen: -Infinity before the word,
+   *  Infinity after it, so only the sung word changes per frame. */
+  inkTime: number;
+  wordRef: (element: HTMLElement | null) => void;
+  onSeek: (position: number) => void;
+}) {
+  return (
+    <button
+      ref={wordRef}
+      className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""}`}
+      onClick={() => onSeek(entity.start)}
+      tabIndex={exiting ? -1 : 0}
+    >
+      {highlighter ? (
+        <HighlighterWords line={entity.ink} time={inkTime} />
+      ) : (
+        <LyricWord words={entity.words} />
+      )}
+    </button>
+  );
+});
 
 /** Space Gravity: sung words float in zero gravity around the artwork. */
 export function SpaceGravityLyrics({
@@ -564,6 +649,10 @@ export function SpaceGravityLyrics({
     linkWidth,
   };
   const links = useRef<SVGSVGElement>(null);
+  // A stable seek handler, so floating words skip re-rendering.
+  const seekTo = useRef(onSeek);
+  seekTo.current = onSeek;
+  const [seek] = useState(() => (position: number) => seekTo.current(position));
   useEffect(() => {
     // A new song starts every word fresh.
     if (fieldOf.current === signature) return;
@@ -665,10 +754,30 @@ export function SpaceGravityLyrics({
           !!byKey.get(keys[0])?.opposite,
           spread ? Math.max(...members.map((body) => body.height)) * 1.1 : 0,
         );
-        const top = area.top + (area.bottom - area.top - layout.height) / 2;
+        // Spread lines each start at their own seeded spot across the
+        // stage, so lines don't all pile up from the middle and get pushed
+        // to one side.
+        const placeX = spread ? random(hash(`${keys[0]}:x`)) * 2 - 1 : 0,
+          placeY = spread ? random(hash(`${keys[0]}:y`)) * 2 - 1 : 0;
+        const edges = layout.places.map((place, index) => [
+          place.x - members[index].width / 2,
+          place.x + members[index].width / 2,
+        ]);
+        const rowWidth =
+          Math.max(...edges.map(([, right]) => right)) -
+          Math.min(...edges.map(([left]) => left));
+        const slackX = Math.max(0, width - rowWidth) / 2,
+          slackY = Math.max(0, area.bottom - area.top - layout.height) / 2;
+        const top =
+          area.top +
+          (area.bottom - area.top - layout.height) / 2 +
+          placeY * slackY * 0.8;
         members.forEach((body, index) => {
           body.naturalX =
-            area.left + GRAVITY.edgePadding + layout.places[index].x;
+            area.left +
+            GRAVITY.edgePadding +
+            layout.places[index].x +
+            placeX * slackX * 0.8;
           body.naturalY = top + layout.places[index].y;
         });
         for (const body of members) {
@@ -765,7 +874,7 @@ export function SpaceGravityLyrics({
 
   return (
     <div
-      className={`gravity-lyrics ${highlighter ? "highlighter" : ""}`}
+      className={`gravity-lyrics ${highlighter ? "highlighter" : ""} ${highlighter && linkWidth > 0 ? "linked" : ""}`}
       style={
         highlighter
           ? ({ "--highlighter-ink": highlighter } as CSSProperties)
@@ -809,28 +918,22 @@ export function SpaceGravityLyrics({
                 const role = gravityRole(entity, lead, time, prepared.finalEnd);
                 const exiting = !visible.includes(entity);
                 return (
-                  <button
+                  <GravityWord
                     key={entity.key}
-                    ref={refFor(entity.key)}
-                    className={`gravity-word ${role} ${entity.opposite ? "opposite" : ""} ${entity.background ? "background" : ""} ${exiting ? "exiting" : ""}`}
-                    onClick={() => onSeek(entity.start)}
-                    tabIndex={exiting ? -1 : 0}
-                  >
-                    {highlighter ? (
-                      <HighlighterWords
-                        line={entity.ink}
-                        time={
-                          time < entity.start
-                            ? -Infinity
-                            : time < entity.end
-                              ? time
-                              : Infinity
-                        }
-                      />
-                    ) : (
-                      <LyricWord words={entity.words} />
-                    )}
-                  </button>
+                    entity={entity}
+                    role={role}
+                    exiting={exiting}
+                    highlighter={!!highlighter}
+                    inkTime={
+                      time < entity.start
+                        ? -Infinity
+                        : time < entity.end
+                          ? time
+                          : Infinity
+                    }
+                    wordRef={refFor(entity.key)}
+                    onSeek={seek}
+                  />
                 );
               })}
             </div>

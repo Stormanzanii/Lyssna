@@ -151,7 +151,7 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
     <td align="center" valign="top" width="200">
       <a href="https://github.com/iPixelGalaxy"><img src="https://images.weserv.nl/?url=github.com/iPixelGalaxy.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="iPixelGalaxy"></a><br>
       <b>iPixelGalaxy</b><br>
-      <sub>Spicy Lyrics fork and Spotify+</sub>
+      <sub>Spicy Lyrics fork</sub>
     </td>
     <td align="center" valign="top" width="200">
       <a href="https://github.com/Spikerko"><img src="https://images.weserv.nl/?url=github.com/Spikerko.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="Spikerko"></a><br>
@@ -165,12 +165,11 @@ The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 **Built on**
 
 - **[Spicy Lyrics](https://github.com/iPixelGalaxy/spicy-lyrics)** · Spikerko, fork by iPixelGalaxy · AGPL-3.0<br>Lyrics display, Space Gravity, word sync and the TTML tools.
-- **[Spotify+](https://github.com/iPixelGalaxy/spotify-plus)** · iPixelGalaxy · no licence declared<br>The Add to playlist folders menu.
 - **[librespot](https://github.com/librespot-org/librespot)** · librespot contributors · MIT<br>Spotify playback and Connect.
 - **[spr](https://github.com/Fraktality/spr)** · Fraktality · MIT<br>The spring that animates lyrics.
 - **[Kawarp](https://github.com/better-lyrics/kawarp)** · Better Lyrics · MIT<br>The warped artwork and Canvas ambience.
 
-SpotiFlex reimplements Spicy Lyrics' and Spotify+'s behaviour; it copies no source or assets from either.
+SpotiFlex reimplements Spicy Lyrics' behaviour; it copies no Spicy Lyrics source or assets.
 
 ## License
 

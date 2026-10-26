@@ -8842,7 +8842,7 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
     .getByLabel("Preset name", { exact: true })
     .fill("SLP1:Bouncy|1.2,1.3,2,1,1,0.88,0.64,1.45,0.2,1.18,0.56");
   await page.getByRole("button", { name: "Import", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("Imported Bouncy.");
+  await expect(page.locator(".animator-message")).toHaveText("Imported Bouncy.");
   await expect(saved).toHaveValue(/^animator-/);
   await expect(
     page.getByLabel("Word peak scale value", { exact: true }),
@@ -8863,7 +8863,7 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
       "SLP1:Shared|1.1,1.2,2,1,1,0.88,0.64,1.45,0.2,1.18,0.56";
   });
   await page.getByRole("button", { name: "Import", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("Imported Shared.");
+  await expect(page.locator(".animator-message")).toHaveText("Imported Shared.");
   await expect(page.getByLabel("Preset name", { exact: true })).toHaveCSS(
     "color",
     "rgb(255, 255, 255)",

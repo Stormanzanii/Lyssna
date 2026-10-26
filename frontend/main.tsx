@@ -12,6 +12,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./fullscreen-lyrics.css";
 import { CreatorProfiles } from "./creator-profile";
+import { installOverlayScrollbars } from "./overlay-scrollbar";
+installOverlayScrollbars();
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <CreatorProfiles>

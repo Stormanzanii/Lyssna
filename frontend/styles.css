@@ -4540,6 +4540,35 @@ input.volume-range:active::-webkit-slider-thumb {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Panel scrollers draw their own overlay thumb (overlay-scrollbar.ts), so
+   the native bar and its reserved gutter go. */
+.overlay-scrolled {
+  scrollbar-width: none;
+  scrollbar-gutter: auto !important;
+}
+.overlay-scrollbar {
+  position: absolute;
+  z-index: 5;
+  width: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  touch-action: none;
+}
+.overlay-scroll-host:hover > .overlay-scrollbar,
+.overlay-scrollbar.dragging {
+  opacity: 1;
+  transition-duration: 0.1s;
+}
+.overlay-scrollbar-thumb {
+  width: 100%;
+  border-radius: 999px;
+  background: #ffffff4d;
+  will-change: transform;
+}
+.overlay-scrollbar-thumb:hover,
+.overlay-scrollbar.dragging .overlay-scrollbar-thumb {
+  background: #ffffff80;
+}
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

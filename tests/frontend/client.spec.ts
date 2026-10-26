@@ -7959,6 +7959,36 @@ test("long song titles fade at both edges while they scroll", async ({
   expect(Math.abs(look.start)).toBeLessThanOrEqual(1);
 });
 
+test("panels use a hover-only overlay scrollbar that takes no space", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 640 });
+  await startClient(page);
+  const scroller = page.locator(".now-playing-scroll").first();
+  const bar = page.locator(".now-playing > .overlay-scrollbar");
+  await expect(bar).toBeAttached();
+  // No gutter: the native bar is gone.
+  expect(
+    await scroller.evaluate(
+      (element) => element.offsetWidth - element.clientWidth,
+    ),
+  ).toBe(0);
+  await page.mouse.move(5, 5);
+  await expect(bar).toHaveCSS("opacity", "0");
+  await page.locator(".now-playing").hover({ position: { x: 40, y: 200 } });
+  await expect(bar).toHaveCSS("opacity", "1");
+  const thumb = bar.locator(".overlay-scrollbar-thumb");
+  const box = (await thumb.boundingBox())!;
+  expect(box.width).toBe(12);
+  await page.mouse.move(box.x + 6, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 6, box.y + 110, { steps: 5 });
+  await page.mouse.up();
+  expect(
+    await scroller.evaluate((element) => element.scrollTop),
+  ).toBeGreaterThan(50);
+});
+
 test("clicking empty top bar space never starts a window drag; moving does", async ({
   page,
 }) => {

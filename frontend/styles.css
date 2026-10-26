@@ -6007,7 +6007,7 @@ input[type="range"]:hover {
 .gravity-links path {
   fill: none;
   stroke: var(--highlighter-ink);
-  /* A marker's broad, see-through stroke. */
+  /* A marker's broad, see-through stroke; its width is set per link. */
   stroke-width: 11px;
   stroke-linecap: round;
   stroke-linejoin: round;

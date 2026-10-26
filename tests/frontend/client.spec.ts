@@ -4704,6 +4704,76 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
     .toBe("1.2s");
 });
 
+test("Space Gravity marker links draw in order at the Highlighter's width", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "Quick quick words",
+            start_ms: 0,
+            end_ms: 3000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            // Sung back to back, faster than a link takes to draw.
+            words: [
+              { text: "Quick", start_ms: 0, end_ms: 100 },
+              { text: " quick", start_ms: 100, end_ms: 200 },
+              { text: " words", start_ms: 200, end_ms: 3000 },
+            ],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  await at(50);
+  await expect(page.locator(".gravity-word")).toHaveCount(3);
+  const links = page.locator(".gravity-links path");
+  // "quick" is sung, but the first link is still on its way: no second
+  // link starts ahead of it.
+  await at(300);
+  await expect(links).toHaveCount(1);
+  await at(500);
+  await expect(links).toHaveCount(2);
+  // As broad as the Highlighter's band on the words.
+  const width = await links
+    .first()
+    .evaluate((path) => parseFloat((path as SVGPathElement).style.strokeWidth));
+  const band = await page
+    .locator(".gravity-word .highlighter-piece")
+    .first()
+    .evaluate((piece) => piece.getBoundingClientRect().height);
+  expect(width).toBeGreaterThan(band * 0.5);
+});
+
 test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {

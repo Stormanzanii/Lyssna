@@ -329,15 +329,22 @@ function drawLinks(
     if (entity.start <= time) current = Math.max(current, entity.lead);
   const now = performance.now();
   const wanted = new Set<string>();
+  // Links draw one after another: each starts once its word is sung and
+  // the link before it has landed, so none runs ahead of the chain.
+  let landed = -Infinity;
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
+    if (to.index !== from.index + 1) landed = -Infinity;
+    const begin = Math.max(from.end, landed),
+      finish = begin + Math.max(320, to.start - from.end);
+    landed = finish;
     // Links within the sung line and the one before, and the link from
     // that earlier line into the sung one.
     const within =
       from.lead === to.lead && (to.lead === current || to.lead === current - 1);
     const across = from.lead === current - 1 && to.lead === current;
-    if (!(within || across) || to.index !== from.index + 1 || time < from.end)
+    if (!(within || across) || to.index !== from.index + 1 || time < begin)
       continue;
     const a = bodies.get(from.key),
       b = bodies.get(to.key);
@@ -391,6 +398,10 @@ function drawLinks(
       "d",
       `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
     );
+    // As broad as the Highlighter's band on the smaller of the two words.
+    path.style.strokeWidth = `${(
+      Math.min(a.height * a.scale, b.height * b.scale) * 0.84
+    ).toFixed(1)}px`;
     // The link dims with its words: each half takes its own word's
     // strength, so a link from a dim word to the sung one is half and half.
     const gradient = sheet.querySelector<SVGLinearGradientElement>(
@@ -414,10 +425,7 @@ function drawLinks(
     }
     // The pen follows song time softly, so coarse time updates don't step.
     const target = ease(
-      Math.min(
-        1,
-        Math.max(0, (time - from.end) / Math.max(320, to.start - from.end)),
-      ),
+      Math.min(1, Math.max(0, (time - begin) / (finish - begin))),
     );
     const elapsed = Math.min(100, now - Number(path.dataset.at));
     const drawn =

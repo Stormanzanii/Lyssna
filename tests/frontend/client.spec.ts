@@ -10803,6 +10803,24 @@ test("highlighter inks sung words behind the text and keeps them", async ({
   await expect(sung.locator(".highlighter-stroke")).toHaveCount(rows);
   // One pen tip per line, where the pen finished, not one per row.
   await expect(sung.locator(".highlighter-tip:visible")).toHaveCount(1);
+  // That tip sits after the last word: its middle is past the last letter.
+  await expect
+    .poll(() =>
+      sung.evaluate((line) => {
+        const tip = line.querySelector(".highlighter-tip:not([hidden])")!;
+        const pieces = line.querySelectorAll(".highlighter-piece");
+        const last = pieces[pieces.length - 1];
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        return (
+          (tip.getBoundingClientRect().left +
+            tip.getBoundingClientRect().right) /
+            2 -
+          range.getBoundingClientRect().right
+        );
+      }),
+    )
+    .toBeGreaterThan(0);
   await openSettings(page, "Effects");
   await page
     .getByLabel("Marker colour", { exact: true })
@@ -10974,9 +10992,112 @@ test("highlighter tip glides and ink stays through the next line", async ({
   await expect.poll(width).toBeGreaterThan(early + 2);
   // The next line has begun while this one's last word is still running:
   // this line keeps all its ink.
-  await at(8500);
+  // Near the end of the word, then the line ends: the tip glides to the
+  // end of the line rather than jumping there.
+  await at(7000);
+  await expect.poll(width).toBeGreaterThan(early + 20);
+  const before = await width();
+  const end = await first
+    .locator(".highlighter-piece")
+    .last()
+    .evaluate((piece) => piece.getBoundingClientRect().right);
+  await at(9500);
+  const next = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) =>
+        requestAnimationFrame(() =>
+          resolve(
+            document
+              .querySelector(".lyrics-page .lyric-line .highlighter-tip")!
+              .getBoundingClientRect().right,
+          ),
+        ),
+      ),
+  );
+  expect(next).toBeLessThan(end - 4);
+  expect(next).toBeGreaterThanOrEqual(before - 1);
+  await expect.poll(width).toBeGreaterThan(end - 14);
+
   await expect(page.locator(".lyrics-page .lyric-line").nth(1)).toHaveClass(
     /active/,
   );
   await expect(first.locator(".highlighter-stroke")).toHaveCount(1);
+});
+
+test("highlighter keeps a word's syllables on one row", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await showLyrics(page);
+  const syllables = [
+    "Elo",
+    "quence ",
+    "be",
+    "longs ",
+    "to ",
+    "the ",
+    "con",
+    "quer",
+    "or ",
+    "of ",
+    "ev",
+    "ery ",
+    "na",
+    "tion",
+  ];
+  await page.evaluate(
+    ({ track, playback, syllables }) => {
+      const { emit } = (window as any).__clientTest;
+      emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: false,
+          progress_ms: 500,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              start_ms: 0,
+              end_ms: 7000,
+              text: syllables.join(""),
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: syllables.map((text, index) => ({
+                text,
+                start_ms: index * 500,
+                end_ms: (index + 1) * 500,
+              })),
+            },
+          ],
+        },
+      });
+    },
+    { track, playback: emptyState.playback, syllables },
+  );
+  const line = page.locator(".lyrics-page .lyric-line").first();
+  await expect(line.locator(".highlighter-piece")).toHaveCount(14);
+  for (const width of [900, 1000, 1100, 1300, 1600]) {
+    await page.setViewportSize({ width, height: 900 });
+    const tops = await line
+      .locator(".highlighter-piece")
+      .evaluateAll((pieces) =>
+        pieces.map((piece) => piece.getBoundingClientRect().top),
+      );
+    // "con", "quer", "or" and "na", "tion" each share a row.
+    expect(new Set(tops.slice(6, 9)).size, `conqueror at ${width}px`).toBe(1);
+    expect(new Set(tops.slice(12)).size, `nation at ${width}px`).toBe(1);
+  }
 });

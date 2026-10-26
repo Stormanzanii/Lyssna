@@ -33,6 +33,21 @@ describe("highlighter", () => {
     expect(inkAt(pieces[1], 900)).toBe(1);
   });
 
+  it("moves a space before a word onto the word before it", () => {
+    const pieces = highlighterPieces(
+      line([
+        { text: "can't", start_ms: 0, end_ms: 200 },
+        { text: " it's", start_ms: 200, end_ms: 400 },
+      ]),
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(["can't ", "it's"]);
+    // A line never starts with a space either.
+    expect(
+      highlighterPieces(line([{ text: " Hi", start_ms: 0, end_ms: 1 }]))[0]
+        .text,
+    ).toBe("Hi");
+  });
+
   it("shares an untimed line over its words by letters", () => {
     const pieces = highlighterPieces(line([], "a bbb"));
     expect(pieces.map((piece) => piece.text)).toEqual(["a ", "bbb"]);
@@ -48,8 +63,8 @@ describe("highlighter", () => {
 
   it("lays darker ink where the pen moves slowly", () => {
     expect(inkAlpha(2, 2000)).toBeGreaterThan(inkAlpha(2, 300));
-    expect(inkAlpha(2, 20)).toBe(0.3);
-    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.56, 1);
+    expect(inkAlpha(2, 20)).toBe(0.5);
+    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.78, 1);
   });
 
   it("leaves a mark that grows while the pen rests in a pause", () => {

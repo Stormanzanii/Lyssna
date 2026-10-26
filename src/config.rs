@@ -170,6 +170,10 @@ pub struct Settings {
     pub lyric_offset_ms: i64,
     pub romanized: bool,
     pub reduce_motion: bool,
+    /// Limit Animation Frame Rate: animations stay at or under
+    /// `animation_fps_cap`, 15 to 240.
+    pub animation_fps_cap_enabled: bool,
+    pub animation_fps_cap: u16,
     /// The lyrics page artwork crossfades when the song changes.
     pub cover_animation: bool,
     pub liquid_glass: bool,
@@ -303,6 +307,8 @@ impl Default for Settings {
             lyric_offset_ms: 0,
             romanized: false,
             reduce_motion: false,
+            animation_fps_cap_enabled: false,
+            animation_fps_cap: 60,
             cover_animation: true,
             liquid_glass: false,
             canvas_lyrics: true,
@@ -409,6 +415,7 @@ impl Settings {
     pub fn clean_lyrics_options(&mut self) {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
         self.lyrics_background_blur = self.lyrics_background_blur.min(48);
+        self.animation_fps_cap = self.animation_fps_cap.clamp(15, 240);
         if !["animated", "static", "cover", "artist", "color", "none"]
             .contains(&self.lyrics_background.as_str())
         {
@@ -582,6 +589,10 @@ mod tests {
         background.clean_lyrics_options();
         assert_eq!(background.lyrics_background, "animated");
         assert_eq!(background.lyrics_background_blur, 48);
+        let mut fps: Settings = serde_json::from_str(r#"{"animation_fps_cap":5}"#).unwrap();
+        fps.clean_lyrics_options();
+        assert_eq!(fps.animation_fps_cap, 15);
+        assert_eq!(older.animation_fps_cap, 60);
         let mut artist: Settings =
             serde_json::from_str(r#"{"lyrics_background":"artist"}"#).unwrap();
         artist.clean_lyrics_options();

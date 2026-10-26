@@ -164,6 +164,7 @@ import {
 import { AppMenu, type AppMenuGroup } from "./app-menu";
 import { AboutDialog } from "./about-dialog";
 import { presetOf } from "./animator-tuning";
+import { setFrameCap } from "./frame-cap";
 import { AnimatorPanel } from "./animator-settings";
 import {
   NextIcon,
@@ -636,6 +637,16 @@ function App() {
   );
   // Styles that differ between animator presets key off the root.
   const cacheAction = state.settings.lyrics_cache_action ?? "song";
+  useEffect(() => {
+    setFrameCap(
+      state.settings.animation_fps_cap_enabled
+        ? (state.settings.animation_fps_cap ?? 60)
+        : 0,
+    );
+  }, [
+    state.settings.animation_fps_cap_enabled,
+    state.settings.animation_fps_cap,
+  ]);
   const animatorPreset = presetOf(state.settings.lyrics_animator);
   useEffect(() => {
     document.documentElement.dataset.animator = animatorPreset;

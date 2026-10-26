@@ -130,6 +130,8 @@ export const emptyState: AppState = {
     lyric_offset_ms: 0,
     romanized: false,
     reduce_motion: false,
+    animation_fps_cap_enabled: false,
+    animation_fps_cap: 60,
     cover_animation: true,
     liquid_glass: false,
     canvas_lyrics: true,

@@ -4312,7 +4312,7 @@ test("Liquid Glass is off by default and toggles from Settings", async ({
       ),
     )
     .toBe(true);
-  await page.getByLabel("Search settings").fill("glass");
+  await page.getByLabel("Search settings").fill("liquid glass");
   await expect(page.locator(".setting-row")).toHaveCount(1);
   await page.getByLabel("Search settings").fill("zzzz");
   await expect(page.locator(".lyrics-settings-empty")).toBeVisible();
@@ -10469,4 +10469,28 @@ test("lyrics can sit over the cover, the artist's header or nothing", async ({
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(image).toHaveCount(0);
   await expect(section.locator(".ambience")).toHaveCount(0);
+});
+
+test("animation frame rate can be capped", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Appearance");
+  const rate = page.getByLabel("Animation frame rate", { exact: true });
+  await expect(rate).toBeDisabled();
+  await page
+    .getByRole("switch", { name: "Limit animation frame rate" })
+    .click();
+  await rate.fill("30");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const settings = (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings;
+        return [
+          settings?.animation_fps_cap_enabled,
+          settings?.animation_fps_cap,
+        ];
+      }),
+    )
+    .toEqual([true, 30]);
 });

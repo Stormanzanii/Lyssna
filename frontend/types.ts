@@ -113,6 +113,8 @@ export interface Settings {
   lyric_offset_ms: number;
   romanized: boolean;
   reduce_motion: boolean;
+  animation_fps_cap_enabled?: boolean;
+  animation_fps_cap?: number;
   cover_animation?: boolean;
   liquid_glass?: boolean;
   canvas_lyrics?: boolean;

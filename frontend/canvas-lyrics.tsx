@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { IS_MAC } from "./platform";
+import { frameDue } from "./frame-cap";
 
 const AMBIENT_WIDTH = 80;
 // Canvases run at 24 to 30 fps, so redrawing the backdrop faster buys nothing.
@@ -86,6 +87,7 @@ export function LyricsCanvas({
         // An empty backdrop takes the current frame at once, paused or not.
         (!primed ||
           (now - last >= AMBIENT_INTERVAL_MS &&
+            frameDue(last, now) &&
             element.currentTime !== lastTime)) &&
         element.readyState >= 2 &&
         element.videoWidth > 0 &&

@@ -1,3 +1,5 @@
+import { cappedFps } from "./frame-cap";
+
 /** Whether the desktop window is minimized or focused, as reported by Rust. */
 export interface WindowActivity {
   minimized: boolean;
@@ -25,7 +27,7 @@ export function onWindowActivity(listener: () => void) {
 
 /** Ambience frame rate: full while focused, reduced in the background. */
 export const ambienceFps = (activity: WindowActivity) =>
-  activity.minimized ? 0 : activity.focused ? 30 : 12;
+  activity.minimized ? 0 : cappedFps(activity.focused ? 30 : 12);
 
 /**
  * Longest side of the ambience canvas, in pixels. The canvas is blurred and

@@ -15,6 +15,7 @@ import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
 import { filterWords } from "./word-filter";
+import { frameDue } from "./frame-cap";
 import { useArtworkColor } from "./artwork-color";
 import {
   BadgeCheck,
@@ -436,9 +437,13 @@ export function usePosition(
   useEffect(() => {
     setTime(performance.now());
     if (!state.playback.is_playing) return;
-    let frame = 0;
+    let frame = 0,
+      shown = 0;
     const tick = (time: number) => {
-      setTime(time);
+      if (frameDue(shown, time)) {
+        shown = time;
+        setTime(time);
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -580,6 +585,10 @@ export function LyricsDisplay({
     spring.current.position = container.scrollTop;
     const tick = (time: number) => {
       frame = 0;
+      if (!frameDue(last, time)) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       const motion = spring.current,
         slide = glide.current;
       if (slide) {

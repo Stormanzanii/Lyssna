@@ -39,6 +39,7 @@ import {
 } from "./space-gravity";
 import { windowPosition } from "./window-activity";
 import type { Lyrics } from "./types";
+import { frameDue } from "./frame-cap";
 
 interface Entity {
   key: string;
@@ -390,6 +391,7 @@ export function SpaceGravityLyrics({
     const motion: WindowMotion = { vx: 0, vy: 0 };
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
+      if (!frameDue(last, now)) return;
       renderFrame += 1;
       const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;

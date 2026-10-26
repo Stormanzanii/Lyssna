@@ -7,6 +7,7 @@ import {
   wordGoal,
   type SyllableGoal,
 } from "./lyric-motion";
+import { frameDue } from "./frame-cap";
 
 interface Piece {
   element: HTMLElement;
@@ -76,8 +77,13 @@ export class LyricAnimator {
   }
   private run = () => {
     cancelAnimationFrame(this.frame);
-    const now = performance.now(),
-      seconds = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
+    const now = performance.now();
+    // Under a frame rate cap, wait for the next allowed frame.
+    if (!frameDue(this.last, now)) {
+      this.frame = requestAnimationFrame(this.run);
+      return;
+    }
+    const seconds = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     this.frame = this.step(seconds) ? requestAnimationFrame(this.run) : 0;
   };

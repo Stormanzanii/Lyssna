@@ -648,6 +648,22 @@ export function SettingsWindow({
           "Turn off animated backgrounds and word animations.",
           "animation accessibility",
         ),
+        flag(
+          "animation_fps_cap_enabled",
+          "Limit animation frame rate",
+          "Cap how often lyrics, scrolling and the moving background redraw, to save power.",
+          "fps frame rate limit cap animation power battery",
+        ),
+        range(
+          "animation_fps_cap",
+          "Animation frame rate",
+          "The most frames per second animations draw while the limit is on.",
+          "fps frame rate limit cap animation",
+          [15, 240, 5],
+          60,
+          " fps",
+          !settings.animation_fps_cap_enabled,
+        ),
       ],
     ],
     [

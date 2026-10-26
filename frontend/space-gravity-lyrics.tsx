@@ -38,7 +38,8 @@ import {
   type WindowMotion,
 } from "./space-gravity";
 import { windowPosition } from "./window-activity";
-import type { Lyrics } from "./types";
+import type { Line, Lyrics } from "./types";
+import { HighlighterWords } from "./highlighter";
 import { frameDue } from "./frame-cap";
 
 interface Entity {
@@ -47,6 +48,8 @@ interface Entity {
   /** Source line index, and the syllables to animate like normal lyrics. */
   line: number;
   words: AnimatedWord[];
+  /** The word as a line of its own, for the Highlighter's pen. */
+  ink: Line;
   start: number;
   end: number;
   /** Lead line ordinal this word belongs to (backing vocals use their parent). */
@@ -100,17 +103,25 @@ export function prepareGravity(lyrics: Lyrics) {
       const { text } = piece;
       if (!text) continue;
       const background = line.background && lead >= 0;
+      // A trailing space inside a rotated word's paint box draws a dotted
+      // hairline past its last letter; floating words need no spacing.
+      const words = piece.words.map((word, index, all) =>
+        index === all.length - 1
+          ? { ...word, text: word.text.trimEnd() }
+          : word,
+      );
       entities.push({
         key: `${lineIndex}:${slot}`,
         text,
         line: lineIndex,
-        // A trailing space inside a rotated word's paint box draws a dotted
-        // hairline past its last letter; floating words need no spacing.
-        words: piece.words.map((word, index, all) =>
-          index === all.length - 1
-            ? { ...word, text: word.text.trimEnd() }
-            : word,
-        ),
+        words,
+        ink: {
+          ...line,
+          start_ms: piece.start,
+          end_ms: piece.end,
+          text: words.map((word) => word.text).join(""),
+          words,
+        },
         start: piece.start,
         end: piece.end,
         lead,
@@ -286,10 +297,14 @@ export function SpaceGravityLyrics({
   tuning,
   onSeek,
   credits,
+  highlighter,
 }: {
   lyrics: Lyrics;
   time: number;
   reduceMotion: boolean;
+  /** The Highlighter's ink colour: each word gets its pen instead of the
+   *  usual sweep. */
+  highlighter?: string;
   tuning?: AnimatorSettings;
   onSeek: (position: number) => void;
   credits: ReactNode;
@@ -531,7 +546,14 @@ export function SpaceGravityLyrics({
   }, [time, lyrics]);
 
   return (
-    <div className="gravity-lyrics">
+    <div
+      className={`gravity-lyrics ${highlighter ? "highlighter" : ""}`}
+      style={
+        highlighter
+          ? ({ "--highlighter-ink": highlighter } as CSSProperties)
+          : undefined
+      }
+    >
       <div
         className="gravity-stage"
         ref={stage}
@@ -573,7 +595,20 @@ export function SpaceGravityLyrics({
                     onClick={() => onSeek(entity.start)}
                     tabIndex={exiting ? -1 : 0}
                   >
-                    <LyricWord words={entity.words} />
+                    {highlighter ? (
+                      <HighlighterWords
+                        line={entity.ink}
+                        time={
+                          time < entity.start
+                            ? -Infinity
+                            : time < entity.end
+                              ? time
+                              : Infinity
+                        }
+                      />
+                    ) : (
+                      <LyricWord words={entity.words} />
+                    )}
                   </button>
                 );
               })}

@@ -4508,6 +4508,73 @@ test("Space Gravity shares normal syllable joins and held-letter timing", async 
     .not.toBe("");
 });
 
+test("Highlighter inks each floating word in Space Gravity", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.getByLabel("Space Gravity").check();
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "Mmmmmmmmmm next",
+            start_ms: 0,
+            end_ms: 6000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "Mmmmmmmmmm", start_ms: 0, end_ms: 4000 },
+              { text: " next", start_ms: 4000, end_ms: 6000 },
+            ],
+          },
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 2000,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const word = page.locator(".gravity-word").first();
+  await expect(word.locator(".highlighter-piece")).toHaveText("Mmmmmmmmmm");
+  // Half the word is sung, so half its ink is down, however it has turned.
+  const share = () =>
+    word.evaluate((node) => {
+      const band = node.querySelector<HTMLElement>(".highlighter-stroke");
+      const piece = node.querySelector<HTMLElement>(".highlighter-piece")!;
+      if (!band) return -1;
+      const em = parseFloat(getComputedStyle(piece).fontSize);
+      const inset = Number(
+        /inset\(0px ([\d.]+)px/.exec(band.style.clipPath)?.[1] ?? NaN,
+      );
+      const shown = parseFloat(band.style.width) - inset - 0.16 * em;
+      return shown / piece.offsetWidth;
+    });
+  await expect.poll(share).toBeGreaterThan(0.44);
+  expect(await share()).toBeLessThan(0.56);
+  // The next word has no ink yet.
+  await expect(
+    page.locator(".gravity-word").nth(1).locator(".highlighter-stroke"),
+  ).toHaveCount(0);
+});
+
 test("Space Gravity words keep drifting while the song plays", async ({
   page,
 }) => {

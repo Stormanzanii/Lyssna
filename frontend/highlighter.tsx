@@ -139,14 +139,48 @@ interface Layout {
 }
 
 /** Converts screen positions to the line's own pixels, so strokes line up
- *  even while the line is scaled. */
+ *  even while the line is scaled or, in Space Gravity, turned. Every
+ *  transform above the line folds into one linear map around its centre,
+ *  which a transform keeps at the centre of its screen box. */
 function localFrame(root: HTMLElement) {
   const box = root.getBoundingClientRect();
-  const scale = box.width / (root.offsetWidth || box.width || 1) || 1;
-  return {
-    x: (x: number) => (x - box.left) / scale,
-    y: (y: number) => (y - box.top) / scale,
+  let a = 1,
+    b = 0,
+    c = 0,
+    d = 1;
+  for (
+    let node: Element | null = root;
+    node && node !== document.documentElement;
+    node = node.parentElement
+  ) {
+    const transform = getComputedStyle(node).transform;
+    if (!transform || transform === "none") continue;
+    const m = new DOMMatrixReadOnly(transform);
+    [a, b, c, d] = [
+      m.a * a + m.c * b,
+      m.b * a + m.d * b,
+      m.a * c + m.c * d,
+      m.b * c + m.d * d,
+    ];
+  }
+  const det = a * d - b * c || 1,
+    middleX = (box.left + box.right) / 2,
+    middleY = (box.top + box.bottom) / 2,
+    halfWidth = root.offsetWidth / 2,
+    halfHeight = root.offsetHeight / 2;
+  return (x: number, y: number) => {
+    const dx = x - middleX,
+      dy = y - middleY;
+    return {
+      x: (d * dx - c * dy) / det + halfWidth,
+      y: (a * dy - b * dx) / det + halfHeight,
+    };
   };
+}
+
+/** A screen box's centre in the line's own pixels. */
+function centreOf(frame: ReturnType<typeof localFrame>, box: DOMRect) {
+  return frame((box.left + box.right) / 2, (box.top + box.bottom) / 2);
 }
 
 /** Measures the rows and pieces. Strokes are revealed over this fixed
@@ -156,15 +190,15 @@ function measure(root: HTMLElement, pieces: Piece[]): Layout {
   const frame = localFrame(root);
   const em = parseFloat(getComputedStyle(root).fontSize) || 16;
   const stretches: Stretch[] = spans.map((span, index) => {
-    const edges = span.getBoundingClientRect();
-    const left = frame.x(edges.left),
-      right = frame.x(edges.right);
+    const middle = centreOf(frame, span.getBoundingClientRect());
+    const left = middle.x - span.offsetWidth / 2,
+      right = middle.x + span.offsetWidth / 2;
     return {
       index,
       left,
       right,
-      top: frame.y(edges.top),
-      bottom: frame.y(edges.bottom),
+      top: middle.y - span.offsetHeight / 2,
+      bottom: middle.y + span.offsetHeight / 2,
       alpha: inkAlpha(
         (right - left) / em,
         pieces[index].end_ms - pieces[index].start_ms,
@@ -215,19 +249,30 @@ function pathAt(
   const letters =
     ink >= 1 ? all : ink * (text.textContent?.trimEnd().length ?? 0);
   const frame = localFrame(root);
+  const stretch = layout.lanes
+    .flatMap((lane) => lane.stretches)
+    .find((stretch) => stretch.index === current);
+  if (!stretch) return 0;
   // The tip glides through each letter rather than jumping letter by
-  // letter: it sits between the ends of the letters on either side.
+  // letter: it sits between the ends of the letters on either side. A
+  // run of letters starts at the piece's left edge, so its far end is
+  // found from its centre, which survives turning.
   const range = document.createRange();
   const after = (count: number) => {
-    if (!count) {
-      const start = span.getClientRects()[0];
-      return start ? { x: frame.x(start.left), y: frame.y(start.top) } : null;
-    }
+    if (!count)
+      return {
+        x: stretch.left,
+        y:
+          stretch.top +
+          Math.min(stretch.bottom - stretch.top, layout.em * 1.4) / 2,
+      };
     range.setStart(text, 0);
     range.setEnd(text, Math.min(count, text.textContent?.length ?? 0));
     const boxes = range.getClientRects(),
       end = boxes[boxes.length - 1];
-    return end ? { x: frame.x(end.right), y: frame.y(end.top) } : null;
+    if (!end) return null;
+    const middle = centreOf(frame, end);
+    return { x: 2 * middle.x - stretch.left, y: middle.y };
   };
   const whole = Math.floor(letters);
   let tip = after(whole);
@@ -236,7 +281,7 @@ function pathAt(
     tip = { x: tip.x + (next.x - tip.x) * (letters - whole), y: tip.y };
   if (!tip) return 0;
   const lane = layout.lanes.find(
-    (lane) => Math.abs(lane.top - tip.y) < (lane.bottom - lane.top) / 2,
+    (lane) => tip.y >= lane.top - 1 && tip.y <= lane.bottom + 1,
   );
   if (!lane) return 0;
   return (

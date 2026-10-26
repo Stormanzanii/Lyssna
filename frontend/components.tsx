@@ -1640,6 +1640,11 @@ function SongLyricsPage({
                 time={current}
                 reduceMotion={!motionAllowed}
                 tuning={state.settings.lyrics_animator}
+                highlighter={
+                  state.settings.lyrics_highlighter && lyrics.synced
+                    ? markerColour(state.settings.lyrics_highlighter_color)
+                    : undefined
+                }
                 onSeek={(positionMs) =>
                   onPlayer({
                     command: "seek",

@@ -1008,7 +1008,7 @@ export function SettingsWindow({
         flag(
           "lyrics_highlighter",
           "Highlighter",
-          "A marker pen sweeps behind each line as it's sung, row by row. Space Gravity takes its place while on.",
+          "A marker pen sweeps behind each line as it's sung, row by row, and over each floating word in Space Gravity.",
           "highlighter marker highlight pen lyrics player style",
         ),
         settings.lyrics_highlighter ? (

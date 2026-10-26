@@ -8335,6 +8335,44 @@ test("playlist artwork recovers when an inferred Spotify size does not exist", a
     .toBe(true);
 });
 
+test("a paused Canvas backdrop survives entering and leaving full screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await page.evaluate(
+    (base) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...base, is_playing: false },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { ...emptyState.playback, item: track },
+  );
+  await emitCanvas(page);
+  // The test Canvas is solid purple, so a painted backdrop is not black.
+  const painted = () =>
+    page.locator(".lyrics-canvas-backdrop").evaluate((element) => {
+      const canvas = element as HTMLCanvasElement;
+      const [r, g, b] = canvas
+        .getContext("2d")!
+        .getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data;
+      return r + g + b > 30;
+    });
+  await expect.poll(painted).toBe(true);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect.poll(painted).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  await expect.poll(painted).toBe(true);
+});
+
 for (const canvas of [false, true]) {
   test(`fullscreen controls follow ${canvas ? "Canvas dock" : "album artwork"} and disappear on idle`, async ({
     page,

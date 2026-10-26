@@ -60,10 +60,14 @@ export function LyricsCanvas({
         Math.round((width * box.height) / Math.max(1, box.width)),
       );
       if (canvas.width !== width || canvas.height !== height) {
-        // Resizing clears the canvas and its filter.
+        // Resizing clears the canvas and its filter. A paused video draws no
+        // new frames, so repaint the current one now; entering or leaving
+        // full screen would otherwise leave the backdrop blank.
         canvas.width = width;
         canvas.height = height;
         primed = false;
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame((now) => draw(now));
       }
     };
     let frame = 0,
@@ -79,11 +83,13 @@ export function LyricsCanvas({
     element.addEventListener("loadedmetadata", resize);
     const draw = (now: number) => {
       if (
-        now - last >= AMBIENT_INTERVAL_MS &&
+        // An empty backdrop takes the current frame at once, paused or not.
+        (!primed ||
+          (now - last >= AMBIENT_INTERVAL_MS &&
+            element.currentTime !== lastTime)) &&
         element.readyState >= 2 &&
         element.videoWidth > 0 &&
         element.videoHeight > 0 &&
-        element.currentTime !== lastTime &&
         !document.hidden
       ) {
         last = now;

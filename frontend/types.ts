@@ -134,6 +134,7 @@ export interface Settings {
   lyrics_word_filter?: import("./word-filter").WordFilter;
   lyrics_line_hover?: boolean;
   lyrics_skeleton?: boolean;
+  lyrics_no_lyrics_notice?: boolean;
   lyrics_cache_button?: boolean;
   lyrics_cache_action?: "song" | "reload" | "all";
   lyrics_early_scroll?: boolean;

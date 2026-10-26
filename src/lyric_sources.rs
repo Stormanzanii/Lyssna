@@ -129,6 +129,31 @@ pub fn quality(lyrics: &Lyrics) -> u8 {
     }
 }
 
+/// The answer when every source was reached and none had lyrics. The
+/// No lyrics notice setting can hide this one; real failures still show.
+pub const NO_LYRICS: &str = "No lyrics found for this song";
+
+/// A lyrics source could not be reached, as opposed to having no lyrics.
+#[derive(Debug)]
+pub struct Unreachable(pub String);
+impl std::fmt::Display for Unreachable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for Unreachable {}
+
+/// Whether an error means a source could not be reached (offline, timed
+/// out, connection refused) rather than that it had no lyrics.
+pub fn unreachable(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause.is::<Unreachable>()
+            || cause
+                .downcast_ref::<reqwest::Error>()
+                .is_some_and(|error| error.is_connect() || error.is_timeout() || error.is_request())
+    })
+}
+
 /// Whether some lead line ends 0.3 to 5 seconds before the next starts:
 /// lyrics timed to the voice rather than run line into line.
 pub fn has_line_gaps(lyrics: &Lyrics) -> bool {
@@ -183,7 +208,7 @@ pub fn fetch_best(
         _ => pick,
     };
     let mut best: Option<Lyrics> = None;
-    let mut failure = None;
+    let mut failure: Option<anyhow::Error> = None;
     let mut preferred = false;
     for (source, result) in sources.iter().zip(results) {
         if preferred && matches!(source.as_str(), "lrclib" | "netease") {
@@ -195,7 +220,11 @@ pub fn fetch_best(
         let lyrics = match result {
             Ok(lyrics) => lyrics,
             Err(error) => {
-                failure = Some(error);
+                // Only an unreachable source is worth reporting; the rest
+                // simply had no lyrics.
+                if unreachable(&error) {
+                    failure = Some(error);
+                }
                 continue;
             }
         };
@@ -219,9 +248,8 @@ pub fn fetch_best(
             return Ok(choose(pick, &apple));
         }
     }
-    best.map(|pick| choose(pick, &apple)).ok_or_else(|| {
-        failure.unwrap_or_else(|| anyhow!("No lyrics source found lyrics for this song"))
-    })
+    best.map(|pick| choose(pick, &apple))
+        .ok_or_else(|| failure.unwrap_or_else(|| anyhow!(NO_LYRICS)))
 }
 
 /// Splits the Spicy Lyrics provider's answer: Apple Music lyrics belong to
@@ -963,6 +991,24 @@ mod tests {
         assert!(!valid_musixmatch_token(
             "21051986b9886beabe1ce01c3ce94c9631941 1f8f2c"
         ));
+    }
+
+    #[test]
+    fn missing_lyrics_differ_from_unreachable_sources() {
+        let order: Vec<String> = ["spicy", "musixmatch"].map(String::from).to_vec();
+        let missing = fetch_best(&order, false, &|_| Err(anyhow!("No match")))
+            .err()
+            .unwrap();
+        assert_eq!(missing.to_string(), NO_LYRICS);
+        assert!(!unreachable(&missing));
+        let offline = fetch_best(&order, false, &|source| match source {
+            "spicy" => Err(Unreachable("Spicy Lyrics is unreachable".into()).into()),
+            _ => Err(anyhow!("No match")),
+        })
+        .err()
+        .unwrap();
+        assert!(unreachable(&offline));
+        assert_eq!(offline.to_string(), "Spicy Lyrics is unreachable");
     }
 
     #[test]

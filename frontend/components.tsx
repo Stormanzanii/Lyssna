@@ -1607,7 +1607,8 @@ function SongLyricsPage({
             ) : !state.lyric_error &&
               state.settings.lyrics_skeleton !== false ? (
               <LyricsSkeleton />
-            ) : (
+            ) : state.lyric_error === NO_LYRICS &&
+              state.settings.lyrics_no_lyrics_notice === false ? null : (
               <div className="lyrics-message">
                 <Mic2 />
                 <h2>
@@ -1645,6 +1646,8 @@ function SongLyricsPage({
   );
 }
 
+/** The backend's answer when every source had no lyrics (not a failure). */
+const NO_LYRICS = "No lyrics found for this song";
 /** Ragged placeholder widths, fixed so the lines never reshuffle. */
 const SKELETON_WIDTHS = [71, 56, 87, 48, 76, 63, 90, 52, 69, 81, 59, 74];
 /** Placeholder lines where the lyrics will land, while they are fetched. */

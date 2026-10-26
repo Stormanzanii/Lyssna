@@ -152,6 +152,7 @@ export const emptyState: AppState = {
     lyrics_word_filter: "off",
     lyrics_line_hover: false,
     lyrics_skeleton: true,
+    lyrics_no_lyrics_notice: true,
     lyrics_cache_button: true,
     lyrics_cache_action: "song",
     lyrics_early_scroll: false,

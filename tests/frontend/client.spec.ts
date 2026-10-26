@@ -10396,3 +10396,31 @@ test("lyrics still follow the song with smooth scrolling off", async ({
     )
     .toBeLessThan(40);
 });
+
+test("songs without lyrics can show only the song", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const fail = (message: string) =>
+    page.evaluate(
+      ({ uri, message }) =>
+        (window as any).__clientTest.emit({
+          type: "lyric_error",
+          uri,
+          message,
+        }),
+      { uri: track.uri, message },
+    );
+  await fail("No lyrics found for this song");
+  const heading = page.getByRole("heading", { name: "Lyrics unavailable" });
+  await expect(heading).toBeVisible();
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "No lyrics notice" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(heading).toHaveCount(0);
+  await expect(page.locator(".lyrics-page .lyrics-title")).toContainText(
+    "Timing test",
+  );
+  // A source that cannot be reached still says so.
+  await fail("Spicy Lyrics is unreachable");
+  await expect(heading).toBeVisible();
+});

@@ -875,7 +875,9 @@ fn fetch_from(
         {
             return Ok(lyrics);
         }
-        anyhow::ensure!(network, "Not cached");
+        if !network {
+            return Err(crate::lyric_sources::Unreachable("Offline and not saved".into()).into());
+        }
         let lyrics = fetch()?;
         if fs::create_dir_all(&cache).is_ok() {
             let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
@@ -883,7 +885,8 @@ fn fetch_from(
         Ok(lyrics)
     };
     // Spicy Lyrics and Apple Music share one provider request.
-    let provider: std::sync::OnceLock<std::result::Result<Lyrics, String>> =
+    // Errors keep whether the provider was unreachable, as text and a flag.
+    let provider: std::sync::OnceLock<std::result::Result<Lyrics, (String, bool)>> =
         std::sync::OnceLock::new();
     let from_provider = |source: &str| -> Result<Lyrics> {
         let answer = provider.get_or_init(|| {
@@ -900,11 +903,15 @@ fn fetch_from(
                     }
                     lyrics
                 })
-                .map_err(|error| error.to_string())
+                .map_err(|error| (error.to_string(), crate::lyric_sources::unreachable(&error)))
         });
-        let lyrics = answer
-            .as_ref()
-            .map_err(|error| anyhow::anyhow!(error.clone()))?;
+        let lyrics = answer.as_ref().map_err(|(message, unreachable)| {
+            if *unreachable {
+                crate::lyric_sources::Unreachable(message.clone()).into()
+            } else {
+                anyhow::anyhow!(message.clone())
+            }
+        })?;
         crate::lyric_sources::split_provider(lyrics, source)
             .with_context(|| format!("No {source} lyrics from the provider"))
     };

@@ -958,6 +958,12 @@ export function SettingsWindow({
           "Show placeholder lines while lyrics load, instead of a message.",
           "loading placeholder skeleton",
         ),
+        flag(
+          "lyrics_no_lyrics_notice",
+          "No lyrics notice",
+          "Say when a song has no lyrics. Off shows only the song; problems reaching a source still show.",
+          "no lyrics notice message unavailable missing",
+        ),
       ],
     ],
     [

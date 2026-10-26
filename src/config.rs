@@ -207,6 +207,9 @@ pub struct Settings {
     pub lyrics_line_hover: bool,
     /// Placeholder lines while lyrics load, instead of a message.
     pub lyrics_skeleton: bool,
+    /// Songs without lyrics say so; off shows only the song. Failures to
+    /// reach a source always show.
+    pub lyrics_no_lyrics_notice: bool,
     /// The lyrics toolbar's cache button and what it clears: "song" (this
     /// song's saved copy), "reload" (nothing saved) or "all" (every saved
     /// copy). The song's lyrics are fetched again after each.
@@ -319,6 +322,7 @@ impl Default for Settings {
             lyrics_word_filter: "off".into(),
             lyrics_line_hover: false,
             lyrics_skeleton: true,
+            lyrics_no_lyrics_notice: true,
             lyrics_cache_button: true,
             lyrics_cache_action: "song".into(),
             lyrics_early_scroll: false,
@@ -542,6 +546,7 @@ mod tests {
         assert!(older.glass_seek);
         assert!(older.lyrics_keep_overlaps);
         assert!(older.lyrics_smooth_scroll);
+        assert!(older.lyrics_no_lyrics_notice);
         assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
         let chosen: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();

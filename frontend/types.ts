@@ -157,6 +157,7 @@ export interface Settings {
   crossfade?: boolean;
   crossfade_seconds?: number;
   lyrics_discord_usernames?: boolean;
+  lyrics_profiles_in_browser?: boolean;
   audio_output?: string | null;
   folders: Folder[];
   spotify_plus?: SpotifyPlus;

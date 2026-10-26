@@ -806,6 +806,12 @@ export function SettingsWindow({
           "Credit community lyrics makers by their Discord username, looked up on spicylyrics.org, instead of their display name.",
           "discord username display name community credits maker uploader",
         ),
+        flag(
+          "lyrics_profiles_in_browser",
+          "Open profiles in browser",
+          "Open community lyrics makers' spicylyrics.org profiles in your browser instead of in SpotiFlex.",
+          "profile browser community credits maker spicylyrics website",
+        ),
         <SettingRow
           key="offset"
           label="Timing offset"

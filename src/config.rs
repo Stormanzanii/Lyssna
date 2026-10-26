@@ -224,6 +224,9 @@ pub struct Settings {
     pub crossfade_seconds: u8,
     /// Community lyrics credit people by Discord username, not display name.
     pub lyrics_discord_usernames: bool,
+    /// Community credit links open spicylyrics.org instead of the in-app
+    /// creator profile.
+    pub lyrics_profiles_in_browser: bool,
     pub folders: Vec<PlaylistFolder>,
     /// Whether the Now playing panel is open, kept across restarts.
     pub now_playing_open: bool,
@@ -302,6 +305,7 @@ impl Default for Settings {
             crossfade: false,
             crossfade_seconds: 5,
             lyrics_discord_usernames: true,
+            lyrics_profiles_in_browser: false,
             folders: Vec::new(),
             now_playing_open: true,
             song_sorts: Default::default(),

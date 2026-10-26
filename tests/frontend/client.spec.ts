@@ -9991,3 +9991,53 @@ test("Now playing's dynamic background can be turned off", async ({ page }) => {
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(panel.locator(".ambience")).toHaveCount(0);
 });
+
+test("community profiles can open in the browser", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Open profiles in browser" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "spicy_lyrics",
+        synced: true,
+        instrumental: false,
+        attribution: {
+          maker: {
+            username: "Maker",
+            id: "123456789012345678",
+            url: "https://spicylyrics.org/profile/Maker",
+          },
+        },
+        lines: [
+          {
+            text: "Hello",
+            start_ms: 1000,
+            end_ms: 2000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  await page.getByRole("button", { name: "@Maker", exact: true }).click();
+  const calls = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((call: any) =>
+          ["open_link", "open_creator_profile"].includes(call.command),
+        )
+        .map((call: any) => [call.command, call.args?.url ?? null]),
+    );
+  await expect
+    .poll(calls)
+    .toEqual([["open_link", "https://spicylyrics.org/profile/Maker"]]);
+});

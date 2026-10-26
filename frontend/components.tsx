@@ -709,6 +709,7 @@ export function LyricsDisplay({
         <LyricCredits
           lyrics={lyrics}
           discord={settings.lyrics_discord_usernames !== false}
+          browser={settings.lyrics_profiles_in_browser}
         />
       </div>
     );
@@ -799,6 +800,7 @@ export function LyricsDisplay({
                 lyrics={lyrics}
                 expanded
                 discord={settings.lyrics_discord_usernames !== false}
+                browser={settings.lyrics_profiles_in_browser}
               />
             )}
           </div>
@@ -815,6 +817,7 @@ export function LyricsDisplay({
             lyrics={lyrics}
             expanded
             discord={settings.lyrics_discord_usernames !== false}
+            browser={settings.lyrics_profiles_in_browser}
           />
         </div>
       )}
@@ -844,11 +847,14 @@ const LyricCredits = memo(function LyricCredits({
   lyrics,
   expanded = false,
   discord = true,
+  browser = false,
 }: {
   lyrics: Lyrics;
   expanded?: boolean;
   /** Name people by Discord username when their profile gave one. */
   discord?: boolean;
+  /** Open spicylyrics.org profiles in the browser instead of in the app. */
+  browser?: boolean;
 }) {
   const nameOf = (person: Contributor) =>
     (discord && person.discord) || person.username;
@@ -913,7 +919,7 @@ const LyricCredits = memo(function LyricCredits({
                 <button
                   className="community-profile"
                   onClick={() =>
-                    person.id
+                    person.id && !(browser && url)
                       ? openCreator(person)
                       : void rpc("open_link", { url }).catch(() => {})
                   }
@@ -966,7 +972,7 @@ const LyricCredits = memo(function LyricCredits({
                 <button
                   className="text-link"
                   onClick={() =>
-                    person.id
+                    person.id && !(browser && url)
                       ? openCreator(person)
                       : void rpc("open_link", { url }).catch(() => {})
                   }
@@ -1566,6 +1572,7 @@ function SongLyricsPage({
                       discord={
                         state.settings.lyrics_discord_usernames !== false
                       }
+                      browser={state.settings.lyrics_profiles_in_browser}
                     />
                   </>
                 }

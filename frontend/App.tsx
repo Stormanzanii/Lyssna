@@ -219,6 +219,8 @@ type EntityMenu = {
   y: number;
 };
 const windowHandle = () => getCurrentWindow();
+/** How long the lyrics take to slide away when full screen closes. */
+const FULLSCREEN_EXIT_MS = 450;
 /** Fit menus using their rendered size, including newly added actions. */
 const keepOnScreen = (menu: HTMLElement | null, x: number, y: number) => {
   if (!menu) return;
@@ -1393,8 +1395,20 @@ function App() {
   const fullscreen = async (force?: boolean) => {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
+    // Animate closing full screen: the lyrics slide down out of view first.
+    let leaving: HTMLElement | null = null;
     try {
       const next = force ?? !(await windowHandle().isFullscreen());
+      leaving =
+        !next &&
+        state.settings.fullscreen_animate_close &&
+        !state.settings.reduce_motion
+          ? document.querySelector<HTMLElement>(".immersive .lyrics-page")
+          : null;
+      if (leaving) {
+        leaving.classList.add("fullscreen-exit");
+        await new Promise((resolve) => setTimeout(resolve, FULLSCREEN_EXIT_MS));
+      }
       // The backend leaves and restores maximized without the window
       // shrinking to its restore size on the way.
       await rpc("window_fullscreen", { enabled: next });
@@ -1403,6 +1417,7 @@ function App() {
     } catch (error) {
       notify(String(error), true);
     } finally {
+      leaving?.classList.remove("fullscreen-exit");
       fullscreenBusy.current = false;
     }
   };

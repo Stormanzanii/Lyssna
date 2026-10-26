@@ -426,3 +426,10 @@
     #ffffff33 var(--range, 50%)
   );
 }
+/* Animate closing full screen: the lyrics slide down out of view before the
+   window leaves full screen. */
+.immersive .lyrics-page.fullscreen-exit {
+  translate: 0 100%;
+  pointer-events: none;
+  transition: translate 450ms cubic-bezier(0.55, 0, 1, 0.45);
+}

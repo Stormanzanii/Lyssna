@@ -9905,3 +9905,23 @@ test("full screen volume slider sets the volume", async ({ page }) => {
     )
     .toBe(40);
 });
+
+test("closing full screen can slide the lyrics away first", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Layout");
+  await page
+    .getByRole("switch", { name: "Animate closing full screen" })
+    .click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await page.keyboard.press("Escape");
+  const section = page.locator(".lyrics-page");
+  await expect(section).toHaveClass(/fullscreen-exit/);
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect(page.locator(".application")).not.toHaveClass(/immersive/);
+  await expect(section).not.toHaveClass(/fullscreen-exit/);
+});

@@ -196,6 +196,8 @@ pub struct Settings {
     pub lyrics_pinned_footer: PinnedLyricsFooter,
     pub fullscreen_always_show: FullscreenAlwaysShow,
     pub fullscreen_volume: FullscreenVolume,
+    /// Lyrics slide down out of view before full screen closes.
+    pub fullscreen_animate_close: bool,
     pub lyrics_animator: LyricsAnimator,
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
@@ -272,6 +274,7 @@ impl Default for Settings {
             lyrics_pinned_footer: PinnedLyricsFooter::Off,
             fullscreen_always_show: FullscreenAlwaysShow::None,
             fullscreen_volume: FullscreenVolume::Off,
+            fullscreen_animate_close: false,
             lyrics_source_order: crate::lyric_sources::DEFAULT_ORDER
                 .iter()
                 .map(|id| (*id).into())

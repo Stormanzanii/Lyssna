@@ -1011,6 +1011,12 @@ export function SettingsWindow({
           </select>
         </SettingRow>,
         flag(
+          "fullscreen_animate_close",
+          "Animate closing full screen",
+          "Slide the lyrics away before full screen closes.",
+          "fullscreen full screen close exit animation slide",
+        ),
+        flag(
           "lyrics_hide_npv",
           "Hide lyrics in Now playing",
           "Never show the lyrics card in the Now playing panel.",

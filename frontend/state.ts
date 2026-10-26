@@ -158,6 +158,7 @@ export const emptyState: AppState = {
     lyrics_pinned_footer: "off",
     fullscreen_always_show: "none",
     fullscreen_volume: "off",
+    fullscreen_animate_close: false,
     lyrics_source_order: [
       "spicy",
       "apple",

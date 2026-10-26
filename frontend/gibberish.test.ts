@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { gibberishLine, gibberishSyllables, gibberishWords } from "./gibberish";
-import { GIBBERISH_WORDS } from "./gibberish-dictionary";
+import { GIBBERISH_ENTRIES } from "./gibberish-dictionary";
 
 describe("gibberish", () => {
   it("carries the fork's whole dictionary", () => {
-    expect(GIBBERISH_WORDS.size).toBe(2001);
-    expect(GIBBERISH_WORDS.get("beautiful")).toBe("byutifo");
-    expect(GIBBERISH_WORDS.get("i'm")).toBe("am");
+    expect(GIBBERISH_ENTRIES).toHaveLength(2113);
+    expect(gibberishLine("beautiful")).toBe("byutifo");
   });
 
-  it("joins a phrase into one word and keeps its closing mark", () => {
+  it("joins a line into lower-case words without punctuation", () => {
     expect(gibberishLine("I'm in love with you, my dear")).toBe(
-      "Amenlufwitu, madia",
+      "emenlufwitumadia",
     );
     expect(gibberishLine("so beautiful")).not.toContain(" ");
   });
@@ -39,7 +38,20 @@ describe("gibberish", () => {
     expect(syllables).toHaveLength(4);
     expect(syllables.slice(0, 3).join("")).toBe("byutifo");
     expect(syllables.every((part) => part.length > 0)).toBe(true);
-    expect(syllables.join("")).toBe(gibberishLine("beautiful day"));
+    expect(syllables.join("")).toBe("byutifode");
+  });
+
+  it("ends words at spaces before syllables too", () => {
+    // Lyrics put the space before a word as often as after the last one.
+    expect(
+      gibberishSyllables(["The", " morn", "ing", " light", " is"]).join(""),
+    ).toBe("demoninlaies");
+    // Words timed alone keep doubled letters across them, as in the fork.
+    expect(gibberishSyllables(["don't", " know"]).join("")).toBe("donnu");
+    expect(gibberishLine("don't know")).toBe("donu");
+    expect(gibberishLine("The morning light is turning blue")).toBe(
+      "demoninlaiesterinblu",
+    );
   });
 
   it("keeps untouched syllables of words it leaves alone", () => {

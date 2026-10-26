@@ -10670,7 +10670,7 @@ test("gibberish respells lyrics and long phrases still wrap", async ({
     { track, playback: emptyState.playback, sentence },
   );
   const line = page.locator(".lyrics-page .lyric-line").first();
-  await expect(line).toContainText("Winomichen");
+  await expect(line).toContainText("winumichen");
   await expect(line).not.toContainText("beautiful");
   for (const width of [1000, 1440]) {
     await page.setViewportSize({ width, height: 900 });

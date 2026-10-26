@@ -1,4 +1,4 @@
-import { GIBBERISH_WORDS } from "./gibberish-dictionary";
+import { GIBBERISH_ENTRIES } from "./gibberish-dictionary";
 
 /* Gibberish, from Spicy Lyrics' Unique Word Filters: lyrics respelled the
  * way someone who doesn't speak the language might write down what they
@@ -7,14 +7,12 @@ import { GIBBERISH_WORDS } from "./gibberish-dictionary";
  * (iPixelGalaxy/spicy-lyrics a60aa34, AGPL-3.0): the dictionary, the
  * phonetic rules for words it lacks, t/d + y blending and the joining.
  *
+ * Output matches the fork's: lower case, no punctuation, words joined.
  * SpotiFlex changes: a word timed in syllables is respelled whole and then
  * shared back out over its syllables, where the fork respelled each
- * syllable alone ("beau-ti-ful" missed the dictionary's "byutifo"); phrases
- * keep the comma, question mark or other mark that ends them, as in the
- * meme's "Wenomechainsama, tumajarbisaun"; a line that began with a
- * capital still does; curly apostrophes and accents are read like plain
- * ones; and words with no Latin letters, such as Japanese or Korean, are
- * left as written. */
+ * syllable alone ("beau-ti-ful" missed the dictionary's "byutifo"); curly
+ * apostrophes and accents are read like plain ones; and words with no
+ * Latin letters, such as Japanese or Korean, are left as written. */
 
 // Phonetic rules for words missing from the dictionary, in the fork's order.
 const RULES: [RegExp, string][] = [
@@ -85,9 +83,6 @@ const RULES: [RegExp, string][] = [
 ];
 
 const DOUBLE_CONSONANT = /([bcdfghjklmnpqrstvwxyz])\1/g;
-/** Marks that end a phrase; the respelled phrase keeps them. */
-const PHRASE_END = /[,;:!?.…]+$/;
-
 /** Lower case, accents dropped, curly apostrophes made straight. */
 function plain(text: string) {
   return text
@@ -97,12 +92,38 @@ function plain(text: string) {
     .toLowerCase();
 }
 
+/** Each dictionary word's entries, by their place in the fork's list. */
+const ENTRIES = new Map<string, [number, string][]>();
+GIBBERISH_ENTRIES.forEach(([word, spelling], index) => {
+  const list = ENTRIES.get(word) ?? [];
+  list.push([index, spelling]);
+  ENTRIES.set(word, list);
+});
+
+/** The fork's dictionary pass: every entry in order, each one respelling
+ *  the word if it matches the spelling so far. Null when none matched. */
+function lookUp(word: string): string | null {
+  let text = word,
+    at = -1,
+    matched = false;
+  for (;;) {
+    const next = ENTRIES.get(text)?.find(([index]) => index > at);
+    if (!next) return matched ? text : null;
+    [at, text] = next;
+    matched = true;
+  }
+}
+
 /** One hyphen-free part of a word: the dictionary, then phonetic rules. */
 function respellPart(part: string) {
   const word = part.replace(/[^a-z0-9']/g, "").replace(/^'+|'+$/g, "");
-  const known =
-    GIBBERISH_WORDS.get(word) ?? GIBBERISH_WORDS.get(word.replace(/'/g, ""));
-  if (known !== undefined) return known;
+  const known = lookUp(word);
+  if (known !== null) return known;
+  // The fork's entries also matched words inside apostrophes ("nothin'").
+  const pieces = word.split("'");
+  const spelled = pieces.map(lookUp);
+  if (pieces.length > 1 && spelled.some((piece) => piece !== null))
+    return spelled.map((piece, index) => piece ?? pieces[index]).join("");
   let text = word.replace(/'/g, "");
   for (const [pattern, spelling] of RULES)
     text = text.replace(pattern, spelling);
@@ -119,31 +140,21 @@ function respellWord(word: string): string | null {
     .join("");
 }
 
-/** Respelled words, each with what follows it: nothing inside a phrase,
- *  or the phrase's closing mark and a space. Words that are not respelled
- *  keep their own text and spacing. `words` hold their trailing spaces. */
+/** Respelled words, joined without spaces as in the fork: each output
+ *  holds one word's spelling. Words that are not respelled keep their own
+ *  text and spacing. */
 export function gibberishWords(words: string[]): string[] {
   const out: string[] = [];
-  let previous: { word: string; text: string } | undefined;
-  let lineStart = true;
   const respelled: boolean[] = [];
-  words.forEach((word, index) => {
+  let previous: { word: string; text: string } | undefined;
+  words.forEach((word) => {
     const core = respellWord(word);
     respelled.push(core !== null);
     if (core === null) {
-      // A lone dash or other mark stands apart between respelled phrases.
-      if (!/[\p{L}\p{N}]/u.test(word) && word.trim()) {
-        const spaced = !out.length || /\s$/.test(out[out.length - 1]);
-        out.push(
-          `${spaced ? "" : " "}${word.trim()}${index < words.length - 1 ? " " : ""}`,
-        );
-      } else out.push(word);
+      out.push(word);
       previous = undefined;
       return;
     }
-    const trimmed = word.trimEnd();
-    const mark = trimmed.match(PHRASE_END)?.[0] ?? "";
-    const last = index === words.length - 1;
     let text = core;
     if (previous) {
       // t or d before a "y" word blends into ch or j ("met you": "mechu").
@@ -164,11 +175,8 @@ export function gibberishWords(words: string[]): string[] {
       )
         text = text.slice(1);
     }
-    if (lineStart && /^\P{L}*\p{Lu}/u.test(word))
-      text = text.charAt(0).toUpperCase() + text.slice(1);
-    lineStart = false;
-    out.push(text + (mark ? mark + (last ? "" : " ") : ""));
-    previous = mark ? undefined : { word, text };
+    out.push(text);
+    previous = { word, text };
   });
   // As in the fork, consonants doubled anywhere in the result are said once.
   return out.map((text, index) =>
@@ -184,19 +192,27 @@ export function gibberishLine(text: string): string {
 
 /** Words timed in syllables: each word is respelled whole, then its
  *  spelling is shared over its syllables by their share of the letters.
- *  A syllable ends a word when it ends with a space or ends the line. */
+ *  As in the lyrics renderer, a space before or after a syllable ends a
+ *  word. */
 export function gibberishSyllables(syllables: string[]): string[] {
   const groups: number[][] = [];
   let group: number[] = [];
   syllables.forEach((syllable, index) => {
+    if (group.length && /^\s/.test(syllable)) {
+      groups.push(group);
+      group = [];
+    }
     group.push(index);
     if (/\s$/.test(syllable) || index === syllables.length - 1) {
       groups.push(group);
       group = [];
     }
   });
-  const spelled = gibberishWords(
-    groups.map((indexes) => indexes.map((index) => syllables[index]).join("")),
+  // Like the fork's word-synced lyrics, each word stands alone: no blending
+  // or merged consonants across words, which only line lyrics get.
+  const spelled = groups.map(
+    (indexes) =>
+      gibberishWords([indexes.map((index) => syllables[index]).join("")])[0],
   );
   const out: string[] = [];
   groups.forEach((indexes, word) => {
@@ -210,9 +226,6 @@ export function gibberishSyllables(syllables: string[]): string[] {
       out.push(...original);
       return;
     }
-    // Keep the closing mark and space on the word's last syllable.
-    const tail = text.match(/[,;:!?.…]*\s*$/)?.[0] ?? "";
-    const body = text.slice(0, text.length - tail.length);
     const weights = indexes.map(
       (index) => syllables[index].replace(/[^\p{L}\p{N}]/gu, "").length || 1,
     );
@@ -223,12 +236,11 @@ export function gibberishSyllables(syllables: string[]): string[] {
       seen += weights[part];
       const end =
         part === indexes.length - 1
-          ? body.length
-          : Math.round((body.length * seen) / total);
-      out.push(body.slice(used, Math.max(used, end)));
+          ? text.length
+          : Math.round((text.length * seen) / total);
+      out.push(text.slice(used, Math.max(used, end)));
       used = Math.max(used, end);
     });
-    out[out.length - 1] += tail;
   });
   return out;
 }

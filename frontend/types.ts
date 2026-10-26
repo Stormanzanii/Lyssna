@@ -121,6 +121,10 @@ export interface Settings {
   npv_ambience?: boolean;
   glass_seek?: boolean;
   space_gravity?: boolean;
+  /** Highlighter lyrics player: a marker sweeps behind each sung line. */
+  lyrics_highlighter?: boolean;
+  /** The marker colour: "#rrggbb", or "cover" for the artwork's colour. */
+  lyrics_highlighter_color?: string;
   lyrics_translations?: boolean;
   lyrics_animator?: AnimatorSettings;
   experimental_word_sync?: boolean;

@@ -75,6 +75,7 @@ import {
   type ScrollSpring,
 } from "./lyric-motion";
 import { LyricAnimator } from "./lyric-animator";
+import { HighlighterWords, markerColour } from "./highlighter";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
 
@@ -721,6 +722,7 @@ export function LyricsDisplay({
     if (Math.min(box.bottom, view.bottom) - Math.max(box.top, view.top) >= 5)
       setFollowing(true);
   }, [positionMs, following, primary, lyrics.synced]);
+  const highlighter = !!settings.lyrics_highlighter && lyrics.synced;
   if (lyrics.instrumental)
     return (
       <div className="lyrics-message">
@@ -736,14 +738,23 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_minimal && !compact ? "minimal" : ""} ${settings.lyrics_keep_overlaps !== false ? "keep-overlaps" : ""} ${lyrics.synced && lyrics.lines.length && positionMs >= Math.max(...lyrics.lines.map(vocalEnd)) ? "all-sung" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_minimal && !compact ? "minimal" : ""} ${highlighter ? "highlighter" : ""} ${settings.lyrics_keep_overlaps !== false ? "keep-overlaps" : ""} ${lyrics.synced && lyrics.lines.length && positionMs >= Math.max(...lyrics.lines.map(vocalEnd)) ? "all-sung" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
       data-following={following}
       style={
-        compact
-          ? undefined
-          : ({
-              "--lyric-size": `${Math.round(settings.lyric_size * 1.6)}px`,
-            } as CSSProperties)
+        {
+          ...(compact
+            ? {}
+            : {
+                "--lyric-size": `${Math.round(settings.lyric_size * 1.6)}px`,
+              }),
+          ...(highlighter
+            ? {
+                "--highlighter-ink": markerColour(
+                  settings.lyrics_highlighter_color,
+                ),
+              }
+            : {}),
+        } as CSSProperties
       }
     >
       <div
@@ -800,7 +811,14 @@ export function LyricsDisplay({
                 onMouseDown={(event) => event.preventDefault()}
               >
                 <span className="lyric-main">
-                  <LyricWords line={line} />
+                  {highlighter ? (
+                    <HighlighterWords
+                      line={line}
+                      time={playing ? positionMs : -Infinity}
+                    />
+                  ) : (
+                    <LyricWords line={line} />
+                  )}
                 </span>
                 {/* Lyrics can carry translations, such as Chinese under
                     English; like Spicy Lyrics they stay hidden unless

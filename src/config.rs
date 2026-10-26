@@ -185,6 +185,11 @@ pub struct Settings {
     /// Space Gravity lyrics; replaced the earlier floating lyrics option.
     #[serde(alias = "floating_lyrics")]
     pub space_gravity: bool,
+    /// Highlighter lyrics player: a marker sweeps behind each sung line.
+    pub lyrics_highlighter: bool,
+    /// The Highlighter's marker colour: "#rrggbb", or "cover" for the
+    /// artwork's colour.
+    pub lyrics_highlighter_color: String,
     /// Translations bundled with lyrics; hidden unless asked for.
     pub lyrics_translations: bool,
     pub experimental_word_sync: bool,
@@ -323,6 +328,8 @@ impl Default for Settings {
             npv_ambience: true,
             glass_seek: true,
             space_gravity: false,
+            lyrics_highlighter: false,
+            lyrics_highlighter_color: "#7d6f08".into(),
             lyrics_translations: false,
             experimental_word_sync: false,
             lyrics_hide_artwork: false,
@@ -441,6 +448,16 @@ impl Settings {
         {
             self.lyrics_background = "animated".into();
         }
+        let colour = self.lyrics_highlighter_color.to_ascii_lowercase();
+        self.lyrics_highlighter_color = if colour == "cover"
+            || (colour.len() == 7
+                && colour.starts_with('#')
+                && colour[1..].bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            colour
+        } else {
+            "#7d6f08".into()
+        };
         if !["off", "gibberish", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
             self.lyrics_word_filter = "off".into();
         }
@@ -608,6 +625,19 @@ mod tests {
             serde_json::from_str(r#"{"lyrics_word_filter":"gibberish"}"#).unwrap();
         gibberish.clean_lyrics_options();
         assert_eq!(gibberish.lyrics_word_filter, "gibberish");
+        let older: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(older.lyrics_highlighter_color, "#7d6f08");
+        for (saved, kept) in [
+            ("#1F7A3A", "#1f7a3a"),
+            ("cover", "cover"),
+            ("red", "#7d6f08"),
+        ] {
+            let mut marker: Settings =
+                serde_json::from_value(serde_json::json!({ "lyrics_highlighter_color": saved }))
+                    .unwrap();
+            marker.clean_lyrics_options();
+            assert_eq!(marker.lyrics_highlighter_color, kept);
+        }
         let mut background: Settings =
             serde_json::from_str(r#"{"lyrics_background":"legacy","lyrics_background_blur":200}"#)
                 .unwrap();

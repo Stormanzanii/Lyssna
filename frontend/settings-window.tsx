@@ -35,6 +35,7 @@ import { cloneElement, isValidElement, type ReactElement } from "react";
 import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
+import { DEFAULT_MARKER, MARKER_COLOURS } from "./highlighter";
 import { LyricsProvider } from "./lyrics-provider";
 import { MusixmatchToken } from "./musixmatch-token";
 import { AnimatorPresetRow } from "./animator-settings";
@@ -1004,6 +1005,21 @@ export function SettingsWindow({
           "Words float in zero gravity, drift as they're sung and react when you move the window.",
           "gravity float",
         ),
+        flag(
+          "lyrics_highlighter",
+          "Highlighter",
+          "A marker pen sweeps behind each line as it's sung, row by row. Space Gravity takes its place while on.",
+          "highlighter marker highlight pen lyrics player style",
+        ),
+        settings.lyrics_highlighter ? (
+          <MarkerColourRow
+            key="highlighter-colour"
+            value={settings.lyrics_highlighter_color ?? DEFAULT_MARKER}
+            onChange={(lyrics_highlighter_color) =>
+              onSettings({ lyrics_highlighter_color })
+            }
+          />
+        ) : null,
         <AnimatorPresetRow
           key="animator"
           animator={settings.lyrics_animator}
@@ -1616,5 +1632,59 @@ export function SettingsWindow({
         </div>
       </section>
     </div>
+  );
+}
+
+/** The Highlighter's marker colour: a preset, the cover's colour, or any
+ *  colour from the picker. */
+function MarkerColourRow({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (colour: string) => void;
+}) {
+  const preset =
+    value === "cover" || MARKER_COLOURS.some(([hex]) => hex === value)
+      ? value
+      : "custom";
+  return (
+    <SettingRow
+      label="Marker colour"
+      help="The Highlighter's ink. Cover colour follows the artwork; Custom takes any colour."
+      keywords="highlighter marker colour color ink custom cover"
+    >
+      <span className="marker-colour">
+        <select
+          className="settings-select"
+          aria-label="Marker colour"
+          value={preset}
+          onChange={(event) =>
+            onChange(
+              event.target.value === "custom"
+                ? value === "cover"
+                  ? DEFAULT_MARKER
+                  : value
+                : event.target.value,
+            )
+          }
+        >
+          {MARKER_COLOURS.map(([hex, name]) => (
+            <option key={hex} value={hex}>
+              {name}
+            </option>
+          ))}
+          <option value="cover">Cover colour</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input
+          type="color"
+          aria-label="Custom marker colour"
+          value={value === "cover" ? DEFAULT_MARKER : value}
+          disabled={value === "cover"}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </span>
+    </SettingRow>
   );
 }

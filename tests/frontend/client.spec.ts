@@ -10681,3 +10681,95 @@ test("gibberish respells lyrics and long phrases still wrap", async ({
       .toBeLessThanOrEqual(2);
   }
 });
+
+test("highlighter sweeps a marker behind the sung words", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await expect(page.getByLabel("Marker colour", { exact: true })).toHaveValue(
+    "#7d6f08",
+  );
+  await showLyrics(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const { emit } = (window as any).__clientTest;
+      emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: false,
+          progress_ms: 1500,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      const words =
+        "As he came into the window was a sound of a crescendo".split(" ");
+      emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [0, 1].map((line) => ({
+            start_ms: line * 6000,
+            end_ms: (line + 1) * 6000,
+            text: words.join(" "),
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: words.map((word, index) => ({
+              start_ms: line * 6000 + index * 500,
+              end_ms: line * 6000 + (index + 1) * 500,
+              text: index < words.length - 1 ? `${word} ` : word,
+            })),
+          })),
+        },
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  const active = page.locator(".lyrics-page .lyric-line.active");
+  await expect(active.locator(".highlighter-piece")).toHaveCount(12);
+  const inks = () =>
+    active
+      .locator(".highlighter-piece")
+      .evaluateAll((pieces) =>
+        pieces.map((piece) =>
+          Number((piece as HTMLElement).style.getPropertyValue("--ink")),
+        ),
+      );
+  // At 1.5 s the first three words are sung and the rest are not.
+  await expect.poll(async () => (await inks()).slice(0, 3)).toEqual([1, 1, 1]);
+  expect((await inks()).slice(4)).toEqual(Array(8).fill(0));
+  const marker = await active
+    .locator(".highlighter-piece")
+    .first()
+    .evaluate((piece) => getComputedStyle(piece, "::before").backgroundColor);
+  expect(marker).toBe("rgb(125, 111, 8)");
+  // Lines not being sung carry no marker.
+  expect(
+    await page
+      .locator(".lyrics-page .lyric-line:not(.active) .highlighter-piece")
+      .evaluateAll((pieces) =>
+        pieces.every(
+          (piece) =>
+            (piece as HTMLElement).style.getPropertyValue("--ink") === "0",
+        ),
+      ),
+  ).toBe(true);
+  await openSettings(page, "Effects");
+  await page
+    .getByLabel("Marker colour", { exact: true })
+    .selectOption("#24508f");
+  await showLyrics(page);
+  expect(
+    await active
+      .locator(".highlighter-piece")
+      .first()
+      .evaluate((piece) => getComputedStyle(piece, "::before").backgroundColor),
+  ).toBe("rgb(36, 80, 143)");
+});

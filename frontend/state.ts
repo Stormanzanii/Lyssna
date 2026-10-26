@@ -138,6 +138,8 @@ export const emptyState: AppState = {
     npv_ambience: true,
     glass_seek: true,
     space_gravity: false,
+    lyrics_highlighter: false,
+    lyrics_highlighter_color: "#7d6f08",
     lyrics_translations: false,
     experimental_word_sync: false,
     lyrics_hide_artwork: false,

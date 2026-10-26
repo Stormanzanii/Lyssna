@@ -5775,3 +5775,42 @@ input[type="range"]:hover {
   filter: blur(var(--background-blur, 0px)) brightness(0.45);
   transform: scale(1.08);
 }
+
+/* Highlighter lyrics player: an opaque marker stroke, skewed like a pen
+   held at an angle, fills behind each word as it is sung. Neighbouring
+   strokes overlap a little, so a row reads as one stroke with slanted
+   ends. */
+.lyrics-display.highlighter {
+  --highlighter-ink: #7d6f08;
+}
+.highlighter-piece {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-text-fill-color: rgb(255 255 255 / var(--unsung-alpha));
+}
+.lyric-line.active .highlighter-piece {
+  -webkit-text-fill-color: #fff;
+}
+.highlighter-piece::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -0.12em;
+  bottom: 0.06em;
+  width: calc(var(--ink, 0) * (100% + 0.24em));
+  height: 0.86em;
+  border-radius: 0.14em;
+  background: var(--highlighter-ink);
+  transform: skewX(-14deg);
+  opacity: min(1, calc(var(--ink, 0) * 40));
+}
+.lyrics-display.highlighter .lyric-line:not(.active) .highlighter-piece::before {
+  transition: opacity 0.3s ease-out;
+  opacity: 0;
+}
+.reduce-motion .highlighter-piece::before {
+  transform: none;
+}

@@ -871,3 +871,24 @@
   color: #fff;
   opacity: 1;
 }
+.marker-colour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.marker-colour input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 3px;
+  border: 1px solid #ffffff1f;
+  border-radius: 8px;
+  background: #ffffff0d;
+  cursor: pointer;
+}
+.marker-colour input[type="color"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.marker-colour .settings-select {
+  width: 176px;
+}

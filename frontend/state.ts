@@ -165,6 +165,7 @@ export const emptyState: AppState = {
     now_playing_open: true,
     song_sorts: {},
     lyrics_background: "animated",
+    lyrics_background_blur: 0,
     lyrics_pinned_footer: "off",
     fullscreen_always_show: "none",
     fullscreen_volume: "off",

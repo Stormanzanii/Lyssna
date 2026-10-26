@@ -156,6 +156,8 @@ pub enum Event {
         listeners: Option<u64>,
         /// Header photo or avatar, used when the artist has no other picture.
         image: Option<String>,
+        /// The header photo alone.
+        header: Option<String>,
         verified: Option<bool>,
         biography: String,
     },
@@ -1628,6 +1630,7 @@ impl Backend {
                                 uri: uri.clone(),
                                 artist_id: artist_id.clone(),
                                 listeners: overview.monthly_listeners,
+                                header: overview.header_image.clone(),
                                 image: overview.header_image.or(overview.avatar_image),
                                 verified: overview.verified,
                                 biography: overview.biography,

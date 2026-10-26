@@ -4,6 +4,8 @@ export interface Artwork {
   width?: number;
 }
 export interface Artist {
+  /** The artist page's wide header photo. */
+  header_image?: string;
   monthly_listeners?: number;
   id?: string;
   uri?: string;
@@ -148,7 +150,9 @@ export interface Settings {
   lyrics_hide_npv_empty?: boolean;
   now_playing_open?: boolean;
   song_sorts?: Record<string, string>;
-  lyrics_background?: "animated" | "static" | "color";
+  lyrics_background?:
+    "animated" | "static" | "cover" | "artist" | "color" | "none";
+  lyrics_background_blur?: number;
   lyrics_pinned_footer?: "off" | "no_writers" | "full";
   /** Full screen parts kept visible while the rest hides on idle. */
   fullscreen_always_show?: "none" | "controls" | "time" | "both";

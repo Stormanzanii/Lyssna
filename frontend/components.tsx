@@ -1343,6 +1343,20 @@ function SongLyricsPage({
     state.settings.lyrics_word_filter,
   );
   const year = state.settings.lyrics_year_position ?? "left";
+  // Cover art and Artist header put a plain image behind the lyrics; the
+  // artist's header falls back to the cover until it is known.
+  const background = state.settings.lyrics_background ?? "animated";
+  const cover = artworkFor(track?.album.images, 1280);
+  const backgroundImage =
+    background === "cover"
+      ? cover
+      : background === "artist"
+        ? [
+            state.details.artists.find(
+              (artist) => artist.id && artist.id === track?.artists[0]?.id,
+            )?.header_image ?? "",
+          ].find(usableImage) || cover
+        : undefined;
   const fullscreenControls = track ? (
     <div
       className="lyrics-fullscreen-controls"
@@ -1476,17 +1490,26 @@ function SongLyricsPage({
       {(!immersive || canvas || narrow || state.settings.lyrics_hide_artwork) &&
         children}
       {(!canvas || !canvasShown) &&
-        state.settings.lyrics_background !== "color" && (
+        (background === "animated" || background === "static") && (
           <Ambience
             track={track}
             reduceMotion={state.settings.reduce_motion}
-            animate={
-              state.playback.is_playing &&
-              state.settings.lyrics_background !== "static"
-            }
+            animate={state.playback.is_playing && background !== "static"}
           />
         )}
-      {canvas && (
+      {(!canvas || !canvasShown) && backgroundImage && (
+        <div
+          className="lyrics-image-background"
+          aria-hidden="true"
+          style={
+            {
+              backgroundImage: `url("${backgroundImage.replace(/"/g, "%22")}")`,
+              "--background-blur": `${state.settings.lyrics_background_blur ?? 0}px`,
+            } as CSSProperties
+          }
+        />
+      )}
+      {canvas && background !== "none" && (
         <canvas
           className="lyrics-canvas-backdrop"
           ref={backdrop}

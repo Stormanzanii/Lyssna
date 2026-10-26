@@ -228,8 +228,11 @@ pub struct Settings {
     pub lyrics_year_position: YearPosition,
     pub lyrics_hide_npv: bool,
     pub lyrics_hide_npv_empty: bool,
-    /// Lyrics page background: "animated", "static" or "color".
+    /// Lyrics page background: "animated", "static", "cover" (the album
+    /// art), "artist" (the artist's header photo), "color" or "none".
     pub lyrics_background: String,
+    /// Blur over the Cover art and Artist header backgrounds, 0 to 48 px.
+    pub lyrics_background_blur: u8,
     pub lyrics_pinned_footer: PinnedLyricsFooter,
     pub fullscreen_always_show: FullscreenAlwaysShow,
     pub fullscreen_volume: FullscreenVolume,
@@ -334,6 +337,7 @@ impl Default for Settings {
             lyrics_hide_npv: false,
             lyrics_hide_npv_empty: false,
             lyrics_background: "animated".into(),
+            lyrics_background_blur: 0,
             lyrics_pinned_footer: PinnedLyricsFooter::Off,
             fullscreen_always_show: FullscreenAlwaysShow::None,
             fullscreen_volume: FullscreenVolume::Off,
@@ -404,6 +408,12 @@ impl Settings {
     /// Keeps Spicy Lyrics display options inside the ranges Settings offers.
     pub fn clean_lyrics_options(&mut self) {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
+        self.lyrics_background_blur = self.lyrics_background_blur.min(48);
+        if !["animated", "static", "cover", "artist", "color", "none"]
+            .contains(&self.lyrics_background.as_str())
+        {
+            self.lyrics_background = "animated".into();
+        }
         if !["off", "lower", "upper"].contains(&self.lyrics_word_filter.as_str()) {
             self.lyrics_word_filter = "off".into();
         }
@@ -429,9 +439,6 @@ impl Settings {
         settings.ui_zoom_percent = settings.ui_zoom_percent.clamp(75, 200);
         settings.lyric_offset_ms = settings.lyric_offset_ms.clamp(-10_000, 10_000);
         settings.clean_lyrics_options();
-        if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
-            settings.lyrics_background = "animated".into();
-        }
         settings.lyrics_source_order = crate::lyric_sources::migrate(
             &settings.lyrics_source_order,
             &mut settings.lyrics_sources_disabled,
@@ -569,6 +576,16 @@ mod tests {
             serde_json::from_str(r#"{"lyrics_word_filter":"Gibberish"}"#).unwrap();
         filter.clean_lyrics_options();
         assert_eq!(filter.lyrics_word_filter, "off");
+        let mut background: Settings =
+            serde_json::from_str(r#"{"lyrics_background":"legacy","lyrics_background_blur":200}"#)
+                .unwrap();
+        background.clean_lyrics_options();
+        assert_eq!(background.lyrics_background, "animated");
+        assert_eq!(background.lyrics_background_blur, 48);
+        let mut artist: Settings =
+            serde_json::from_str(r#"{"lyrics_background":"artist"}"#).unwrap();
+        artist.clean_lyrics_options();
+        assert_eq!(artist.lyrics_background, "artist");
         assert!(older.lyrics_cache_button);
         assert!(older.lyrics_prefer_apple);
         assert!(older.settings_remember_place);

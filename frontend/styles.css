@@ -5762,3 +5762,16 @@ input.volume-range:active::-webkit-slider-thumb {
 .lyrics-year.right .lyrics-year-dot {
   margin: 0 0.4em 0 0;
 }
+/* Cover art and Artist header backgrounds: the picture fills the page,
+   darkened for the lyrics, with the chosen blur. Scaled up a little so a
+   blur never shows soft edges. */
+.lyrics-image-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-size: cover;
+  filter: blur(var(--background-blur, 0px)) brightness(0.45);
+  transform: scale(1.08);
+}

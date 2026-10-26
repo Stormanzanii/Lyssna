@@ -755,7 +755,7 @@ export function SettingsWindow({
         <SettingRow
           key="background"
           label="Background"
-          help="Moving artwork, still artwork, or one colour from the cover behind the lyrics."
+          help="Moving artwork, still artwork, the cover or the artist's header photo, one colour from the cover, or nothing behind the lyrics."
           keywords="background ambience dynamic static colour color"
         >
           <select
@@ -771,9 +771,22 @@ export function SettingsWindow({
           >
             <option value="animated">Animated artwork</option>
             <option value="static">Still artwork</option>
+            <option value="cover">Cover art</option>
+            <option value="artist">Artist header</option>
             <option value="color">Cover colour</option>
+            <option value="none">None</option>
           </select>
         </SettingRow>,
+        range(
+          "lyrics_background_blur",
+          "Background blur",
+          "Blur the Cover art and Artist header backgrounds.",
+          "background blur cover artist header image",
+          [0, 48, 1],
+          0,
+          " px",
+          !["cover", "artist"].includes(settings.lyrics_background ?? ""),
+        ),
         <SettingRow
           key="pinned-footer"
           label="Pinned Lyrics Footer"

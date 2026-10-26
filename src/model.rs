@@ -19,6 +19,10 @@ pub struct Artist {
     pub verified: Option<bool>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub biography: String,
+    /// The wide header photo from the artist's page, for the lyrics page's
+    /// Artist header background.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub header_image: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

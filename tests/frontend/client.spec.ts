@@ -10424,3 +10424,49 @@ test("songs without lyrics can show only the song", async ({ page }) => {
   await fail("Spicy Lyrics is unreachable");
   await expect(heading).toBeVisible();
 });
+
+test("lyrics can sit over the cover, the artist's header or nothing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  const section = page.locator(".lyrics-page");
+  const image = section.locator(".lyrics-image-background");
+  await expect(section.locator(".ambience")).toHaveCount(1);
+  await openSettings(page, "Lyrics");
+  const select = page.getByLabel("Lyrics background", { exact: true });
+  const blur = page.getByLabel("Background blur", { exact: true });
+  await expect(blur).toBeDisabled();
+  await select.selectOption("cover");
+  await blur.fill("20");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(section.locator(".ambience")).toHaveCount(0);
+  await expect(image).toHaveCSS("background-image", /cover\.svg/);
+  await expect(image).toHaveCSS("filter", /blur\(20px\)/);
+  await page.evaluate(
+    ({ uri, artist }) =>
+      (window as any).__clientTest.emit({
+        type: "playing_details",
+        uri,
+        details: {
+          artists: [
+            {
+              ...artist,
+              header_image: "https://artwork.example.test/artist/banner.svg",
+            },
+          ],
+          queue: [],
+        },
+      }),
+    { uri: track.uri, artist: track.artists[0] },
+  );
+  await openSettings(page, "Lyrics");
+  await select.selectOption("artist");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(image).toHaveCSS("background-image", /banner\.svg/);
+  await openSettings(page, "Lyrics");
+  await select.selectOption("none");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(image).toHaveCount(0);
+  await expect(section.locator(".ambience")).toHaveCount(0);
+});

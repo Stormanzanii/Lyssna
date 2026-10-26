@@ -436,6 +436,7 @@ impl Desktop {
                             artist_id,
                             listeners,
                             image,
+                            header,
                             verified,
                             biography,
                         } => {
@@ -455,6 +456,9 @@ impl Desktop {
                                         }
                                         if !biography.is_empty() {
                                             artist.biography = biography.clone();
+                                        }
+                                        if let Some(url) = &header {
+                                            artist.header_image = url.clone();
                                         }
                                         // Local playback only knows artists whose page
                                         // was opened; fall back to the header photo.
@@ -2176,9 +2180,6 @@ fn save_settings(
             crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
         crate::config::clean_song_sorts(&mut settings.song_sorts);
         settings.lyrics_animator.clean();
-        if !["animated", "static", "color"].contains(&settings.lyrics_background.as_str()) {
-            settings.lyrics_background = "animated".into();
-        }
         settings.save()?;
         crate::lyric_sources::configure(
             &settings.lyrics_source_order,

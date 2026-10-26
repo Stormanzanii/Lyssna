@@ -2017,6 +2017,38 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
+test("right-clicking the Canvas in lyrics opens no song menu", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await emitCanvas(page);
+  const video = page.locator(".lyrics-canvas-cover video");
+  await expect(video).toBeVisible();
+  const box = (await video.boundingBox())!;
+  const x = box.x + Math.max(40, box.width * 0.3),
+    y = box.y + Math.max(40, box.height * 0.3);
+  expect(
+    await page.evaluate(
+      ([x, y]) => !!document.elementFromPoint(x, y)?.closest(".lyrics-album"),
+      [x, y],
+    ),
+  ).toBe(true);
+  await page.mouse.click(x, y, { button: "right" });
+  await page.waitForTimeout(200);
+  await expect(page.locator(".song-menu")).toHaveCount(0);
+  // The title over it keeps its menu.
+  await page
+    .locator(".lyrics-page .lyrics-title")
+    .click({ button: "right", force: true });
+  await expect(page.locator(".song-menu")).toBeVisible();
+});
+
 test("Canvas defaults on, Space Gravity is optional, with sharp video left and metadata bottom-left", async ({
   page,
 }) => {

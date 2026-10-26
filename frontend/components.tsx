@@ -1336,7 +1336,11 @@ function SongLyricsPage({
         <>
           <div
             className="lyrics-album"
-            data-context-route={track.id ? `track:${track.id}` : undefined}
+            // The Canvas sits behind this box as a backdrop, so only the
+            // title and artists open the song menu over it.
+            data-context-route={
+              track.id && !canvas ? `track:${track.id}` : undefined
+            }
           >
             {canvas ? (
               <LyricsCanvas
@@ -1362,27 +1366,33 @@ function SongLyricsPage({
                   fullscreenControls}
               </div>
             )}
-            <TrackTitle
-              track={track}
-              onAlbum={onAlbum}
-              reduceMotion={state.settings.reduce_motion}
-              className="lyrics-title"
-            />
-            {/* The year stays put; only the artist names scroll. */}
-            <div className="lyrics-artists">
-              {track.album.release_date && !state.settings.lyrics_hide_year && (
-                <span className="lyrics-year">
-                  {track.album.release_date.slice(0, 4)}
-                  {/* Spaced like the artist's own inset on the far side. */}
-                  <span className="lyrics-year-dot">·</span>
-                </span>
-              )}
-              <Marquee
-                text={artistNames(track)}
+            <div
+              className="lyrics-details"
+              data-context-route={track.id ? `track:${track.id}` : undefined}
+            >
+              <TrackTitle
+                track={track}
+                onAlbum={onAlbum}
                 reduceMotion={state.settings.reduce_motion}
-              >
-                <ArtistLinks artists={track.artists} onArtist={onArtist} />
-              </Marquee>
+                className="lyrics-title"
+              />
+              {/* The year stays put; only the artist names scroll. */}
+              <div className="lyrics-artists">
+                {track.album.release_date &&
+                  !state.settings.lyrics_hide_year && (
+                    <span className="lyrics-year">
+                      {track.album.release_date.slice(0, 4)}
+                      {/* Spaced like the artist's own inset on the far side. */}
+                      <span className="lyrics-year-dot">·</span>
+                    </span>
+                  )}
+                <Marquee
+                  text={artistNames(track)}
+                  reduceMotion={state.settings.reduce_motion}
+                >
+                  <ArtistLinks artists={track.artists} onArtist={onArtist} />
+                </Marquee>
+              </div>
             </div>
             {(canvas || narrow || state.settings.lyrics_hide_artwork) &&
               fullscreenControls}

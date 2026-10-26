@@ -30,6 +30,10 @@ A Spotify client written in Rust. It streams through [librespot](https://github.
 | **Library** | Every playlist and Spotify folder, plus saved albums and followed artists, in Spotify's Recents order |
 | **Updates** | Signed automatic updates on Windows, checked against an Ed25519 signature and SHA-256 hash before installing |
 
+Press **F11** for full-screen lyrics over the Canvas. The controls fade out until you move the mouse:
+
+![Full-screen lyrics over a Spotify Canvas](.github/assets/fullscreen.avif)
+
 > [!NOTE]
 > **Early development.** Some of Spotify's and Spicy Lyrics' features are still missing. [docs/FEATURES.md](docs/FEATURES.md) lists what works and what does not.
 

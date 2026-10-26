@@ -4632,16 +4632,21 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   // Halfway through the pause after "One", its line is half drawn.
   await at(1500);
   await expect(links).toHaveCount(1);
-  await expect
-    .poll(() => links.first().evaluate((path) => path.style.strokeDashoffset))
-    .toBe("0.5");
+  const offset = () =>
+    links
+      .first()
+      .evaluate((path) =>
+        Number((path as SVGPathElement).style.strokeDashoffset),
+      );
+  await expect.poll(offset).toBeCloseTo(0.5, 2);
   // Once "two" starts, the line reaches it and stays.
   await at(2500);
-  await expect
-    .poll(() => links.first().evaluate((path) => path.style.strokeDashoffset))
-    .toBe("0");
+  await expect.poll(offset).toBeCloseTo(0, 2);
   await at(4500);
   await expect(links).toHaveCount(2);
+  // Only the line being sung is joined; once it ends its links fade away.
+  await at(6500);
+  await expect(links).toHaveCount(0);
 });
 
 test("Space Gravity words keep drifting while the song plays", async ({

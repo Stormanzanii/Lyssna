@@ -301,9 +301,15 @@ function edge(body: Body, side: -1 | 1) {
   };
 }
 
+/** Eases in and out, so a link's pen starts and lands softly. */
+const ease = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
 /** With the Highlighter on, a marker line runs from each sung word to the
- *  next one, drawn across the pause between them like brainstorm notes.
- *  It bends a little and follows both words as they drift. */
+ *  next one in the line being sung, drawn across the pause between them
+ *  like brainstorm notes. It leaves each word along its own slant, so the
+ *  curve flows between them, and follows both as they drift. When the line
+ *  is done its links fade away. */
 function drawLinks(
   sheet: SVGSVGElement,
   entities: Entity[],
@@ -316,11 +322,26 @@ function drawLinks(
     (entity) =>
       entity.index >= 0 && shown.has(entity.key) && elements.has(entity.key),
   );
+  // The line being sung: started, with words still to finish.
+  let active = -1;
+  for (const entity of lead)
+    if (
+      entity.start <= time &&
+      lead.some((word) => word.lead === entity.lead && time < word.end)
+    )
+      active = Math.max(active, entity.lead);
+  const now = performance.now();
   const wanted = new Set<string>();
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
-    if (to.index !== from.index + 1 || time < from.end) continue;
+    if (
+      from.lead !== active ||
+      to.lead !== active ||
+      to.index !== from.index + 1 ||
+      time < from.end
+    )
+      continue;
     const a = bodies.get(from.key),
       b = bodies.get(to.key);
     if (!a?.spawned || !b?.spawned) continue;
@@ -332,32 +353,61 @@ function drawLinks(
     if (!path) {
       path = document.createElementNS(SVG, "path");
       path.dataset.link = key;
+      path.dataset.drawn = "0";
+      path.dataset.at = `${now}`;
       path.setAttribute("pathLength", "1");
       sheet.append(path);
     }
+    path.classList.remove("leaving");
     const start = edge(a, 1),
       end = edge(b, -1);
-    const dx = end.x - start.x,
-      dy = end.y - start.y,
-      length = Math.hypot(dx, dy) || 1;
-    // A seeded sideways bend, so each link curves its own way.
-    const bend = (((from.seed % 200) / 100 - 1) * 0.35 + 0.18) * length;
-    const control = {
-      x: (start.x + end.x) / 2 - (dy / length) * bend,
-      y: (start.y + end.y) / 2 + (dx / length) * bend,
-    };
+    const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+    // Leave and arrive along each word's slant, with a seeded lift so
+    // links swing their own way.
+    const reach = Math.min(160, length * 0.45);
+    const lift = ((from.seed % 200) / 100 - 1) * 0.5;
+    const out = ((a.angle + lift * 30) * Math.PI) / 180,
+      into = ((b.angle - lift * 30) * Math.PI) / 180;
+    const c1 = {
+        x: start.x + Math.cos(out) * reach,
+        y: start.y + Math.sin(out) * reach,
+      },
+      c2 = {
+        x: end.x - Math.cos(into) * reach,
+        y: end.y - Math.sin(into) * reach,
+      };
+    const point = (p: { x: number; y: number }) =>
+      `${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
     path.setAttribute(
       "d",
-      `M${start.x.toFixed(1)} ${start.y.toFixed(1)}Q${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
+      `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
     );
-    const drawn = Math.min(
-      1,
-      Math.max(0, (time - from.end) / Math.max(180, to.start - from.end)),
+    // The pen follows song time softly, so coarse time updates don't step.
+    const target = ease(
+      Math.min(
+        1,
+        Math.max(0, (time - from.end) / Math.max(320, to.start - from.end)),
+      ),
     );
-    path.style.strokeDashoffset = `${1 - drawn}`;
+    const elapsed = Math.min(100, now - Number(path.dataset.at));
+    const drawn =
+      Number(path.dataset.drawn) +
+      (target - Number(path.dataset.drawn)) * (1 - Math.exp(-elapsed / 60));
+    path.dataset.drawn = `${drawn}`;
+    path.dataset.at = `${now}`;
+    path.style.strokeDashoffset = `${(1 - drawn).toFixed(3)}`;
   }
-  for (const path of [...sheet.querySelectorAll<SVGPathElement>("path")])
-    if (!wanted.has(path.dataset.link ?? "")) path.remove();
+  for (const path of [...sheet.querySelectorAll<SVGPathElement>("path")]) {
+    if (
+      wanted.has(path.dataset.link ?? "") ||
+      path.classList.contains("leaving")
+    )
+      continue;
+    path.classList.add("leaving");
+    setTimeout(() => {
+      if (path.classList.contains("leaving")) path.remove();
+    }, 420);
+  }
 }
 
 /** Space Gravity: sung words float in zero gravity around the artwork. */

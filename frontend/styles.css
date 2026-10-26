@@ -6007,8 +6007,16 @@ input[type="range"]:hover {
 .gravity-links path {
   fill: none;
   stroke: var(--highlighter-ink);
-  stroke-width: 3.5px;
+  stroke-width: 3px;
   stroke-linecap: round;
+  stroke-linejoin: round;
   stroke-dasharray: 1 1;
-  opacity: 0.72;
+  opacity: 0.75;
+  /* A soft glow of the same ink, like felt bleeding into paper. */
+  filter: drop-shadow(0 0 3px
+    color-mix(in srgb, var(--highlighter-ink) 55%, transparent));
+  transition: opacity 0.4s ease-out;
+}
+.gravity-links path.leaving {
+  opacity: 0;
 }

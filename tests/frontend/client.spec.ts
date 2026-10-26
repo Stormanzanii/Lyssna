@@ -10565,3 +10565,38 @@ test("every settings tab keeps its icon and label", async ({ page }) => {
     }
   }
 });
+
+test("settings slider values stay inside their rows", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  const offset = page.getByRole("slider", { name: "Timing offset" });
+  await offset.fill("-2000");
+  await expect(
+    page.locator(".setting-row").filter({ has: offset }).locator("output"),
+  ).toHaveText("-2000 ms");
+  await openSettings(page, "Appearance");
+  await page
+    .getByRole("switch", { name: "Limit animation frame rate" })
+    .click();
+  await page.getByRole("slider", { name: "Animation frame rate" }).fill("240");
+  for (const tab of ["Appearance", "Lyrics", "Effects"]) {
+    await openSettings(page, tab);
+    const overflow = await page
+      .locator(".lyrics-settings .settings-range")
+      .evaluateAll((ranges) =>
+        ranges.map((range) => {
+          const row = range.closest(".setting-row")!.getBoundingClientRect();
+          const output = range.querySelector("output")!;
+          // The text itself, which can spill past a too-narrow output box.
+          const text = document.createRange();
+          text.selectNodeContents(output);
+          return {
+            text: output.textContent,
+            past: text.getBoundingClientRect().right - (row.right - 16),
+          };
+        }),
+      );
+    for (const { text, past } of overflow)
+      expect(past, `${text} on ${tab}`).toBeLessThanOrEqual(0.5);
+  }
+});

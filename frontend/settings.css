@@ -517,8 +517,12 @@
 .lyrics-settings .settings-range input {
   width: 180px;
 }
+/* Room for the widest value, such as "-2000 ms", so sliders line up. */
+.lyrics-settings .settings-range {
+  flex-shrink: 0;
+}
 .lyrics-settings .settings-range output {
-  width: 28px;
+  min-width: 60px;
   text-align: right;
   font-size: 13px;
 }

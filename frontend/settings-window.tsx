@@ -305,7 +305,7 @@ export function SettingsWindow({
             disabled={off}
             style={
               {
-                "--fill": `${((value - min) / (max - min)) * 100}%`,
+                "--fill": `${Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100))}%`,
               } as CSSProperties
             }
             onChange={(event) =>
@@ -871,28 +871,15 @@ export function SettingsWindow({
           "Open community lyrics makers' spicylyrics.org profiles in your browser instead of in SpotiFlex.",
           "profile browser community credits maker spicylyrics website",
         ),
-        <SettingRow
-          key="offset"
-          label="Timing offset"
-          help="Shift lyrics earlier or later to match what you hear."
-          keywords="lyrics sync delay offset milliseconds"
-        >
-          <span className="settings-number">
-            <input
-              className="number-field"
-              type="number"
-              aria-label="Timing offset"
-              min="-10000"
-              max="10000"
-              step="50"
-              value={settings.lyric_offset_ms}
-              onChange={(event) =>
-                onSettings({ lyric_offset_ms: Number(event.target.value) })
-              }
-            />
-            ms
-          </span>
-        </SettingRow>,
+        range(
+          "lyric_offset_ms",
+          "Timing offset",
+          "Shift lyrics earlier or later to match what you hear.",
+          "lyrics sync delay offset milliseconds",
+          [-2000, 2000, 10],
+          0,
+          " ms",
+        ),
         flag(
           "lyrics_seek_compensation",
           "Seek fade-in compensation",

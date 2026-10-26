@@ -8003,6 +8003,13 @@ test("the Now playing lyrics card opens, expands and folds like Spicy Lyrics", a
   const controls = card.locator(".lyric-card-control");
   await expect(controls).toHaveCount(3);
   await card.screenshot({ path: "target/diagnostics/npv-lyrics-card.png" });
+  // The current line sits near the top, not below a band of empty space.
+  const lead = await card
+    .locator(".lyric-scroll")
+    .evaluate((element) =>
+      parseFloat(getComputedStyle(element).getPropertyValue("--lead-top")),
+    );
+  expect(lead).toBeLessThanOrEqual(40);
   // Expand: the card fills the panel and everything else steps aside.
   await card.getByTitle("Expand lyrics").click();
   await expect(page.locator(".now-playing")).toHaveClass(/lyrics-expanded/);

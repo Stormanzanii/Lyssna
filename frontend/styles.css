@@ -3603,7 +3603,7 @@ small {
   padding: 0 8px;
 }
 .compact .lyric-scroll {
-  mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
+  mask-image: linear-gradient(transparent, #000 9%, #000 80%, transparent);
 }
 .compact .lyric-wait {
   padding-inline: 4px;

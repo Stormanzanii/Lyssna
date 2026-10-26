@@ -579,8 +579,10 @@ export function LyricsDisplay({
         ?.classList.contains("narrow");
       // Playback follows the line's centre, independent of artwork. Wide
       // lyrics still begin above centre and stop at the padded credits.
+      // Compact cards keep one faded line above the current one, as Spicy
+      // Lyrics' card does, instead of a band of empty space.
       const focus = compact
-        ? Math.min(72, container.clientHeight * 0.25)
+        ? Math.min(40, container.clientHeight * 0.14)
         : container.clientHeight / 2;
       const centred = !compact;
       container.style.setProperty(

@@ -5840,6 +5840,14 @@ input[type="range"]:hover {
   -webkit-mask-composite: source-in;
 }
 .highlighter-tip {
+  opacity: var(--tip-opacity, 1);
+  transition: opacity 0.3s ease-out;
   border-radius: 0.16em 0.22em 0.22em 0.16em;
   background: color-mix(in srgb, var(--highlighter-ink) 88%, transparent);
+}
+.highlighter-tip.lifted {
+  opacity: 0;
+}
+.lyrics-display.reduce-motion .highlighter-tip {
+  transition: none;
 }

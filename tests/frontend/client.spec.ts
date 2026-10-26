@@ -10802,12 +10802,12 @@ test("highlighter inks sung words behind the text and keeps them", async ({
   );
   await expect(sung.locator(".highlighter-stroke")).toHaveCount(rows);
   // One pen tip per line, where the pen finished, not one per row.
-  await expect(sung.locator(".highlighter-tip:visible")).toHaveCount(1);
+  await expect(sung.locator(".highlighter-tip:not(.lifted)")).toHaveCount(1);
   // That tip sits after the last word: its middle is past the last letter.
   await expect
     .poll(() =>
       sung.evaluate((line) => {
-        const tip = line.querySelector(".highlighter-tip:not([hidden])")!;
+        const tip = line.querySelector(".highlighter-tip:not(.lifted)")!;
         const pieces = line.querySelectorAll(".highlighter-piece");
         const last = pieces[pieces.length - 1];
         const range = document.createRange();
@@ -11100,4 +11100,321 @@ test("highlighter keeps a word's syllables on one row", async ({ page }) => {
     expect(new Set(tops.slice(6, 9)).size, `conqueror at ${width}px`).toBe(1);
     expect(new Set(tops.slice(12)).size, `nation at ${width}px`).toBe(1);
   }
+});
+
+test("highlighter finishes a line at the singing's pace", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  // Early scroll ends a line 250 ms before its last word does.
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Early scroll", exact: true }).click();
+  await showLyrics(page);
+  const at = (progress_ms: number) =>
+    page.evaluate(
+      ({ track, playback, progress_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...playback,
+            item: track,
+            is_playing: false,
+            progress_ms,
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { track, playback: emptyState.playback, progress_ms },
+    );
+  await at(3500);
+  await page.evaluate(
+    ({ track }) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              start_ms: 0,
+              end_ms: 6000,
+              text: "Slap box?",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [
+                { text: "Slap ", start_ms: 0, end_ms: 2000 },
+                { text: "box?", start_ms: 3000, end_ms: 6000 },
+              ],
+            },
+            {
+              start_ms: 6000,
+              end_ms: 9000,
+              text: "They said",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [],
+            },
+          ],
+        },
+      }),
+    { track },
+  );
+  const first = page.locator(".lyrics-page .lyric-line").first();
+  // 5.8 s: early scroll has moved on, but "box?" is still being sung.
+  await at(5800);
+  await expect(first).not.toHaveClass(/active/);
+  // So the tip is still in "box?", not at its end.
+  const spread = () =>
+    first.evaluate((line) => {
+      const tip = line.querySelector(".highlighter-tip:not(.lifted)")!;
+      const box = line
+        .querySelectorAll(".highlighter-piece")[1]
+        .getBoundingClientRect();
+      const middle =
+        (tip.getBoundingClientRect().left + tip.getBoundingClientRect().right) /
+        2;
+      return (middle - box.left) / box.width;
+    });
+  await page.waitForTimeout(400);
+  const halfway = await spread();
+  expect(halfway).toBeGreaterThan(0.5);
+  expect(halfway).toBeLessThan(1.02);
+  // Once the word is sung the tip reaches the end.
+  await at(6500);
+  await expect.poll(spread).toBeGreaterThan(0.95);
+});
+
+test("highlighter toggles mid-song without per-line layouts", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await page.evaluate(
+    ({ track, playback }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: false,
+          progress_ms: 120000,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { track, playback: emptyState.playback },
+  );
+  await page.waitForTimeout(1000);
+  await openSettings(page, "Effects");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Performance.enable");
+  const layouts = async () => {
+    const { metrics } = await session.send("Performance.getMetrics");
+    return metrics.find((metric) => metric.name === "LayoutCount")!.value;
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const before = await layouts();
+    await page.getByRole("switch", { name: "Highlighter" }).click();
+    await expect(page.locator(".highlighter-stroke")).toHaveCount(60);
+    // A constant number of layouts, rather than one for each sung line.
+    expect((await layouts()) - before).toBeLessThan(15);
+    await page.getByRole("switch", { name: "Highlighter" }).click();
+    await expect(page.locator(".highlighter-stroke")).toHaveCount(0);
+  }
+  await session.detach();
+});
+
+async function highlighterAt(page: Page, progress_ms: number) {
+  await page.evaluate(
+    ({ track, playback, progress_ms }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: false, progress_ms },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { track, playback: emptyState.playback, progress_ms },
+  );
+}
+
+async function highlighterFixture(page: Page, words: string[]) {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await showLyrics(page);
+  await highlighterAt(page, 500);
+  await page.evaluate(
+    ({ track, words }) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              start_ms: 0,
+              end_ms: words.length * 1000,
+              text: words.join(""),
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: words.map((text, index) => ({
+                text,
+                start_ms: index * 1000,
+                end_ms: (index + 1) * 1000,
+              })),
+            },
+          ],
+        },
+      }),
+    { track, words },
+  );
+  return page.locator(".lyrics-page .lyric-line").first();
+}
+
+test("highlighter grows a wrapped row's tip from zero", async ({ page }) => {
+  const line = await highlighterFixture(page, [
+    "First ",
+    "second ",
+    "third ",
+    "fourth",
+  ]);
+  await line.locator(".highlighter-words").evaluate((root) => {
+    root.style.width = "350px";
+  });
+  const next = await line
+    .locator(".highlighter-piece")
+    .evaluateAll((pieces) => {
+      const firstTop = (pieces[0] as HTMLElement).offsetTop;
+      const index = pieces.findIndex(
+        (piece) => (piece as HTMLElement).offsetTop > firstTop,
+      );
+      return { index, width: pieces[index].getBoundingClientRect().width };
+    });
+  expect(next.index).toBeGreaterThan(0);
+  // Hold the first few pixels of the second row. A full nib must not pop in.
+  await highlighterAt(page, next.index * 1000 + 3000 / next.width);
+  await expect(line.locator(".highlighter-tip")).toHaveCount(2);
+  const tip = line.locator(".highlighter-tip").nth(1);
+  await expect
+    .poll(() => tip.evaluate((node) => Number(getComputedStyle(node).opacity)))
+    .toBeLessThan(0.25);
+  await highlighterAt(page, next.index * 1000 + 500);
+  await expect(tip).toHaveCSS("opacity", "1");
+  await expect(line.locator(".highlighter-tip").first()).toHaveCSS(
+    "opacity",
+    "0",
+  );
+});
+
+test("highlighter keeps a finished row complete after resize", async ({
+  page,
+}) => {
+  const line = await highlighterFixture(page, ["Finished"]);
+  await highlighterAt(page, 2000);
+  await expect(line.locator(".highlighter-stroke")).toHaveCount(1);
+  const resize = async (width: string) => {
+    await line.locator(".highlighter-words").evaluate((root, width) => {
+      root.style.fontSize = width;
+    }, width);
+    await page.waitForTimeout(150);
+    return line.locator(".highlighter-stroke").evaluate((stroke) => {
+      const insets = (stroke as HTMLElement).style.clipPath
+        .slice(6)
+        .split("round")[0]
+        .trim()
+        .split(/\s+/);
+      return parseFloat(insets[1] ?? insets[0]);
+    });
+  };
+  await resize("30px");
+  expect(await resize("80px")).toBeLessThan(1);
+  await highlighterAt(page, -1);
+  await expect(line.locator(".highlighter-stroke")).toHaveCount(0);
+  await highlighterAt(page, 2000);
+  await expect(line.locator(".highlighter-stroke")).toHaveCount(1);
+  expect(await resize("100px")).toBeLessThan(1);
+});
+
+test("highlighter has no extra hop at a row's end", async ({ page }) => {
+  const line = await highlighterFixture(page, ["Finish"]);
+  const reaches: number[] = [];
+  for (const time of [970, 980, 990, 1000]) {
+    await highlighterAt(page, time);
+    await page.waitForTimeout(300);
+    reaches.push(
+      await line.locator(".highlighter-stroke").evaluate((stroke) => {
+        const node = stroke as HTMLElement;
+        const insets = node.style.clipPath
+          .slice(6)
+          .split("round")[0]
+          .trim()
+          .split(/\s+/);
+        return (
+          parseFloat(node.style.width) - parseFloat(insets[1] ?? insets[0])
+        );
+      }),
+    );
+  }
+  const step = reaches[2] - reaches[1];
+  expect(reaches[3] - reaches[2]).toBeLessThan(step * 1.5 + 0.2);
+});
+
+test("highlighter cancels queued ink when seeking before a frame", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await highlighterAt(page, 120000);
+  await openSettings(page, "Effects");
+  await page.evaluate(() => {
+    const request = window.requestAnimationFrame;
+    const cancel = window.cancelAnimationFrame;
+    const held = new Map<number, FrameRequestCallback>();
+    let serial = -1;
+    window.requestAnimationFrame = (callback) => {
+      held.set(--serial, callback);
+      return serial;
+    };
+    window.cancelAnimationFrame = (id) => {
+      held.delete(id);
+      cancel(id);
+    };
+    (window as any).__resumeHighlighterFrames = () => {
+      window.requestAnimationFrame = request;
+      window.cancelAnimationFrame = cancel;
+      held.forEach((callback) => callback(performance.now()));
+    };
+    document
+      .querySelector<HTMLElement>('[role="switch"][aria-label="Highlighter"]')!
+      .click();
+  });
+  try {
+    await expect(page.locator(".highlighter-words")).toHaveCount(80);
+    await highlighterAt(page, 0);
+    await expect(page.locator(".highlighter-piece").nth(59)).toHaveAttribute(
+      "style",
+      "--ink: 0;",
+    );
+  } finally {
+    await page.evaluate(() => (window as any).__resumeHighlighterFrames());
+  }
+  // No previously queued finished line may repaint after the rewind.
+  await page.waitForTimeout(150);
+  await expect(page.locator(".highlighter-stroke")).toHaveCount(0);
 });

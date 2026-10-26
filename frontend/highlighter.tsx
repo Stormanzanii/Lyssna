@@ -319,7 +319,9 @@ function paint(
       full = width + lead + tail,
       top = lane.top + height * 0.09,
       tall = height * 0.84;
-    const end = lead + reveal + (reveal >= width - 0.5 ? tail : 0);
+    // The ink's margins grow with it, so a row starts from nothing and
+    // ends without a hop.
+    const end = (Math.max(0, reveal) / Math.max(1, width)) * full;
     // A hand drifts a little across a row.
     const tilt = wobble(seed + index) * 0.6,
       drift = Math.tan((tilt * Math.PI) / 180);
@@ -340,8 +342,34 @@ function paint(
     tip.style.transform = `translate(${left + along}px, ${top + along * drift}px) rotate(${tilt.toFixed(2)}deg) skewX(-8deg)`;
     tip.style.width = `${nibWidth}px`;
     tip.style.height = `${tall}px`;
-    tip.hidden = index !== shown.length - 1;
+    tip.style.setProperty("--tip-opacity", `${Math.min(1, end / nibWidth)}`);
+    // Only the row being drawn keeps its tip; a finished row's fades out
+    // as the pen moves on, rather than vanishing.
+    tip.classList.toggle("lifted", index !== shown.length - 1);
   });
+}
+
+/** Read every line before drawing any ink, including animation and resize
+ *  frames. Interleaving those reads and writes forces a layout per line
+ *  when the Highlighter is enabled midway through a song. */
+const queued = new Map<object, () => () => void>();
+let flushing = 0;
+function batched(key: object, read: () => () => void) {
+  queued.set(key, read);
+  flushing ||= requestAnimationFrame(() => {
+    flushing = 0;
+    const jobs = [...queued.values()];
+    queued.clear();
+    jobs.map((read) => read()).forEach((write) => write());
+  });
+}
+
+function cancelBatched(key: object) {
+  queued.delete(key);
+  if (!queued.size) {
+    cancelAnimationFrame(flushing);
+    flushing = 0;
+  }
 }
 
 /** One line's words with the marker drawn up to `time`. Lines that are not
@@ -369,7 +397,8 @@ export const HighlighterWords = memo(function HighlighterWords({
     ink = useRef<HTMLSpanElement>(null),
     layout = useRef<Layout>(undefined),
     // The pen glides after the song's position instead of snapping to it.
-    pen = useRef({ path: 0, at: 0, frame: 0, drawn: false }),
+    pen = useRef({ path: 0, at: 0, drawn: false }),
+    redraw = useRef<() => void>(() => {}),
     latest = useRef(time);
   latest.current = time;
   const seed = line.start_ms % 997;
@@ -378,51 +407,56 @@ export const HighlighterWords = memo(function HighlighterWords({
       sheet = ink.current;
     if (!element || !sheet) return;
     const state = pen.current;
-    const step = (now: number) => {
-      state.frame = 0;
-      const current = (layout.current ??= measure(element, pieces));
-      const target = pathAt(element, current, pieces, latest.current);
-      const elapsed = Math.min(100, now - (state.at || now));
-      state.at = now;
-      // A line's first drawing, a seek back or an unsung line lands at
-      // once. Otherwise the pen eases toward the song's position, and when
-      // the line ends it glides on to the end rather than jumping there.
-      const finishing = latest.current === Infinity;
-      state.path =
-        !state.drawn || target < state.path - 1 || latest.current === -Infinity
-          ? target
-          : state.path +
-            (target - state.path) *
-              (1 - Math.exp(-elapsed / (finishing ? 70 : 30)));
-      state.drawn = true;
-      paint(sheet, current, pieces, state.path, latest.current, seed);
-      if (Math.abs(target - state.path) > 0.3)
-        state.frame = requestAnimationFrame(step);
-      else state.at = 0;
-    };
-    cancelAnimationFrame(state.frame);
-    step(performance.now());
-    return () => cancelAnimationFrame(state.frame);
+    const step = () =>
+      batched(element, () => {
+        const now = performance.now();
+        const resized = !layout.current;
+        const current = (layout.current ??= measure(element, pieces));
+        const target = pathAt(element, current, pieces, latest.current);
+        const elapsed = state.at ? Math.min(100, now - state.at) : 1000 / 60;
+        state.at = now;
+        // A new layout must use song time, not the old layout's pixel distance.
+        // Otherwise the pen eases toward the song, including the final margin.
+        const finishing = latest.current === Infinity;
+        state.path =
+          !state.drawn || resized || target < state.path - 1
+            ? target
+            : state.path +
+              (target - state.path) *
+                (1 - Math.exp(-elapsed / (finishing ? 70 : 30)));
+        state.drawn = true;
+        const moving = Math.abs(target - state.path) > 0.3;
+        if (!moving) {
+          state.path = target;
+          state.at = 0;
+        }
+        return () => {
+          paint(sheet, current, pieces, state.path, latest.current, seed);
+          if (moving) step();
+        };
+      });
+    redraw.current = step;
+    // Lines not yet sung have no ink and need no measuring.
+    if (time === -Infinity) {
+      sheet.replaceChildren();
+      state.path = 0;
+      state.at = 0;
+      state.drawn = false;
+    } else step();
+    return () => cancelBatched(element);
   }, [pieces, time, seed]);
   // Rows move when the window or text size changes.
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
     const observer = new ResizeObserver(() => {
-      if (!ink.current) return;
-      layout.current = measure(element, pieces);
-      paint(
-        ink.current,
-        layout.current,
-        pieces,
-        Math.min(pen.current.path, layout.current.length),
-        latest.current,
-        seed,
-      );
+      layout.current = undefined;
+      if (latest.current !== -Infinity) redraw.current();
     });
     observer.observe(element);
     return () => {
       observer.disconnect();
+      cancelBatched(element);
       layout.current = undefined;
     };
   }, [pieces, seed]);

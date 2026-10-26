@@ -308,36 +308,31 @@ const ease = (t: number) =>
 /** With the Highlighter on, a marker line runs from each sung word to the
  *  next one in the line being sung, drawn across the pause between them
  *  like brainstorm notes. It leaves each word along its own slant, so the
- *  curve flows between them, and follows both as they drift. When the line
- *  is done its links fade away. */
+ *  curve flows between them, and follows both as they drift. The line
+ *  before keeps its links; older ones fade away. */
 function drawLinks(
   sheet: SVGSVGElement,
   entities: Entity[],
   bodies: Map<string, GravityBody>,
   elements: Map<string, HTMLElement>,
-  shown: Set<string>,
   time: number,
 ) {
+  // Words fading out still carry their links, which fade with them.
   const lead = entities.filter(
-    (entity) =>
-      entity.index >= 0 && shown.has(entity.key) && elements.has(entity.key),
+    (entity) => entity.index >= 0 && elements.has(entity.key),
   );
-  // The line being sung: started, with words still to finish.
-  let active = -1;
+  // The latest line to start, and the one before it, keep their links.
+  let current = -1;
   for (const entity of lead)
-    if (
-      entity.start <= time &&
-      lead.some((word) => word.lead === entity.lead && time < word.end)
-    )
-      active = Math.max(active, entity.lead);
+    if (entity.start <= time) current = Math.max(current, entity.lead);
   const now = performance.now();
   const wanted = new Set<string>();
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
     if (
-      from.lead !== active ||
-      to.lead !== active ||
+      from.lead !== to.lead ||
+      (from.lead !== current && from.lead !== current - 1) ||
       to.index !== from.index + 1 ||
       time < from.end
     )
@@ -406,7 +401,7 @@ function drawLinks(
     path.classList.add("leaving");
     setTimeout(() => {
       if (path.classList.contains("leaving")) path.remove();
-    }, 420);
+    }, 1300);
   }
 }
 
@@ -651,7 +646,6 @@ export function SpaceGravityLyrics({
           live.current.highlighter ? prepared.entities : [],
           bodies.current,
           elements.current,
-          new Set(visible.map((entity) => entity.key)),
           live.current.time,
         );
       for (const [key, node] of elements.current) {

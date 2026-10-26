@@ -4620,13 +4620,39 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
               { text: " three", start_ms: 4000, end_ms: 6000 },
             ],
           },
+          {
+            text: "Four five",
+            start_ms: 7000,
+            end_ms: 8500,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "Four", start_ms: 7000, end_ms: 7500 },
+              { text: " five", start_ms: 8000, end_ms: 8500 },
+            ],
+          },
+          {
+            text: "Six seven",
+            start_ms: 9000,
+            end_ms: 10000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "Six", start_ms: 9000, end_ms: 9300 },
+              { text: " seven", start_ms: 9500, end_ms: 10000 },
+            ],
+          },
         ],
       },
     });
   }, track.uri);
   await at(500);
   const links = page.locator(".gravity-links path");
-  await expect(page.locator(".gravity-word")).toHaveCount(3);
+  await expect(page.locator(".gravity-word").first()).toBeVisible();
   // Nothing is joined until a word is sung.
   await expect(links).toHaveCount(0);
   // Halfway through the pause after "One", its line is half drawn.
@@ -4644,9 +4670,22 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   await expect.poll(offset).toBeCloseTo(0, 2);
   await at(4500);
   await expect(links).toHaveCount(2);
-  // Only the line being sung is joined; once it ends its links fade away.
-  await at(6500);
-  await expect(links).toHaveCount(0);
+  // The line before the one being sung keeps its links...
+  await at(7700);
+  const kept = page.locator(".gravity-links path:not(.leaving)");
+  await expect(kept).toHaveCount(3);
+  // ...and older lines' links fade out rather than vanish.
+  await at(9600);
+  await expect(kept).toHaveCount(2);
+  await expect(page.locator(".gravity-links path.leaving")).not.toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".gravity-links path.leaving")
+        .first()
+        .evaluate((path) => getComputedStyle(path).transitionDuration),
+    )
+    .toBe("1.2s");
 });
 
 test("Space Gravity words keep drifting while the song plays", async ({

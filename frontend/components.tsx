@@ -645,14 +645,19 @@ export function LyricsDisplay({
         );
         return;
       }
-      if (jumped.current && !settings.reduce_motion)
+      // Smooth scrolling off: the browser's own smooth scroll, not the spring.
+      const native = settings.lyrics_smooth_scroll === false;
+      if (jumped.current && !settings.reduce_motion && !native)
         glide.current = {
           from: container.scrollTop,
           start: performance.now(),
         };
-      if (settings.reduce_motion) {
-        container.scrollTop = spring.current.target;
-        spring.current.position = container.scrollTop;
+      if (settings.reduce_motion || native) {
+        container.scrollTo({
+          top: spring.current.target,
+          behavior: native && !settings.reduce_motion ? "smooth" : "instant",
+        });
+        spring.current.position = spring.current.target;
         spring.current.velocity = 0;
       } else if (!frame) {
         last = performance.now();
@@ -683,6 +688,7 @@ export function LyricsDisplay({
     settings.romanized,
     settings.lyrics_translations,
     settings.lyrics_minimal,
+    settings.lyrics_smooth_scroll,
     footerMode,
     gap?.start,
   ]);

@@ -911,6 +911,12 @@ export function SettingsWindow({
           !settings.lyrics_early_scroll,
         ),
         flag(
+          "lyrics_smooth_scroll",
+          "Smooth scrolling",
+          "Glide between lines on a spring. Off uses plain smooth scrolling.",
+          "smooth scroll spring glide",
+        ),
+        flag(
           "lyrics_follow_button",
           "Show scroll to active button",
           "While you scroll through lyrics, show a button that returns to the current line.",

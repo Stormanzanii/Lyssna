@@ -156,6 +156,7 @@ export const emptyState: AppState = {
     lyrics_cache_action: "song",
     lyrics_early_scroll: false,
     lyrics_follow_button: true,
+    lyrics_smooth_scroll: true,
     lyrics_early_scroll_ms: 250,
     lyrics_year_position: "left",
     lyrics_hide_npv: false,

@@ -215,6 +215,8 @@ pub struct Settings {
     pub lyrics_early_scroll: bool,
     /// While browsing lyrics, a button returns to the current line.
     pub lyrics_follow_button: bool,
+    /// Lyrics follow the song on a spring; off uses plain smooth scrolling.
+    pub lyrics_smooth_scroll: bool,
     /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
     pub lyrics_early_scroll_ms: u16,
     /// Replaced by `lyrics_year_position`; read from older files only.
@@ -321,6 +323,7 @@ impl Default for Settings {
             lyrics_cache_action: "song".into(),
             lyrics_early_scroll: false,
             lyrics_follow_button: true,
+            lyrics_smooth_scroll: true,
             lyrics_early_scroll_ms: 250,
             lyrics_hide_year: false,
             lyrics_year_position: YearPosition::Left,
@@ -538,6 +541,7 @@ mod tests {
         assert!(older.npv_ambience);
         assert!(older.glass_seek);
         assert!(older.lyrics_keep_overlaps);
+        assert!(older.lyrics_smooth_scroll);
         assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
         let chosen: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();

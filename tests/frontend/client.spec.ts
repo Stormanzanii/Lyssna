@@ -10358,3 +10358,41 @@ test("minimal mode keeps overlapping lines dimmed unless told not to", async ({
   await page.keyboard.press("F11");
   await expect(overlap).toHaveCSS("opacity", "0");
 });
+
+test("lyrics still follow the song with smooth scrolling off", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Smooth scrolling" }).click();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 120_500,
+        playing: false,
+        observed_at: Date.now(),
+      }),
+    track.uri,
+  );
+  const flow = page.locator(".lyrics-display .lyric-scroll");
+  await expect
+    .poll(() =>
+      flow.evaluate((node) => {
+        const box = node.getBoundingClientRect(),
+          line = node
+            .querySelector(".lyric-line.active")!
+            .getBoundingClientRect();
+        return Math.abs(
+          line.top + line.height / 2 - (box.top + box.height / 2),
+        );
+      }),
+    )
+    .toBeLessThan(40);
+});

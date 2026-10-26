@@ -138,6 +138,7 @@ export interface Settings {
   lyrics_cache_action?: "song" | "reload" | "all";
   lyrics_early_scroll?: boolean;
   lyrics_follow_button?: boolean;
+  lyrics_smooth_scroll?: boolean;
   /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */
   lyrics_early_scroll_ms?: number;
   /** Release year beside the artists on the lyrics page. */

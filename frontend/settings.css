@@ -847,3 +847,17 @@
 .lyrics-settings.animator-panel .animator-preset-control > .settings-select {
   min-width: 0;
 }
+/* Hide settings: a small button after the setting's name. */
+.setting-hide {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 4px;
+  color: #a7a7a7;
+  opacity: 0.6;
+}
+.setting-hide:hover {
+  color: #fff;
+  opacity: 1;
+}

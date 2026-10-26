@@ -167,6 +167,9 @@ export interface Settings {
   lyrics_musixmatch_lines_only?: boolean;
   settings_remember_place?: boolean;
   developer_mode?: boolean;
+  settings_allow_hiding?: boolean;
+  settings_hide_buttons?: boolean;
+  hidden_settings?: string[];
   ui_font?: string;
   ui_zoom_percent?: number;
   lyric_font?: string;

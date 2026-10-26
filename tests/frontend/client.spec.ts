@@ -10494,3 +10494,31 @@ test("animation frame rate can be capped", async ({ page }) => {
     )
     .toEqual([true, 30]);
 });
+
+test("settings can be hidden and shown again", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  const row = page.getByRole("switch", { name: "Show romanized lyrics" });
+  await expect(row).toBeVisible();
+  await expect(page.getByTitle("Hide Show romanized lyrics")).toHaveCount(0);
+  await openSettings(page, "Advanced");
+  await page.getByRole("switch", { name: "Allow hiding settings" }).click();
+  await expect(page.getByText("No hidden settings")).toBeVisible();
+  await openSettings(page, "Lyrics");
+  await page.getByTitle("Hide Show romanized lyrics").click();
+  await expect(row).toHaveCount(0);
+  await openSettings(page, "Advanced");
+  const hidden = page
+    .locator(".setting-row")
+    .filter({ hasText: "Show romanized lyrics" });
+  await expect(hidden).toBeVisible();
+  // Hide buttons can go while hidden settings stay hidden.
+  await page.getByRole("switch", { name: "Show hide buttons" }).click();
+  await openSettings(page, "Lyrics");
+  await expect(row).toHaveCount(0);
+  await expect(page.locator(".setting-hide")).toHaveCount(0);
+  await openSettings(page, "Advanced");
+  await hidden.getByRole("button", { name: "Show" }).click();
+  await openSettings(page, "Lyrics");
+  await expect(row).toBeVisible();
+});

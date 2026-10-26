@@ -258,6 +258,11 @@ pub struct Settings {
     /// Developer mode: F12 and Settings > Advanced open the WebView's
     /// developer tools.
     pub developer_mode: bool,
+    /// Hide settings: whether rows can be hidden, whether each shows a hide
+    /// button, and the hidden rows' IDs.
+    pub settings_allow_hiding: bool,
+    pub settings_hide_buttons: bool,
+    pub hidden_settings: Vec<String>,
     pub ui_font: String,
     pub ui_zoom_percent: u16,
     pub lyric_font: String,
@@ -361,6 +366,9 @@ impl Default for Settings {
                 .collect(),
             settings_remember_place: true,
             developer_mode: false,
+            settings_allow_hiding: false,
+            settings_hide_buttons: true,
+            hidden_settings: Vec::new(),
             ui_font: String::new(),
             ui_zoom_percent: 100,
             lyric_font: String::new(),
@@ -416,6 +424,14 @@ impl Settings {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
         self.lyrics_background_blur = self.lyrics_background_blur.min(48);
         self.animation_fps_cap = self.animation_fps_cap.clamp(15, 240);
+        let mut seen = std::collections::HashSet::new();
+        self.hidden_settings.retain(|id| {
+            !id.is_empty()
+                && id.len() <= 64
+                && id.bytes().all(|byte| byte.is_ascii_graphic())
+                && seen.insert(id.clone())
+        });
+        self.hidden_settings.truncate(200);
         if !["animated", "static", "cover", "artist", "color", "none"]
             .contains(&self.lyrics_background.as_str())
         {
@@ -592,6 +608,11 @@ mod tests {
         let mut fps: Settings = serde_json::from_str(r#"{"animation_fps_cap":5}"#).unwrap();
         fps.clean_lyrics_options();
         assert_eq!(fps.animation_fps_cap, 15);
+        let mut hidden: Settings =
+            serde_json::from_str(r#"{"hidden_settings":["romanized","romanized","","bad id"]}"#)
+                .unwrap();
+        hidden.clean_lyrics_options();
+        assert_eq!(hidden.hidden_settings, vec!["romanized"]);
         assert_eq!(older.animation_fps_cap, 60);
         let mut artist: Settings =
             serde_json::from_str(r#"{"lyrics_background":"artist"}"#).unwrap();

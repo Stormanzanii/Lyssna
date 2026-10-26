@@ -25,7 +25,13 @@ import {
 } from "lucide-react";
 import type { AppState } from "./state";
 import type { Settings, SpotifyPlus } from "./types";
-import { SettingRow, SettingsQuery, Toggle } from "./setting-row";
+import {
+  HiddenSettings,
+  SettingRow,
+  SettingsQuery,
+  Toggle,
+} from "./setting-row";
+import { cloneElement, isValidElement, type ReactElement } from "react";
 import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
@@ -1360,6 +1366,28 @@ export function SettingsWindow({
           "Reopen Settings on the tab and at the place it was closed.",
           "settings menu tab location remember reopen",
         ),
+        flag(
+          "settings_allow_hiding",
+          "Allow hiding settings",
+          "Hide settings you never change. Hidden ones are listed below, where they can be shown again.",
+          "hide hidden settings manage",
+        ),
+        settings.settings_allow_hiding ? (
+          <SettingRow
+            key="hide-buttons"
+            label="Show hide buttons"
+            help="Put a hide button beside each setting's name."
+            keywords="hide hidden settings buttons eye"
+          >
+            <Toggle
+              label="Show hide buttons"
+              checked={settings.settings_hide_buttons !== false}
+              onChange={(checked) =>
+                onSettings({ settings_hide_buttons: checked })
+              }
+            />
+          </SettingRow>
+        ) : null,
       ],
     ],
     [
@@ -1390,6 +1418,57 @@ export function SettingsWindow({
       ],
     ],
   ];
+  // Rows built from SettingRow can be hidden, named by their React key.
+  const hidden = new Set(settings.hidden_settings ?? []);
+  const named: { id: string; label: string }[] = [];
+  // Advanced rows stay, so hiding can always be turned off again.
+  for (const section of sections.filter(([tab]) => tab !== "Advanced"))
+    section[2] = section[2].map((row) => {
+      if (!isValidElement(row) || row.type !== SettingRow || row.key === null)
+        return row;
+      const id = String(row.key),
+        label = (row as ReactElement<{ label: unknown }>).props.label;
+      named.push({ id, label: typeof label === "string" ? label : id });
+      return cloneElement(row as ReactElement<{ hideId?: string }>, {
+        hideId: id,
+      });
+    });
+  const hiding = {
+    allow: !!settings.settings_allow_hiding,
+    buttons: settings.settings_hide_buttons !== false,
+    hidden,
+    hide: (id: string) =>
+      onSettings({ hidden_settings: [...new Set([...hidden, id])] }),
+  };
+  const hiddenRows = named.filter(({ id }) => hidden.has(id));
+  if (hiding.allow)
+    sections.push([
+      "Advanced",
+      "Hidden settings",
+      hiddenRows.length
+        ? hiddenRows.map(({ id, label }) => (
+            <SettingRow key={`hidden-${id}`} label={label} keywords="hidden">
+              <button
+                className="pill outline"
+                onClick={() =>
+                  onSettings({
+                    hidden_settings: [...hidden].filter((item) => item !== id),
+                  })
+                }
+              >
+                Show
+              </button>
+            </SettingRow>
+          ))
+        : [
+            <SettingRow
+              key="hidden-none"
+              label="No hidden settings"
+              help="Use the hide button beside a setting's name to hide it."
+              keywords="hidden"
+            />,
+          ],
+    ]);
   const about = tab === "About" && !searching;
   const visible = sections.filter(([key]) => searching || key === tab);
   const status =
@@ -1487,33 +1566,35 @@ export function SettingsWindow({
             if (!searching) writePlace(tab, event.currentTarget.scrollTop);
           }}
         >
-          <SettingsQuery.Provider value={query}>
-            {about ? (
-              <section className="lyrics-settings-about" aria-label="About">
-                <button
-                  className="text-link lyrics-settings-back"
-                  onClick={() => select("General")}
-                >
-                  <ChevronLeft size={16} />
-                  Settings
-                </button>
-                <Credits onOpen={onOpen} />
-              </section>
-            ) : (
-              <div role="tabpanel">
-                {visible.map(([key, title, rows]) => (
-                  <section
-                    key={`${key}-${title}`}
-                    className="lyrics-settings-section"
+          <HiddenSettings.Provider value={hiding}>
+            <SettingsQuery.Provider value={query}>
+              {about ? (
+                <section className="lyrics-settings-about" aria-label="About">
+                  <button
+                    className="text-link lyrics-settings-back"
+                    onClick={() => select("General")}
                   >
-                    <h3>{title}</h3>
-                    <div className="lyrics-settings-group">{rows}</div>
-                  </section>
-                ))}
-                <p className="lyrics-settings-empty">No settings match.</p>
-              </div>
-            )}
-          </SettingsQuery.Provider>
+                    <ChevronLeft size={16} />
+                    Settings
+                  </button>
+                  <Credits onOpen={onOpen} />
+                </section>
+              ) : (
+                <div role="tabpanel">
+                  {visible.map(([key, title, rows]) => (
+                    <section
+                      key={`${key}-${title}`}
+                      className="lyrics-settings-section"
+                    >
+                      <h3>{title}</h3>
+                      <div className="lyrics-settings-group">{rows}</div>
+                    </section>
+                  ))}
+                  <p className="lyrics-settings-empty">No settings match.</p>
+                </div>
+              )}
+            </SettingsQuery.Provider>
+          </HiddenSettings.Provider>
           <footer className="lyrics-settings-footer">
             <button
               className="lyrics-settings-about-link"

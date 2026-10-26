@@ -776,12 +776,13 @@ impl Desktop {
                             offset,
                             generation,
                             tracks,
+                            more,
                         } => {
                             if snapshot.generation != generation || snapshot.route != key {
                                 continue;
                             }
                             snapshot.loading = false;
-                            snapshot.more = tracks.len() == 50;
+                            snapshot.more = more;
                             if offset == 0 {
                                 snapshot.tracks = tracks.clone();
                             } else if snapshot.tracks.len() == offset {

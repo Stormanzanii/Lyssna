@@ -510,9 +510,10 @@ impl SpotiFlex {
                     offset,
                     generation,
                     tracks,
+                    more,
                 } if key == self.view && generation == self.tracks_generation => {
                     self.loading = false;
-                    self.more = tracks.len() == 50 && !key.starts_with("search:");
+                    self.more = more && !key.starts_with("search:");
                     if offset == 0 {
                         self.tracks = tracks;
                     } else if offset == self.tracks.len() {

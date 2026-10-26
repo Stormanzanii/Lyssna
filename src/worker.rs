@@ -200,6 +200,8 @@ pub enum Event {
         offset: usize,
         generation: u64,
         tracks: Vec<Track>,
+        /// More songs follow this batch.
+        more: bool,
     },
     TracksFailed {
         generation: u64,
@@ -1075,6 +1077,91 @@ impl Backend {
                     });
                     return Ok(());
                 }
+                // A playlist, Liked Songs or an album shows every song at once,
+                // like Spotify. After the first page, the rest load together on
+                // a background thread instead of one round trip per page.
+                if offset > 0
+                    && (key == "liked"
+                        || ["playlist:", "liked-artist:", "album:"]
+                            .iter()
+                            .any(|prefix| key.starts_with(prefix)))
+                {
+                    let spotify = self.api()?;
+                    let _ = spotify.refresh_credentials();
+                    let mut spotify = spotify.background();
+                    let facts_spotify = spotify.background();
+                    let native = self.scoped_native();
+                    let native_ready = self.native_ready();
+                    let events = self.events.clone();
+                    let context = self.context.clone();
+                    let facts = self.facts.clone();
+                    thread::spawn(move || {
+                        let mut tracks = Vec::new();
+                        let mut more = true;
+                        let mut failure = None;
+                        while tracks.len() < REST_BATCH {
+                            match fetch_tracks(&mut spotify, &native, &key, offset + tracks.len()) {
+                                Ok(page) => {
+                                    let last = page.len() < 50;
+                                    if !key.starts_with("album:") {
+                                        let _ = facts.try_send(FactsRequest {
+                                            spotify: facts_spotify.background(),
+                                            native: native.clone(),
+                                            tracks: page.clone(),
+                                        });
+                                    }
+                                    tracks.extend(page);
+                                    if last {
+                                        more = false;
+                                        break;
+                                    }
+                                }
+                                Err(error) => {
+                                    failure = Some(error.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                        let uris: Vec<String> =
+                            tracks.iter().map(|track| track.uri.clone()).collect();
+                        if tracks.is_empty()
+                            && let Some(message) = failure
+                        {
+                            let _ = events.send(Event::TracksFailed {
+                                generation,
+                                message,
+                            });
+                        } else {
+                            let _ = events.send(Event::Tracks {
+                                key,
+                                offset,
+                                generation,
+                                tracks,
+                                more,
+                            });
+                        }
+                        context.request_repaint();
+                        if native_ready {
+                            let mut seen = std::collections::HashSet::new();
+                            let uris: Vec<String> = uris
+                                .into_iter()
+                                .filter(|uri| {
+                                    crate::collection::supports(uri) && seen.insert(uri.clone())
+                                })
+                                .collect();
+                            for chunk in uris.chunks(500) {
+                                let Ok(saved) = native.saved_items(chunk) else {
+                                    break;
+                                };
+                                let _ = events.send(Event::SavedMany(
+                                    chunk.iter().cloned().zip(saved).collect(),
+                                ));
+                            }
+                            context.request_repaint();
+                        }
+                    });
+                    return Ok(());
+                }
                 let result = self.fetch_tracks(&key, offset);
                 match result {
                     Ok(tracks) => {
@@ -1091,6 +1178,7 @@ impl Backend {
                             });
                         }
                         self.emit(Event::Tracks {
+                            more: tracks.len() == 50,
                             key,
                             offset,
                             generation,
@@ -1715,6 +1803,8 @@ impl Backend {
         fetch_tracks(self.api()?, &native, key, offset)
     }
 }
+/// Most songs one background batch loads after a collection's first page.
+const REST_BATCH: usize = 2_000;
 struct PrefetchRequest {
     spotify: Spotify,
     native: NativeControls,

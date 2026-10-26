@@ -2017,6 +2017,31 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
+test("Now playing ambience follows its own Canvas, not the lyrics page's", async ({
+  page,
+}) => {
+  await startClient(page);
+  await emitCanvas(page);
+  const ambience = page.locator(".now-playing > .ambience canvas");
+  // Now playing shows the Canvas itself, so its ambience warps the video.
+  await expect(
+    page.locator(".now-playing video[data-canvas-video]"),
+  ).toHaveCount(1);
+  await expect(ambience).toHaveAttribute("data-source", "canvas");
+  // With the Canvas on the lyrics page, the panel goes back to the artwork.
+  await showLyrics(page);
+  await page.locator(".file-input").setInputFiles({
+    name: "timing.ttml",
+    mimeType: "application/xml",
+    buffer: Buffer.from("<tt/>"),
+  });
+  await expect(page.locator(".lyrics-canvas-cover video")).toHaveCount(1);
+  await expect(
+    page.locator(".now-playing video[data-canvas-video]"),
+  ).toHaveCount(0);
+  await expect(ambience).not.toHaveAttribute("data-source", "canvas");
+});
+
 test("right-clicking the Canvas in lyrics opens no song menu", async ({
   page,
 }) => {

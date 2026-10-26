@@ -1723,7 +1723,9 @@ export function NowPlaying({
         track={track}
         reduceMotion={state.settings.reduce_motion}
         animate={state.playback.is_playing}
-        followCanvas={!!state.canvas_url}
+        // Only while Now playing shows the Canvas itself; with it on the
+        // lyrics page, the panel keeps the album artwork's ambience.
+        followCanvas={canvas}
       />
       <div className="now-playing-scroll">
         {!canvas && heading}

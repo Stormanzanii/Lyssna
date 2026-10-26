@@ -32,8 +32,8 @@ export const Ambience = memo(function Ambience({
   /** Kawarp colour boost. 3, its maximum, stands in for Spicy Lyrics'
    * `saturate(2.5)` filter on top of 1.5 without a full-panel filter pass. */
   saturation?: number;
-  /** Warp the playing Canvas video instead of the artwork, as Spicy Lyrics'
-   * Now Playing background does. */
+  /** Warp the panel's playing Canvas video instead of the artwork, as Spicy
+   * Lyrics' Now Playing background does. */
   followCanvas?: boolean;
 }) {
   const source = image ?? track?.album.images?.[0]?.url ?? "",
@@ -161,6 +161,7 @@ export const Ambience = memo(function Ambience({
     const stopFollowing = () => {
       if (!following.current) return;
       following.current = null;
+      delete surface.current?.dataset.source;
       engine.unloadVideo();
       if (artwork.current)
         void engine
@@ -168,10 +169,13 @@ export const Ambience = memo(function Ambience({
           .then(() => resume.current?.(engine.transitionDuration + 100))
           .catch(() => {});
     };
-    // Canvas videos come and go with songs and layouts; look for the one on
-    // screen twice a second rather than threading it through every parent.
+    // The panel's own Canvas comes and goes with songs; look for it twice a
+    // second rather than threading the element through every parent. Only
+    // this ambience's panel is searched, so the lyrics page's Canvas never
+    // tints Now Playing.
+    const panel = surface.current?.parentElement?.parentElement;
     const look = () => {
-      const video = document.querySelector<HTMLVideoElement>(
+      const video = panel?.querySelector<HTMLVideoElement>(
         "video[data-canvas-video]",
       );
       if (!video || video === failed) return stopFollowing();
@@ -195,6 +199,7 @@ export const Ambience = memo(function Ambience({
         return;
       }
       following.current = video;
+      if (surface.current) surface.current.dataset.source = "canvas";
       resume.current?.();
     };
     look();

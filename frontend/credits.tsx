@@ -13,13 +13,14 @@ export const PEOPLE = [
 ] as const;
 
 /** Who SpotiFlex builds on, and under which licence. Shown in Settings and
- *  in the Lyrics settings About screen. */
+ *  in the Lyrics settings About screen; README.md's Credits section lists the
+ *  same people and projects, so keep the two in step. */
 export const CREDITS = [
   {
     name: "Spotify+",
     by: "iPixelGalaxy",
     licence: "No licence declared",
-    note: "Interface options and menus, reimplemented from its feature descriptions. No source is copied.",
+    note: "The Add to playlist folders menu, reimplemented from its feature descriptions. No source is copied.",
     url: "https://github.com/iPixelGalaxy/spotify-plus",
   },
   {
@@ -28,6 +29,13 @@ export const CREDITS = [
     licence: "AGPL-3.0",
     note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows.",
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
+  },
+  {
+    name: "EeveeSpotifyReincarnated",
+    by: "iPixelGalaxy",
+    licence: "GPL-3.0",
+    note: "The profile lookup that shows Discord usernames on community lyrics, reimplemented. No source is copied.",
+    url: "https://github.com/iPixelGalaxy/EeveeSpotifyReincarnated",
   },
   {
     name: "librespot",
@@ -42,6 +50,13 @@ export const CREDITS = [
     licence: "MIT",
     note: "The spring that animates lyrics.",
     url: "https://github.com/Fraktality/spr",
+  },
+  {
+    name: "Kawarp",
+    by: "Better Lyrics",
+    licence: "MIT",
+    note: "The warped artwork and Canvas ambience.",
+    url: "https://github.com/better-lyrics/kawarp",
   },
 ] as const;
 

@@ -894,6 +894,12 @@ export function SettingsWindow({
           </span>
         </SettingRow>,
         flag(
+          "lyrics_seek_compensation",
+          "Seek fade-in compensation",
+          "Clicking a lyric starts 300 ms before it, so a speaker that fades in after a seek is at full volume when the line begins.",
+          "seek fade in compensation click lyric early volume",
+        ),
+        flag(
           "romanized",
           "Show romanized lyrics",
           "Display Latin-alphabet readings. Supplied readings are preferred; automatic transliteration is approximate.",

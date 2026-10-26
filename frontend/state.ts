@@ -161,6 +161,7 @@ export const emptyState: AppState = {
     lyrics_follow_button: true,
     lyrics_smooth_scroll: true,
     lyrics_early_scroll_ms: 250,
+    lyrics_seek_compensation: true,
     lyrics_year_position: "left",
     lyrics_hide_npv: false,
     lyrics_hide_npv_empty: false,

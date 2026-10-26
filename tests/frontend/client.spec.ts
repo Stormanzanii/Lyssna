@@ -6112,7 +6112,22 @@ test("lyric clock frames reuse click handlers and keep seeking functional", asyn
             .at(-1)?.args.request,
       ),
     )
-    .toMatchObject({ command: "seek", positionMs: 20_000 });
+    .toMatchObject({ command: "seek", positionMs: 19_700 });
+  // Without Seek fade-in compensation, a click seeks to the line itself.
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Seek fade-in compensation" }).click();
+  await page.keyboard.press("Escape");
+  await lines.nth(2).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({ command: "seek", positionMs: 40_000 });
 });
 
 async function openFolderDeletion(page: Page) {

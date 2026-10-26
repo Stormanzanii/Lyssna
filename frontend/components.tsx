@@ -452,6 +452,10 @@ export function usePosition(
   return clock.current.read(Math.max(time, now));
 }
 
+/** Seek Fade-in Compensation from Spicy Lyrics: a clicked lyric starts
+ *  this far early, so a device's fade-in after a seek ends as it begins. */
+const SEEK_FADE_LEAD_MS = 300;
+const lyricSeekTarget = (ms: number) => Math.max(0, ms - SEEK_FADE_LEAD_MS);
 /** Spicy Lyrics resumes following this long after the last scroll. */
 const BROWSE_COOLDOWN_MS = 750;
 export function LyricsDisplay({
@@ -491,9 +495,10 @@ export function LyricsDisplay({
   };
   const lines = useRef<(HTMLButtonElement | null)[]>([]);
   const seek = useRef(onSeek);
+  const seekLead = settings.lyrics_seek_compensation !== false;
   useLayoutEffect(() => {
-    seek.current = onSeek;
-  }, [onSeek]);
+    seek.current = (ms) => onSeek(seekLead ? lyricSeekTarget(ms) : ms);
+  }, [onSeek, seekLead]);
   // Clock frames must not replace each button's native click listener or ref.
   const lineActions = useMemo(
     () =>
@@ -1606,7 +1611,13 @@ function SongLyricsPage({
                 reduceMotion={!motionAllowed}
                 tuning={state.settings.lyrics_animator}
                 onSeek={(positionMs) =>
-                  onPlayer({ command: "seek", positionMs })
+                  onPlayer({
+                    command: "seek",
+                    positionMs:
+                      state.settings.lyrics_seek_compensation !== false
+                        ? lyricSeekTarget(positionMs)
+                        : positionMs,
+                  })
                 }
                 credits={
                   <>

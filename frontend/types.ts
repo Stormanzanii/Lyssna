@@ -146,6 +146,8 @@ export interface Settings {
   lyrics_smooth_scroll?: boolean;
   /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */
   lyrics_early_scroll_ms?: number;
+  /** Lyric clicks seek 300 ms early, ahead of a device's seek fade-in. */
+  lyrics_seek_compensation?: boolean;
   /** Release year beside the artists on the lyrics page. */
   lyrics_year_position?: "left" | "right" | "off";
   lyrics_hide_npv?: boolean;

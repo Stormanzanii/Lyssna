@@ -226,6 +226,9 @@ pub struct Settings {
     pub lyrics_smooth_scroll: bool,
     /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
     pub lyrics_early_scroll_ms: u16,
+    /// Clicking a lyric seeks 300 ms before it, covering the fade-in some
+    /// Spotify devices play after a seek.
+    pub lyrics_seek_compensation: bool,
     /// Replaced by `lyrics_year_position`; read from older files only.
     #[serde(skip_serializing)]
     pub lyrics_hide_year: bool,
@@ -343,6 +346,7 @@ impl Default for Settings {
             lyrics_follow_button: true,
             lyrics_smooth_scroll: true,
             lyrics_early_scroll_ms: 250,
+            lyrics_seek_compensation: true,
             lyrics_hide_year: false,
             lyrics_year_position: YearPosition::Left,
             lyrics_hide_npv: false,
@@ -569,6 +573,7 @@ mod tests {
     fn lyrics_options_default_like_spicy_lyrics_and_stay_in_range() {
         let older: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(older.lyrics_early_scroll_ms, 250);
+        assert!(older.lyrics_seek_compensation);
         assert!(older.lyrics_skeleton);
         assert!(older.cover_animation);
         assert!(older.lyrics_follow_button);

@@ -9,6 +9,33 @@ pub struct Facts {
     pub genres: Vec<String>,
     pub release_date: String,
 }
+/// Albums fetched at once while enriching.
+const ALBUM_FETCHES: usize = 8;
+
+/// One album's facts by song, following its pages. None when it fails.
+fn load_album(native: &NativeControls, id: &str) -> Option<HashMap<String, Facts>> {
+    let album = native.catalogue("album", id, 0).ok()?;
+    let total = album["tracksV2"]["totalCount"].as_u64().unwrap_or_default() as usize;
+    let mut offset = album["tracksV2"]["items"].as_array().map_or(0, Vec::len);
+    let mut entries = album_facts(&album);
+    while offset > 0 && offset < total && offset < 5000 {
+        let Ok(page) = native.catalogue("album", id, offset) else {
+            break;
+        };
+        let count = page["tracksV2"]["items"].as_array().map_or(0, Vec::len);
+        if count == 0 {
+            break;
+        }
+        let before = entries.len();
+        entries.extend(album_facts(&page));
+        if before == entries.len() {
+            break;
+        }
+        offset += count;
+    }
+    Some(entries)
+}
+
 #[derive(Default)]
 pub struct Catalogue {
     albums: HashMap<String, HashMap<String, Facts>>,
@@ -54,46 +81,47 @@ impl Catalogue {
         tracks: Vec<Track>,
     ) -> HashMap<String, Facts> {
         let mut result = HashMap::new();
-        let mut attempted = HashSet::new();
         let mut artist_attempts = HashSet::new();
         let mut genre_budget = 3;
+        // Albums load several at a time; one by one, a long playlist's
+        // release dates and play counts trickled in for a minute.
+        let missing: Vec<String> = tracks
+            .iter()
+            .filter_map(|track| track.album.id.clone())
+            .filter(|id| id.len() == 22 && !self.albums.contains_key(id))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        if self.albums.len() + missing.len() > 2048 {
+            self.albums.clear();
+        }
+        for batch in missing.chunks(ALBUM_FETCHES) {
+            let loaded: Vec<(String, HashMap<String, Facts>)> = std::thread::scope(|scope| {
+                let handles: Vec<_> = batch
+                    .iter()
+                    .map(|id| scope.spawn(move || (id.clone(), load_album(native, id))))
+                    .collect();
+                handles
+                    .into_iter()
+                    .filter_map(|handle| handle.join().ok())
+                    .filter_map(|(id, entries)| Some((id, entries?)))
+                    .collect()
+            });
+            self.albums.extend(loaded);
+        }
         for track in tracks {
             let mut facts = Facts {
                 release_date: track.album.release_date.clone(),
                 ..Facts::default()
             };
-            if let Some(id) = track.album.id.as_deref().filter(|id| id.len() == 22) {
-                if !self.albums.contains_key(id)
-                    && attempted.insert(id.to_owned())
-                    && let Ok(album) = native.catalogue("album", id, 0)
-                {
-                    let total =
-                        album["tracksV2"]["totalCount"].as_u64().unwrap_or_default() as usize;
-                    let mut offset = album["tracksV2"]["items"].as_array().map_or(0, Vec::len);
-                    let mut entries = album_facts(&album);
-                    while offset > 0 && offset < total && offset < 5000 {
-                        let Ok(page) = native.catalogue("album", id, offset) else {
-                            break;
-                        };
-                        let count = page["tracksV2"]["items"].as_array().map_or(0, Vec::len);
-                        if count == 0 {
-                            break;
-                        }
-                        let before = entries.len();
-                        entries.extend(album_facts(&page));
-                        if before == entries.len() {
-                            break;
-                        }
-                        offset += count;
-                    }
-                    if self.albums.len() >= 512 {
-                        self.albums.clear();
-                    }
-                    self.albums.insert(id.into(), entries);
-                }
-                if let Some(value) = self.albums.get(id).and_then(|album| album.get(&track.uri)) {
-                    facts = value.clone();
-                }
+            if let Some(value) = track
+                .album
+                .id
+                .as_deref()
+                .and_then(|id| self.albums.get(id))
+                .and_then(|album| album.get(&track.uri))
+            {
+                facts = value.clone();
             }
             for artist in &track.artists {
                 facts.genres.extend(artist.genres.clone());

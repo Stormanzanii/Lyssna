@@ -1103,13 +1103,6 @@ impl Backend {
                             match fetch_tracks(&mut spotify, &native, &key, offset + tracks.len()) {
                                 Ok(page) => {
                                     let last = page.len() < 50;
-                                    if !key.starts_with("album:") {
-                                        let _ = facts.try_send(FactsRequest {
-                                            spotify: facts_spotify.background(),
-                                            native: native.clone(),
-                                            tracks: page.clone(),
-                                        });
-                                    }
                                     tracks.extend(page);
                                     if last {
                                         more = false;
@@ -1124,6 +1117,11 @@ impl Backend {
                         }
                         let uris: Vec<String> =
                             tracks.iter().map(|track| track.uri.clone()).collect();
+                        let facts_tracks = if key.starts_with("album:") {
+                            Vec::new()
+                        } else {
+                            tracks.clone()
+                        };
                         if tracks.is_empty()
                             && let Some(message) = failure
                         {
@@ -1141,6 +1139,16 @@ impl Backend {
                             });
                         }
                         context.request_repaint();
+                        // Facts for the whole batch, in chunks so filters and
+                        // sorts fill in steadily. This thread can wait for the
+                        // facts worker, so none are dropped.
+                        for chunk in facts_tracks.chunks(200) {
+                            let _ = facts.send(FactsRequest {
+                                spotify: facts_spotify.background(),
+                                native: native.clone(),
+                                tracks: chunk.to_vec(),
+                            });
+                        }
                         if native_ready {
                             let mut seen = std::collections::HashSet::new();
                             let uris: Vec<String> = uris

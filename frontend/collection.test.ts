@@ -110,6 +110,28 @@ it("orders real plays before unknown values and sorts recent additions separatel
   ).toBe("b");
 });
 
+it("keeps release order steady while facts load", () => {
+  // Facts landing later must not reshuffle a release sort the songs' own
+  // album dates already settle.
+  const before = collectionTracks(tracks, {}, { ...filters, sort: "oldest" });
+  const after = collectionTracks(
+    tracks,
+    Object.fromEntries(
+      // Only songs that already carry an album date.
+      tracks
+        .slice(0, 2)
+        .map((track) => [
+          track.uri,
+          { genres: [], release_date: "1990-01-01" },
+        ]),
+    ),
+    { ...filters, sort: "oldest" },
+  );
+  expect(after.map((track) => track.uri)).toEqual(
+    before.map((track) => track.uri),
+  );
+});
+
 describe("date added", () => {
   const now = Date.parse("2026-10-21T00:00:00Z");
   it("reads like Spotify: relative under four weeks, then the date", () => {

@@ -95,7 +95,9 @@ export function collectionTracks(
   const query = filters.query.trim().toLocaleLowerCase();
   const release = (track: Track) =>
     Date.parse(
-      facts[track.uri]?.release_date || track.album.release_date || "",
+      // The song's own album date is there from the start, so release
+      // order holds while facts are still loading.
+      track.album.release_date || facts[track.uri]?.release_date || "",
     );
   return tracks
     .map((track, index) => ({ track, index }))

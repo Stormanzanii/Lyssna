@@ -1,3 +1,5 @@
+![SpotiFlex playing a song with its Spotify Canvas behind word-synced lyrics](.github/assets/app.webp)
+
 <div align="center">
 
 <img src="assets/spotiflex.png" alt="SpotiFlex icon" width="96">
@@ -35,6 +37,10 @@ SpotiFlex plays Spotify through [librespot](https://github.com/librespot-org/lib
 | Home and browsing | Spotify's Home feed, artist and album pages, search, Recents and the What's New feed behind the bell |
 | Window | Optional tray mode that keeps music playing after the window closes, and opening at sign-in (normal or minimized) |
 | Updates | Signed automatic updates for Windows; each executable is checked against an Ed25519 signature and a SHA-256 hash before it replaces the old one |
+
+Full screen (F11) turns the window into the lyrics and the song's Canvas, with playback controls that appear when you move the mouse:
+
+![Full-screen lyrics over a Spotify Canvas](.github/assets/fullscreen.webp)
 
 ## Install
 

@@ -4770,11 +4770,13 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await expect(dialog.getByRole("tab", { name: "About" })).toHaveCount(0);
   await dialog.getByRole("button", { name: /About and credits/ }).click();
   await expect(dialog.locator(".credit-person")).toHaveCount(3);
-  await expect(dialog.locator(".credit-row").first()).toContainText("Spotify+");
+  // Same order as README.md's Credits.
   await expect(dialog.locator(".credit-row").first()).toContainText(
-    "No licence declared",
+    "Spicy Lyrics",
   );
-  await dialog.locator(".credit-row").first().click();
+  const plus = dialog.locator(".credit-row", { hasText: "Spotify+" });
+  await expect(plus).toContainText("No licence declared");
+  await plus.click();
   await expect
     .poll(() =>
       page.evaluate(

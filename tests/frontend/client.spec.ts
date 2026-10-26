@@ -10801,6 +10801,8 @@ test("highlighter inks sung words behind the text and keeps them", async ({
       ).size,
   );
   await expect(sung.locator(".highlighter-stroke")).toHaveCount(rows);
+  // One pen tip per line, where the pen finished, not one per row.
+  await expect(sung.locator(".highlighter-tip:visible")).toHaveCount(1);
   await openSettings(page, "Effects");
   await page
     .getByLabel("Marker colour", { exact: true })

@@ -252,8 +252,8 @@ function laneMask(
 
 /** Shows the ink revealed up to `path` along the pen's path. Each row has
  *  one band laid over the whole row and clipped at the tip, plus the
- *  brighter pen tip: moving with the pen, or left where it lifted at the
- *  row's end. */
+ *  brighter pen tip, shown once per line: on the row the pen is on, or
+ *  where it finished. */
 function paint(
   ink: HTMLElement,
   layout: Layout,
@@ -295,6 +295,7 @@ function paint(
     tip.style.transform = `translate(${left + end - nibWidth}px, ${top}px) skewX(-8deg)`;
     tip.style.width = `${nibWidth}px`;
     tip.style.height = `${tall}px`;
+    tip.hidden = index !== shown.length - 1;
   });
 }
 

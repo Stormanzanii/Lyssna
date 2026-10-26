@@ -1329,6 +1329,7 @@ function SongLyricsPage({
     state.settings.romanized,
     track?.duration_ms,
   );
+  const year = state.settings.lyrics_year_position ?? "left";
   const fullscreenControls = track ? (
     <div
       className="lyrics-fullscreen-controls"
@@ -1528,20 +1529,25 @@ function SongLyricsPage({
               />
               {/* The year stays put; only the artist names scroll. */}
               <div className="lyrics-artists">
-                {track.album.release_date &&
-                  !state.settings.lyrics_hide_year && (
-                    <span className="lyrics-year">
-                      {track.album.release_date.slice(0, 4)}
-                      {/* Spaced like the artist's own inset on the far side. */}
-                      <span className="lyrics-year-dot">·</span>
-                    </span>
-                  )}
+                {track.album.release_date && year === "left" && (
+                  <span className="lyrics-year">
+                    {track.album.release_date.slice(0, 4)}
+                    {/* Spaced like the artist's own inset on the far side. */}
+                    <span className="lyrics-year-dot">·</span>
+                  </span>
+                )}
                 <Marquee
                   text={artistNames(track)}
                   reduceMotion={state.settings.reduce_motion}
                 >
                   <ArtistLinks artists={track.artists} onArtist={onArtist} />
                 </Marquee>
+                {track.album.release_date && year === "right" && (
+                  <span className="lyrics-year right">
+                    <span className="lyrics-year-dot">·</span>
+                    {track.album.release_date.slice(0, 4)}
+                  </span>
+                )}
               </div>
             </div>
             {(canvas || narrow || state.settings.lyrics_hide_artwork) &&

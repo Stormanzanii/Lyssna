@@ -56,6 +56,18 @@ pub enum FullscreenVolume {
     Off,
 }
 
+/// Where the release year sits beside the artists on the lyrics page: the
+/// fork's Release Year Position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum YearPosition {
+    Right,
+    Off,
+    #[default]
+    #[serde(other)]
+    Left,
+}
+
 /// Keep remembered sorts that name a known choice for a short page key,
 /// capped so the settings file stays small.
 pub fn clean_song_sorts(sorts: &mut std::collections::BTreeMap<String, String>) {
@@ -194,7 +206,10 @@ pub struct Settings {
     pub lyrics_follow_button: bool,
     /// How far ahead Early scroll moves, in milliseconds: 0 to 800.
     pub lyrics_early_scroll_ms: u16,
+    /// Replaced by `lyrics_year_position`; read from older files only.
+    #[serde(skip_serializing)]
     pub lyrics_hide_year: bool,
+    pub lyrics_year_position: YearPosition,
     pub lyrics_hide_npv: bool,
     pub lyrics_hide_npv_empty: bool,
     /// Lyrics page background: "animated", "static" or "color".
@@ -282,6 +297,7 @@ impl Default for Settings {
             lyrics_follow_button: true,
             lyrics_early_scroll_ms: 250,
             lyrics_hide_year: false,
+            lyrics_year_position: YearPosition::Left,
             lyrics_hide_npv: false,
             lyrics_hide_npv_empty: false,
             lyrics_background: "animated".into(),
@@ -351,6 +367,9 @@ impl Settings {
     /// Keeps Spicy Lyrics display options inside the ranges Settings offers.
     pub fn clean_lyrics_options(&mut self) {
         self.lyrics_early_scroll_ms = self.lyrics_early_scroll_ms.min(800);
+        if std::mem::take(&mut self.lyrics_hide_year) {
+            self.lyrics_year_position = YearPosition::Off;
+        }
     }
     pub fn load() -> Result<Self> {
         let path = data_dir()?.join("settings.json");
@@ -414,6 +433,7 @@ pub fn valid_client_id(value: &str) -> bool {
 mod tests {
     use super::{
         FullscreenAlwaysShow, FullscreenVolume, LyricsAnimator, PinnedLyricsFooter, Settings,
+        YearPosition,
     };
 
     #[test]
@@ -494,6 +514,21 @@ mod tests {
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();
         assert_eq!(wild.lyrics_early_scroll_ms, 800);
+    }
+
+    #[test]
+    fn hidden_release_year_becomes_year_position_off() {
+        let mut hidden: Settings = serde_json::from_str(r#"{"lyrics_hide_year":true}"#).unwrap();
+        hidden.clean_lyrics_options();
+        assert_eq!(hidden.lyrics_year_position, YearPosition::Off);
+        let saved = serde_json::to_value(&hidden).unwrap();
+        assert!(saved.get("lyrics_hide_year").is_none());
+        assert_eq!(saved["lyrics_year_position"], "off");
+        let mut shown: Settings = serde_json::from_str("{}").unwrap();
+        shown.clean_lyrics_options();
+        assert_eq!(shown.lyrics_year_position, YearPosition::Left);
+        let right: Settings = serde_json::from_str(r#"{"lyrics_year_position":"right"}"#).unwrap();
+        assert_eq!(right.lyrics_year_position, YearPosition::Right);
     }
 
     #[test]

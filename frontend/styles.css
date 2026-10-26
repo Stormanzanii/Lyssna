@@ -5756,3 +5756,7 @@ input.volume-range:active::-webkit-slider-thumb {
   bottom: 12px;
   right: 12px;
 }
+/* Release year after the artists: the dot sits on the year's near side. */
+.lyrics-year.right .lyrics-year-dot {
+  margin: 0 0.4em 0 0;
+}

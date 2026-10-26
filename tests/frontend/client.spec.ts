@@ -10069,3 +10069,40 @@ test("Escape can leave the lyrics page as well as full screen", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator(".lyrics-page")).toHaveCount(0);
 });
+
+test("release year can sit after the artists or be left out", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            album: { ...track.album, release_date: "2026-01-01" },
+          },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  await showLyrics(page);
+  const artists = page.locator(".lyrics-page .lyrics-artists");
+  const year = artists.locator(".lyrics-year");
+  await expect(year).toHaveCount(1);
+  await expect(artists.locator(":scope > *").first()).toHaveClass(
+    /lyrics-year/,
+  );
+  await openSettings(page, "Lyrics");
+  const select = page.getByLabel("Release year position", { exact: true });
+  await select.selectOption("right");
+  await expect(artists.locator(":scope > *").last()).toHaveClass(
+    /lyrics-year right/,
+  );
+  await select.selectOption("off");
+  await expect(year).toHaveCount(0);
+});

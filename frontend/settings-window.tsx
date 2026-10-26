@@ -788,12 +788,28 @@ export function SettingsWindow({
             <option value="full">Full</option>
           </select>
         </SettingRow>,
-        flag(
-          "lyrics_hide_year",
-          "Hide release year",
-          "Leave the year out of the song details beside the lyrics.",
-          "year date metadata",
-        ),
+        <SettingRow
+          key="year"
+          label="Release year position"
+          help="Show the year before or after the artists beside the lyrics, or leave it out."
+          keywords="year date metadata release hide"
+        >
+          <select
+            className="settings-select"
+            aria-label="Release year position"
+            value={settings.lyrics_year_position ?? "left"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_year_position: event.target
+                  .value as Settings["lyrics_year_position"],
+              })
+            }
+          >
+            <option value="off">Off</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </SettingRow>,
       ],
     ],
     [

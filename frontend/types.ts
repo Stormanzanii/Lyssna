@@ -135,7 +135,8 @@ export interface Settings {
   lyrics_follow_button?: boolean;
   /** Early scroll lead in milliseconds, 0 to 800; 250 unless chosen. */
   lyrics_early_scroll_ms?: number;
-  lyrics_hide_year?: boolean;
+  /** Release year beside the artists on the lyrics page. */
+  lyrics_year_position?: "left" | "right" | "off";
   lyrics_hide_npv?: boolean;
   lyrics_hide_npv_empty?: boolean;
   now_playing_open?: boolean;

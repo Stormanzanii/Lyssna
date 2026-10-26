@@ -43,6 +43,19 @@ pub enum FullscreenAlwaysShow {
     None,
 }
 
+/// Where full screen lyrics put a volume slider: the fork's Fullscreen
+/// Volume Slider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FullscreenVolume {
+    Left,
+    Right,
+    Below,
+    #[default]
+    #[serde(other)]
+    Off,
+}
+
 /// Keep remembered sorts that name a known choice for a short page key,
 /// capped so the settings file stays small.
 pub fn clean_song_sorts(sorts: &mut std::collections::BTreeMap<String, String>) {
@@ -182,6 +195,7 @@ pub struct Settings {
     pub lyrics_background: String,
     pub lyrics_pinned_footer: PinnedLyricsFooter,
     pub fullscreen_always_show: FullscreenAlwaysShow,
+    pub fullscreen_volume: FullscreenVolume,
     pub lyrics_animator: LyricsAnimator,
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
@@ -257,6 +271,7 @@ impl Default for Settings {
             lyrics_background: "animated".into(),
             lyrics_pinned_footer: PinnedLyricsFooter::Off,
             fullscreen_always_show: FullscreenAlwaysShow::None,
+            fullscreen_volume: FullscreenVolume::Off,
             lyrics_source_order: crate::lyric_sources::DEFAULT_ORDER
                 .iter()
                 .map(|id| (*id).into())
@@ -378,7 +393,9 @@ pub fn valid_client_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{FullscreenAlwaysShow, LyricsAnimator, PinnedLyricsFooter, Settings};
+    use super::{
+        FullscreenAlwaysShow, FullscreenVolume, LyricsAnimator, PinnedLyricsFooter, Settings,
+    };
 
     #[test]
     fn pinned_lyrics_footer_survives_settings_restore_and_unknown_modes() {
@@ -449,6 +466,9 @@ mod tests {
         let unknown: Settings =
             serde_json::from_str(r#"{"fullscreen_always_show":"all"}"#).unwrap();
         assert_eq!(unknown.fullscreen_always_show, FullscreenAlwaysShow::None);
+        assert_eq!(older.fullscreen_volume, FullscreenVolume::Off);
+        let below: Settings = serde_json::from_str(r#"{"fullscreen_volume":"below"}"#).unwrap();
+        assert_eq!(below.fullscreen_volume, FullscreenVolume::Below);
         let mut wild: Settings =
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();

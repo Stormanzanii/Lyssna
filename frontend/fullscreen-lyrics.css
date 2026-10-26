@@ -305,11 +305,124 @@
 .immersive
   .lyrics-page:is([data-always-show="controls"], [data-always-show="both"])
   .lyrics-fullscreen-controls
-  > .lyrics-fullscreen-buttons {
+  > :is(.lyrics-fullscreen-buttons, .lyrics-fullscreen-volume) {
   opacity: 1;
   pointer-events: auto;
 }
 /* Over the artwork, the shade stays under controls that stay up. */
 .immersive .lyrics-page[data-always-show] .lyrics-media::after {
   opacity: 1;
+}
+/* Full screen volume slider: a row under the controls, or an upright bar
+   beside them, fading with them. */
+.immersive .lyrics-fullscreen-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+.immersive .lyrics-fullscreen-volume .icon-button {
+  width: auto;
+  height: auto;
+  padding: 4px;
+  color: #ffffffd9;
+}
+.immersive .lyrics-fullscreen-volume input {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #fff var(--range, 50%),
+    #ffffff33 var(--range, 50%)
+  );
+  cursor: pointer;
+}
+.immersive .lyrics-fullscreen-volume input::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px #0006;
+}
+.immersive .lyrics-fullscreen-volume.below {
+  justify-self: center;
+  width: min(70%, 340px);
+}
+.immersive .lyrics-fullscreen-volume:is(.left, .right) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  flex-direction: column-reverse;
+}
+.immersive .lyrics-fullscreen-volume:is(.left, .right) input {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: auto;
+  background: linear-gradient(
+    to top,
+    #fff var(--range, 50%),
+    #ffffff33 var(--range, 50%)
+  );
+}
+/* Over the artwork, an upright bar runs beside the cover, as the fork
+   places it beside its media box; a row joins the controls on the cover. */
+.immersive .lyrics-media .lyrics-fullscreen-volume:is(.left, .right) {
+  top: auto;
+  bottom: calc(14px - 6cqw);
+  height: calc(100cqw - 28px);
+}
+.immersive .lyrics-media .lyrics-fullscreen-volume.left {
+  left: calc(-10cqw - 52px);
+}
+.immersive .lyrics-media .lyrics-fullscreen-volume.right {
+  right: calc(-10cqw - 52px);
+}
+/* Beside the Canvas, the controls make room for the bar inside their
+   corner, and a row below lifts the song details further. */
+.immersive
+  .canvas-lyrics:not(.narrow)
+  .lyrics-fullscreen-controls:has(> .lyrics-fullscreen-volume.left) {
+  padding-left: 48px;
+}
+.immersive
+  .canvas-lyrics:not(.narrow)
+  .lyrics-fullscreen-controls:has(> .lyrics-fullscreen-volume.right) {
+  padding-right: 48px;
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume.left {
+  left: 0;
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume.right {
+  right: 0;
+}
+.immersive
+  .canvas-lyrics:not(.narrow):has(.lyrics-fullscreen-volume.below)
+  :is(.lyrics-title, .lyrics-artists) {
+  translate: 0 calc(-1.4 * var(--lyrics-dock-lift));
+}
+/* Stacked layouts have no room beside the controls: the bar becomes a row. */
+.immersive .lyrics-page.narrow .lyrics-fullscreen-volume {
+  position: static;
+  flex-direction: row;
+  justify-self: center;
+  width: min(70%, 340px);
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-volume input {
+  writing-mode: horizontal-tb;
+  direction: ltr;
+  width: auto;
+  height: 6px;
+  background: linear-gradient(
+    to right,
+    #fff var(--range, 50%),
+    #ffffff33 var(--range, 50%)
+  );
 }

@@ -157,6 +157,7 @@ export const emptyState: AppState = {
     lyrics_background: "animated",
     lyrics_pinned_footer: "off",
     fullscreen_always_show: "none",
+    fullscreen_volume: "off",
     lyrics_source_order: [
       "spicy",
       "apple",

@@ -141,6 +141,7 @@ export interface Settings {
   lyrics_pinned_footer?: "off" | "no_writers" | "full";
   /** Full screen parts kept visible while the rest hides on idle. */
   fullscreen_always_show?: "none" | "controls" | "time" | "both";
+  fullscreen_volume?: "off" | "left" | "right" | "below";
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];
   ui_font?: string;

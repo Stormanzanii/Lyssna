@@ -9862,3 +9862,46 @@ test("full screen can keep the time or controls up while idle", async ({
   await expect(seek).toHaveCSS("opacity", "0", { timeout: 5000 });
   await expect(buttons).toHaveCSS("opacity", "1");
 });
+
+test("full screen volume slider sets the volume", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await expect(page.getByLabel("Full screen volume")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  for (const side of ["left", "below"]) {
+    await openSettings(page, "Layout");
+    await page
+      .getByLabel("Full screen volume slider", { exact: true })
+      .selectOption(side);
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.keyboard.press("F11");
+    await page.mouse.move(900, 300);
+    await page.mouse.move(901, 302);
+    await page.keyboard.press("Escape");
+  }
+  await emitCanvas(page);
+  await page.keyboard.press("F11");
+  await page.mouse.move(900, 300);
+  await page.mouse.move(901, 302);
+  const slider = page.getByLabel("Full screen volume");
+  await expect(slider).toBeVisible();
+  await slider.fill("40");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .map((entry: any) => entry.args?.request)
+            .filter((request: any) => request?.command === "volume")
+            .at(-1)?.volume,
+      ),
+    )
+    .toBe(40);
+});

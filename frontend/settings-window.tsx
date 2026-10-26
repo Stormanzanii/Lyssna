@@ -987,6 +987,29 @@ export function SettingsWindow({
             <option value="both">Both</option>
           </select>
         </SettingRow>,
+        <SettingRow
+          key="fullscreen-volume"
+          label="Full screen volume slider"
+          help="Add a volume slider to the full screen controls."
+          keywords="fullscreen full screen volume slider sound"
+        >
+          <select
+            className="settings-select"
+            aria-label="Full screen volume slider"
+            value={settings.fullscreen_volume ?? "off"}
+            onChange={(event) =>
+              onSettings({
+                fullscreen_volume: event.target
+                  .value as Settings["fullscreen_volume"],
+              })
+            }
+          >
+            <option value="off">Off</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="below">Below</option>
+          </select>
+        </SettingRow>,
         flag(
           "lyrics_hide_npv",
           "Hide lyrics in Now playing",

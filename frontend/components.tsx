@@ -31,7 +31,10 @@ import {
   PanelLeftOpen,
   UnfoldVertical,
   FoldVertical,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { VolumeControl } from "./volume-control";
 import { DJArtwork, DJ_COVER } from "./brand";
 import {
   NextIcon,
@@ -1413,6 +1416,14 @@ function SongLyricsPage({
           <RepeatIcon size={20} one={repeat === "track"} />
         </button>
       </div>
+      {state.settings.fullscreen_volume &&
+        state.settings.fullscreen_volume !== "off" && (
+          <FullscreenVolume
+            state={state}
+            onPlayer={onPlayer}
+            side={state.settings.fullscreen_volume}
+          />
+        )}
     </div>
   ) : null;
   return (
@@ -1628,6 +1639,63 @@ function LyricsSkeleton() {
           <i />
         </span>
       </p>
+    </div>
+  );
+}
+
+/** Volume beside or below the full screen controls, as the fork's
+ *  Fullscreen Volume Slider. */
+function FullscreenVolume({
+  state,
+  onPlayer,
+  side,
+}: {
+  state: AppState;
+  onPlayer: (request: PlayerRequest) => void;
+  side: "left" | "right" | "below";
+}) {
+  const device = state.playback.device;
+  const [volume, setVolume] = useState(device.volume_percent ?? 100);
+  const send = useRef(onPlayer);
+  send.current = onPlayer;
+  const control = useMemo(
+    () =>
+      new VolumeControl(
+        (value) => send.current({ command: "volume", volume: value }),
+        setVolume,
+      ),
+    [],
+  );
+  useEffect(() => () => control.dispose(), [control]);
+  useEffect(() => {
+    control.observe(device.volume_percent, device.id ?? device.name);
+  }, [device.volume_percent, device.id, device.name, control]);
+  return (
+    <div className={`lyrics-fullscreen-volume ${side}`}>
+      <button
+        className="icon-button"
+        title={volume ? "Mute" : "Unmute"}
+        onClick={() => {
+          control.edit(volume ? 0 : 70);
+          control.finish();
+        }}
+      >
+        {volume ? <Volume2 size={20} /> : <VolumeX size={20} />}
+      </button>
+      <input
+        type="range"
+        aria-label="Full screen volume"
+        min="0"
+        max="100"
+        value={volume}
+        style={{ "--range": `${volume}%` } as CSSProperties}
+        onPointerDown={() => control.begin()}
+        onPointerUp={() => control.finish()}
+        onPointerCancel={() => control.finish()}
+        onKeyUp={() => control.finish()}
+        onBlur={() => control.finish()}
+        onChange={(event) => control.edit(Number(event.target.value))}
+      />
     </div>
   );
 }

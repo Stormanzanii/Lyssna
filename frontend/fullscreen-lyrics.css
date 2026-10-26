@@ -19,6 +19,7 @@
 .immersive .lyrics-page {
   --fullscreen-gutter: clamp(20px, 1.6vw, 36px);
   --lyrics-controls-opacity: 0;
+  --lyrics-controls-events: none;
   --lyrics-dock-lift: 0px;
 }
 .immersive
@@ -28,6 +29,7 @@
     :has(:focus-visible)
   ) {
   --lyrics-controls-opacity: 1;
+  --lyrics-controls-events: auto;
   --lyrics-dock-lift: 136px;
 }
 .immersive .lyrics-page .lyrics-fullscreen-controls,
@@ -277,4 +279,37 @@
   translate: -50% 0;
   width: min(560px, calc(100% - 64px));
   margin: 0;
+}
+/* Always show in full screen: the chosen part stays up and the song details
+   stay lifted above it, while everything else still hides on idle. */
+.immersive .lyrics-page[data-always-show] {
+  --lyrics-dock-lift: 136px;
+}
+.immersive .lyrics-page[data-always-show] .lyrics-fullscreen-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+.immersive .lyrics-page[data-always-show] .lyrics-fullscreen-controls > *,
+.immersive
+  .lyrics-page[data-always-show]
+  .lyrics-media
+  .lyrics-fullscreen-like {
+  opacity: var(--lyrics-controls-opacity);
+  pointer-events: var(--lyrics-controls-events);
+  transition: opacity 250ms ease;
+}
+.immersive
+  .lyrics-page:is([data-always-show="time"], [data-always-show="both"])
+  .lyrics-fullscreen-controls
+  > :is(.lyrics-glass-seek, .lyrics-fullscreen-times),
+.immersive
+  .lyrics-page:is([data-always-show="controls"], [data-always-show="both"])
+  .lyrics-fullscreen-controls
+  > .lyrics-fullscreen-buttons {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Over the artwork, the shade stays under controls that stay up. */
+.immersive .lyrics-page[data-always-show] .lyrics-media::after {
+  opacity: 1;
 }

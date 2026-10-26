@@ -964,6 +964,29 @@ export function SettingsWindow({
           "Put the album cover on the right of the lyrics.",
           "cover side swap",
         ),
+        <SettingRow
+          key="always-show"
+          label="Always show in full screen"
+          help="Keep the playback controls, the time, or both on screen instead of hiding them when the mouse rests."
+          keywords="fullscreen full screen controls time seek hide idle"
+        >
+          <select
+            className="settings-select"
+            aria-label="Always show in full screen"
+            value={settings.fullscreen_always_show ?? "none"}
+            onChange={(event) =>
+              onSettings({
+                fullscreen_always_show: event.target
+                  .value as Settings["fullscreen_always_show"],
+              })
+            }
+          >
+            <option value="none">None</option>
+            <option value="controls">Controls</option>
+            <option value="time">Time</option>
+            <option value="both">Both</option>
+          </select>
+        </SettingRow>,
         flag(
           "lyrics_hide_npv",
           "Hide lyrics in Now playing",

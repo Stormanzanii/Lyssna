@@ -30,6 +30,19 @@ pub enum PinnedLyricsFooter {
     Off,
 }
 
+/// What full screen lyrics keep on screen while the rest hides on idle:
+/// the fork's Always Show In Fullscreen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FullscreenAlwaysShow {
+    Controls,
+    Time,
+    Both,
+    #[default]
+    #[serde(other)]
+    None,
+}
+
 /// Keep remembered sorts that name a known choice for a short page key,
 /// capped so the settings file stays small.
 pub fn clean_song_sorts(sorts: &mut std::collections::BTreeMap<String, String>) {
@@ -168,6 +181,7 @@ pub struct Settings {
     /// Lyrics page background: "animated", "static" or "color".
     pub lyrics_background: String,
     pub lyrics_pinned_footer: PinnedLyricsFooter,
+    pub fullscreen_always_show: FullscreenAlwaysShow,
     pub lyrics_animator: LyricsAnimator,
     /// Lyric sources in the order they are tried, and the ones turned off.
     pub lyrics_source_order: Vec<String>,
@@ -242,6 +256,7 @@ impl Default for Settings {
             lyrics_hide_npv_empty: false,
             lyrics_background: "animated".into(),
             lyrics_pinned_footer: PinnedLyricsFooter::Off,
+            fullscreen_always_show: FullscreenAlwaysShow::None,
             lyrics_source_order: crate::lyric_sources::DEFAULT_ORDER
                 .iter()
                 .map(|id| (*id).into())
@@ -363,7 +378,7 @@ pub fn valid_client_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{LyricsAnimator, PinnedLyricsFooter, Settings};
+    use super::{FullscreenAlwaysShow, LyricsAnimator, PinnedLyricsFooter, Settings};
 
     #[test]
     fn pinned_lyrics_footer_survives_settings_restore_and_unknown_modes() {
@@ -427,6 +442,13 @@ mod tests {
         assert_eq!(older.lyrics_early_scroll_ms, 250);
         assert!(older.lyrics_skeleton);
         assert!(older.cover_animation);
+        assert_eq!(older.fullscreen_always_show, FullscreenAlwaysShow::None);
+        let chosen: Settings =
+            serde_json::from_str(r#"{"fullscreen_always_show":"both"}"#).unwrap();
+        assert_eq!(chosen.fullscreen_always_show, FullscreenAlwaysShow::Both);
+        let unknown: Settings =
+            serde_json::from_str(r#"{"fullscreen_always_show":"all"}"#).unwrap();
+        assert_eq!(unknown.fullscreen_always_show, FullscreenAlwaysShow::None);
         let mut wild: Settings =
             serde_json::from_str(r#"{"lyrics_early_scroll_ms":5000}"#).unwrap();
         wild.clean_lyrics_options();

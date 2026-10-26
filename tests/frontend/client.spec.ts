@@ -9827,3 +9827,38 @@ test("lyrics artwork crossfades to the next song's cover", async ({ page }) => {
     "https://artwork.example.test/next.svg",
   );
 });
+
+test("full screen can keep the time or controls up while idle", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Always show in full screen", { exact: true })
+    .selectOption("time");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  const section = page.locator(".lyrics-page");
+  await expect(section).toHaveAttribute("data-always-show", "time");
+  const seek = section.locator(".lyrics-glass-seek");
+  const buttons = section.locator(".lyrics-fullscreen-buttons");
+  // Idle: the time stays, the buttons hide.
+  await page.mouse.move(900, 300);
+  await page.mouse.move(901, 301);
+  await expect(buttons).toHaveCSS("opacity", "1");
+  await expect(buttons).toHaveCSS("opacity", "0", { timeout: 5000 });
+  await expect(seek).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Escape");
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Always show in full screen", { exact: true })
+    .selectOption("controls");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.keyboard.press("F11");
+  await expect(section).toHaveAttribute("data-always-show", "controls");
+  await expect(seek).toHaveCSS("opacity", "0", { timeout: 5000 });
+  await expect(buttons).toHaveCSS("opacity", "1");
+});

@@ -1430,6 +1430,12 @@ function SongLyricsPage({
         } as CSSProperties
       }
       data-seeking={seeking !== null || undefined}
+      data-always-show={
+        state.settings.fullscreen_always_show &&
+        state.settings.fullscreen_always_show !== "none"
+          ? state.settings.fullscreen_always_show
+          : undefined
+      }
       onMouseMove={wakeTools}
       onKeyDownCapture={wakeTools}
       onMouseLeave={sleepTools}

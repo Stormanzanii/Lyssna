@@ -139,6 +139,8 @@ export interface Settings {
   song_sorts?: Record<string, string>;
   lyrics_background?: "animated" | "static" | "color";
   lyrics_pinned_footer?: "off" | "no_writers" | "full";
+  /** Full screen parts kept visible while the rest hides on idle. */
+  fullscreen_always_show?: "none" | "controls" | "time" | "both";
   lyrics_source_order?: string[];
   lyrics_sources_disabled?: string[];
   ui_font?: string;

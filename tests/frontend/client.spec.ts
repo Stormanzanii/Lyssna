@@ -10763,13 +10763,13 @@ test("highlighter draws see-through strokes over sung words and keeps them", asy
       over:
         getComputedStyle(stroke.parentElement!).zIndex === "1" &&
         stroke.parentElement!.previousElementSibling !== null,
-      opacity: Number(style.opacity),
+      mask: (stroke as HTMLElement).style.maskImage,
       ink: style.backgroundImage + style.backgroundColor,
     };
   });
   expect(reach.gap).toBeLessThan(12);
   expect(reach.over).toBe(true);
-  expect(reach.opacity).toBeLessThan(1);
+  expect(reach.mask).toContain("linear-gradient");
   // Lines yet to be sung carry no strokes.
   await expect(
     page.locator(".lyrics-page .lyric-line:not(.active) .highlighter-stroke"),
@@ -10812,4 +10812,90 @@ test("highlighter draws see-through strokes over sung words and keeps them", asy
       .first()
       .evaluate((stroke) => getComputedStyle(stroke).backgroundColor),
   ).toBe("rgb(63, 142, 232)");
+});
+
+test("highlighter ink darkens when slow and marks a pause", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await showLyrics(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const { emit } = (window as any).__clientTest;
+      emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: false,
+          progress_ms: 4200,
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+      // Quick words, a pause after "was", then one long held word.
+      const timing: [string, number, number][] = [
+        ["Quick ", 0, 150],
+        ["words ", 150, 300],
+        ["was ", 300, 450],
+        ["looong", 1650, 4000],
+      ];
+      emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              start_ms: 0,
+              end_ms: 4000,
+              text: "Quick words was looong",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: timing.map(([text, start_ms, end_ms]) => ({
+                text,
+                start_ms,
+                end_ms,
+              })),
+            },
+            {
+              start_ms: 5000,
+              end_ms: 9000,
+              text: "Next line",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [],
+            },
+          ],
+        },
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  const strokes = page.locator(".lyrics-page .highlighter-stroke");
+  await expect(strokes.first()).toBeVisible();
+  const alphas = (
+    await strokes.evaluateAll((elements) =>
+      elements.map((element) => (element as HTMLElement).style.maskImage),
+    )
+  ).map((mask) =>
+    mask
+      .match(/rgba\(0, 0, 0, [\d.]+\)/g)!
+      .map((stop) => Number(stop.slice(14, -1))),
+  );
+  const quick = alphas[0][0],
+    held = alphas.at(-1)!.at(-1)!,
+    mark = Math.max(...alphas.flat());
+  // The quick words are lighter than the held word, and the pause left a
+  // darker mark than either.
+  expect(quick).toBeLessThan(held);
+  expect(mark).toBeGreaterThan(held);
 });

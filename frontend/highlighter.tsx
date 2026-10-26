@@ -10,7 +10,9 @@ import type { Line } from "./types";
 /* Highlighter: a lyrics player where a marker pen draws over each line as
  * it is sung. The ink lies on top of the text, see-through like a real
  * highlighter, one stroke per row with slanted chisel-tip ends, a slight
- * tilt and wobble, and streaks. Sung lines keep their strokes. Timed
+ * tilt and wobble, and streaks. Like a real pen, slow stretches leave
+ * darker ink than quick ones, and where the singing pauses mid-line the
+ * resting tip leaves a darker mark. Sung lines keep their strokes. Timed
  * syllables set the pace; a line without them is shared out over its
  * words by letter count. */
 
@@ -122,6 +124,49 @@ function tipAt(
   return end ? { x: end.right, top: end.top } : null;
 }
 
+/** How dark the ink lies over a stretch drawn `widthEm` wide in
+ *  `durationMs`: a slow pen leaves more ink, a quick one less. */
+export function inkAlpha(widthEm: number, durationMs: number) {
+  const speed = widthEm / Math.max(0.05, durationMs / 1000);
+  return Math.min(0.82, Math.max(0.36, 0.82 - 0.055 * speed));
+}
+
+/** How strong a mark the pen leaves resting between two stretches when the
+ *  singing pauses, 0 to 1: it grows the longer the pen rests. */
+export function restMark(before: Piece, after: Piece, time: number) {
+  const rest = Math.min(time, after.start_ms) - before.end_ms;
+  return after.start_ms - before.end_ms < 150 || rest <= 0
+    ? 0
+    : Math.min(1, rest / 700);
+}
+
+/** The see-through mask along one stroke: each stretch's ink by its pen
+ *  speed, with darker marks where the pen rested. */
+function inkMask(
+  stroke: { left: number; right: number },
+  stretches: { left: number; right: number; alpha: number; rest: number }[],
+  em: number,
+) {
+  const stops: [number, number][] = [];
+  for (const { left, right, alpha, rest } of stretches) {
+    stops.push([(left + right) / 2 - stroke.left, alpha]);
+    if (rest) {
+      const at = right - stroke.left,
+        peak = Math.min(0.95, alpha + 0.55 * rest);
+      stops.push(
+        [at - 0.3 * em, alpha],
+        [at - 0.08 * em, peak],
+        [at + 0.04 * em, peak],
+      );
+    }
+  }
+  stops.sort((a, b) => a[0] - b[0]);
+  if (stops.length === 1) stops.push([stops[0][0] + 1, stops[0][1]]);
+  return `linear-gradient(90deg, ${stops
+    .map(([x, alpha]) => `rgb(0 0 0 / ${alpha.toFixed(3)}) ${x.toFixed(1)}px`)
+    .join(", ")})`;
+}
+
 /** Small steady variations per row, so strokes look drawn by hand. */
 function wobble(seed: number) {
   const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
@@ -138,10 +183,24 @@ function drawInk(
 ) {
   const spans = [...root.querySelectorAll<HTMLElement>(".highlighter-piece")];
   const tip = time === -Infinity ? null : tipAt(spans, pieces, time);
-  const strokes: Row[] = [];
+  const strokes: (Row & { mask: string })[] = [];
   if (tip) {
     const box = root.getBoundingClientRect();
     const em = parseFloat(getComputedStyle(root).fontSize) || 16;
+    const stretches = spans.map((span, index) => {
+      const piece = pieces[index],
+        edges = span.getBoundingClientRect();
+      return {
+        left: edges.left,
+        right: edges.right,
+        top: edges.top,
+        alpha: inkAlpha(edges.width / em, piece.end_ms - piece.start_ms),
+        rest:
+          index < pieces.length - 1
+            ? restMark(piece, pieces[index + 1], time)
+            : 0,
+      };
+    });
     for (const row of textRows(spans)) {
       const done = row.top < tip.top - (row.bottom - row.top) / 2;
       const here =
@@ -149,11 +208,24 @@ function drawInk(
       if (!done && !here) break;
       const right = here ? Math.min(tip.x, row.right) : row.right;
       if (right <= row.left) continue;
+      const stroke = {
+        left: row.left - 0.14 * em,
+        right: right + (here && tip.x < row.right ? 0 : 0.14 * em),
+      };
       strokes.push({
-        left: row.left - box.left - 0.14 * em,
-        right: right - box.left + (here && tip.x < row.right ? 0 : 0.14 * em),
+        left: stroke.left - box.left,
+        right: stroke.right - box.left,
         top: row.top - box.top,
         bottom: row.bottom - box.top,
+        mask: inkMask(
+          stroke,
+          stretches.filter(
+            (stretch) =>
+              Math.abs(stretch.top - row.top) < (row.bottom - row.top) / 2 &&
+              stretch.left < right,
+          ),
+          em,
+        ),
       });
     }
   }
@@ -170,6 +242,8 @@ function drawInk(
     element.style.top = `${stroke.top + height * (0.14 + shift * 0.04)}px`;
     element.style.height = `${height * (0.78 + wobble(seed - index) * 0.05)}px`;
     element.style.transform = `rotate(${shift * 0.9}deg)`;
+    element.style.maskImage = stroke.mask;
+    element.style.webkitMaskImage = stroke.mask;
   });
 }
 

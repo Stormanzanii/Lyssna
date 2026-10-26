@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { highlighterPieces, inkAt, markerColour } from "./highlighter";
+import {
+  highlighterPieces,
+  inkAlpha,
+  inkAt,
+  markerColour,
+  restMark,
+} from "./highlighter";
 import type { Line } from "./types";
 
 const line = (words: Line["words"], text = ""): Line => ({
@@ -38,5 +44,21 @@ describe("highlighter", () => {
     expect(markerColour("#1f7a3a")).toBe("#1f7a3a");
     expect(markerColour("cover")).toContain("--lyrics-cover-color");
     expect(markerColour("red")).toBe("#d4b80f");
+  });
+
+  it("lays darker ink where the pen moves slowly", () => {
+    expect(inkAlpha(2, 2000)).toBeGreaterThan(inkAlpha(2, 300));
+    expect(inkAlpha(2, 20)).toBe(0.36);
+    expect(inkAlpha(1, 10_000)).toBeCloseTo(0.82, 1);
+  });
+
+  it("leaves a mark that grows while the pen rests in a pause", () => {
+    const before = { text: "a ", start_ms: 0, end_ms: 500 },
+      after = { text: "b", start_ms: 1500, end_ms: 2000 };
+    expect(restMark(before, after, 400)).toBe(0);
+    expect(restMark(before, after, 850)).toBeCloseTo(0.5);
+    expect(restMark(before, after, Infinity)).toBe(1);
+    // Words sung back to back leave no mark.
+    expect(restMark(before, { ...after, start_ms: 520 }, Infinity)).toBe(0);
   });
 });

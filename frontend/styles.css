@@ -5777,8 +5777,9 @@ input[type="range"]:hover {
 }
 
 /* Highlighter lyrics player: see-through marker strokes drawn over the
-   text, one per row (highlighter.tsx places them). Chisel-tip ends, ink
-   pooling at both ends and faint streaks make them look hand-drawn. */
+   text, one per row (highlighter.tsx places them and masks each one to
+   set how dark the ink lies). Chisel-tip ends, ink pooling at both ends
+   and faint streaks make them look hand-drawn. */
 .lyrics-display.highlighter {
   --highlighter-ink: #d4b80f;
 }
@@ -5805,7 +5806,6 @@ input[type="range"]:hover {
 .highlighter-stroke {
   --tip: 0.26em;
   position: absolute;
-  opacity: 0.56;
   background:
     linear-gradient(
       90deg,

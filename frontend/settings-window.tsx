@@ -965,6 +965,26 @@ export function SettingsWindow({
           "cover side swap",
         ),
         <SettingRow
+          key="toolbar-position"
+          label="View controls position"
+          help="Where the lyrics toolbar sits outside full screen."
+          keywords="toolbar view controls top bottom position"
+        >
+          <select
+            className="settings-select"
+            aria-label="View controls position"
+            value={settings.lyrics_toolbar_bottom ? "bottom" : "top"}
+            onChange={(event) =>
+              onSettings({
+                lyrics_toolbar_bottom: event.target.value === "bottom",
+              })
+            }
+          >
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+          </select>
+        </SettingRow>,
+        <SettingRow
           key="always-show"
           label="Always show in full screen"
           help="Keep the playback controls, the time, or both on screen instead of hiding them when the mouse rests."

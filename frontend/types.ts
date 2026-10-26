@@ -121,6 +121,7 @@ export interface Settings {
   lyrics_hide_artwork?: boolean;
   lyrics_artwork_right?: boolean;
   lyrics_compact?: boolean;
+  lyrics_toolbar_bottom?: boolean;
   lyrics_right_align?: boolean;
   lyrics_flip_duet?: boolean;
   lyrics_wide_duet?: boolean;

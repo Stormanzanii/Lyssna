@@ -5738,3 +5738,21 @@ input.volume-range:active::-webkit-slider-thumb {
     opacity: 0;
   }
 }
+/* View controls at the bottom: outside full screen the toolbar moves to the
+   bottom corner of the lyrics side, clear of the song details. */
+.application:not(.immersive) .lyrics-page.toolbar-bottom > .lyrics-toolbar {
+  top: auto;
+  bottom: 14px;
+  left: auto;
+  right: 16px;
+}
+.application:not(.immersive)
+  .lyrics-page.toolbar-bottom.artwork-right:not(.narrow):not(.no-artwork)
+  > .lyrics-toolbar {
+  left: 16px;
+  right: auto;
+}
+.application:not(.immersive) .lyrics-page.narrow.toolbar-bottom > .lyrics-toolbar {
+  bottom: 12px;
+  right: 12px;
+}

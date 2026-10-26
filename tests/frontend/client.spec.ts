@@ -9925,3 +9925,36 @@ test("closing full screen can slide the lyrics away first", async ({
   await expect(page.locator(".application")).not.toHaveClass(/immersive/);
   await expect(section).not.toHaveClass(/fullscreen-exit/);
 });
+
+test("lyrics view controls can sit at the bottom", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("View controls position", { exact: true })
+    .selectOption("bottom");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await showLyrics(page);
+  const section = page.locator(".lyrics-page");
+  const toolbar = section.locator("> .lyrics-toolbar");
+  await page.mouse.move(900, 400);
+  const sectionBox = (await section.boundingBox())!;
+  const box = (await toolbar.boundingBox())!;
+  expect(sectionBox.y + sectionBox.height - (box.y + box.height)).toBeLessThan(
+    30,
+  );
+  expect(sectionBox.x + sectionBox.width - (box.x + box.width)).toBeLessThan(
+    30,
+  );
+  await emitCanvas(page);
+  await page.mouse.move(901, 401);
+  const canvasBox = (await toolbar.boundingBox())!;
+  expect(
+    sectionBox.y + sectionBox.height - (canvasBox.y + canvasBox.height),
+  ).toBeLessThan(30);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  await page.mouse.move(900, 400);
+  const fullBox = (await section.locator(".lyrics-toolbar").boundingBox())!;
+  expect(fullBox.y).toBeLessThan(100);
+});

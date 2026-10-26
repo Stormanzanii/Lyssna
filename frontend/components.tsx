@@ -814,10 +814,13 @@ export function LyricsDisplay({
                   {highlighter ? (
                     <HighlighterWords
                       line={line}
+                      // A line that has started and is no longer being
+                      // sung keeps all its ink, even while its last word
+                      // overlaps the next line.
                       time={
                         playing
                           ? positionMs
-                          : positionMs >= vocalEnd(line)
+                          : positionMs >= line.start_ms
                             ? Infinity
                             : -Infinity
                       }

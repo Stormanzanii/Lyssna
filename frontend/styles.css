@@ -5778,8 +5778,8 @@ input[type="range"]:hover {
 
 /* Highlighter lyrics player: see-through marker strokes drawn over the
    text, one per row (highlighter.tsx places them and masks each one to
-   set how dark the ink lies). Chisel-tip ends, ink pooling at both ends
-   and faint streaks make them look hand-drawn. */
+   set how dark the ink lies). Chisel-tip ends and ink pooling at both
+   ends make them look hand-drawn. */
 .lyrics-display.highlighter {
   --highlighter-ink: #d4b80f;
 }
@@ -5819,11 +5819,6 @@ input[type="range"]:hover {
       rgb(255 255 255 / 0.12),
       transparent 35%,
       rgb(0 0 0 / 0.1)
-    ),
-    repeating-linear-gradient(
-      180deg,
-      transparent 0 0.09em,
-      rgb(0 0 0 / 0.07) 0.09em 0.12em
     ),
     var(--highlighter-ink);
   clip-path: polygon(

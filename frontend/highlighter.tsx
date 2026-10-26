@@ -10,7 +10,7 @@ import type { Line } from "./types";
 /* Highlighter: a lyrics player where a marker pen draws over each line as
  * it is sung. The ink lies on top of the text, see-through like a real
  * highlighter, one stroke per row with slanted chisel-tip ends, a slight
- * tilt and wobble, and streaks. Like a real pen, slow stretches leave
+ * tilt and wobble. Like a real pen, slow stretches leave
  * darker ink than quick ones, and where the singing pauses mid-line the
  * resting tip leaves a darker mark. Sung lines keep their strokes. Timed
  * syllables set the pace; a line without them is shared out over its
@@ -108,20 +108,29 @@ function tipAt(
   const span = spans[current],
     text = span?.firstChild;
   if (!span || !text) return null;
-  const letters = Math.round(
-    inkAt(pieces[current], time) * (text.textContent?.length ?? 0),
-  );
-  if (!letters) {
-    if (current === 0) return null;
-    const start = span.getClientRects()[0];
-    return start ? { x: start.left, top: start.top } : null;
-  }
+  const length = text.textContent?.length ?? 0;
+  const letters = inkAt(pieces[current], time) * length;
+  if (!letters && current === 0) return null;
+  // The tip glides through each letter rather than jumping letter by
+  // letter: it sits between the ends of the letters on either side.
   const range = document.createRange();
-  range.setStart(text, 0);
-  range.setEnd(text, letters);
-  const boxes = range.getClientRects(),
-    end = boxes[boxes.length - 1];
-  return end ? { x: end.right, top: end.top } : null;
+  const after = (count: number) => {
+    if (!count) {
+      const start = span.getClientRects()[0];
+      return start ? { x: start.left, top: start.top } : null;
+    }
+    range.setStart(text, 0);
+    range.setEnd(text, count);
+    const boxes = range.getClientRects(),
+      end = boxes[boxes.length - 1];
+    return end ? { x: end.right, top: end.top } : null;
+  };
+  const whole = Math.floor(letters),
+    from = after(whole);
+  if (whole >= length || !from) return from;
+  const to = after(whole + 1);
+  if (!to || Math.abs(to.top - from.top) > 2) return from;
+  return { x: from.x + (to.x - from.x) * (letters - whole), top: from.top };
 }
 
 /** How dark the ink lies over a stretch drawn `widthEm` wide in

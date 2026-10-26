@@ -10899,3 +10899,82 @@ test("highlighter ink darkens when slow and marks a pause", async ({
   expect(quick).toBeLessThan(held);
   expect(mark).toBeGreaterThan(held);
 });
+
+test("highlighter tip glides and ink stays through the next line", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByRole("switch", { name: "Highlighter" }).click();
+  await showLyrics(page);
+  const at = (progress_ms: number) =>
+    page.evaluate(
+      ({ track, playback, progress_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "playback",
+          playback: {
+            ...playback,
+            item: track,
+            is_playing: false,
+            progress_ms,
+          },
+          observed_at: Date.now(),
+          changed: false,
+        }),
+      { track, playback: emptyState.playback, progress_ms },
+    );
+  await at(1100);
+  await page.evaluate(
+    ({ track }) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri: track.uri,
+        lyrics: {
+          synced: true,
+          instrumental: false,
+          source: "spicy_lyrics",
+          lines: [
+            {
+              // The last word runs on after the next line begins.
+              start_ms: 0,
+              end_ms: 8000,
+              text: "Mmmmmmmm",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [{ text: "Mmmmmmmm", start_ms: 0, end_ms: 9000 }],
+            },
+            {
+              start_ms: 8000,
+              end_ms: 12000,
+              text: "Next line",
+              translation: "",
+              romanization: "",
+              background: false,
+              opposite: false,
+              words: [],
+            },
+          ],
+        },
+      }),
+    { track },
+  );
+  const first = page.locator(".lyrics-page .lyric-line").first();
+  const width = () =>
+    first
+      .locator(".highlighter-stroke")
+      .evaluate((stroke) => stroke.getBoundingClientRect().width);
+  await expect(first.locator(".highlighter-stroke")).toHaveCount(1);
+  const early = await width();
+  // Still inside the second letter: the tip has moved on regardless.
+  await at(1250);
+  await expect.poll(width).toBeGreaterThan(early + 2);
+  // The next line has begun while this one's last word is still running:
+  // this line keeps all its ink.
+  await at(8500);
+  await expect(page.locator(".lyrics-page .lyric-line").nth(1)).toHaveClass(
+    /active/,
+  );
+  await expect(first.locator(".highlighter-stroke")).toHaveCount(1);
+});

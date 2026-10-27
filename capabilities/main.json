@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Local SpotiFlex window events and fullscreen controls",
-  "windows": ["main"],
+  "windows": ["main", "lyrics-popout"],
   "permissions": [
     "core:event:default",
     "core:menu:default",

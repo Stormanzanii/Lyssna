@@ -2739,6 +2739,35 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   addEventListener("popstate", toEmbed);
   toEmbed();
 })();"#;
+/// Spicy Lyrics' popup lyrics: the lyrics in their own small window that
+/// stays above others, opened again from where it was last closed. The page
+/// is SpotiFlex's own, in its lyrics popout view.
+#[tauri::command]
+async fn open_lyrics_popout(app: tauri::AppHandle) -> std::result::Result<(), String> {
+    const LABEL: &str = "lyrics-popout";
+    let result = || -> Result<()> {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            window.unminimize()?;
+            window.set_focus()?;
+            return Ok(());
+        }
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            LABEL,
+            tauri::WebviewUrl::App("index.html?view=lyrics-popout".into()),
+        )
+        .title("SpotiFlex Lyrics")
+        .inner_size(900.0, 640.0)
+        .min_inner_size(360.0, 260.0)
+        .always_on_top(true)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(0x12, 0x12, 0x12, 0xff))
+        .additional_browser_args(BROWSER_ARGS)
+        .build()?;
+        Ok(())
+    };
+    result().map_err(error)
+}
 #[tauri::command]
 async fn open_creator_profile(
     app: tauri::AppHandle,
@@ -3491,6 +3520,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             window_fullscreen,
+            open_lyrics_popout,
             read_clipboard,
             dj_request,
             dj_prepare,

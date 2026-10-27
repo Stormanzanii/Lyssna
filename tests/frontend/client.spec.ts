@@ -12200,3 +12200,79 @@ test("Space Gravity over a canvas uses the left side too", async ({ page }) => {
   // Words spread over the canvas instead of crowding the right half.
   expect(leftShare).toBeGreaterThan(0.3);
 });
+
+test("the Lyrics popout button opens the popout window", async ({ page }) => {
+  await startClient(page);
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Lyrics popout", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (entry: any) => entry.command === "open_lyrics_popout",
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
+test("the lyrics popout shows the song, its lyrics and a seek bar", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.goto("/?view=lyrics-popout");
+  const popout = page.locator(".lyrics-popout");
+  await expect(popout.locator(".lyrics-popout-title strong")).toHaveText(
+    track.name,
+  );
+  // Only the popout renders: no main window chrome.
+  await expect(page.locator(".application")).toHaveCount(0);
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: Array.from({ length: 30 }, (_, index) => ({
+          text: `Popout line ${index + 1}`,
+          start_ms: index * 2000,
+          end_ms: (index + 1) * 2000,
+          translation: "",
+          romanization: "",
+          words: [
+            {
+              text: `Popout line ${index + 1}`,
+              start_ms: index * 2000,
+              end_ms: (index + 1) * 2000,
+            },
+          ],
+          background: false,
+          opposite: false,
+        })),
+      },
+    });
+  }, track.uri);
+  // The snapshot has the song 40 seconds in: line 21 is being sung.
+  await expect(
+    popout.locator(".lyric-line.active").filter({ hasText: "Popout line 21" }),
+  ).toBeVisible();
+  await expect(popout.getByLabel("Seek position")).toBeVisible();
+  await popout
+    .locator(".lyric-line")
+    .filter({ hasText: "Popout line 25" })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args,
+      ),
+    )
+    .toMatchObject({ request: { command: "seek" }, target: "native" });
+});

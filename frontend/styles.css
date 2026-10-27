@@ -6038,3 +6038,106 @@ input[type="range"]:hover {
 .gravity-lyrics.linked .gravity-word:not(.background) .highlighter-tip {
   display: none;
 }
+
+/* Lyrics popout window, after Spicy Lyrics' popup lyrics: lyrics over the
+   ambience, the song in the top corner, a seek bar along the bottom. */
+.lyrics-popout {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  color: #fff;
+  background: #121212;
+  container-type: inline-size;
+}
+.lyrics-popout > .ambience {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.lyrics-popout > :not(.ambience) {
+  position: relative;
+  z-index: 1;
+}
+.lyrics-popout-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 28px 40px 8px;
+  min-width: 0;
+}
+.lyrics-popout-title strong {
+  font-size: 17px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lyrics-popout-title span {
+  font-size: 14px;
+  color: rgb(255 255 255 / 0.75);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lyrics-popout-lyrics {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 calc(40px + 2cqw);
+}
+.lyrics-popout-lyrics .lyrics-display {
+  flex: 1;
+  min-height: 0;
+}
+.lyrics-popout .lyric-line,
+.lyrics-popout .lyric-wait {
+  font-size: clamp(22px, 4.2cqw, var(--lyric-size));
+}
+.lyrics-popout .lyric-line.background-vocal {
+  font-size: calc(clamp(22px, 4.2cqw, var(--lyric-size)) * 0.58);
+}
+.lyrics-popout-message {
+  margin: auto;
+  font-size: 22px;
+  font-weight: 700;
+  color: rgb(255 255 255 / 0.7);
+}
+.lyrics-popout-seek {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 40px 22px;
+}
+.lyrics-popout-seek span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 0.85);
+}
+.lyrics-popout-seek input[type="range"] {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    #fff var(--range, 0%),
+    rgb(255 255 255 / 0.3) var(--range, 0%)
+  );
+  cursor: pointer;
+}
+.lyrics-popout-seek input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+}
+.lyrics-popout-seek input[type="range"]:hover::-webkit-slider-thumb {
+  opacity: 1;
+}

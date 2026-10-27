@@ -33,6 +33,7 @@ import {
   Library,
   LoaderCircle,
   Maximize2,
+  PictureInPicture2,
   PanelRight,
   CirclePlus,
   CircleCheck,
@@ -5350,6 +5351,14 @@ function PlayerBar({
             volumeControl.edit(next);
           }}
         />
+        <button
+          className="icon-button"
+          title="Lyrics popout"
+          aria-label="Lyrics popout"
+          onClick={() => void rpc("open_lyrics_popout").catch(() => {})}
+        >
+          <PictureInPicture2 size={19} />
+        </button>
         <button
           className="icon-button"
           title="Full screen lyrics"

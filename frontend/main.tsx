@@ -13,11 +13,18 @@ import App from "./App";
 import "./fullscreen-lyrics.css";
 import { CreatorProfiles } from "./creator-profile";
 import { installOverlayScrollbars } from "./overlay-scrollbar";
+import { LyricsPopout, POPOUT_VIEW } from "./lyrics-popout";
 installOverlayScrollbars();
+// The lyrics popout window loads the same page with its own view.
+const popout = new URLSearchParams(location.search).get("view") === POPOUT_VIEW;
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <CreatorProfiles>
-      <App />
-    </CreatorProfiles>
+    {popout ? (
+      <LyricsPopout />
+    ) : (
+      <CreatorProfiles>
+        <App />
+      </CreatorProfiles>
+    )}
   </React.StrictMode>,
 );

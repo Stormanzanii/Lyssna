@@ -345,6 +345,9 @@ function edge(body: Body, side: -1 | 1, inset = 0) {
   };
 }
 
+/** The quickest a link draws, between words sung back to back. */
+const QUICKEST_LINK_MS = 150;
+
 /** The shortest pause between lines that shows the waiting dots. */
 const BREAK_MS = 2500;
 
@@ -370,12 +373,12 @@ function drawLinks(
   const lead = entities.filter(
     (entity) => entity.index >= 0 && elements.has(entity.key),
   );
-  // Each link lands on its word just as that word is sung. It sets off
-  // when the word before ends, or a little before that when the words run
-  // back to back, so it never arrives late. A link always starts at or
-  // after the previous one landed, so they draw in order.
-  const setsOff = (from: Entity, to: Entity) =>
-    Math.max(from.start, Math.min(from.end, to.start - 250));
+  // A link sets off only once the word before is fully inked, and lands
+  // on its word as that word is sung. Words sung back to back leave it no
+  // time, so it then takes a short stroke and lands just after.
+  const setsOff = (from: Entity) => from.end;
+  const lands = (from: Entity, to: Entity) =>
+    Math.max(to.start, from.end + QUICKEST_LINK_MS);
   // The latest line under way, counting the link drawing into it, and the
   // line before it keep their links.
   let current = -1;
@@ -383,9 +386,7 @@ function drawLinks(
     const before = lead[index - 1];
     if (
       entity.start <= time ||
-      (before &&
-        before.index + 1 === entity.index &&
-        setsOff(before, entity) <= time)
+      (before && before.index + 1 === entity.index && setsOff(before) <= time)
     )
       current = Math.max(current, entity.lead);
   });
@@ -396,8 +397,8 @@ function drawLinks(
   for (let index = 1; index < lead.length; index++) {
     const from = lead[index - 1],
       to = lead[index];
-    const finish = to.start,
-      begin = setsOff(from, to);
+    const finish = lands(from, to),
+      begin = setsOff(from);
     // Links within the sung line and the one before, and the link from
     // that earlier line into the sung one.
     const within =
@@ -486,7 +487,7 @@ function drawLinks(
     // sung one is half and half.
     // Across a break long enough for the waiting dots, both words are dim,
     // so the link drawing over it shows brighter, still split in two.
-    const pause = across && time < to.start && to.start - from.end >= BREAK_MS;
+    const pause = across && time < finish && to.start - from.end >= BREAK_MS;
     const settle = 1 - Math.exp(-elapsed / 120);
     [from, to].forEach((entity, side) => {
       const strength = strengthOf(entity, elements);

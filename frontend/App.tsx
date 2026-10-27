@@ -179,6 +179,7 @@ import {
 import { GlassRefractionFilter } from "./glass-refraction";
 import { RecentsPage } from "./recents-page";
 import { WhatsNewPage } from "./whats-new-page";
+import { DiscographyPage } from "./discography-page";
 import {
   addedLabel,
   collectionQueue,
@@ -2894,6 +2895,22 @@ function App() {
                 onNotice={notify}
               />
             )
+          ) : state.route.startsWith("discography:") ? (
+            <div className="browse-scroll" ref={mainScroll}>
+              <DiscographyPage
+                artistId={state.route.slice("discography:".length)}
+                artistName={
+                  state.pages[
+                    `artist:${state.route.slice("discography:".length)}`
+                  ]?.info?.title ?? "Discography"
+                }
+                ready={state.native_ready}
+                onOpenAlbum={openAlbum}
+                onPlay={(context, uri) =>
+                  play({ command: "play_home", context, uri })
+                }
+              />
+            </div>
           ) : state.route === "whats-new" ? (
             <div className="browse-scroll" ref={mainScroll}>
               <WhatsNewPage
@@ -3638,7 +3655,11 @@ function App() {
                     </h2>
                     <button
                       className="text-link muted"
-                      onClick={() => setAllAlbums(!allAlbums)}
+                      onClick={() =>
+                        entity?.artist
+                          ? navigate(`discography:${artistId}`)
+                          : setAllAlbums(!allAlbums)
+                      }
                     >
                       {allAlbums ? "Show less" : "Show all"}
                     </button>

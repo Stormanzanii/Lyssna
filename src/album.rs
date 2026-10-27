@@ -56,6 +56,21 @@ pub(crate) fn parse(album: &Value) -> AlbumDetails {
     }
     details
 }
+/// Releases from a page of Spotify's grouped release list, each with its
+/// song count.
+pub(crate) fn releases(page: &Value) -> Vec<Album> {
+    page["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            let value = &item["releases"]["items"][0];
+            let mut album = release(value)?;
+            album.total_tracks = value["tracks"]["totalCount"].as_u64().unwrap_or_default();
+            Some(album)
+        })
+        .collect()
+}
 /// A release as Spotify's pages list it: name, year, type and cover.
 pub(crate) fn release(album: &Value) -> Option<Album> {
     let uri = album["uri"]
@@ -94,6 +109,19 @@ pub(crate) fn release(album: &Value) -> Option<Album> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn discography_pages_list_each_release_with_its_song_count() {
+        let page = json!({"totalCount":2,"items":[
+            {"releases":{"items":[{"uri":"spotify:album:aaaaaaaaaaaaaaaaaaaaaa","name":"Vampire Bat","type":"SINGLE","date":{"year":2025},"tracks":{"totalCount":1},"coverArt":{"sources":[{"url":"https://i.scdn.co/image/a","width":300}]}}]}},
+            {"releases":{"items":[{"uri":"spotify:playlist:x"}]}}
+        ]});
+        let releases = releases(&page);
+        assert_eq!(releases.len(), 1);
+        assert_eq!(releases[0].name, "Vampire Bat");
+        assert_eq!(releases[0].album_type, "single");
+        assert_eq!(releases[0].release_date, "2025");
+        assert_eq!(releases[0].total_tracks, 1);
+    }
     #[test]
     fn preserves_real_counts_and_missing_counts_separately() {
         let result = parse(

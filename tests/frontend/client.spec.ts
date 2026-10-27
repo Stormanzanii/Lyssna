@@ -609,6 +609,10 @@ async function startClient(
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "artist_discography")
+            return (window as any).__discography?.list ?? [];
+          if (command === "release_tracks")
+            return (window as any).__discography?.tracks?.[args.id] ?? [[], {}];
           if (command === "liked_songs_count")
             return host.__clientTest.likedTotal ?? 0;
           if (command === "read_clipboard") {
@@ -917,7 +921,8 @@ async function startClient(
     await expect(
       page.getByRole("heading", { name: "Daily Mixes", exact: true }),
     ).toBeVisible();
-  else await expect(page.locator(".track-row")).toHaveCount(50);
+  else if (!initialRoute.startsWith("discography:"))
+    await expect(page.locator(".track-row")).toHaveCount(50);
 }
 
 /** The player's DJ button only shows while a DJ session is playing. */
@@ -12345,4 +12350,70 @@ test("lyrics open on the current line instead of sliding up to it", async ({
   );
   expect(trace.at(-1)!).toBeGreaterThan(100);
   expect(Math.abs(trace[0] - trace.at(-1)!)).toBeLessThan(8);
+});
+
+test("the discography page lists each release with its songs", async ({
+  page,
+}) => {
+  const artistId = "0123456789abcdefghijkl";
+  await page.addInitScript(
+    ({ track }) => {
+      const release = (id: string, name: string, type: string) => ({
+        id,
+        uri: `spotify:album:${id}`,
+        name,
+        album_type: type,
+        release_date: "2025",
+        total_tracks: 1,
+        images: [{ url: "https://artwork.example.test/cover.svg" }],
+      });
+      // Set before the client's own init script fills in __clientTest.
+      (window as any).__discography = {
+        list: [
+          release("aaaaaaaaaaaaaaaaaaaaaa", "Vampire Bat", "single"),
+          release("bbbbbbbbbbbbbbbbbbbbbb", "Dreamland", "album"),
+        ],
+        tracks: {
+          aaaaaaaaaaaaaaaaaaaaaa: [
+            [{ ...track, uri: "spotify:track:vampire", name: "Vampire Bat" }],
+            { "spotify:track:vampire": 16051998 },
+          ],
+        },
+      };
+    },
+    { track },
+  );
+  await startClient(page, `discography:${artistId}`);
+  const discography = page.locator(".discography-page");
+  const first = discography.locator(".discography-release").first();
+  await expect(first.locator(".discography-release-title")).toHaveText(
+    "Vampire Bat",
+  );
+  await expect(first).toContainText("Single • 2025 • 1 song");
+  await expect(first.locator(".discography-track-title strong")).toHaveText(
+    "Vampire Bat",
+  );
+  await expect(first).toContainText("16,051,998");
+  // The filter narrows to one kind of release.
+  await discography.getByRole("button", { name: "All" }).click();
+  await page.getByRole("menuitemradio", { name: "Albums" }).click();
+  await expect(discography.locator(".discography-release")).toHaveCount(1);
+  await expect(discography.locator(".discography-release-title")).toHaveText(
+    "Dreamland",
+  );
+  // A release's play button plays it on this computer.
+  await discography.getByRole("button", { name: "Play Dreamland" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({
+      command: "play_home",
+      context: "spotify:album:bbbbbbbbbbbbbbbbbbbbbb",
+    });
 });

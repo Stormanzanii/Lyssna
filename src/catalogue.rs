@@ -102,6 +102,23 @@ pub async fn page(session: &Session, kind: &str, id: &str, offset: usize) -> Res
     entity.as_object().context("Invalid catalogue data")?;
     Ok(entity)
 }
+/// One page of an artist's whole discography, newest first, as Spotify's
+/// Discography page lists it.
+pub async fn discography(session: &Session, id: &str, offset: usize) -> Result<Value> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()) && offset <= 5000,
+        "Invalid artist ID"
+    );
+    // Persisted query identifier from Spotify's desktop Discography page.
+    let mut data = query(
+        session,
+        "queryArtistDiscographyAll",
+        "5e07d323febb57b4a56a42abbf781490e58764aa45feb6e3dc0591564fc56599",
+        json!({"uri":format!("spotify:artist:{id}"),"offset":offset,"limit":50,"order":"DATE_DESC"}),
+    )
+    .await?;
+    Ok(data["data"]["artistUnion"]["discography"]["all"].take())
+}
 /// Writers from Spotify's track credits, for songs whose metadata names no
 /// composer.
 pub async fn songwriters(session: &Session, id: &str) -> Result<Vec<String>> {

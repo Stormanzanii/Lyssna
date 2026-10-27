@@ -536,12 +536,15 @@
   border-radius: 6px;
   box-shadow: 0 8px 24px #00000080;
 }
+/* Names wrap to two lines, as in Spotify, before cutting off. */
 .album-tile strong {
+  display: -webkit-box;
   font-size: 16px;
   font-weight: 500;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .album-tile small {
   font-size: 14px;

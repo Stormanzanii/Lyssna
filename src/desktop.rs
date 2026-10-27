@@ -1495,13 +1495,18 @@ fn valid_route(key: &str) -> bool {
     if let Some(query) = key.strip_prefix("search:") {
         return !query.trim().is_empty() && query.len() <= 500;
     }
-    ["album:", "artist:", "playlist:", "liked-artist:"]
-        .into_iter()
-        .any(|prefix| {
-            key.strip_prefix(prefix).is_some_and(|id| {
-                id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
-            })
-        })
+    [
+        "album:",
+        "artist:",
+        "playlist:",
+        "liked-artist:",
+        "discography:",
+    ]
+    .into_iter()
+    .any(|prefix| {
+        key.strip_prefix(prefix)
+            .is_some_and(|id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+    })
 }
 #[tauri::command]
 async fn home(
@@ -1628,7 +1633,7 @@ fn browse(
         );
         snapshot.loading = true;
         // These pages load their own content.
-        if key == "home" || key == "whats-new" {
+        if key == "home" || key == "whats-new" || key.starts_with("discography:") {
             snapshot.loading = false;
             snapshot.more = false;
             return Ok(());
@@ -1788,10 +1793,12 @@ impl PlayerRequest {
                     PlayerAction::Play(Some(context))
                 } else {
                     ensure!(route != "liked", "Open Liked Songs first");
-                    PlayerAction::PlayContext {
-                        context,
-                        offset: None,
+                    // A song picked from a release's list starts there.
+                    let offset = self.uri.clone();
+                    if let Some(uri) = &offset {
+                        native::queue_uri(uri)?;
                     }
+                    PlayerAction::PlayContext { context, offset }
                 }
             }
             "pause" => PlayerAction::Pause,
@@ -2397,6 +2404,51 @@ fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         .commands
         .send(Command::FetchLyrics(track))
         .map_err(error)
+}
+/// Every release of an artist, for the Discography page.
+#[tauri::command]
+async fn artist_discography(
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Vec<crate::model::Album>, String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || controls.discography(&id))
+        .await
+        .map_err(|_| "Library worker unavailable".to_owned())?
+        .map_err(error)
+}
+/// A release's songs and their play counts, for the Discography page.
+#[tauri::command]
+async fn release_tracks(
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<(Vec<Track>, std::collections::HashMap<String, u64>), String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<_> {
+        ensure!(
+            id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+            "Invalid album ID"
+        );
+        let tracks = controls.playlist_tracks(&format!("album:{id}"), 0)?;
+        let streams = controls
+            .catalogue("album", &id, 0)
+            .map(|entity| crate::album::parse(&entity).streams)
+            .unwrap_or_default();
+        Ok((tracks, streams))
+    })
+    .await
+    .map_err(|_| "Library worker unavailable".to_owned())?
+    .map_err(error)
+}
+fn signed_in_account(state: &State<'_, Desktop>) -> Result<String> {
+    Ok(lock(&state.0.snapshot)?
+        .profile
+        .as_ref()
+        .context("Sign in first")?
+        .id
+        .clone())
 }
 /// Songs in Liked Songs, for its header count and total length.
 #[tauri::command]
@@ -3525,6 +3577,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             window_fullscreen,
             open_lyrics_popout,
+            artist_discography,
+            release_tracks,
             read_clipboard,
             dj_request,
             dj_prepare,
@@ -3880,6 +3934,8 @@ mod tests {
         assert!(valid_route("recent"));
         assert!(valid_route("album:0123456789abcdefghijkl"));
         assert!(valid_route("liked-artist:0123456789abcdefghijkl"));
+        assert!(valid_route("discography:0123456789abcdefghijkl"));
+        assert!(!valid_route("discography:short"));
         assert!(!valid_route("liked-artist:short"));
         assert!(!valid_route("https://example.com"));
         assert!(!valid_route("album:../secrets"));

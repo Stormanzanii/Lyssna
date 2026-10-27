@@ -2052,7 +2052,7 @@ small {
    first row shows; Show all lists the rest. */
 .album-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   grid-template-rows: auto;
   grid-auto-rows: 0;
   column-gap: 4px;
@@ -2087,14 +2087,8 @@ small {
   margin-bottom: 12px;
 }
 .album-tile strong {
-  font-size: 15px;
-  font-weight: 500;
-  display: -webkit-box;
+  display: block;
   line-height: 1.35;
-  white-space: normal;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 .album-tile small {
   display: block;
@@ -6217,4 +6211,170 @@ input[type="range"]:hover {
 .album-grid.all {
   grid-auto-rows: auto;
   row-gap: 8px;
+}
+
+/* Discography page (Show all): each release with its songs, like Spotify. */
+.discography-page {
+  padding: 0 28px 40px;
+}
+.discography-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 16px;
+  background: var(--panel, #121212);
+}
+.discography-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+.discography-filter {
+  position: relative;
+}
+.discography-filter > .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.discography-filter > .text-link:hover {
+  color: #fff;
+}
+.discography-filter-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  border-radius: 6px;
+  background: #282828;
+  box-shadow: 0 16px 24px rgb(0 0 0 / 0.5);
+}
+.discography-filter-menu button {
+  padding: 10px 12px;
+  border-radius: 3px;
+  text-align: left;
+  font-size: 14px;
+  color: #e5e5e5;
+}
+.discography-filter-menu button:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.discography-filter-menu button[aria-checked="true"] {
+  color: #1ed760;
+}
+.discography-message {
+  color: var(--muted);
+  padding: 24px 0;
+}
+.discography-release {
+  padding: 32px 0 8px;
+}
+.discography-release-head {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.discography-release-cover {
+  flex-shrink: 0;
+  padding: 0;
+}
+.discography-release-cover .cover {
+  width: 136px;
+  height: 136px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+.discography-release-head > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.discography-release-title {
+  padding: 0;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: left;
+  color: #fff;
+}
+.discography-release-title:hover {
+  text-decoration: underline;
+}
+.discography-release-head p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.discography-release-play {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 8px;
+  border-radius: 50%;
+  color: #000;
+  background: #fff;
+}
+.discography-release-play:hover {
+  transform: scale(1.05);
+}
+.discography-tracks {
+  display: flex;
+  flex-direction: column;
+}
+.discography-track {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 140px 64px;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.discography-track > span:nth-child(3),
+.discography-track > span:nth-child(4) {
+  text-align: right;
+}
+button.discography-track:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.discography-track-head {
+  min-height: 36px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0;
+  font-size: 13px;
+}
+.discography-track-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.discography-track-title strong {
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discography-track-title small {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

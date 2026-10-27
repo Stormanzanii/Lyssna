@@ -647,6 +647,26 @@ impl NativeControls {
             .build()?
             .block_on(crate::catalogue::songwriters(&session, track_id))
     }
+    /// Every release of an artist, newest first.
+    pub fn discography(&self, id: &str) -> Result<Vec<crate::model::Album>> {
+        let session = self.session()?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let mut releases = Vec::new();
+        let mut offset = 0;
+        loop {
+            let page = runtime.block_on(crate::catalogue::discography(&session, id, offset))?;
+            let count = page["items"].as_array().map_or(0, Vec::len);
+            releases.extend(crate::album::releases(&page));
+            offset += count;
+            let total = page["totalCount"].as_u64().unwrap_or_default() as usize;
+            if count == 0 || offset >= total || offset >= 1000 {
+                break;
+            }
+        }
+        Ok(releases)
+    }
     pub fn catalogue(&self, kind: &str, id: &str, offset: usize) -> Result<serde_json::Value> {
         use librespot_protocol::extension_kind::ExtensionKind;
         anyhow::ensure!(

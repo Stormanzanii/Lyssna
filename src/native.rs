@@ -995,6 +995,17 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
 mod dj_queue_tests {
     use super::*;
     #[test]
+    fn repeat_chosen_before_playback_waits_for_the_next_load() {
+        let mut pending = None;
+        // Not playing yet: Spirc would drop it, so it is held.
+        assert!(!send_repeat_now("track", false, &mut pending));
+        assert_eq!(pending.as_deref(), Some("track"));
+        // Once playing it goes at once and nothing stays held, so a change
+        // from another Spotify client is not overwritten later.
+        assert!(send_repeat_now("context", true, &mut pending));
+        assert!(pending.is_none());
+    }
+    #[test]
     fn shuffled_playlist_queue_is_saved_in_its_live_order() {
         use librespot_playback::player::QueueTrack;
         let account = "test-native-live-order";
@@ -1232,11 +1243,29 @@ async fn prepare_resume(
     })
 }
 
-fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Result<()> {
+/// Whether a repeat choice can go to Spirc now. Spirc ignores commands
+/// until this computer plays, and the next load would start with repeat
+/// off while the controls still show it on; so until then the choice is
+/// held for that load.
+fn send_repeat_now(state: &str, active: bool, pending: &mut Option<String>) -> bool {
+    *pending = (!active).then(|| state.to_owned());
+    active
+}
+
+fn apply_control(
+    spirc: &Spirc,
+    action: PlayerAction,
+    active: &mut bool,
+    pending_repeat: &mut Option<String>,
+) -> Result<()> {
     if let Some(request) = load_request(&action) {
         spirc.activate()?;
         *active = true;
         spirc.load(request)?;
+        if let Some(state) = pending_repeat.take() {
+            spirc.repeat(state == "context")?;
+            spirc.repeat_track(state == "track")?;
+        }
         return Ok(());
     }
     if !*active && matches!(action, PlayerAction::Play(None)) {
@@ -1257,8 +1286,10 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
         }
         PlayerAction::Shuffle(enabled) => spirc.shuffle(enabled)?,
         PlayerAction::Repeat(state) => {
-            spirc.repeat(state == "context")?;
-            spirc.repeat_track(state == "track")?;
+            if send_repeat_now(&state, *active, pending_repeat) {
+                spirc.repeat(state == "context")?;
+                spirc.repeat_track(state == "track")?;
+            }
         }
         PlayerAction::Enqueue(uri) => spirc.add_to_queue(queue_uri(&uri)?)?,
         PlayerAction::Transfer(_) => {
@@ -2072,6 +2103,7 @@ async fn run(
     emit(NativeEvent::Ready(session.device_id().to_owned()));
     let _ = spirc.prewarm_dj();
     let mut active = false;
+    let mut pending_repeat = None;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
     let mut unavailable = crate::playback_intent::UnavailableWatch::default();
@@ -2136,7 +2168,7 @@ async fn run(
                 }else{
                 if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;intent.loading_track(selected_track(&action),std::time::Instant::now());}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
-                if apply_control(&spirc, action, &mut active).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
+                if apply_control(&spirc, action, &mut active, &mut pending_repeat).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
             event = player_events.recv() => {
                 if let Some((kind, uri)) = event.as_ref().and_then(event_summary) {

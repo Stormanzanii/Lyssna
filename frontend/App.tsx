@@ -2895,6 +2895,33 @@ function App() {
                 onNotice={notify}
               />
             )
+          ) : state.route.startsWith("artist-shelf:") ? (
+            <div className="browse-scroll" ref={mainScroll}>
+              {(() => {
+                const [, artist, index] = state.route.split(":");
+                const section =
+                  state.pages[`artist:${artist}`]?.info?.overview?.sections?.[
+                    Number(index)
+                  ];
+                return section ? (
+                  <div className="artist-shelf-page">
+                    <h1>{section.title}</h1>
+                    <Shelf
+                      section={section}
+                      navigate={openCard}
+                      play={homePlay}
+                      ready={state.native_ready}
+                      defaultExpanded
+                      page
+                    />
+                  </div>
+                ) : (
+                  <p className="discography-message">
+                    Open the artist again to see this list.
+                  </p>
+                );
+              })()}
+            </div>
           ) : state.route.startsWith("discography:") ? (
             <div className="browse-scroll" ref={mainScroll}>
               <DiscographyPage
@@ -3732,6 +3759,11 @@ function App() {
                         navigate={openCard}
                         play={homePlay}
                         ready={state.native_ready}
+                        onShowAll={() =>
+                          navigate(
+                            `artist-shelf:${artistId}:${sections.indexOf(section)}`,
+                          )
+                        }
                       />
                     </div>
                   );

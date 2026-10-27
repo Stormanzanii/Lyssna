@@ -6990,6 +6990,20 @@ test("artist pages show Spotify's shelves, About card and sticky bar", async ({
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 
+  // A shelf's Show all opens it as a page of its own, like Spotify.
+  await page
+    .getByRole("region", { name: "Fans also like" })
+    .getByRole("button", { name: "Show all" })
+    .click();
+  await expect(page.locator(".artist-shelf-page h1")).toHaveText(
+    "Fans also like",
+  );
+  await expect(page.locator(".artist-shelf-page .home-card")).not.toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Go back", exact: true }).click();
+  await expect(page.locator(".artist-about > h2")).toBeVisible();
+
   // The sticky bar appears once the header scrolls away, in both themes.
   await page
     .locator(".browse-scroll")

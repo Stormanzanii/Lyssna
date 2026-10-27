@@ -45,6 +45,8 @@ export function Shelf({
   ready,
   defaultExpanded = false,
   noteBelow = false,
+  onShowAll,
+  page = false,
 }: {
   section: HomeSection;
   /** Opens a route; cards pass themselves so the page can show at once. */
@@ -54,6 +56,10 @@ export function Shelf({
   defaultExpanded?: boolean;
   /** Show the subtitle under the title, as Spotify does on profiles. */
   noteBelow?: boolean;
+  /** Show all opens a page of its own instead of growing the row. */
+  onShowAll?: () => void;
+  /** Shown as a page of its own: the page carries the heading. */
+  page?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [clipped, setClipped] = useState(false);
@@ -72,7 +78,7 @@ export function Shelf({
   const heading = shelfHeading(section);
   return (
     <section className="home-shelf" aria-label={section.title}>
-      <div className="home-shelf-heading">
+      <div className="home-shelf-heading" hidden={page}>
         <div>
           {heading.label && !noteBelow && (
             <p>
@@ -86,7 +92,7 @@ export function Shelf({
         </div>
         <button
           className="home-show-all"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => (onShowAll ? onShowAll() : setExpanded(!expanded))}
         >
           {expanded ? "Show less" : "Show all"}
         </button>
@@ -108,7 +114,9 @@ export function Shelf({
               <button
                 className="home-card-open"
                 onClick={() =>
-                  item.kind === "track" ? play(item) : navigate(item.route, item)
+                  item.kind === "track"
+                    ? play(item)
+                    : navigate(item.route, item)
                 }
                 aria-label={`Open ${item.name}`}
               >
@@ -127,7 +135,9 @@ export function Shelf({
               <button
                 className="home-card-title"
                 onClick={() =>
-                  item.kind === "track" ? play(item) : navigate(item.route, item)
+                  item.kind === "track"
+                    ? play(item)
+                    : navigate(item.route, item)
                 }
               >
                 {item.name}
@@ -176,7 +186,9 @@ function FeaturedShelf({
     >
       <div className="home-featured-heading">
         <Cover
-          images={section.header_images?.length ? section.header_images : item.images}
+          images={
+            section.header_images?.length ? section.header_images : item.images
+          }
         />
         <div>
           {heading.label && <p>{heading.label}</p>}

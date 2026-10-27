@@ -1495,6 +1495,17 @@ fn valid_route(key: &str) -> bool {
     if let Some(query) = key.strip_prefix("search:") {
         return !query.trim().is_empty() && query.len() <= 500;
     }
+    // An artist page's shelf by its place on the page.
+    if let Some((id, index)) = key
+        .strip_prefix("artist-shelf:")
+        .and_then(|rest| rest.split_once(':'))
+    {
+        return id.len() == 22
+            && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+            && !index.is_empty()
+            && index.len() <= 2
+            && index.bytes().all(|byte| byte.is_ascii_digit());
+    }
     [
         "album:",
         "artist:",
@@ -1633,7 +1644,11 @@ fn browse(
         );
         snapshot.loading = true;
         // These pages load their own content.
-        if key == "home" || key == "whats-new" || key.starts_with("discography:") {
+        if key == "home"
+            || key == "whats-new"
+            || key.starts_with("discography:")
+            || key.starts_with("artist-shelf:")
+        {
             snapshot.loading = false;
             snapshot.more = false;
             return Ok(());
@@ -3936,6 +3951,8 @@ mod tests {
         assert!(valid_route("liked-artist:0123456789abcdefghijkl"));
         assert!(valid_route("discography:0123456789abcdefghijkl"));
         assert!(!valid_route("discography:short"));
+        assert!(valid_route("artist-shelf:0123456789abcdefghijkl:2"));
+        assert!(!valid_route("artist-shelf:0123456789abcdefghijkl:x"));
         assert!(!valid_route("liked-artist:short"));
         assert!(!valid_route("https://example.com"));
         assert!(!valid_route("album:../secrets"));

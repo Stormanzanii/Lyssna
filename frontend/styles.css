@@ -2052,12 +2052,18 @@ small {
    first row shows; Show all lists the rest. */
 .album-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  grid-template-rows: auto;
-  grid-auto-rows: 0;
-  column-gap: 4px;
+  /* The same card width and spacing as the artist page's other shelves. */
+  grid-auto-flow: column;
+  grid-auto-columns: clamp(150px, 16cqi, 210px);
+  gap: 24px;
   overflow: hidden;
-  padding: 0 16px 30px;
+  padding: 0 24px 30px;
+}
+.album-grid .album-tile {
+  padding: 0;
+}
+.album-grid .album-tile:hover {
+  background: none;
 }
 .album-release-details {
   padding: 16px 28px 28px;
@@ -6209,8 +6215,17 @@ input[type="range"]:hover {
   opacity: 1;
 }
 .album-grid.all {
-  grid-auto-rows: auto;
-  row-gap: 8px;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-columns: auto;
+}
+.artist-shelf-page {
+  padding: 24px 28px 40px;
+}
+.artist-shelf-page h1 {
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 800;
 }
 
 /* Discography page (Show all): each release with its songs, like Spotify. */

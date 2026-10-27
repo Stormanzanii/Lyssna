@@ -530,7 +530,7 @@ function drawLinks(
     // A fading link keeps following its words while they drift.
     const a = bodies.get(link.from),
       b = bodies.get(link.to);
-    if (a && b) shapeLink(link, a, b, width);
+    if (a?.spawned && b?.spawned) shapeLink(link, a, b, width);
     if (link.leaving) continue;
     link.leaving = true;
     link.path.classList.add("leaving");

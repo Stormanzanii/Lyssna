@@ -4757,6 +4757,18 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   const fading = page.locator(".gravity-links path.leaving").first();
   const shape = await fading.getAttribute("d");
   await expect.poll(() => fading.getAttribute("d")).not.toBe(shape);
+  // No link ever runs to the corner, where a word not yet placed sits.
+  const corners = await page.evaluate(
+    () =>
+      [...document.querySelectorAll(".gravity-links path")].filter((path) => {
+        const numbers = (path.getAttribute("d") ?? "")
+          .match(/-?[\d.]+/g)!
+          .map(Number);
+        const ends = [numbers.slice(0, 2), numbers.slice(-2)];
+        return ends.some(([x, y]) => Math.hypot(x, y) < 5);
+      }).length,
+  );
+  expect(corners).toBe(0);
   await expect
     .poll(() =>
       page

@@ -6,12 +6,12 @@
 
 **Spotify on your desktop, with Spicy Lyrics built in.**
 
-[![Release](https://img.shields.io/badge/release-0.1.1-1ed760?style=for-the-badge)](#get-started)
+[![Release](https://img.shields.io/badge/release-0.2.0-1ed760?style=for-the-badge)](#get-started)
 [![Windows · macOS](https://img.shields.io/badge/Windows%20%C2%B7%20macOS-2b2b2b?style=for-the-badge)](#build-from-source)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-dea584?style=for-the-badge&logo=rust&logoColor=white)](Cargo.toml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge)](LICENSE)
 
-[Download](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe) · [Build from source](#build-from-source) · [Credits](#credits)
+[Download](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/spotiflex.exe) · [Build from source](#build-from-source) · [Credits](#credits)
 
 </div>
 
@@ -39,7 +39,7 @@ Press **F11** for full-screen lyrics over the Canvas. The controls fade out unti
 
 ## Get started
 
-1. **Install.** On Windows 10 or 11 (x64), download [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe). On macOS 12 or later, [build from source](#build-from-source).
+1. **Install.** On Windows 10 or 11 (x64), download [SpotiFlex 0.2.0](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/spotiflex.exe). On macOS 12 or later, [build from source](#build-from-source).
 2. **Sign in.** Choose **Sign in with Spotify** and approve the connection in your browser. The setup window stays up until Spotify confirms the account.
 3. **Play something.** Your playlists, albums and artists load into the library on the left.
 4. **Make it yours.** Open **Settings** from the account menu for lyrics sources, the animator, crossfade and tray behaviour.

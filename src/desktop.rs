@@ -2708,6 +2708,13 @@ fn create_playlist(
 /// link, the site's router lands on the full `/{name}` page, whose banner
 /// covers the top of the sheet. That page is swapped for `/embed/{name}`,
 /// and the banner is hidden in case it shows anyway.
+/// WebView2 switches, the same for every window since they share one
+/// browser. wry's defaults, plus: after three GPU process crashes, as a
+/// driver reset during a game causes, Chromium falls back to software
+/// rendering until restart, dropping lyrics to a few dozen frames a
+/// second. Without the limit it brings hardware rendering back each time.
+const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-process-crash-limit";
+
 const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const style = document.createElement("style");
   style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
@@ -2792,6 +2799,7 @@ async fn open_creator_profile(
                 .shadow(true)
                 .visible(false)
                 .parent(&main)?
+                .additional_browser_args(BROWSER_ARGS)
                 .initialization_script(PROFILE_WINDOW_SCRIPT)
                 .on_navigation(|url| {
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
@@ -3565,6 +3573,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn every_window_shares_the_browser_switches() {
+        // WebView2 refuses a window whose switches differ from the browser
+        // already running, and the main window's come from the config.
+        let config: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(
+            config["app"]["windows"][0]["additionalBrowserArgs"],
+            BROWSER_ARGS
+        );
+        assert!(BROWSER_ARGS.contains("--disable-gpu-process-crash-limit"));
+    }
     #[test]
     fn ordered_liked_selection_keeps_requested_queue() {
         let loaded: Vec<_> = ["a", "b", "c"]

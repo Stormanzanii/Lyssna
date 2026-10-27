@@ -21,7 +21,8 @@
         "theme": "Dark",
         "backgroundColor": "#08080c",
         "decorations": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-process-crash-limit"
       }
     ],
     "security": {

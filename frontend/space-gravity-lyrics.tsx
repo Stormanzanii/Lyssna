@@ -345,8 +345,9 @@ function edge(body: Body, side: -1 | 1, inset = 0) {
   };
 }
 
-/** The quickest a link draws, between words sung back to back. */
-const QUICKEST_LINK_MS = 150;
+/** How long before its word starts a link lands, so the word's ink sets
+ *  off from the line. */
+const LANDS_EARLY_MS = 100;
 
 /** The shortest pause between lines that shows the waiting dots. */
 const BREAK_MS = 2500;
@@ -374,11 +375,12 @@ function drawLinks(
     (entity) => entity.index >= 0 && elements.has(entity.key),
   );
   // A link sets off only once the word before is fully inked, and lands
-  // on its word as that word is sung. Words sung back to back leave it no
-  // time, so it then takes a short stroke and lands just after.
+  // just before its word is sung, so that word's ink starts from the line.
+  // Words sung back to back leave no time: the link then shows whole the
+  // moment the word before finishes.
   const setsOff = (from: Entity) => from.end;
   const lands = (from: Entity, to: Entity) =>
-    Math.max(to.start, from.end + QUICKEST_LINK_MS);
+    Math.max(from.end, to.start - LANDS_EARLY_MS);
   // The latest line under way, counting the link drawing into it, and the
   // line before it keep their links.
   let current = -1;
@@ -499,11 +501,16 @@ function drawLinks(
           stop.setAttribute("stop-opacity", opacity);
       }
     });
-    // The pen follows song time softly, so coarse time updates don't step.
-    const target = ease(
-      Math.min(1, Math.max(0, (time - begin) / Math.max(1, finish - begin))),
-    );
-    link.drawn += (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
+    // The pen follows song time softly, so coarse time updates don't step,
+    // but it is always whole once it should have landed.
+    const target =
+      time >= finish
+        ? 1
+        : ease(Math.max(0, (time - begin) / Math.max(1, finish - begin)));
+    link.drawn =
+      target === 1
+        ? 1
+        : link.drawn + (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
     path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
   }
   for (const [key, link] of drawn) {

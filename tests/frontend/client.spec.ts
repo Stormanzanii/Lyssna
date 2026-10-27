@@ -4667,8 +4667,9 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   await expect(page.locator(".gravity-word").first()).toBeVisible();
   // Nothing is joined until a word is sung.
   await expect(links).toHaveCount(0);
-  // Halfway through the pause after "One", its line is half drawn.
-  await at(1500);
+  // Halfway through the pause after "One", its line is half drawn; it
+  // lands just before "two" starts.
+  await at(1450);
   await expect(links).toHaveCount(1);
   const offset = () =>
     links
@@ -4684,7 +4685,7 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   await expect(links).toHaveCount(2);
   // The link into the next line draws across the pause before it, rather
   // than appearing whole when that line starts.
-  await at(6500);
+  await at(6450);
   const into = page.locator('.gravity-links path[data-link="0:2>1:0"]');
   await expect
     .poll(() =>
@@ -4811,15 +4812,16 @@ test("Space Gravity marker links leave each word once it is inked, at the Highli
       ),
     );
   // A link never leaves a word still being inked: "Quick" must finish
-  // first. Back to back, it then takes a short stroke into "quick".
+  // first. Back to back, it then shows whole at once, so "quick" starts
+  // its ink from the line.
+  await expect(links).toHaveCount(0);
   await at(100);
   await expect(links).toHaveCount(1);
-  await expect.poll(async () => (await offsets())[0]).toBeCloseTo(1, 2);
-  await at(250);
   await expect.poll(async () => (await offsets())[0]).toBe(0);
   // The second link waits for "quick" to finish.
-  expect((await offsets())[1] ?? 1).toBeGreaterThan(0.2);
-  await at(350);
+  await at(150);
+  await expect(links).toHaveCount(1);
+  await at(200);
   await expect.poll(offsets).toEqual([0, 0]);
   // As broad as the Highlighter's band on the words.
   const width = await links

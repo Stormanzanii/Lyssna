@@ -43,48 +43,52 @@ pub(crate) fn parse(album: &Value) -> AlbumDetails {
             if let Some(albums) = artist["discography"]["popularReleasesAlbums"]["items"].as_array()
             {
                 for album in albums {
-                    let Some(uri) = album["uri"]
-                        .as_str()
-                        .filter(|uri| uri.starts_with("spotify:album:"))
-                    else {
+                    let Some(album) = release(album) else {
                         continue;
                     };
-                    if details.more.iter().any(|item| item.uri == uri) {
+                    if details.more.iter().any(|item| item.uri == album.uri) {
                         continue;
                     }
-                    details.more.push(Album {
-                        id: uri.rsplit(':').next().map(str::to_owned),
-                        uri: uri.into(),
-                        name: album["name"].as_str().unwrap_or_default().into(),
-                        release_date: album["date"]["year"]
-                            .as_u64()
-                            .map(|year| year.to_string())
-                            .unwrap_or_default(),
-                        album_type: album["type"].as_str().unwrap_or("album").to_lowercase(),
-                        images: album["coverArt"]["sources"]
-                            .as_array()
-                            .map(|images| {
-                                images
-                                    .iter()
-                                    .filter_map(|image| {
-                                        let url = image["url"].as_str()?.to_owned();
-                                        url.starts_with("https://").then_some(Artwork {
-                                            url,
-                                            width: image["width"]
-                                                .as_u64()
-                                                .and_then(|width| width.try_into().ok()),
-                                        })
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                        ..Album::default()
-                    });
+                    details.more.push(album);
                 }
             }
         }
     }
     details
+}
+/// A release as Spotify's pages list it: name, year, type and cover.
+pub(crate) fn release(album: &Value) -> Option<Album> {
+    let uri = album["uri"]
+        .as_str()
+        .filter(|uri| uri.starts_with("spotify:album:"))?;
+    Some(Album {
+        id: uri.rsplit(':').next().map(str::to_owned),
+        uri: uri.into(),
+        name: album["name"].as_str().unwrap_or_default().into(),
+        release_date: album["date"]["year"]
+            .as_u64()
+            .map(|year| year.to_string())
+            .unwrap_or_default(),
+        album_type: album["type"].as_str().unwrap_or("album").to_lowercase(),
+        images: album["coverArt"]["sources"]
+            .as_array()
+            .map(|images| {
+                images
+                    .iter()
+                    .filter_map(|image| {
+                        let url = image["url"].as_str()?.to_owned();
+                        url.starts_with("https://").then_some(Artwork {
+                            url,
+                            width: image["width"]
+                                .as_u64()
+                                .and_then(|width| width.try_into().ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        ..Album::default()
+    })
 }
 #[cfg(test)]
 mod tests {

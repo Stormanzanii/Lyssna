@@ -45,9 +45,49 @@ pub struct ArtistOverview {
     /// Featuring, Discovered on, Artist Playlists, Fans also like, Appears On.
     #[serde(default)]
     pub sections: Vec<crate::home::HomeSection>,
+    /// The releases Spotify's own artist page lists.
+    #[serde(default)]
+    pub discography: Discography,
     pub source_url: String,
     pub fetched_at: u64,
 }
+/// Spotify's Discography shelf: the latest release, the popular ones, and
+/// the first page of albums, singles and EPs, and compilations.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Discography {
+    pub latest: Option<crate::model::Album>,
+    pub popular: Vec<crate::model::Album>,
+    pub albums: Vec<crate::model::Album>,
+    pub singles: Vec<crate::model::Album>,
+    pub compilations: Vec<crate::model::Album>,
+}
+
+fn discography(artist: &Value) -> Discography {
+    let section = &artist["discography"];
+    // Albums, singles and compilations wrap each release in a group.
+    let grouped = |name: &str| -> Vec<crate::model::Album> {
+        section[name]["items"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| crate::album::release(&item["releases"]["items"][0]))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    Discography {
+        latest: crate::album::release(&section["latest"]),
+        popular: section["popularReleasesAlbums"]["items"]
+            .as_array()
+            .map(|items| items.iter().filter_map(crate::album::release).collect())
+            .unwrap_or_default(),
+        albums: grouped("albums"),
+        singles: grouped("singles"),
+        compilations: grouped("compilations"),
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TopCity {
     pub city: String,
@@ -295,6 +335,7 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
         })
         .unwrap_or_default();
     Ok(ArtistOverview {
+        discography: discography(artist),
         details_loaded: false,
         monthly_listeners: artist["stats"]["monthlyListeners"].as_u64(),
         followers: artist["stats"]["followers"].as_u64(),
@@ -613,6 +654,28 @@ fn larger_gallery_photo(url: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn discography_reads_latest_popular_and_grouped_releases() {
+        let id = "0123456789abcdefghijkl";
+        let release = |n: u8, kind: &str| json!({"uri":format!("spotify:album:{n:022}"),"name":format!("Release {n}"),"type":kind,"date":{"year":2000 + u64::from(n)},"coverArt":{"sources":[{"url":"https://i.scdn.co/image/cover","width":300},{"url":"http://insecure.test/cover"}]}});
+        let entity = json!({"uri":format!("spotify:artist:{id}"),"discography":{
+            "latest":release(1,"SINGLE"),
+            "popularReleasesAlbums":{"items":[release(2,"ALBUM")]},
+            "albums":{"items":[{"releases":{"items":[release(3,"ALBUM")]}}]},
+            "singles":{"items":[{"releases":{"items":[release(4,"EP")]}}]},
+            "compilations":{"items":[{"releases":{"items":[release(5,"COMPILATION")]}},{"releases":{"items":[{"uri":"spotify:playlist:x"}]}}]}
+        }});
+        let discography = from_entity(&entity, id).unwrap().discography;
+        let latest = discography.latest.unwrap();
+        assert_eq!(latest.name, "Release 1");
+        assert_eq!(latest.album_type, "single");
+        assert_eq!(latest.release_date, "2001");
+        assert_eq!(latest.images.len(), 1);
+        assert_eq!(discography.popular[0].name, "Release 2");
+        assert_eq!(discography.albums[0].name, "Release 3");
+        assert_eq!(discography.singles[0].album_type, "ep");
+        assert_eq!(discography.compilations.len(), 1);
+    }
     #[test]
     fn desktop_banner_uses_the_current_header_field_and_largest_source() {
         let id = "0123456789abcdefghijkl";

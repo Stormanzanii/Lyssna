@@ -185,7 +185,12 @@ import {
   genresFor,
   nextHeaderSort,
 } from "./collection";
-import { albumKind, albumMatches, albumTypeLabel } from "./album-type";
+import {
+  albumKind,
+  albumMatches,
+  albumTypeLabel,
+  discographyReleases,
+} from "./album-type";
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
@@ -3642,7 +3647,8 @@ function App() {
                       ["all", "Popular releases"],
                       ["album", "Albums"],
                       ["single", "Singles and EPs"],
-                      ...((entity?.artist ? entity.albums : []).some(
+                      ...(entity?.overview?.discography?.compilations.length ||
+                      (entity?.artist ? entity.albums : []).some(
                         (album) =>
                           albumKind(album.album_type) === "compilation",
                       )
@@ -3660,12 +3666,15 @@ function App() {
                   </div>
                   <div className="album-grid">
                     {(entity?.artist
-                      ? entity.albums
-                      : entity?.album_details?.more || []
+                      ? discographyReleases(
+                          entity.albums,
+                          entity.overview?.discography,
+                          albumFilter,
+                        )
+                      : (entity?.album_details?.more || []).filter((album) =>
+                          albumMatches(album.album_type, albumFilter),
+                        )
                     )
-                      .filter((album) =>
-                        albumMatches(album.album_type, albumFilter),
-                      )
                       .slice(0, allAlbums ? undefined : 10)
                       .map((album) => (
                         <button
@@ -3677,8 +3686,12 @@ function App() {
                           <Cover images={album.images} />
                           <strong>{album.name}</strong>
                           <small>
-                            {album.release_date?.slice(0, 4)} ·{" "}
-                            {albumTypeLabel(album.album_type)}
+                            {albumFilter === "all" &&
+                            album.uri ===
+                              entity?.overview?.discography?.latest?.uri
+                              ? "Latest Release"
+                              : album.release_date?.slice(0, 4)}{" "}
+                            · {albumTypeLabel(album.album_type)}
                           </small>
                         </button>
                       ))}

@@ -16,6 +16,14 @@ export interface Artist {
   verified?: boolean;
   biography?: string;
 }
+/** Spotify's Discography shelf, as its artist page lists it. */
+export interface Discography {
+  latest?: Album | null;
+  popular: Album[];
+  albums: Album[];
+  singles: Album[];
+  compilations: Album[];
+}
 export interface Album {
   copyrights?: { text: string; type: string }[];
   id?: string;
@@ -287,6 +295,8 @@ export interface BrowseInfo {
     sections?: HomeSection[];
     /** The item the artist pinned ("Artist pick"). */
     pick?: HomeItem;
+    /** The releases Spotify's own artist page lists. */
+    discography?: Discography;
   };
   key: string;
   title: string;

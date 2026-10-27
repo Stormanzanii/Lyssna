@@ -55,9 +55,10 @@ export const NextIcon = ({ size = 16 }: IconProps) =>
 export const PlayIcon = ({ size = 16 }: IconProps) =>
   solid(
     size,
-    // Spans x 3 to 13.6: a touch right of the box centre, the optical
-    // middle of a triangle, so it looks centred in the round button.
-    <path d="M3 2.2v11.6a.8.8 0 0 0 1.22.68l9.02-5.8a.8.8 0 0 0 0-1.36L4.22 1.52A.8.8 0 0 0 3 2.2Z" />,
+    // Spotify's proportions, 11.5 by 13.4. It spans x 3 to 14.5, its box a
+    // little right of centre as Spotify's is, since a triangle's weight
+    // sits towards its flat side; so it looks centred in the round button.
+    <path d="M3 2.1v11.8a.8.8 0 0 0 1.2.69l9.95-5.9a.8.8 0 0 0 0-1.38L4.2 1.41a.8.8 0 0 0-1.2.69Z" />,
   );
 
 export const PauseIcon = ({ size = 16 }: IconProps) =>
@@ -69,16 +70,23 @@ export const PauseIcon = ({ size = 16 }: IconProps) =>
     </>,
   );
 
-/** Two crossing paths with open arrowheads; the one passing under starts
- *  as a short stroke at the top left. */
+/** Two paths crossing from the left edge to arrowheads on the right. */
 export const ShuffleIcon = ({ size = 16 }: IconProps) =>
   stroked(
     size,
     <>
-      <path d="M1 2.9c1 .3 1.75.95 2.4 1.9" />
-      <path d="M1 14.4 5.55 7.35C6.6 5.75 7.85 4.6 10.1 4.6h4.4" />
-      <path d="M6.85 10.25c1.05 1.65 2.15 2.7 3.95 2.7h3.7" />
-      <path d="m12.35 2.1 2.5 2.5-2.5 2.5M12.35 10.45l2.5 2.5-2.5 2.5" />
+      <path
+        d="M1 4.25h1.6c1.55 0 2.55.7 3.4 1.95l3.15 4.6c.85 1.25 1.85 1.95 3.4 1.95h2.2"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M1 12.75h1.6c1.55 0 2.55-.7 3.4-1.95l3.15-4.6c.85-1.25 1.85-1.95 3.4-1.95h2.2"
+        strokeWidth="1.75"
+      />
+      <path
+        d="m12.3 1.55 2.7 2.7-2.7 2.7M12.3 10.05l2.7 2.7-2.7 2.7"
+        strokeWidth="1.75"
+      />
     </>,
   );
 

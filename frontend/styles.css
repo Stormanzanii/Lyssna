@@ -1078,13 +1078,25 @@ small {
   font-size: 14px;
   font-weight: 600;
 }
+/* Popular beside You Liked, wrapping under it when the centre panel, not
+   the window, is narrow; stacked, You Liked lines up with Discography. */
 .artist-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(200px, 1fr);
-  gap: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 24px;
+  container: artist-top / inline-size;
 }
 .artist-top section {
+  flex: 1.8 1 520px;
   min-width: 0;
+}
+.artist-top > .artist-liked {
+  flex: 1 1 260px;
+}
+@container artist-top (max-width: 803px) {
+  .artist-liked {
+    padding-left: 28px;
+  }
 }
 .artist-top .track-table-head,
 .artist-top .track-row {
@@ -1192,15 +1204,6 @@ small {
 .artist-pick small {
   font-size: 14px;
   color: var(--muted);
-}
-@media (max-width: 1300px) {
-  .artist-top {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-  .artist-liked {
-    padding-left: 28px;
-  }
 }
 .artist-monthly {
   color: #fff;

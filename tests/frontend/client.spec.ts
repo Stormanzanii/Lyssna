@@ -3490,6 +3490,39 @@ test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {
   ).toBe("visible");
 });
 
+test("the lyrics ambience rebuilds after the GPU loses its canvas", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await startClient(page);
+  await playLyricTrack(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.keyboard.press("Escape");
+  await showLyrics(page);
+  const layer = page.locator(".lyrics-page > .ambience .ambient-layer");
+  await expect(layer).toHaveCount(1);
+  await layer.evaluate((canvas: HTMLCanvasElement) => {
+    (canvas as any).__old = true;
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    gl!.getExtension("WEBGL_lose_context")!.loseContext();
+  });
+  // A fresh canvas takes over, with a working context.
+  await expect
+    .poll(() =>
+      layer.evaluate(
+        (canvas: HTMLCanvasElement) =>
+          !(canvas as any).__old &&
+          !(
+            canvas.getContext("webgl2") ?? canvas.getContext("webgl")
+          )?.isContextLost(),
+      ),
+    )
+    .toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test("Now playing retains the lyrics ambience with Liquid Glass enabled", async ({
   page,
 }) => {

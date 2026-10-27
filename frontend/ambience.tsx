@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Kawarp from "@kawarp/core";
 import type { Track } from "./types";
 import {
@@ -44,6 +44,9 @@ export const Ambience = memo(function Ambience({
     artwork = useRef(source),
     motion = useRef({ animate, reduceMotion });
   motion.current = { animate, reduceMotion };
+  // A GPU reset, as a game can cause, loses the canvas's WebGL context and
+  // leaves a flat colour. Each loss swaps in a fresh canvas and renderer.
+  const [generation, setGeneration] = useState(0);
   artwork.current = source;
   useEffect(() => {
     const canvas = surface.current;
@@ -62,9 +65,16 @@ export const Ambience = memo(function Ambience({
         highPrecisionOutput: true,
       });
     } catch {
-      return;
+      // The GPU may still be coming back; try again shortly.
+      const retry = setTimeout(() => setGeneration((value) => value + 1), 2000);
+      return () => clearTimeout(retry);
     }
     renderer.current = engine;
+    const lost = (event: Event) => {
+      event.preventDefault();
+      setGeneration((value) => value + 1);
+    };
+    canvas.addEventListener("webglcontextlost", lost);
     let frame = 0,
       last = 0,
       // Still ambience keeps drawing until this time so artwork crossfades,
@@ -142,6 +152,7 @@ export const Ambience = memo(function Ambience({
     reduced.addEventListener("change", restart);
     return () => {
       disposed = true;
+      canvas.removeEventListener("webglcontextlost", lost);
       cancelAnimationFrame(frame);
       sizes.disconnect();
       observer.disconnect();
@@ -152,7 +163,7 @@ export const Ambience = memo(function Ambience({
       renderer.current = null;
       engine.dispose();
     };
-  }, []);
+  }, [generation]);
   useEffect(() => {
     if (!followCanvas) return;
     const engine = renderer.current;
@@ -208,7 +219,7 @@ export const Ambience = memo(function Ambience({
       clearInterval(timer);
       stopFollowing();
     };
-  }, [followCanvas]);
+  }, [followCanvas, generation]);
   useEffect(() => {
     if (!source || following.current) return;
     let cancelled = false;
@@ -222,7 +233,7 @@ export const Ambience = memo(function Ambience({
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [source, generation]);
   useEffect(() => resume.current?.(), [animate, reduceMotion]);
   useEffect(() => {
     renderer.current?.setOptions({
@@ -230,13 +241,14 @@ export const Ambience = memo(function Ambience({
       animationSpeed: speed,
       saturation,
     });
-  }, [warp, speed, saturation]);
+  }, [warp, speed, saturation, generation]);
   return (
     <div
       className={`ambience ${reduceMotion ? "still" : ""}`}
       aria-hidden="true"
     >
       <canvas
+        key={generation}
         width={512}
         height={288}
         ref={surface}

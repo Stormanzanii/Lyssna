@@ -318,6 +318,10 @@ interface Link {
   /** Each half's eased strength. */
   strengths: [number, number];
   leaving: boolean;
+  /** The two words it joins, and the seed that sets its swing. */
+  from: string;
+  to: string;
+  seed: number;
 }
 const sheets = new WeakMap<SVGSVGElement, Map<string, Link>>();
 
@@ -355,6 +359,44 @@ const BREAK_MS = 2500;
 /** Eases in and out, so a link's pen starts and lands softly. */
 const ease = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
+/** Lays a link along the edges of its two words as they drift. */
+function shapeLink(link: Link, a: Body, b: Body, width: number) {
+  const { path, gradient } = link;
+  // As broad as the Highlighter's band on the smaller of the two words.
+  const stroke =
+    Math.min(a.height * a.scale, b.height * b.scale) * 0.84 * width;
+  // Each end tucks under its word's ink, so line and words read as one
+  // unbroken stroke.
+  const start = edge(a, 1, stroke / 2),
+    end = edge(b, -1, stroke / 2);
+  const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+  // Leave and arrive along each word's slant, with a seeded lift so
+  // links swing their own way.
+  const reach = Math.min(160, length * 0.45);
+  const lift = ((link.seed % 200) / 100 - 1) * 0.5;
+  const out = ((a.angle + lift * 30) * Math.PI) / 180,
+    into = ((b.angle - lift * 30) * Math.PI) / 180;
+  const c1 = {
+      x: start.x + Math.cos(out) * reach,
+      y: start.y + Math.sin(out) * reach,
+    },
+    c2 = {
+      x: end.x - Math.cos(into) * reach,
+      y: end.y - Math.sin(into) * reach,
+    };
+  const point = (p: { x: number; y: number }) =>
+    `${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  path.setAttribute(
+    "d",
+    `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
+  );
+  path.style.strokeWidth = `${stroke.toFixed(1)}px`;
+  gradient.setAttribute("x1", start.x.toFixed(1));
+  gradient.setAttribute("y1", start.y.toFixed(1));
+  gradient.setAttribute("x2", end.x.toFixed(1));
+  gradient.setAttribute("y2", end.y.toFixed(1));
+}
 
 /** With the Highlighter on, a marker line runs from each sung word to the
  *  next one in the line being sung, drawn across the pause between them
@@ -441,6 +483,9 @@ function drawLinks(
         at: now,
         strengths: [strengthOf(from, elements), strengthOf(to, elements)],
         leaving: false,
+        from: from.key,
+        to: to.key,
+        seed: from.seed,
       };
       drawn.set(key, link);
     }
@@ -448,40 +493,7 @@ function drawLinks(
       link.leaving = false;
       link.path.classList.remove("leaving");
     }
-    const { path, gradient } = link;
-    // As broad as the Highlighter's band on the smaller of the two words.
-    const stroke =
-      Math.min(a.height * a.scale, b.height * b.scale) * 0.84 * width;
-    // Each end tucks under its word's ink, so line and words read as one
-    // unbroken stroke.
-    const start = edge(a, 1, stroke / 2),
-      end = edge(b, -1, stroke / 2);
-    const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
-    // Leave and arrive along each word's slant, with a seeded lift so
-    // links swing their own way.
-    const reach = Math.min(160, length * 0.45);
-    const lift = ((from.seed % 200) / 100 - 1) * 0.5;
-    const out = ((a.angle + lift * 30) * Math.PI) / 180,
-      into = ((b.angle - lift * 30) * Math.PI) / 180;
-    const c1 = {
-        x: start.x + Math.cos(out) * reach,
-        y: start.y + Math.sin(out) * reach,
-      },
-      c2 = {
-        x: end.x - Math.cos(into) * reach,
-        y: end.y - Math.sin(into) * reach,
-      };
-    const point = (p: { x: number; y: number }) =>
-      `${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    path.setAttribute(
-      "d",
-      `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
-    );
-    path.style.strokeWidth = `${stroke.toFixed(1)}px`;
-    gradient.setAttribute("x1", start.x.toFixed(1));
-    gradient.setAttribute("y1", start.y.toFixed(1));
-    gradient.setAttribute("x2", end.x.toFixed(1));
-    gradient.setAttribute("y2", end.y.toFixed(1));
+    shapeLink(link, a, b, width);
     const elapsed = Math.min(100, now - link.at);
     link.at = now;
     // The link dims with its words: each half eases toward its own word's
@@ -511,10 +523,15 @@ function drawLinks(
       target === 1
         ? 1
         : link.drawn + (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
-    path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
+    link.path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
   }
   for (const [key, link] of drawn) {
-    if (wanted.has(key) || link.leaving) continue;
+    if (wanted.has(key)) continue;
+    // A fading link keeps following its words while they drift.
+    const a = bodies.get(link.from),
+      b = bodies.get(link.to);
+    if (a && b) shapeLink(link, a, b, width);
+    if (link.leaving) continue;
     link.leaving = true;
     link.path.classList.add("leaving");
     setTimeout(() => {

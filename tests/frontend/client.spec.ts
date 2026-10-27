@@ -4720,6 +4720,10 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   await at(9600);
   await expect(kept).toHaveCount(3);
   await expect(page.locator(".gravity-links path.leaving")).not.toHaveCount(0);
+  // A fading link keeps following its drifting words rather than freezing.
+  const fading = page.locator(".gravity-links path.leaving").first();
+  const shape = await fading.getAttribute("d");
+  await expect.poll(() => fading.getAttribute("d")).not.toBe(shape);
   await expect
     .poll(() =>
       page

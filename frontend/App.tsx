@@ -3542,7 +3542,7 @@ function App() {
                 {entity?.artist && (likedHere > 0 || entity.overview?.pick) && (
                   <aside className="artist-liked">
                     {likedHere > 0 && (
-                      <>
+                      <div className="artist-aside-block">
                         <h2>You Liked</h2>
                         <div className="artist-liked-row">
                           <div className="liked-artist-image">
@@ -3568,10 +3568,10 @@ function App() {
                             <small>By {entity.artist.name}</small>
                           </span>
                         </div>
-                      </>
+                      </div>
                     )}
                     {entity.overview?.pick && (
-                      <>
+                      <div className="artist-aside-block">
                         <h2>Artist pick</h2>
                         <button
                           className="artist-pick"
@@ -3602,7 +3602,7 @@ function App() {
                             <small>{entity.overview.pick.subtitle}</small>
                           </span>
                         </button>
-                      </>
+                      </div>
                     )}
                   </aside>
                 )}
@@ -3665,7 +3665,7 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="album-grid">
+                  <div className={`album-grid ${allAlbums ? "all" : ""}`}>
                     {(entity?.artist
                       ? discographyReleases(
                           entity.albums,

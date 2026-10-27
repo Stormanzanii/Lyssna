@@ -1102,8 +1102,17 @@ small {
 .artist-top .track-row {
   grid-template-columns: 28px minmax(130px, 1.8fr) minmax(85px, 0.8fr) 68px;
 }
+/* You Liked and Artist pick side by side, as in Spotify, wrapping when
+   there is no room. */
 .artist-liked {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  column-gap: 48px;
   padding: 24px 28px 16px 0;
+}
+.artist-aside-block {
+  min-width: 0;
 }
 .artist-liked h2 {
   font-size: 23px;
@@ -1116,8 +1125,8 @@ small {
   margin-bottom: 32px;
 }
 .artist-liked .cover {
-  width: 80px;
-  height: 80px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -1165,8 +1174,8 @@ small {
   color: #fff;
 }
 .artist-liked .artist-pick .cover {
-  width: 112px;
-  height: 112px;
+  width: 96px;
+  height: 96px;
   border-radius: 6px;
 }
 .artist-pick > span {
@@ -1178,17 +1187,14 @@ small {
 .artist-pick-posted {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   align-self: flex-start;
-  padding: 4px 10px 4px 4px;
-  border-radius: 999px;
-  font-size: 13px;
-  background: #fff;
-  color: #000;
+  font-size: 14px;
+  color: var(--muted);
 }
 .artist-pick-posted img {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
 }
@@ -2042,11 +2048,16 @@ small {
 .page-sentinel {
   height: 1px;
 }
+/* Like Spotify's shelves: cards share the row's width, and only the
+   first row shows; Show all lists the rest. */
 .album-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-  padding: 0 20px 30px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  grid-template-rows: auto;
+  grid-auto-rows: 0;
+  column-gap: 4px;
+  overflow: hidden;
+  padding: 0 16px 30px;
 }
 .album-release-details {
   padding: 16px 28px 28px;
@@ -2076,10 +2087,14 @@ small {
   margin-bottom: 12px;
 }
 .album-tile strong {
-  font-size: 14px;
-  font-weight: 650;
-  display: block;
-  line-height: 1.4;
+  font-size: 15px;
+  font-weight: 500;
+  display: -webkit-box;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .album-tile small {
   display: block;
@@ -6198,4 +6213,8 @@ input[type="range"]:hover {
 }
 .lyrics-popout-seek input[type="range"]:hover::-webkit-slider-thumb {
   opacity: 1;
+}
+.album-grid.all {
+  grid-auto-rows: auto;
+  row-gap: 8px;
 }

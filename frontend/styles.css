@@ -3745,17 +3745,26 @@ small {
   max-width: 640px;
   justify-self: center;
 }
+/* Spotify's sizes and spacing: 35px buttons, 9px apart, with a little more
+   room either side of play, and glyphs drawn edge to edge at 18px. */
 .transport-buttons {
   display: flex;
-  gap: 16px;
+  gap: 9px;
   align-items: center;
   justify-content: center;
   margin-bottom: 6px;
 }
 .transport-buttons .icon-button {
-  width: 32px;
-  height: 32px;
+  width: 35px;
+  height: 35px;
   color: #b3b3b3;
+}
+.transport-buttons .play-toggle {
+  width: 35px;
+  min-width: 35px;
+  height: 35px;
+  padding: 0;
+  margin: 0 7px;
 }
 /* As in Spotify, side buttons only brighten; the play button alone grows. */
 .transport-buttons .icon-button:is(:hover, :active) {

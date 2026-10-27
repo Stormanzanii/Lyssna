@@ -12308,3 +12308,41 @@ test("the lyrics popout shows the song, its lyrics and a seek bar", async ({
     )
     .toMatchObject({ request: { command: "seek" }, target: "native" });
 });
+
+test("lyrics open on the current line instead of sliding up to it", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await page.evaluate(
+    ({ uri }) =>
+      (window as any).__clientTest.emit({
+        type: "native_position",
+        uri,
+        position_ms: 40_500,
+        playing: false,
+        observed_at: Date.now(),
+      }),
+    { uri: track.uri },
+  );
+  // Record the scroll position from the first frame the lyrics show.
+  await page.evaluate(() => {
+    const trace: number[] = [];
+    (window as any).__scrollTrace = trace;
+    const sample = () => {
+      const flow = document.querySelector(".lyrics-page .lyric-scroll");
+      if (flow?.querySelector(".lyric-line")) trace.push(flow.scrollTop);
+      if (trace.length < 40) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__scrollTrace.length))
+    .toBe(40);
+  const trace: number[] = await page.evaluate(
+    () => (window as any).__scrollTrace,
+  );
+  expect(trace.at(-1)!).toBeGreaterThan(100);
+  expect(Math.abs(trace[0] - trace.at(-1)!)).toBeLessThan(8);
+});

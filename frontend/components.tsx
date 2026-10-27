@@ -591,6 +591,9 @@ export function LyricsDisplay({
     () => lyrics.lines.map((line) => line.start_ms).join(","),
     [lyrics],
   );
+  // The first placement, as the page opens or an effect switches, lands on
+  // the current line at once rather than sliding up from the top.
+  const placed = useRef(false);
   const wording = useRef({
     lyrics,
     timing,
@@ -687,7 +690,8 @@ export function LyricsDisplay({
         );
         return;
       }
-      if (reworded) {
+      if (reworded || !placed.current) {
+        placed.current = true;
         reworded = false;
         cancelAnimationFrame(frame);
         frame = 0;

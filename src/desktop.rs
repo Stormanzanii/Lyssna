@@ -2446,16 +2446,42 @@ async fn release_tracks(
             id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
             "Invalid album ID"
         );
-        let tracks = controls.playlist_tracks(&format!("album:{id}"), 0)?;
-        let streams = controls
-            .catalogue("album", &id, 0)
-            .map(|entity| crate::album::parse(&entity).streams)
-            .unwrap_or_default();
+        // One request: the album's metadata carries its songs and plays.
+        let entity = controls.catalogue("album", &id, 0)?;
+        let streams = crate::album::parse(&entity).streams;
+        let tracks = album_songs(&entity, &id);
+        let total = entity["tracksV2"]["totalCount"]
+            .as_u64()
+            .unwrap_or_default() as usize;
+        // Longer albums page their songs; the song list has them all.
+        if tracks.is_empty() || tracks.len() < total {
+            return Ok((
+                controls.playlist_tracks(&format!("album:{id}"), 0)?,
+                streams,
+            ));
+        }
         Ok((tracks, streams))
     })
     .await
     .map_err(|_| "Library worker unavailable".to_owned())?
     .map_err(error)
+}
+/// An album's songs from its metadata, each carrying the album.
+fn album_songs(entity: &Value, id: &str) -> Vec<Track> {
+    let album = crate::catalogue::base_info(entity, "album", id)
+        .ok()
+        .and_then(|info| info.album)
+        .unwrap_or_default();
+    entity["tracksV2"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| crate::search::native_track(&item["track"]))
+        .map(|mut track| {
+            track.album = album.clone();
+            track
+        })
+        .collect()
 }
 fn signed_in_account(state: &State<'_, Desktop>) -> Result<String> {
     Ok(lock(&state.0.snapshot)?
@@ -3686,6 +3712,29 @@ mod tests {
             BROWSER_ARGS
         );
         assert!(BROWSER_ARGS.contains("--disable-gpu-process-crash-limit"));
+    }
+    #[test]
+    fn album_songs_come_from_album_metadata_with_the_album() {
+        let id = "0123456789abcdefghijkl";
+        let entity = json!({
+            "uri": format!("spotify:album:{id}"),
+            "name": "Vampire Bat",
+            "type": "SINGLE",
+            "tracksV2": {"totalCount": 1, "items": [{"track": {
+                "uri": "spotify:track:abcdefghijklmnopqrstuv",
+                "name": "Vampire Bat",
+                "duration": {"totalMilliseconds": 206000},
+                "contentRating": {"label": "EXPLICIT"},
+                "artists": {"items": [{"uri": "spotify:artist:0123456789abcdefghij07", "profile": {"name": "Glass Animals"}}]}
+            }}]}
+        });
+        let songs = album_songs(&entity, id);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].name, "Vampire Bat");
+        assert_eq!(songs[0].duration_ms, 206000);
+        assert!(songs[0].explicit);
+        assert_eq!(songs[0].artists[0].name, "Glass Animals");
+        assert_eq!(songs[0].album.uri, format!("spotify:album:{id}"));
     }
     #[test]
     fn ordered_liked_selection_keeps_requested_queue() {

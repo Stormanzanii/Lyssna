@@ -211,7 +211,7 @@ fn native_album(value: &Value) -> Option<Album> {
     })
 }
 
-fn native_track(value: &Value) -> Option<Track> {
+pub(crate) fn native_track(value: &Value) -> Option<Track> {
     let value = data(value);
     let uri = value["uri"].as_str()?;
     let id = uri.strip_prefix("spotify:track:")?;

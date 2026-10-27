@@ -6,6 +6,15 @@ import { albumMatches, albumTypeLabel } from "./album-type";
 import { formatTime } from "./state";
 import type { Album, Track } from "./types";
 
+type Songs = { tracks: Track[]; streams: Record<string, number> };
+/** Songs already loaded, by release, so returning to a discography is
+ *  instant. Bounded: the oldest entries go first. */
+const loaded = new Map<string, Songs>();
+function remember(id: string, songs: Songs) {
+  loaded.set(id, songs);
+  if (loaded.size > 300) loaded.delete(loaded.keys().next().value!);
+}
+
 const FILTERS = [
   ["all", "All"],
   ["album", "Albums"],
@@ -86,10 +95,12 @@ export function DiscographyPage({
       ) : !releases ? (
         <p className="discography-message">Loading releases…</p>
       ) : (
-        shown.map((release) => (
+        shown.map((release, index) => (
           <DiscographyRelease
             key={release.uri ?? release.id}
             release={release}
+            // The first releases load at once; the rest as they come near.
+            eager={index < 6}
             onOpen={() => onOpenAlbum(release)}
             onPlay={(track) =>
               onPlay(release.uri ?? `spotify:album:${release.id}`, track)
@@ -105,19 +116,21 @@ export function DiscographyPage({
  *  view, so a long discography loads only what is looked at. */
 function DiscographyRelease({
   release,
+  eager,
   onOpen,
   onPlay,
 }: {
   release: Album;
+  eager: boolean;
   onOpen: () => void;
   onPlay: (track?: string) => void;
 }) {
   const section = useRef<HTMLElement>(null);
-  const [songs, setSongs] = useState<{
-    tracks: Track[];
-    streams: Record<string, number>;
-  } | null>(null);
-  const [near, setNear] = useState(false);
+  const id = release.id || release.uri?.split(":")[2];
+  const [songs, setSongs] = useState<Songs | null>(
+    () => (id && loaded.get(id)) || null,
+  );
+  const [near, setNear] = useState(eager);
   useEffect(() => {
     const element = section.current;
     if (!element) return;
@@ -128,17 +141,19 @@ function DiscographyRelease({
           observer.disconnect();
         }
       },
-      { rootMargin: "600px 0px" },
+      { rootMargin: "2000px 0px" },
     );
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const id = release.id || release.uri?.split(":")[2];
   useEffect(() => {
-    if (!near || !id) return;
+    if (!near || !id || songs) return;
     let current = true;
     rpc<[Track[], Record<string, number>]>("release_tracks", { id })
-      .then(([tracks, streams]) => current && setSongs({ tracks, streams }))
+      .then(([tracks, streams]) => {
+        remember(id, { tracks, streams });
+        if (current) setSongs({ tracks, streams });
+      })
       .catch(() => current && setSongs({ tracks: [], streams: {} }));
     return () => {
       current = false;

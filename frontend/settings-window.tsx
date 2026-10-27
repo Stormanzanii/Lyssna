@@ -935,7 +935,7 @@ export function SettingsWindow({
           "How far ahead Early scroll moves to the next line.",
           "scroll ahead lead milliseconds",
           [0, 800, 10],
-          250,
+          200,
           " ms",
           !settings.lyrics_early_scroll,
         ),

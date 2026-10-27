@@ -547,7 +547,7 @@ export function LyricsDisplay({
   const scrollTime =
     positionMs +
     (settings.lyrics_early_scroll
-      ? (settings.lyrics_early_scroll_ms ?? 250)
+      ? (settings.lyrics_early_scroll_ms ?? 200)
       : 0);
   const active = activeLines(lyrics.lines, scrollTime);
   const primary =

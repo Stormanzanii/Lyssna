@@ -362,10 +362,10 @@ impl Default for Settings {
             lyrics_no_lyrics_notice: true,
             lyrics_cache_button: true,
             lyrics_cache_action: "song".into(),
-            lyrics_early_scroll: false,
+            lyrics_early_scroll: true,
             lyrics_follow_button: true,
             lyrics_smooth_scroll: true,
-            lyrics_early_scroll_ms: 250,
+            lyrics_early_scroll_ms: 200,
             lyrics_seek_compensation: true,
             lyrics_hide_year: false,
             lyrics_year_position: YearPosition::Left,
@@ -632,7 +632,8 @@ mod tests {
     #[test]
     fn lyrics_options_default_like_spicy_lyrics_and_stay_in_range() {
         let older: Settings = serde_json::from_str("{}").unwrap();
-        assert_eq!(older.lyrics_early_scroll_ms, 250);
+        assert_eq!(older.lyrics_early_scroll_ms, 200);
+        assert!(older.lyrics_early_scroll);
         assert!(older.lyrics_seek_compensation);
         assert!(older.lyrics_skeleton);
         assert!(older.cover_animation);

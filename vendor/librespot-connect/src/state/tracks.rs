@@ -68,6 +68,11 @@ impl<'ct> ConnectState {
         &self.player().next_tracks
     }
 
+    /// Whether `uri` is among the upcoming tracks.
+    pub fn has_next_track(&self, uri: &str) -> bool {
+        self.next_tracks().iter().any(|track| track.uri == uri)
+    }
+
     pub fn set_current_track_random(&mut self) -> Result<(), Error> {
         let max_tracks = self.get_context(self.active_context)?.tracks.len();
         let rng_track = rand::rng().random_range(0..max_tracks);

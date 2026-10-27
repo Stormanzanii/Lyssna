@@ -9746,6 +9746,44 @@ test("Space Gravity keeps words in place when the same lyrics load again", async
   expect(Math.max(...moved)).toBeLessThan(40);
 });
 
+test("clicking a queued song skips to it rather than playing it alone", async ({
+  page,
+}) => {
+  await startClient(page);
+  const songs = Array.from({ length: 3 }, (_, index) => ({
+    ...track,
+    uri: `spotify:track:next${String(index).padStart(2, "0")}`,
+    name: `Next ${index}`,
+  }));
+  await page.evaluate(
+    ({ uri, queue, artists }) =>
+      (window as any).__clientTest.emit({
+        type: "playing_details",
+        uri,
+        details: { artists, queue },
+      }),
+    { uri: track.uri, queue: songs, artists: track.artists },
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  await page
+    .locator(".queue-panel .queue-row")
+    .filter({ hasText: "Next 1" })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "player")
+          .map((entry: any) => entry.args.request)
+          .at(-1),
+      ),
+    )
+    .toMatchObject({ command: "skip_to", uri: "spotify:track:next01" });
+});
+
 test("the queue moves once on skip even when Spotify sends the queue first", async ({
   page,
 }) => {

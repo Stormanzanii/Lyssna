@@ -224,6 +224,10 @@ fn command_body(action: &PlayerAction) -> Result<Value> {
         PlayerAction::Pause => json!({"endpoint":"pause"}),
         PlayerAction::Play(None) => json!({"endpoint":"resume"}),
         PlayerAction::Next => json!({"endpoint":"skip_next"}),
+        PlayerAction::SkipTo(uri) => {
+            valid_track(uri)?;
+            json!({"endpoint":"skip_next","track":{"uri":uri}})
+        }
         PlayerAction::Previous => json!({"endpoint":"skip_prev"}),
         PlayerAction::Seek(position) => {
             json!({"endpoint":"seek_to","value":position,"position":position})
@@ -354,6 +358,7 @@ mod tests {
             PlayerAction::Pause,
             PlayerAction::Play(None),
             PlayerAction::Next,
+            PlayerAction::SkipTo(uri.into()),
             PlayerAction::Previous,
             PlayerAction::Seek(1234),
             PlayerAction::Shuffle(true),
@@ -384,6 +389,11 @@ mod tests {
             ));
         }
         assert!(command_body(&PlayerAction::Enqueue("https://example.test/".into())).is_err());
+        // Skipping to a queued song names it, so Spotify keeps the queue.
+        assert_eq!(
+            command_body(&PlayerAction::SkipTo(uri.into())).unwrap()["track"]["uri"],
+            uri
+        );
     }
     #[test]
     fn context_play_carries_the_url_alexa_speakers_require() {

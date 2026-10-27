@@ -1796,6 +1796,11 @@ impl PlayerRequest {
             }
             "pause" => PlayerAction::Pause,
             "next" => PlayerAction::Next,
+            "skip_to" => {
+                let uri = self.uri.clone().context("Track URI missing")?;
+                native::queue_uri(&uri)?;
+                PlayerAction::SkipTo(uri)
+            }
             "previous" => PlayerAction::Previous,
             "play_context" => PlayerAction::PlayContext {
                 context: self.context.clone().context("Playback context missing")?,
@@ -1937,6 +1942,28 @@ fn player(
                 },
             );
         }
+        // Skipping to a queued song needs it coming up on this computer.
+        // Otherwise, as after a restart, start the saved queue at it, or play
+        // the song alone.
+        if local
+            && let PlayerAction::SkipTo(uri) = &action
+            && !(state.0.controls.has_track() && state.0.controls.coming_up(uri))
+        {
+            let uri = uri.clone();
+            let saved = snapshot
+                .profile
+                .as_ref()
+                .map(|profile| crate::resume::queue(&profile.id))
+                .unwrap_or_default();
+            action = match saved.iter().position(|item| *item == uri) {
+                Some(offset) => PlayerAction::PlayUris {
+                    uris: saved,
+                    offset,
+                    context: None,
+                },
+                None => PlayerAction::Play(Some(uri)),
+            };
+        }
         // After a restart the player shows the saved song without loading it;
         // skipping starts the saved queue one song on or back.
         if local
@@ -1989,7 +2016,10 @@ fn player(
                     "Play a song on this computer before adding to its queue."
                 );
             }
-            if matches!(action, PlayerAction::Next | PlayerAction::Previous) {
+            if matches!(
+                action,
+                PlayerAction::Next | PlayerAction::SkipTo(_) | PlayerAction::Previous
+            ) {
                 *lock(&state.0.pending_track)? = None;
             }
             if !native_context {

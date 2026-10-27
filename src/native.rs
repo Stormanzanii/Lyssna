@@ -486,6 +486,18 @@ impl NativeControls {
             .build()?
             .block_on(task(&session))
     }
+    /// Whether `uri` is coming up in this computer's queue.
+    pub fn coming_up(&self, uri: &str) -> bool {
+        self.0.lock().is_ok_and(|connection| {
+            connection.as_ref().is_some_and(|connection| {
+                connection.queue_snapshot.lock().is_ok_and(|queue| {
+                    queue
+                        .as_ref()
+                        .is_some_and(|queue| queue.iter().any(|item| item == uri))
+                })
+            })
+        })
+    }
     pub fn queue(&self) -> Result<Vec<crate::model::Track>> {
         let uris = {
             let connection = self
@@ -823,7 +835,12 @@ impl NativeControls {
         if loading {
             connection.loaded.store(true, Ordering::Release);
         }
-        if loading || matches!(action, PlayerAction::Next | PlayerAction::Previous) {
+        if loading
+            || matches!(
+                action,
+                PlayerAction::Next | PlayerAction::SkipTo(_) | PlayerAction::Previous
+            )
+        {
             connection.audio_buffer.interrupt(selected_track(&action));
         }
         let result = connection.sender.send(action).map_err(|error| error.0);
@@ -874,6 +891,7 @@ fn command_kind(action: &PlayerAction) -> Option<&'static str> {
         PlayerAction::Play(Some(_)) => "play-track",
         PlayerAction::Pause => "pause",
         PlayerAction::Next => "next",
+        PlayerAction::SkipTo(_) => "skip-to",
         PlayerAction::Previous => "previous",
         PlayerAction::Seek(_) => "seek",
         PlayerAction::PlayUris { .. } => "play-list",
@@ -1229,6 +1247,7 @@ fn apply_control(spirc: &Spirc, action: PlayerAction, active: &mut bool) -> Resu
         PlayerAction::Play(None) => spirc.play()?,
         PlayerAction::Pause => spirc.pause()?,
         PlayerAction::Next => spirc.next()?,
+        PlayerAction::SkipTo(uri) => spirc.next_to(uri)?,
         PlayerAction::Previous => spirc.prev()?,
         PlayerAction::Seek(position) => {
             spirc.set_position_ms(position.min(u32::MAX as u64) as u32)?

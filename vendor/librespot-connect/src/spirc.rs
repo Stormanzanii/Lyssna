@@ -485,6 +485,7 @@ enum SpircCommand {
     Load(LoadRequest),
     AddToQueue(SpotifyUri),
     ClearQueue,
+    NextTo(String),
 }
 
 const CONTEXT_FETCH_THRESHOLD: usize = 2;
@@ -852,6 +853,14 @@ impl Spirc {
         Ok(self.commands.send(SpircCommand::ClearQueue)?)
     }
 
+    /// Skips forward to an upcoming track, keeping the context and the queue
+    /// after it. Does nothing when the track is not coming up.
+    ///
+    /// Does nothing if we are not the active device.
+    pub fn next_to(&self, uri: String) -> Result<(), Error> {
+        Ok(self.commands.send(SpircCommand::NextTo(uri))?)
+    }
+
     /// Disconnects the current device and pauses the playback according the value.
     ///
     /// Does nothing if we are not the active device.
@@ -1207,6 +1216,11 @@ impl SpircTask {
             SpircCommand::Pause => self.handle_pause(),
             SpircCommand::Prev => self.handle_prev()?,
             SpircCommand::Next => self.handle_next(None)?,
+            // Skipping toward a track that is not coming up would never stop.
+            SpircCommand::NextTo(uri) if self.connect_state.has_next_track(&uri) => {
+                self.handle_next(Some(uri))?
+            }
+            SpircCommand::NextTo(uri) => warn!("{uri} is not coming up; not skipping"),
             SpircCommand::VolumeUp => self.handle_volume_up(),
             SpircCommand::VolumeDown => self.handle_volume_down(),
             SpircCommand::Shuffle(shuffle) => self.handle_shuffle(shuffle)?,

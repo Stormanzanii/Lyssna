@@ -2318,7 +2318,8 @@ export function QueuePanel({
       onClick={
         current
           ? undefined
-          : () => onPlayer({ command: "play", uri: item.uri, track: item })
+          : // Skip ahead to it, keeping the playlist and the rest of the queue.
+            () => onPlayer({ command: "skip_to", uri: item.uri, track: item })
       }
       disabled={current}
     >

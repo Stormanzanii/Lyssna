@@ -474,6 +474,8 @@ impl Spotify {
             }
             PlayerAction::Pause => (Method::PUT, "pause", None),
             PlayerAction::Next => (Method::POST, "next", None),
+            // The Web API cannot skip to a queued song; play it instead.
+            PlayerAction::SkipTo(uri) => (Method::PUT, "play", Some(json!({"uris": [uri]}))),
             PlayerAction::Previous => (Method::POST, "previous", None),
             PlayerAction::Seek(position) => {
                 query.push(("position_ms", position.to_string()));
@@ -655,6 +657,8 @@ pub enum PlayerAction {
     },
     Pause,
     Next,
+    /// Skip forward to a song coming up in the queue, keeping the rest.
+    SkipTo(String),
     Previous,
     Seek(u64),
     Volume(u8),

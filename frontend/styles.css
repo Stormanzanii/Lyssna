@@ -6007,12 +6007,11 @@ input[type="range"]:hover {
 .gravity-links path {
   fill: none;
   stroke: var(--highlighter-ink);
-  /* A marker's broad, see-through stroke; its width is set per link. */
+  /* The same ink as the words' bands; its width is set per link. */
   stroke-width: 11px;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 1 1;
-  opacity: 0.5;
   transition: opacity 1.2s ease-out;
 }
 .gravity-links path.leaving {
@@ -6020,9 +6019,6 @@ input[type="range"]:hover {
 }
 .gravity-links stop {
   stop-color: var(--highlighter-ink);
-}
-.gravity-links stop.dim {
-  stop-color: color-mix(in srgb, var(--highlighter-ink) 45%, #000);
 }
 /* In Space Gravity the connecting lines carry the pen on from each word,
    so lead words drop the pen tip; backing vocals, which have no lines,

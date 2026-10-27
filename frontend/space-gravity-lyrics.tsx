@@ -334,15 +334,19 @@ function strengthOf(entity: Entity, elements: Map<string, HTMLElement>) {
       : 0.22;
 }
 
-/** Where a turned, scaled word's left or right edge meets its middle. */
-function edge(body: Body, side: -1 | 1) {
+/** Where a turned, scaled word's left or right edge meets its middle,
+ *  drawn in by `inset` pixels. */
+function edge(body: Body, side: -1 | 1, inset = 0) {
   const angle = (body.angle * Math.PI) / 180,
-    reach = (side * body.width * body.scale) / 2;
+    reach = side * Math.max(0, (body.width * body.scale) / 2 - inset);
   return {
     x: body.x + Math.cos(angle) * reach,
     y: body.y + Math.sin(angle) * reach,
   };
 }
+
+/** The shortest pause between lines that shows the waiting dots. */
+const BREAK_MS = 2500;
 
 /** Eases in and out, so a link's pen starts and lands softly. */
 const ease = (t: number) =>
@@ -442,8 +446,13 @@ function drawLinks(
       link.path.classList.remove("leaving");
     }
     const { path, gradient } = link;
-    const start = edge(a, 1),
-      end = edge(b, -1);
+    // As broad as the Highlighter's band on the smaller of the two words.
+    const stroke =
+      Math.min(a.height * a.scale, b.height * b.scale) * 0.84 * width;
+    // Each end tucks under its word's ink, so line and words read as one
+    // unbroken stroke.
+    const start = edge(a, 1, stroke / 2),
+      end = edge(b, -1, stroke / 2);
     const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
     // Leave and arrive along each word's slant, with a seeded lift so
     // links swing their own way.
@@ -465,12 +474,7 @@ function drawLinks(
       "d",
       `M${point(start)}C${point(c1)} ${point(c2)} ${point(end)}`,
     );
-    // As broad as the Highlighter's band on the smaller of the two words.
-    path.style.strokeWidth = `${(
-      Math.min(a.height * a.scale, b.height * b.scale) *
-      0.84 *
-      width
-    ).toFixed(1)}px`;
+    path.style.strokeWidth = `${stroke.toFixed(1)}px`;
     gradient.setAttribute("x1", start.x.toFixed(1));
     gradient.setAttribute("y1", start.y.toFixed(1));
     gradient.setAttribute("x2", end.x.toFixed(1));
@@ -478,19 +482,18 @@ function drawLinks(
     const elapsed = Math.min(100, now - link.at);
     link.at = now;
     // The link dims with its words: each half eases toward its own word's
-    // strength, so a link from a dim word to the sung one is half and half.
-    // Dim halves sink further, darker and fainter, so the sung line's links
-    // stand out over the line before.
+    // strength, matching that word's ink, so a link from a dim word to the
+    // sung one is half and half.
+    // Across a break long enough for the waiting dots, both words are dim,
+    // so the link drawing over it shows brighter, still split in two.
+    const pause = across && time < to.start && to.start - from.end >= BREAK_MS;
     const settle = 1 - Math.exp(-elapsed / 120);
     [from, to].forEach((entity, side) => {
-      const goal = strengthOf(entity, elements);
-      const strength = (link.strengths[side] +=
-        (goal - link.strengths[side]) * settle);
-      const dim = goal < 0.9,
-        opacity = (dim ? strength * 0.6 : strength).toFixed(2);
+      const strength = strengthOf(entity, elements);
+      const goal = pause ? Math.min(1, strength * 2.5) : strength;
+      const opacity = (link.strengths[side] +=
+        (goal - link.strengths[side]) * settle).toFixed(2);
       for (const stop of link.stops.slice(side * 2, side * 2 + 2)) {
-        if (stop.classList.contains("dim") !== dim)
-          stop.classList.toggle("dim", dim);
         if (stop.getAttribute("stop-opacity") !== opacity)
           stop.setAttribute("stop-opacity", opacity);
       }

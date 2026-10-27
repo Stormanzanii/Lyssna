@@ -4648,6 +4648,16 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
               { text: " seven", start_ms: 9500, end_ms: 10000 },
             ],
           },
+          {
+            text: "Eight",
+            start_ms: 13000,
+            end_ms: 14000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [{ text: "Eight", start_ms: 13000, end_ms: 14000 }],
+          },
         ],
       },
     });
@@ -4688,7 +4698,8 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
   const kept = page.locator(".gravity-links path:not(.leaving)");
   // Two in the earlier line, one into the sung line, one within it.
   await expect(kept).toHaveCount(4);
-  // A link from a dim word into the sung line is half dim, half bright.
+  // A link from a dim word into the sung line is half dim, half bright,
+  // each half matching its word's ink so the line reads as one stroke.
   const halves = () =>
     page.evaluate(() => {
       const path = document.querySelector<SVGPathElement>(
@@ -4701,8 +4712,9 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
         Number(stop.getAttribute("stop-opacity")),
       );
     });
-  await expect.poll(async () => (await halves())[0]).toBeLessThan(0.2);
+  await expect.poll(async () => (await halves())[0]).toBeCloseTo(0.22, 1);
   await expect.poll(async () => (await halves())[3]).toBeCloseTo(1, 1);
+  await expect(into).toHaveCSS("opacity", "1");
   // ...and older lines' links fade out rather than vanish.
   await at(9600);
   await expect(kept).toHaveCount(3);
@@ -4715,6 +4727,28 @@ test("Highlighter joins sung words with marker lines in Space Gravity", async ({
         .evaluate((path) => getComputedStyle(path).transitionDuration),
     )
     .toBe("1.2s");
+  // Over a break with the waiting dots, the link into the next line shows
+  // brighter than its dim words, still half and half.
+  await at(12000);
+  const pause = () =>
+    page.evaluate(() => {
+      const path = document.querySelector<SVGPathElement>(
+        '.gravity-links path[data-link="2:1>3:0"]',
+      );
+      const stops = document.querySelectorAll(
+        `#${path?.dataset.gradient} stop`,
+      );
+      return [...stops].map((stop) =>
+        Number(stop.getAttribute("stop-opacity")),
+      );
+    });
+  await expect.poll(async () => (await pause())[0]).toBeGreaterThan(0.45);
+  await expect
+    .poll(async () => {
+      const stops = await pause();
+      return stops[3] - stops[0];
+    })
+    .toBeGreaterThan(0.15);
 });
 
 test("Space Gravity marker links reach each word as it starts, at the Highlighter's width", async ({

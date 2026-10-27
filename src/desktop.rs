@@ -2757,6 +2757,10 @@ async fn open_lyrics_popout(app: tauri::AppHandle) -> std::result::Result<(), St
             tauri::WebviewUrl::App("index.html?view=lyrics-popout".into()),
         )
         .title("SpotiFlex Lyrics")
+        // Frameless like Spicy Lyrics' popup; the page draws its own close
+        // button and drags the window.
+        .decorations(false)
+        .shadow(true)
         .inner_size(900.0, 640.0)
         .min_inner_size(360.0, 260.0)
         .always_on_top(true)

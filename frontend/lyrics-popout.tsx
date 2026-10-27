@@ -6,7 +6,17 @@ import {
   type CSSProperties,
 } from "react";
 import "./styles.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Heart, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import {
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PreviousIcon,
+  RepeatIcon,
+  ShuffleIcon,
+} from "./player-icons";
 import { Ambience } from "./ambience";
 import { LyricsDisplay, usePosition } from "./components";
 import { displayLyrics } from "./word-sync";
@@ -19,11 +29,25 @@ import type { PlayerRequest, Snapshot } from "./types";
 /** The window label the desktop side gives the lyrics popout. */
 export const POPOUT_VIEW = "lyrics-popout";
 
-/** Spicy Lyrics' popup lyrics: the song's lyrics alone in their own window,
- *  over its ambience, with the title in a corner and a seek bar below. It
- *  follows the same desktop events as the main window. */
+/** Spicy Lyrics' popup lyrics: the song's lyrics alone in a frameless
+ *  window, over its ambience, with the title in a corner and a seek bar
+ *  below; the close button and playback controls show while the pointer
+ *  moves. It follows the same desktop events as the main window. */
 export function LyricsPopout() {
   const [state, dispatch] = useReducer(reducer, emptyState);
+  // Controls wake on pointer movement and fade a moment after it stops.
+  const [awake, setAwake] = useState(false);
+  const sleep = useRef<ReturnType<typeof setTimeout>>(undefined),
+    // Held awake while the pointer rests on the controls.
+    holding = useRef(false);
+  const wake = () => {
+    setAwake(true);
+    clearTimeout(sleep.current);
+    sleep.current = setTimeout(() => {
+      if (!holding.current) setAwake(false);
+    }, 2000);
+  };
+  useEffect(() => () => clearTimeout(sleep.current), []);
   useEffect(() => {
     let disposed = false,
       unlisten: (() => void) | undefined;
@@ -83,9 +107,26 @@ export function LyricsPopout() {
   const play = (request: PlayerRequest) =>
     void rpc("player", { request, target }).catch(() => {});
   const year = track?.album.release_date?.slice(0, 4);
+  const saved = !!(track && state.saved[track.uri]);
+  const repeat = state.playback.repeat_state || "off";
+  const toggleSaved = () => {
+    if (!track) return;
+    dispatch({ type: "saved", uri: track.uri, saved: !saved });
+    void rpc("save_item", { uri: track.uri, saved: !saved }).catch(() =>
+      dispatch({ type: "saved", uri: track.uri, saved }),
+    );
+  };
   return (
     <div
       className="lyrics-popout"
+      data-awake={awake || undefined}
+      data-tauri-drag-region
+      onPointerMove={wake}
+      onPointerDown={wake}
+      onPointerLeave={() => {
+        clearTimeout(sleep.current);
+        setAwake(false);
+      }}
       style={
         {
           "--lyric-size": `${Math.round(state.settings.lyric_size * 1.6)}px`,
@@ -97,6 +138,14 @@ export function LyricsPopout() {
         animate={state.playback.is_playing}
         reduceMotion={state.settings.reduce_motion}
       />
+      <button
+        className="icon-button lyrics-popout-close"
+        aria-label="Close lyrics popout"
+        title="Close"
+        onClick={() => void getCurrentWindow().close()}
+      >
+        <X size={18} />
+      </button>
       <header className="lyrics-popout-title" data-tauri-drag-region>
         <strong>{track?.name ?? "Nothing playing"}</strong>
         {track && (
@@ -106,7 +155,7 @@ export function LyricsPopout() {
           </span>
         )}
       </header>
-      <main className="lyrics-popout-lyrics">
+      <main className="lyrics-popout-lyrics" data-tauri-drag-region>
         {lyrics && !lyrics.instrumental ? (
           <PopoutLyrics
             state={state}
@@ -129,6 +178,78 @@ export function LyricsPopout() {
         state={state}
         onSeek={(ms) => play({ command: "seek", positionMs: ms })}
       />
+      <div
+        className="lyrics-popout-controls"
+        onPointerEnter={() => (holding.current = true)}
+        onPointerLeave={() => (holding.current = false)}
+      >
+        <button
+          className={`icon-button lyrics-popout-like ${saved ? "is-saved" : ""}`}
+          title={saved ? "Remove from Liked Songs" : "Save to Liked Songs"}
+          disabled={!track}
+          onClick={toggleSaved}
+        >
+          <Heart size={24} fill={saved ? "currentColor" : "none"} />
+        </button>
+        <div className="lyrics-popout-transport">
+          <button
+            className={`icon-button ${state.playback.shuffle_state ? "active" : ""}`}
+            title="Shuffle"
+            onClick={() =>
+              play({
+                command: "shuffle",
+                enabled: !state.playback.shuffle_state,
+              })
+            }
+          >
+            <ShuffleIcon size={20} />
+          </button>
+          <button
+            className="icon-button"
+            title="Previous song"
+            onClick={() => play({ command: "previous" })}
+          >
+            <PreviousIcon size={22} />
+          </button>
+          <button
+            className="icon-button lyrics-popout-play"
+            aria-label={state.playback.is_playing ? "Pause" : "Play"}
+            onClick={() =>
+              play({ command: state.playback.is_playing ? "pause" : "play" })
+            }
+          >
+            {state.playback.is_playing ? (
+              <PauseIcon size={26} />
+            ) : (
+              <PlayIcon size={26} />
+            )}
+          </button>
+          <button
+            className="icon-button"
+            title="Next song"
+            onClick={() => play({ command: "next" })}
+          >
+            <NextIcon size={22} />
+          </button>
+          <button
+            className={`icon-button ${repeat !== "off" ? "active" : ""}`}
+            title="Repeat"
+            onClick={() =>
+              play({
+                command: "repeat",
+                repeat:
+                  repeat === "off"
+                    ? "context"
+                    : repeat === "context"
+                      ? "track"
+                      : "off",
+              })
+            }
+          >
+            <RepeatIcon size={20} one={repeat === "track"} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -12273,9 +12273,29 @@ test("the lyrics popout shows the song, its lyrics and a seek bar", async ({
     popout.locator(".lyric-line.active").filter({ hasText: "Popout line 21" }),
   ).toBeVisible();
   await expect(popout.getByLabel("Seek position")).toBeVisible();
+  // Close and playback controls show only while the pointer moves.
+  const controls = popout.locator(".lyrics-popout-controls");
+  await expect(controls).toHaveCSS("opacity", "0");
+  await page.mouse.move(400, 300);
+  await page.mouse.move(420, 320);
+  await expect(controls).toHaveCSS("opacity", "1");
+  await expect(
+    popout.getByRole("button", { name: "Close lyrics popout" }),
+  ).toBeVisible();
+  await popout.getByRole("button", { name: "Next song" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request.command,
+      ),
+    )
+    .toBe("next");
   await popout
     .locator(".lyric-line")
-    .filter({ hasText: "Popout line 25" })
+    .filter({ hasText: "Popout line 22" })
     .click();
   await expect
     .poll(() =>

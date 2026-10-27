@@ -531,7 +531,12 @@ export function LyricsDisplay({
         key={item.start}
         ref={visible ? waiting : undefined}
         gap={item}
-        time={positionMs}
+        // Song time only matters near the pause; held still elsewhere, a
+        // countdown far off does not render again every frame.
+        time={Math.min(
+          item.end + COUNTDOWN_REACH_MS,
+          Math.max(item.start - COUNTDOWN_REACH_MS, positionMs),
+        )}
         reduceMotion={settings.reduce_motion}
         visible={visible}
       />
@@ -826,50 +831,31 @@ export function LyricsDisplay({
           const distance = Math.abs(index - primary);
           return (
             <Fragment key={`${line.start_ms}-${index}`}>
-              <button
-                ref={lineActions[index].ref}
-                key={`${line.start_ms}-${index}`}
-                className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${!playing && positionMs >= vocalEnd(line) ? "past" : ""}`}
-                style={
-                  {
-                    "--blur": `${compact || playing ? 0 : lineBlur(distance)}px`,
-                  } as CSSProperties
-                }
-                onClick={lineActions[index].click}
-                disabled={!lyrics.synced}
-                // Clicking seeks without taking focus, so Space stays with
-                // play and pause.
-                onMouseDown={(event) => event.preventDefault()}
-              >
-                <span className="lyric-main">
-                  {highlighter ? (
-                    <HighlighterWords
-                      line={line}
-                      // A line keeps following the song until its last
-                      // word ends, even after the next line takes over, so
-                      // the pen finishes at the singing's pace; then it
-                      // keeps all its ink.
-                      time={
-                        playing ||
+              <LyricRow
+                line={line}
+                action={lineActions[index]}
+                playing={playing}
+                past={!playing && positionMs >= vocalEnd(line)}
+                blur={compact || playing ? 0 : lineBlur(distance)}
+                synced={lyrics.synced}
+                highlighter={highlighter}
+                // A line keeps following the song until its last word ends,
+                // even after the next line takes over, so the pen finishes
+                // at the singing's pace; then it keeps all its ink. Lines
+                // not being sung hold still, so they skip rendering.
+                time={
+                  !highlighter
+                    ? 0
+                    : playing ||
                         (positionMs >= line.start_ms &&
                           positionMs < vocalEnd(line))
-                          ? positionMs
-                          : positionMs >= line.start_ms
-                            ? Infinity
-                            : -Infinity
-                      }
-                    />
-                  ) : (
-                    <LyricWords line={line} />
-                  )}
-                </span>
-                {/* Lyrics can carry translations, such as Chinese under
-                    English; like Spicy Lyrics they stay hidden unless
-                    asked for. */}
-                {settings.lyrics_translations && line.translation && (
-                  <span className="lyric-translation">{line.translation}</span>
-                )}
-              </button>
+                      ? positionMs
+                      : positionMs >= line.start_ms
+                        ? Infinity
+                        : -Infinity
+                }
+                translation={settings.lyrics_translations}
+              />
               {gaps.has(index) && waitingDots(gaps.get(index)!)}
             </Fragment>
           );
@@ -1076,6 +1062,62 @@ const LyricCredits = memo(function LyricCredits({
 });
 
 /** Static lyric markup. LyricAnimator moves the syllables and letters. */
+/** How far either side of a pause its countdown follows song time. */
+const COUNTDOWN_REACH_MS = 3000;
+
+/** One lyric line. Memoised: while a song plays only the lines whose role,
+ *  blur or ink changes render again, not every word of every line. */
+const LyricRow = memo(function LyricRow({
+  line,
+  action,
+  playing,
+  past,
+  blur,
+  synced,
+  highlighter,
+  time,
+  translation,
+}: {
+  line: Line;
+  action: {
+    ref: (element: HTMLButtonElement | null) => void;
+    click: () => void;
+  };
+  playing: boolean;
+  past: boolean;
+  blur: number;
+  synced: boolean;
+  highlighter: boolean;
+  time: number;
+  translation?: boolean;
+}) {
+  return (
+    <button
+      ref={action.ref}
+      className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${past ? "past" : ""}`}
+      style={{ "--blur": `${blur}px` } as CSSProperties}
+      onClick={action.click}
+      disabled={!synced}
+      // Clicking seeks without taking focus, so Space stays with play and
+      // pause.
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <span className="lyric-main">
+        {highlighter ? (
+          <HighlighterWords line={line} time={time} />
+        ) : (
+          <LyricWords line={line} />
+        )}
+      </span>
+      {/* Lyrics can carry translations, such as Chinese under English; like
+          Spicy Lyrics they stay hidden unless asked for. */}
+      {translation && line.translation && (
+        <span className="lyric-translation">{line.translation}</span>
+      )}
+    </button>
+  );
+});
+
 const LyricWords = memo(function LyricWords({ line }: { line: Line }) {
   const groups = useMemo(() => wordGroups(line.words), [line]);
   if (!line.words.length)

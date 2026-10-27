@@ -5022,6 +5022,73 @@ function hoverPreview(input: HTMLInputElement, clientX: number) {
   input.style.setProperty("--hover", `${at * 100}%`);
   return at;
 }
+/** The player bar's song time and seek bar: the only part that follows
+ *  song time every frame, so the rest of the bar does not render again. */
+function SeekRow({
+  state,
+  onPlayer,
+}: {
+  state: AppState;
+  onPlayer: (request: PlayerRequest) => void;
+}) {
+  const current = usePosition(state),
+    track = state.playback.item;
+  const [seeking, setSeeking] = useState<number | null>(null),
+    [seekHover, setSeekHover] = useState<number | null>(null);
+  const seek = () => {
+    if (seeking !== null) {
+      onPlayer({ command: "seek", positionMs: seeking });
+      setSeeking(null);
+    }
+  };
+  useEffect(() => setSeeking(null), [track?.uri]);
+  return (
+    <div className="seek-row">
+      <time>{formatTime(seeking ?? current)}</time>
+      <div className="seek-track">
+        {seekHover !== null && track?.duration_ms ? (
+          <span
+            className="seek-tooltip"
+            style={{ left: `${seekHover * 100}%` }}
+            aria-hidden="true"
+          >
+            {formatTime(seekHover * track.duration_ms)}
+          </span>
+        ) : null}
+        <input
+          aria-label="Seek position"
+          type="range"
+          min="0"
+          max={track?.duration_ms || 1}
+          value={seeking ?? current}
+          style={
+            {
+              "--range": `${((seeking ?? current) / Math.max(1, track?.duration_ms || 1)) * 100}%`,
+            } as CSSProperties
+          }
+          onChange={(event) => setSeeking(Number(event.target.value))}
+          onPointerDown={(event) =>
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }
+          onPointerUp={seek}
+          onKeyUp={seek}
+          onPointerCancel={() => setSeeking(null)}
+          onLostPointerCapture={() => setSeeking(null)}
+          onBlur={seek}
+          onPointerMove={(event) =>
+            setSeekHover(hoverPreview(event.currentTarget, event.clientX))
+          }
+          onPointerLeave={(event) => {
+            event.currentTarget.style.removeProperty("--hover");
+            setSeekHover(null);
+          }}
+        />
+      </div>
+      <time>{formatTime(track?.duration_ms || 0)}</time>
+    </div>
+  );
+}
+
 function PlayerBar({
   state,
   onPlayer,
@@ -5055,11 +5122,8 @@ function PlayerBar({
   sidebarActive: boolean;
   queueActive: boolean;
 }) {
-  const current = usePosition(state),
-    track = state.playback.item;
-  const [seeking, setSeeking] = useState<number | null>(null),
-    [volume, setVolume] = useState(70),
-    [seekHover, setSeekHover] = useState<number | null>(null);
+  const track = state.playback.item;
+  const [volume, setVolume] = useState(70);
   const volumeCallback = useRef(onPlayer);
   volumeCallback.current = onPlayer;
   const volumeControl = useMemo(
@@ -5087,13 +5151,6 @@ function PlayerBar({
     state.playback.device.name,
     volumeControl,
   ]);
-  const seek = () => {
-    if (seeking !== null) {
-      onPlayer({ command: "seek", positionMs: seeking });
-      setSeeking(null);
-    }
-  };
-  useEffect(() => setSeeking(null), [track?.uri]);
   return (
     <footer
       className={`player-bar ${elsewhere ? "has-elsewhere" : ""}`}
@@ -5212,49 +5269,7 @@ function PlayerBar({
             )}
           </button>
         </div>
-        <div className="seek-row">
-          <time>{formatTime(seeking ?? current)}</time>
-          <div className="seek-track">
-            {seekHover !== null && track?.duration_ms ? (
-              <span
-                className="seek-tooltip"
-                style={{ left: `${seekHover * 100}%` }}
-                aria-hidden="true"
-              >
-                {formatTime(seekHover * track.duration_ms)}
-              </span>
-            ) : null}
-            <input
-              aria-label="Seek position"
-              type="range"
-              min="0"
-              max={track?.duration_ms || 1}
-              value={seeking ?? current}
-              style={
-                {
-                  "--range": `${((seeking ?? current) / Math.max(1, track?.duration_ms || 1)) * 100}%`,
-                } as CSSProperties
-              }
-              onChange={(event) => setSeeking(Number(event.target.value))}
-              onPointerDown={(event) =>
-                event.currentTarget.setPointerCapture(event.pointerId)
-              }
-              onPointerUp={seek}
-              onKeyUp={seek}
-              onPointerCancel={() => setSeeking(null)}
-              onLostPointerCapture={() => setSeeking(null)}
-              onBlur={seek}
-              onPointerMove={(event) =>
-                setSeekHover(hoverPreview(event.currentTarget, event.clientX))
-              }
-              onPointerLeave={(event) => {
-                event.currentTarget.style.removeProperty("--hover");
-                setSeekHover(null);
-              }}
-            />
-          </div>
-          <time>{formatTime(track?.duration_ms || 0)}</time>
-        </div>
+        <SeekRow state={state} onPlayer={onPlayer} />
       </div>
       <div className="player-extras">
         {(state.dj_context || state.narrating || state.dj_pending) && (

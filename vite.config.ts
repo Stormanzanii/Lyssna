@@ -79,6 +79,22 @@ export default defineConfig({
     outDir: "../dist",
     emptyOutDir: true,
     target: ["chrome110", "safari15"],
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "react",
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+            },
+            {
+              name: "transliteration",
+              test: /[\\/]node_modules[\\/]transliteration[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   },
   test: { include: ["**/*.test.ts"] },
 });

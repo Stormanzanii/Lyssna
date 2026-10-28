@@ -97,6 +97,7 @@ main() {
   fi
 
   printf 'Building %s with Rust %s.\n' "$(git rev-parse --short HEAD)" "$RUSTUP_TOOLCHAIN"
+  export npm_config_loglevel="${npm_config_loglevel:-${NPM_CONFIG_LOGLEVEL:-warn}}"
   npm ci --no-audit --no-fund
   npm run desktop:build -- -- --locked
 }

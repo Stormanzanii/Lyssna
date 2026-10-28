@@ -11777,9 +11777,9 @@ test("highlighter finishes a line at the singing's pace", async ({ page }) => {
   await startClient(page);
   await openSettings(page, "Effects");
   await page.getByRole("switch", { name: "Highlighter" }).click();
-  // Early scroll ends a line 250 ms before its last word does.
+  // Early scroll, on by default, ends a line 200 ms before its last word.
   await openSettings(page, "Lyrics");
-  await page.getByRole("switch", { name: "Early scroll", exact: true }).click();
+  await page.getByRole("switch", { name: "Early scroll", exact: true }).check();
   await showLyrics(page);
   const at = (progress_ms: number) =>
     page.evaluate(

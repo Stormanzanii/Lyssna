@@ -12541,9 +12541,7 @@ test("Cinema Lyrics: a setting shows its button, which toggles the window", asyn
   // Off by default, as in the fork.
   await expect(button).toHaveCount(0);
   await openSettings(page, "Layout");
-  await page
-    .getByLabel("Enable Cinema Lyrics Window", { exact: true })
-    .check();
+  await page.getByLabel("Enable Cinema Lyrics Window", { exact: true }).check();
   await page.keyboard.press("Escape");
   await button.click();
   await expect
@@ -12625,4 +12623,43 @@ test("the main window acts on the Cinema window's requests", async ({
       ),
     )
     .toBe("album:0123456789abcdefghijkl");
+});
+
+test("the popout and Cinema windows show lyrics in the main window's font", async ({
+  page,
+}) => {
+  await startClient(page);
+  const font = async () => {
+    await page.evaluate((uri) => {
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri,
+        lyrics: {
+          source: "Imported TTML",
+          synced: true,
+          instrumental: false,
+          lines: [0, 1].map((index) => ({
+            text: `Line ${index + 1}`,
+            start_ms: index * 60000,
+            end_ms: (index + 1) * 60000,
+            translation: "",
+            romanization: "",
+            words: [],
+            background: false,
+            opposite: false,
+          })),
+        },
+      });
+    }, track.uri);
+    const line = page.locator(".lyric-line").first();
+    await expect(line).toBeVisible();
+    return line.evaluate((line) => getComputedStyle(line).fontFamily);
+  };
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const main = await font();
+  expect(main).toContain("Inter Variable");
+  for (const view of ["lyrics-popout", "cinema"]) {
+    await page.goto(`/?view=${view}`);
+    expect(await font()).toBe(main);
+  }
 });

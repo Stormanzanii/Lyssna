@@ -3,6 +3,7 @@ import "./styles.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Heart, X } from "lucide-react";
 import { rpc } from "./bridge";
+import { useAppFonts } from "./custom-fonts";
 import { sendPlayer, useDesktopState } from "./desktop-state";
 import {
   NextIcon,
@@ -29,6 +30,7 @@ export const POPOUT_VIEW = "lyrics-popout";
  *  moves. It follows the same desktop events as the main window. */
 export function LyricsPopout() {
   const [state, dispatch] = useDesktopState();
+  const fonts = useAppFonts(state.settings);
   // Controls wake on pointer movement and fade a moment after it stops.
   const [awake, setAwake] = useState(false);
   const sleep = useRef<ReturnType<typeof setTimeout>>(undefined),
@@ -83,6 +85,7 @@ export function LyricsPopout() {
       }}
       style={
         {
+          ...fonts,
           "--lyric-size": `${Math.round(state.settings.lyric_size * 1.6)}px`,
         } as CSSProperties
       }

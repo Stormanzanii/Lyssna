@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Settings as SettingsIcon, X } from "lucide-react";
 import { rpc } from "./bridge";
 import { LyricsPage } from "./components";
+import { useAppFonts } from "./custom-fonts";
 import { sendPlayer, useDesktopState } from "./desktop-state";
 import {
   CompactIcon,
@@ -45,6 +46,7 @@ const TOGGLES = [
  *  it needs no developer tools. */
 export function CinemaLyrics() {
   const [state, dispatch] = useDesktopState();
+  const fonts = useAppFonts(state.settings);
   const track = state.playback.item;
   useEffect(() => {
     document.title = track
@@ -86,6 +88,7 @@ export function CinemaLyrics() {
   const open = (route: string) => askMain({ kind: "route", route });
   return (
     <div
+      style={fonts}
       className={`application immersive cinema ${state.settings.reduce_motion ? "reduce-motion" : ""} ${state.settings.liquid_glass ? "liquid-glass glass-refraction" : ""}`}
     >
       <div className="workspace">

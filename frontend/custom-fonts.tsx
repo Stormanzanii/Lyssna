@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Settings } from "./types";
 import { SettingRow } from "./setting-row";
 type StoredFont = { family: string; name: string; data: Blob };
@@ -59,6 +59,25 @@ export function fontFamily(family?: string) {
   if (!family?.trim() || family.length > 100 || /[\x00-\x1f\x7f]/.test(family))
     return undefined;
   return `"${family.trim().replace(/["\\]/g, "\\$&")}", "Segoe UI", sans-serif`;
+}
+const DEFAULT_LYRIC_FONT = '"Inter Variable", "Segoe UI", sans-serif';
+/** The interface and lyrics fonts a window's root uses, loading chosen
+ *  custom fonts, so every window shows lyrics in the same typeface. */
+export function useAppFonts(
+  settings: Pick<Settings, "ui_font" | "lyric_font">,
+): CSSProperties {
+  useEffect(() => {
+    void loadSelectedFonts([settings.ui_font, settings.lyric_font]).catch(
+      () => {},
+    );
+  }, [settings.ui_font, settings.lyric_font]);
+  return {
+    fontFamily: fontFamily(settings.ui_font),
+    "--lyric-font": fontFamily(settings.lyric_font) || DEFAULT_LYRIC_FONT,
+    // Song details beside the lyrics follow a chosen lyrics font, and
+    // otherwise keep the app font (Metropolis).
+    "--lyric-detail-font": fontFamily(settings.lyric_font) || undefined,
+  } as CSSProperties;
 }
 const systemFonts = [
   "Segoe UI",

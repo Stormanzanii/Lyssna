@@ -150,7 +150,7 @@ import {
   togglePlaylistPin,
   forgetPlaylist,
 } from "./library-order";
-import { fontFamily, loadSelectedFonts } from "./custom-fonts";
+import { useAppFonts } from "./custom-fonts";
 import { UpdatePrompt } from "./update-prompt";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
@@ -216,7 +216,6 @@ import {
 } from "./recent-searches";
 import type { SearchEntry } from "./search-results";
 /** Lyrics use Inter unless the user picks a lyrics font. */
-const DEFAULT_LYRIC_FONT = '"Inter Variable", "Segoe UI", sans-serif';
 /** Inputs that take no typing, so Space still toggles playback. */
 const NON_TEXT_INPUTS = new Set([
   "range",
@@ -490,12 +489,7 @@ function App() {
     pageSentinel = useRef<HTMLDivElement>(null),
     pendingPage = useRef<string>("");
   stateRef.current = state;
-  useEffect(() => {
-    void loadSelectedFonts([
-      state.settings.ui_font,
-      state.settings.lyric_font,
-    ]).catch(() => {});
-  }, [state.settings.ui_font, state.settings.lyric_font]);
+  const fonts = useAppFonts(state.settings);
   routeRef.current = state.route;
   const notify = useCallback(
     (message: string, error = false) =>
@@ -2307,17 +2301,7 @@ function App() {
   return (
     <div
       className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""} ${state.settings.liquid_glass ? "glass-refraction" : ""}`}
-      style={
-        {
-          fontFamily: fontFamily(state.settings.ui_font),
-          "--lyric-font":
-            fontFamily(state.settings.lyric_font) || DEFAULT_LYRIC_FONT,
-          // Song details beside the lyrics follow a chosen lyrics font, and
-          // otherwise keep the app font (Metropolis).
-          "--lyric-detail-font":
-            fontFamily(state.settings.lyric_font) || undefined,
-        } as CSSProperties
-      }
+      style={fonts}
       onDragOver={(event) => event.preventDefault()}
       onContextMenu={(event) => {
         if (event.defaultPrevented) return;

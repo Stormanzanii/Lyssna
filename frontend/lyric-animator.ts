@@ -179,6 +179,8 @@ export class LyricAnimator {
           seconds,
           syllable.letters.length ? undefined : [2, 35],
         );
+        if (ahead >= syllable.end)
+          for (const letter of syllable.letters) letter.springs.settle();
         letterGoals(syllable.start, syllable.end, ahead, syllable.letterCount)
           .slice(
             syllable.letterOffset,

@@ -223,7 +223,7 @@ export class Spring {
   constructor(
     position: number,
     private frequency: number,
-    private damping: number,
+    public damping: number,
   ) {
     this.position = this.goal = position;
   }
@@ -511,6 +511,12 @@ export class SyllableSprings {
       lift: this.lift.step(seconds),
       glow: this.glow.step(seconds),
     };
+  }
+  /** Once a held word is sung its letters glide back to rest instead of
+   *  dipping below it and bouncing as the line moves on. */
+  settle() {
+    this.scale.damping = Math.max(1, this.scale.damping);
+    this.lift.damping = Math.max(1, this.lift.damping);
   }
   get asleep() {
     return this.scale.asleep && this.lift.asleep && this.glow.asleep;

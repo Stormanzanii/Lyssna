@@ -12852,3 +12852,51 @@ test("lines not reached yet keep normal spacing between words", async ({
   expect(upcoming.height / past.height).toBeCloseTo(0.95, 2);
   expect(Math.abs(upcoming.gap - past.gap * 0.95)).toBeLessThan(0.75);
 });
+
+test("held letters glide back to rest once their word is sung", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await emitHeldLyrics(page);
+  const line = page
+    .locator(".lyrics-page .lyric-line")
+    .filter({ hasText: "Dracula" })
+    .first();
+  await expect(line.locator(".lyric-letter")).toHaveCount(2);
+  // Song time follows the clock, sampled after the held word ends.
+  const start = Date.now() - 3000;
+  const samples: number[][] = [];
+  while (Date.now() - start < 5000) {
+    await page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms: Date.now() - start },
+    );
+    if (Date.now() - start > 3450)
+      samples.push(
+        await line
+          .locator(".lyric-letter")
+          .evaluateAll((letters) =>
+            letters.map((letter) =>
+              Number(
+                getComputedStyle(letter).scale === "none"
+                  ? 1
+                  : getComputedStyle(letter).scale,
+              ),
+            ),
+          ),
+      );
+    await page.waitForTimeout(25);
+  }
+  // No letter dips below full size and bounces back.
+  expect(samples.length).toBeGreaterThan(10);
+  for (const scales of samples)
+    for (const scale of scales) expect(scale).toBeGreaterThan(0.999);
+});

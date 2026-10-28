@@ -3238,9 +3238,10 @@ async fn window_fullscreen(
     result().map_err(error)
 }
 
-#[cfg(windows)]
 #[path = "stream_deck.rs"]
 mod stream_deck;
+
+#[cfg(windows)]
 mod fullscreen_placement {
     use anyhow::Result;
     use windows::Win32::{

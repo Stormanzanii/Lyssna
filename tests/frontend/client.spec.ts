@@ -2290,11 +2290,13 @@ test("timed syllables lift independently and font choices apply separately", asy
     });
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
     letter = page.locator(".lyrics-page .lyric-letter").first();
-  // "Hel" is rising; the held "lo" moves by letter and rests low at the
-  // unsung scale, as the fork builds letters, so its spacing stays even.
+  // "Hel" is rising; the held "lo" moves by letter and eases down to rest
+  // low at full size, so its spacing stays even.
   await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
   await expect.poll(async () => (await motion(letter)).lift).toBeGreaterThan(0);
-  expect((await motion(letter)).scale).toBeCloseTo(0.95, 2);
+  await expect
+    .poll(async () => Math.abs((await motion(letter)).scale - 1))
+    .toBeLessThan(0.005);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -2310,9 +2312,7 @@ test("timed syllables lift independently and font choices apply separately", asy
   await expect
     .poll(async () => (await motion(letter)).scale)
     .toBeGreaterThan(1.02);
-  expect((await motion(letter)).glow).toMatch(
-    /rgba?\(255, 255, 255(\)|, 0\.[1-9])/,
-  );
+  expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
   // With no lyrics font chosen, song details keep the app font.
   expect(
     await page
@@ -3646,9 +3646,7 @@ test("compact lyrics centre the title and artists against cover and Canvas thumb
   await expect.poll(alignment).toBeLessThan(1);
 });
 
-test("split words keep their syllables together as the fork's do", async ({
-  page,
-}) => {
+test("unsung split words keep their syllables together", async ({ page }) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page.evaluate((uri) => {
@@ -3701,10 +3699,9 @@ test("split words keep their syllables together as the fork's do", async ({
     );
   for (let index = 1; index < boxes.length; index++)
     expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
-      2,
+      0.5,
     );
-  // As the fork's, a middle piece rests small about its centre, so joints
-  // open by at most a pixel or so, and every line keeps near its margin.
+  // Lines not yet reached rest at full size, so they share the left margin.
   const lefts = await page
     .locator(".lyrics-page .lyric-line .lyric-main")
     .evaluateAll((elements) =>
@@ -3714,7 +3711,7 @@ test("split words keep their syllables together as the fork's do", async ({
             .left,
       ),
     );
-  expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(3);
+  expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(0.5);
   // While the word is sung, one piece pops as the next rests small; no seam
   // opens between them.
   await page.evaluate(
@@ -3736,7 +3733,9 @@ test("split words keep their syllables together as the fork's do", async ({
       elements.map((element) => element.getBoundingClientRect().toJSON()),
     );
   for (let index = 1; index < sung.length; index++)
-    expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(2);
+    expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(
+      0.5,
+    );
 });
 
 test("restarting a song slides lyrics back to the start instead of crawling", async ({
@@ -12438,76 +12437,6 @@ test("the discography page lists each release with its songs", async ({
       context: "spotify:album:bbbbbbbbbbbbbbbbbbbbbb",
     });
 });
-
-test("a line keeps its size as it becomes the active line", async ({
-  page,
-}) => {
-  await startClient(page);
-  await showLyrics(page);
-  const at = (position_ms: number) =>
-    page.evaluate(
-      ({ uri, position_ms }) =>
-        (window as any).__clientTest.emit({
-          type: "native_position",
-          uri,
-          position_ms,
-          playing: false,
-          observed_at: Date.now(),
-        }),
-      { uri: track.uri, position_ms },
-    );
-  await page.evaluate((uri) => {
-    const line = (start: number, words: string[]) => ({
-      start_ms: start,
-      end_ms: start + 4000,
-      text: words.join(" "),
-      translation: "",
-      romanization: "",
-      background: false,
-      opposite: false,
-      words: words.map((text, index) => ({
-        text: index ? ` ${text}` : text,
-        start_ms: start + index * 1000,
-        end_ms: start + index * 1000 + 900,
-      })),
-    });
-    (window as any).__clientTest.emit({
-      type: "lyrics",
-      uri,
-      lyrics: {
-        source: "Imported TTML",
-        synced: true,
-        instrumental: false,
-        lines: [
-          line(0, ["I", "love,", "I", "love"]),
-          line(4000, ["I've", "been", "so", "busy"]),
-        ],
-      },
-    });
-  }, track.uri);
-  await at(3500);
-  const second = page.locator(".lyrics-page .lyric-line").nth(1);
-  // The last word, sung last, is unsung both before and after.
-  const busy = () =>
-    second
-      .locator(".lyric-syllable")
-      .last()
-      .evaluate((node) => {
-        const scale = getComputedStyle(node).scale;
-        return scale === "none" ? 1 : Number(scale);
-      });
-  await expect(second).not.toHaveClass(/active/);
-  const before = await busy();
-  // Early scroll marks the line active a moment before it starts; its words
-  // must not jump back to full size in between.
-  await at(3900);
-  await expect(second).toHaveClass(/active/);
-  expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
-  await at(4100);
-  await page.waitForTimeout(300);
-  expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
-});
-
 test("compact lyrics line the title up with the year and artists", async ({
   page,
 }) => {

@@ -29,11 +29,9 @@ const STYLES = [
   "--gradient-ratio",
   "--glow",
 ];
-const piece = (element: HTMLElement, letter = false): Piece => ({
+const piece = (element: HTMLElement): Piece => ({
   element,
-  springs: letter
-    ? new SyllableSprings(MOTION.letterScale(0), MOTION.letterLift(0) * 2)
-    : new SyllableSprings(),
+  springs: new SyllableSprings(),
   written: new Map(),
 });
 function write(target: Piece, property: string, value: string) {
@@ -112,7 +110,7 @@ export class LyricAnimator {
       const letters = emphasis
         ? Array.from(
             node.querySelectorAll<HTMLElement>(".lyric-letter"),
-            (letter) => piece(letter, true),
+            (letter) => piece(letter),
           )
         : [];
       return {

@@ -66,10 +66,13 @@ import {
   Plus,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import { listen } from "@tauri-apps/api/event";
+import type { CinemaRequest } from "./cinema";
 import { startIdleTrim } from "./memory-trim";
 import { useRowWindow } from "./track-window";
 import { animateLayout } from "./layout-transition";
 import {
+  CinemaIcon,
   CompactIcon,
   FullScreenIcon,
   HideArtworkIcon,
@@ -734,6 +737,31 @@ function App() {
     // Home refreshes on entry and return, as Spotify's does; skipping songs
     // while it is open no longer reloads its shelves.
   }, [state.profile?.id, state.native_ready, center, state.route, refreshHome]);
+  // The Cinema window hands over what lives here: opening a page, importing
+  // lyrics and settings. The main window comes forward to show it.
+  useEffect(() => {
+    let disposed = false,
+      unlisten: (() => void) | undefined;
+    void listen<CinemaRequest>("cinema-request", ({ payload }) => {
+      const window = windowHandle();
+      void window.unminimize().then(() => window.setFocus());
+      if (payload.kind === "route") navigate(payload.route);
+      else if (payload.kind === "import") setTtmlOpen("load");
+      else
+        setSettingsTab(
+          lastSettingsTab(
+            stateRef.current.settings.settings_remember_place !== false,
+          ),
+        );
+    }).then((stop) => {
+      if (disposed) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [navigate]);
   const metadataKeys = useMemo(
     () =>
       [
@@ -5399,6 +5427,16 @@ function PlayerBar({
             volumeControl.edit(next);
           }}
         />
+        {state.settings.cinema_lyrics && (
+          <button
+            className="icon-button"
+            title="Cinema Lyrics"
+            aria-label="Cinema Lyrics"
+            onClick={() => void rpc("toggle_cinema_lyrics").catch(() => {})}
+          >
+            <CinemaIcon />
+          </button>
+        )}
         <button
           className="icon-button"
           title="Lyrics popout"

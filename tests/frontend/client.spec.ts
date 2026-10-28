@@ -587,6 +587,7 @@ async function startClient(
         commands,
         emit,
         emitVoice: (payload: any) => emitNamed("spotiflex-dj-voice", payload),
+        emitNamed,
         pendingVoice: null,
         resolveVoice: null,
       };
@@ -12528,4 +12529,100 @@ test("compact lyrics line the title up with the year and artists", async ({
         (await left(".lyrics-page .lyrics-artists")),
     ),
   ).toBeLessThan(0.5);
+});
+
+test("Cinema Lyrics: a setting shows its button, which toggles the window", async ({
+  page,
+}) => {
+  await startClient(page);
+  const button = page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Cinema Lyrics", exact: true });
+  // Off by default, as in the fork.
+  await expect(button).toHaveCount(0);
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Enable Cinema Lyrics Window", { exact: true })
+    .check();
+  await page.keyboard.press("Escape");
+  await button.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (entry: any) => entry.command === "toggle_cinema_lyrics",
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
+test("the Cinema window shows the full screen lyrics page and its toolbar", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.goto("/?view=cinema");
+  const cinema = page.locator(".application.immersive.cinema");
+  await expect(cinema.locator(".lyrics-page")).toBeVisible();
+  // Only the lyrics: no top bar, library or player bar.
+  await expect(
+    page.locator(".topbar, .library-panel, .player-bar"),
+  ).toHaveCount(0);
+  await expect(cinema.locator(".lyrics-title .song-title")).toHaveText(
+    track.name,
+  );
+  const toolbar = cinema.getByRole("toolbar", { name: "Lyrics" });
+  // Its controls show while the mouse moves, as in full screen.
+  await page.mouse.move(400, 300);
+  await page.mouse.move(420, 320);
+  await expect(
+    toolbar.getByTitle("Full screen", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    toolbar.getByRole("button", { name: "Close Cinema" }),
+  ).toBeVisible();
+  // A toolbar toggle saves for every window.
+  await toolbar.getByTitle("Compact lyrics", { exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "save_settings")
+            .at(-1)?.args.settings.lyrics_compact,
+      ),
+    )
+    .toBe(true);
+  await expect(cinema.locator(".lyrics-page.narrow")).toHaveCount(1);
+});
+
+test("the main window acts on the Cinema window's requests", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emitNamed("cinema-request", {
+      kind: "settings",
+    }),
+  );
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emitNamed("cinema-request", {
+      kind: "route",
+      route: "album:0123456789abcdefghijkl",
+    }),
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "browse")
+            .at(-1)?.args.key,
+      ),
+    )
+    .toBe("album:0123456789abcdefghijkl");
 });

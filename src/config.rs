@@ -290,6 +290,10 @@ pub struct Settings {
     /// keeps playing; Quit in the tray menu exits. Off by default. Replaces
     /// an earlier `close_to_tray` that was on by default.
     pub keep_playing_on_close: bool,
+    /// A Cinema Lyrics button in the player bar opens the full screen lyrics
+    /// in a window of their own, as the pixels-spicy-lyrics fork's Cinema
+    /// Lyrics Window. Off by default, as there.
+    pub cinema_lyrics: bool,
     /// Songs overlap when one runs into the next, as Spotify's Crossfade
     /// songs: off by default, 1 to 12 seconds, 5 unless chosen.
     pub crossfade: bool,
@@ -400,6 +404,7 @@ impl Default for Settings {
             audio_output: None,
             auto_download_updates: true,
             keep_playing_on_close: false,
+            cinema_lyrics: false,
             crossfade: false,
             crossfade_seconds: 5,
             lyrics_discord_usernames: true,

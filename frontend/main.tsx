@@ -14,13 +14,17 @@ import "./fullscreen-lyrics.css";
 import { CreatorProfiles } from "./creator-profile";
 import { installOverlayScrollbars } from "./overlay-scrollbar";
 import { LyricsPopout, POPOUT_VIEW } from "./lyrics-popout";
+import { CINEMA_VIEW, CinemaLyrics } from "./cinema";
 installOverlayScrollbars();
-// The lyrics popout window loads the same page with its own view.
-const popout = new URLSearchParams(location.search).get("view") === POPOUT_VIEW;
+// The lyrics popout and Cinema windows load the same page with their own
+// view.
+const view = new URLSearchParams(location.search).get("view");
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {popout ? (
+    {view === POPOUT_VIEW ? (
       <LyricsPopout />
+    ) : view === CINEMA_VIEW ? (
+      <CinemaLyrics />
     ) : (
       <CreatorProfiles>
         <App />

@@ -1100,6 +1100,12 @@ export function SettingsWindow({
       "Lyrics layout",
       [
         flag(
+          "cinema_lyrics",
+          "Enable Cinema Lyrics Window",
+          "Show or hide the Cinema Lyrics button in the playback bar. It opens the full screen lyrics in a window you can move and resize.",
+          "cinema window external popup big",
+        ),
+        flag(
           "lyrics_compact",
           "Compact lyrics",
           "Use the narrow lyrics layout at any window size.",

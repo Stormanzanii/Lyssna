@@ -2835,6 +2835,34 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   addEventListener("popstate", toEmbed);
   toEmbed();
 })();"#;
+/// Cinema Lyrics, as the pixels-spicy-lyrics fork's: the full screen lyrics
+/// in a normal window of their own, framed so it moves, resizes and maximizes
+/// like any other, and remembered where it was last left. The button toggles
+/// it, as the fork's does.
+#[tauri::command]
+async fn toggle_cinema_lyrics(app: tauri::AppHandle) -> std::result::Result<(), String> {
+    const LABEL: &str = "cinema";
+    let result = || -> Result<()> {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            window.close()?;
+            return Ok(());
+        }
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            LABEL,
+            tauri::WebviewUrl::App("index.html?view=cinema".into()),
+        )
+        .title("SpotiFlex Cinema")
+        .inner_size(1280.0, 720.0)
+        .min_inner_size(640.0, 360.0)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(0, 0, 0, 0xff))
+        .additional_browser_args(BROWSER_ARGS)
+        .build()?;
+        Ok(())
+    };
+    result().map_err(error)
+}
 /// Spicy Lyrics' popup lyrics: the lyrics in their own small window that
 /// stays above others, opened again from where it was last closed. The page
 /// is SpotiFlex's own, in its lyrics popout view.
@@ -3628,6 +3656,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             window_fullscreen,
             open_lyrics_popout,
+            toggle_cinema_lyrics,
             artist_discography,
             release_tracks,
             read_clipboard,

@@ -4840,6 +4840,10 @@ input[type="range"]:hover {
   .search-group {
     width: 43%;
   }
+  /* macOS keeps the profile button for its menu; elsewhere it gives way. */
+  .application:not(.macos) .avatar {
+    display: none;
+  }
   .application:not(.macos) .player-extras > .icon-button:nth-child(2),
   .application:not(.macos) .player-extras > .icon-button:nth-child(4),
   .application:not(.macos) .player-extras > .icon-button:last-child {

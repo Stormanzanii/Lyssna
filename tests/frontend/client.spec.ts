@@ -3503,6 +3503,29 @@ test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {
   ).toBe("visible");
 });
 
+test("the Now playing card fades its top only once lyrics scroll", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const scroller = page.locator(".lyric-preview .lyric-scroll");
+  const fade = () =>
+    scroller.evaluate((node) => ({
+      top: node.scrollTop,
+      mask: getComputedStyle(node).maskImage,
+    }));
+  const atTop = await fade();
+  expect(atTop.top).toBe(0);
+  expect(atTop.mask).toContain("min(0px");
+  await scroller.evaluate((node) => {
+    node.scrollTop = 120;
+    node.dispatchEvent(new Event("scroll"));
+  });
+  await expect
+    .poll(async () => (await fade()).mask)
+    .toMatch(/min\((1[0-9]{2}|[1-9][0-9])px/);
+});
+
 test("the lyrics ambience rebuilds after the GPU loses its canvas", async ({
   page,
 }) => {

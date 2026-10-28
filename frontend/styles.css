@@ -3634,8 +3634,15 @@ small {
   min-height: 0;
   padding: 0 8px;
 }
+/* The card's lyrics start just under its header, so the top fade grows
+   with scrolling: the first line is never faded while nothing is above. */
 .compact .lyric-scroll {
-  mask-image: linear-gradient(transparent, #000 9%, #000 80%, transparent);
+  mask-image: linear-gradient(
+    transparent,
+    #000 min(var(--scrolled, 0px), 9%),
+    #000 80%,
+    transparent
+  );
 }
 .compact .lyric-wait {
   padding-inline: 4px;

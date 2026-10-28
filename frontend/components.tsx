@@ -802,6 +802,7 @@ export function LyricsDisplay({
         data-at-end={atEnd}
         onScroll={(event) => {
           const node = event.currentTarget;
+          node.style.setProperty("--scrolled", `${node.scrollTop}px`);
           setAtEnd(
             node.scrollTop + node.clientHeight >= node.scrollHeight - 24,
           );

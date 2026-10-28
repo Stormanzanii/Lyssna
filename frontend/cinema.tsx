@@ -6,6 +6,8 @@ import { Settings as SettingsIcon, X } from "lucide-react";
 import { rpc } from "./bridge";
 import { LyricsPage } from "./components";
 import { useAppFonts } from "./custom-fonts";
+import { GlassRefractionFilter } from "./glass-refraction";
+import { IS_MAC } from "./platform";
 import { sendPlayer, useDesktopState } from "./desktop-state";
 import {
   CompactIcon,
@@ -89,7 +91,7 @@ export function CinemaLyrics() {
   return (
     <div
       style={fonts}
-      className={`application immersive cinema ${state.settings.reduce_motion ? "reduce-motion" : ""} ${state.settings.liquid_glass ? "liquid-glass glass-refraction" : ""}`}
+      className={`application immersive cinema ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${state.settings.liquid_glass ? "liquid-glass glass-refraction" : ""}`}
     >
       <div className="workspace">
         <main className="center-panel showing-lyrics">
@@ -182,6 +184,7 @@ export function CinemaLyrics() {
           </LyricsPage>
         </main>
       </div>
+      {state.settings.liquid_glass && <GlassRefractionFilter />}
     </div>
   );
 }

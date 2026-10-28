@@ -23,6 +23,8 @@ use tauri::{Listener, Manager};
 
 /// Longest line a client may send; commands are a few dozen bytes.
 const MAX_LINE: usize = 4096;
+/// How long a new connection has to send the key.
+const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 /// Plugin connections at once; Stream Deck runs one plugin process.
 const MAX_CLIENTS: usize = 8;
 
@@ -224,8 +226,11 @@ fn serve(
     shared: &Mutex<Shared>,
     key: &str,
 ) -> Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
     let mut reader = BufReader::new(stream.try_clone()?);
+    // Only the key has a deadline. The limit goes on the handle that reads:
+    // on Windows a cloned socket keeps its own, and left on it, every quiet
+    // spell of that length dropped the plugin.
+    reader.get_ref().set_read_timeout(Some(HELLO_TIMEOUT))?;
     // The key comes first; anything else closes the connection.
     let hello = read_line(&mut reader)?;
     let hello: Value = serde_json::from_str(&hello)?;
@@ -233,7 +238,7 @@ fn serve(
         hello["type"] == "hello" && hello["key"].as_str().is_some_and(|given| same(given, key)),
         "Wrong Stream Deck key"
     );
-    stream.set_read_timeout(None)?;
+    reader.get_ref().set_read_timeout(None)?;
     let id = {
         let mut shared = shared
             .lock()
@@ -406,6 +411,31 @@ mod tests {
             cover(&[image("https://i.scdn.co/image/small", 64)]).as_deref(),
             Some("https://i.scdn.co/image/small")
         );
+    }
+
+    #[test]
+    fn the_key_deadline_does_not_outlive_the_key() {
+        // The same handling as `serve`, with a short deadline.
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let client = thread::spawn(move || {
+            let mut client = TcpStream::connect(address).unwrap();
+            client.write_all(b"hello\n").unwrap();
+            thread::sleep(Duration::from_millis(600));
+            client.write_all(b"still here\n").unwrap();
+            thread::sleep(Duration::from_millis(100));
+        });
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        reader
+            .get_ref()
+            .set_read_timeout(Some(Duration::from_millis(200)))
+            .unwrap();
+        assert_eq!(read_line(&mut reader).unwrap(), "hello");
+        reader.get_ref().set_read_timeout(None).unwrap();
+        // A quiet spell longer than the deadline must not end the connection.
+        assert_eq!(read_line(&mut reader).unwrap(), "still here");
+        client.join().unwrap();
     }
 
     #[test]

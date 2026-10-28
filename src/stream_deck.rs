@@ -38,6 +38,10 @@ struct DeckState {
     volume: Option<u8>,
     /// Whether the song is in Liked Songs, once known.
     liked: Option<bool>,
+    /// Song position when last observed, and that moment in Unix
+    /// milliseconds, so the plugin can run the clock between updates.
+    position_ms: u64,
+    observed_at: u64,
 }
 
 #[derive(Clone, PartialEq, Serialize)]
@@ -47,6 +51,7 @@ struct DeckTrack {
     artists: String,
     /// Cover art about 300 px wide, from Spotify's image server.
     image: Option<String>,
+    duration_ms: u64,
 }
 
 #[derive(Default)]
@@ -174,6 +179,7 @@ fn read_state(snapshot: &super::Snapshot) -> DeckState {
                 .collect::<Vec<_>>()
                 .join(", "),
             image: cover(&track.album.images),
+            duration_ms: track.duration_ms,
         }),
         shuffle: playback.shuffle_state,
         repeat: if playback.repeat_state.is_empty() {
@@ -183,6 +189,8 @@ fn read_state(snapshot: &super::Snapshot) -> DeckState {
         },
         volume: playback.device.volume_percent,
         liked: None,
+        position_ms: playback.progress_ms.unwrap_or_default(),
+        observed_at: snapshot.observed_at,
     }
 }
 

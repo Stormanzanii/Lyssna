@@ -51,7 +51,9 @@ struct DeckTrack {
 
 #[derive(Default)]
 struct Shared {
-    clients: Vec<TcpStream>,
+    /// Connected plugins, by connection number.
+    clients: Vec<(u64, TcpStream)>,
+    next_client: u64,
     state: DeckState,
     saved: HashMap<String, bool>,
     /// Volume before Mute, to restore.
@@ -201,7 +203,7 @@ fn broadcast(shared: &mut Shared) {
     let line = state_line(&shared.state);
     shared
         .clients
-        .retain_mut(|client| client.write_all(line.as_bytes()).is_ok());
+        .retain_mut(|(_, client)| client.write_all(line.as_bytes()).is_ok());
 }
 
 fn state_line(state: &DeckState) -> String {
@@ -224,7 +226,7 @@ fn serve(
         "Wrong Stream Deck key"
     );
     stream.set_read_timeout(None)?;
-    {
+    let id = {
         let mut shared = shared
             .lock()
             .map_err(|_| anyhow::anyhow!("State unavailable"))?;
@@ -234,19 +236,29 @@ fn serve(
         );
         let mut writer = stream.try_clone()?;
         writer.write_all(state_line(&shared.state).as_bytes())?;
-        shared.clients.push(writer);
-    }
-    loop {
-        let line = read_line(&mut reader)?;
-        let Ok(message) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        if message["type"] == "command"
-            && let Some(name) = message["command"].as_str()
-        {
-            let _ = run(app, shared, name, &message);
+        shared.next_client += 1;
+        let id = shared.next_client;
+        shared.clients.push((id, writer));
+        id
+    };
+    let result = (|| -> Result<()> {
+        loop {
+            let line = read_line(&mut reader)?;
+            let Ok(message) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
+            if message["type"] == "command"
+                && let Some(name) = message["command"].as_str()
+            {
+                let _ = run(app, shared, name, &message);
+            }
         }
+    })();
+    // A plugin that leaves is dropped at once, not at the next update.
+    if let Ok(mut shared) = shared.lock() {
+        shared.clients.retain(|(client, _)| *client != id);
     }
+    result
 }
 
 /// One line, refusing overlong ones instead of buffering them.

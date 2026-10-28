@@ -2260,6 +2260,9 @@ fn save_settings(
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_visible(settings.keep_playing_on_close);
         }
+        // Every window shows the same settings, so a change made in the
+        // Cinema or popout window reaches the main one and the reverse.
+        let _ = app.emit("spotiflex", json!({"type":"settings","settings":&settings}));
         snapshot.settings = settings;
         Ok(())
     };

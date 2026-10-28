@@ -12497,3 +12497,28 @@ test("a line keeps its size as it becomes the active line", async ({
   await page.waitForTimeout(300);
   expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
 });
+
+test("compact lyrics line the title up with the year and artists", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await showLyrics(page);
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Compact lyrics", { exact: true })
+    .click();
+  const left = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((node) => node.getBoundingClientRect().left);
+  await expect(page.locator(".lyrics-page.narrow")).toHaveCount(1);
+  expect(
+    Math.abs(
+      (await left(".lyrics-page .lyrics-title .song-title")) -
+        (await left(".lyrics-page .lyrics-artists")),
+    ),
+  ).toBeLessThan(0.5);
+});

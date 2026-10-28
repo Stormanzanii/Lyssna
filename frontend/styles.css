@@ -2689,6 +2689,13 @@ small {
 .lyrics-page.narrow .lyrics-title .song-title {
   font-size: 20px;
 }
+/* Left-aligned, the marquee's italic padding pushed the title in from the
+   year beside the artists. Pull it back by that padding so the text lines
+   up, keeping the room for italic overhang. */
+.lyrics-page.narrow
+  :is(.lyrics-title, .lyrics-artists > .marquee:first-child) {
+  margin-inline-start: -0.4em;
+}
 .lyrics-page.narrow .lyrics-artists {
   justify-content: flex-start;
   font-size: 14px;

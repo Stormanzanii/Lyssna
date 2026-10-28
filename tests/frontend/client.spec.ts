@@ -12492,8 +12492,12 @@ test("a line keeps its size as it becomes the active line", async ({
       });
   await expect(second).not.toHaveClass(/active/);
   const before = await busy();
-  await at(4100);
+  // Early scroll marks the line active a moment before it starts; its words
+  // must not jump back to full size in between.
+  await at(3900);
   await expect(second).toHaveClass(/active/);
+  expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
+  await at(4100);
   await page.waitForTimeout(300);
   expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
 });

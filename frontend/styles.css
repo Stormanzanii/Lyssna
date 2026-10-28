@@ -2913,14 +2913,16 @@ small {
 .lyric-line.active .lyric-syllable {
   translate: 0 0.01em;
 }
-/* Lines not reached yet rest as unsung text does on the active line, as the
-   fork builds every word at its idle scale; otherwise a line shrank as it
-   became active. Default's idle scale is 0.95; other presets rest at 1. A
-   line that opens with a split word keeps that first piece full size: it
-   scales from its joint, so resting small would pull it off the margin. */
+/* Text not sung yet rests at the animator's idle scale, as the fork builds
+   every word, so a line never changes size as it starts; the animator's own
+   values take over while a line plays. Keyed to lines not yet finished, not
+   to the active class: Early scroll marks a line active before it starts.
+   Default's idle scale is 0.95; other presets rest at 1. A line that opens
+   with a split word keeps that first piece full size: it scales from its
+   joint, so resting small would pull it off the margin. */
 :root[data-animator="Default"]
   .lyrics-display:not(.reduce-motion)
-  .lyric-line:not(.active, .past)
+  .lyric-line:not(.past)
   :is(.lyric-syllable, .lyric-letter):not(
     .lyric-main > .lyric-word-group:first-child .lyric-syllable.joined-start,
     .lyric-main
@@ -2930,9 +2932,7 @@ small {
   ) {
   scale: 0.95;
 }
-.lyrics-display:not(.reduce-motion)
-  .lyric-line:not(.active, .past)
-  .lyric-syllable {
+.lyrics-display:not(.reduce-motion) .lyric-line:not(.past) .lyric-syllable {
   translate: 0 0.01em;
 }
 .lyric-syllable.emphasis {

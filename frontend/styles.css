@@ -2937,19 +2937,9 @@ small {
 .lyric-syllable.joined-end {
   transform-origin: left 75%;
 }
-/* A split word's middle pieces stay still so no seam opens beside a
-   popping neighbour, but at the size unsung pieces rest at, so every piece
-   of the word matches until the line is sung. */
-.lyric-syllable.joined-middle,
-.lyric-syllable.joined-middle .lyric-letter {
-  scale: none !important;
-}
-:root[data-animator="Default"]
-  .lyrics-display:not(.reduce-motion)
-  .lyric-line:not(.past)
-  .lyric-syllable.joined-middle {
-  scale: 0.95 !important;
-}
+/* Under Default every piece of a split word moves, as the fork's: it
+   rests small, pops while sung and settles full size, so none grows once
+   the line ends. Other presets hold split pieces still (below). */
 /* Custom animator preset, as the pixels-spicy-lyrics fork: split
    syllables keep full size while more of the line follows, so no gaps open;
    the line's final syllable and Space Gravity keep their scale. Default

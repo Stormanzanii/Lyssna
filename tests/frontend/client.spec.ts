@@ -12681,3 +12681,83 @@ test("a line keeps its size as it becomes the active line", async ({
   await page.waitForTimeout(300);
   expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
 });
+
+test("split words keep their size as their line finishes", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  await page.evaluate((uri) => {
+    const line = (start: number) => ({
+      text: "spectacular",
+      start_ms: start,
+      end_ms: start + 3000,
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: [
+        ["spec", 0, 300],
+        ["ta", 300, 600],
+        ["cu", 600, 900],
+        ["lar", 900, 1200],
+      ].map(([text, from, to]) => ({
+        text,
+        start_ms: start + (from as number),
+        end_ms: start + (to as number),
+      })),
+    });
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          line(0),
+          {
+            ...line(4000),
+            text: "view",
+            words: [{ text: "view", start_ms: 4000, end_ms: 4500 }],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  const first = page
+    .locator(".lyrics-page .lyric-line")
+    .filter({ hasText: "spectacular" })
+    .first();
+  const sizes = () =>
+    first
+      .locator(".lyric-syllable")
+      .evaluateAll((pieces) =>
+        pieces.map((piece) => piece.getBoundingClientRect().height),
+      );
+  // The first three pieces are sung and settled while the last is sung...
+  await at(950);
+  await expect(first).toHaveClass(/active/);
+  await page.waitForTimeout(1500);
+  const sung = (await sizes()).slice(0, 3);
+  for (const height of sung)
+    expect(Math.abs(height - sung[0])).toBeLessThan(0.05);
+  // ...and none grows once it has.
+  await at(3600);
+  await expect(first).toHaveClass(/past/);
+  await page.waitForTimeout(300);
+  const after = (await sizes()).slice(0, 3);
+  after.forEach((height, index) =>
+    expect(Math.abs(height - sung[index])).toBeLessThan(0.05),
+  );
+});

@@ -3239,6 +3239,8 @@ async fn window_fullscreen(
 }
 
 #[cfg(windows)]
+#[path = "stream_deck.rs"]
+mod stream_deck;
 mod fullscreen_placement {
     use anyhow::Result;
     use windows::Win32::{
@@ -3583,6 +3585,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             app.manage(Desktop::start(app.handle().clone())?);
+            // The Stream Deck plugin's local control; the app runs without it.
+            if let Err(error) = stream_deck::start(app.handle().clone()) {
+                eprintln!("Stream Deck control unavailable: {error}");
+            }
             install_tray(app)?;
             // The tray icon shows only while closing keeps music playing.
             let keep_playing = crate::config::Settings::load()

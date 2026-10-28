@@ -731,14 +731,9 @@ function App() {
       state.route === "home"
     )
       refreshHome();
-  }, [
-    state.profile?.id,
-    state.native_ready,
-    center,
-    state.route,
-    state.playback.item?.uri,
-    refreshHome,
-  ]);
+    // Home refreshes on entry and return, as Spotify's does; skipping songs
+    // while it is open no longer reloads its shelves.
+  }, [state.profile?.id, state.native_ready, center, state.route, refreshHome]);
   const metadataKeys = useMemo(
     () =>
       [

@@ -1630,7 +1630,7 @@ test("cached Home shows at once and refreshes when native audio connects", async
   ).toHaveCount(0);
 });
 
-test("Home refreshes fresh-looking cached shelves on return and on song changes", async ({
+test("Home refreshes fresh-looking cached shelves on return, not on song changes", async ({
   page,
 }) => {
   await startClient(page, "home");
@@ -1746,7 +1746,10 @@ test("Home refreshes fresh-looking cached shelves on return and on song changes"
       }),
     { playback: emptyState.playback, track },
   );
-  await expect.poll(homeCalls).toBe(before + 2);
+  // Skipping while Home is open leaves its shelves alone, as in Spotify.
+  await expect(page.locator(".player-bar")).toContainText(track.name);
+  await page.waitForTimeout(300);
+  expect(await homeCalls()).toBe(before + 1);
   await page.getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".lyrics-page")).toBeVisible();
   await page.evaluate(
@@ -1769,9 +1772,9 @@ test("Home refreshes fresh-looking cached shelves on return and on song changes"
     { playback: emptyState.playback, track },
   );
   await expect(page.locator(".lyrics-page")).toContainText("Later song");
-  expect(await homeCalls()).toBe(before + 2);
+  expect(await homeCalls()).toBe(before + 1);
   await page.getByTitle("Home", { exact: true }).click();
-  await expect.poll(homeCalls).toBe(before + 3);
+  await expect.poll(homeCalls).toBe(before + 2);
 });
 
 test("big lists show their exact total length", async ({ page }) => {

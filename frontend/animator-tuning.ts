@@ -53,7 +53,7 @@ export const ANIMATOR_PARAMETERS: readonly AnimatorParameter[] = [
     step: 0.005,
     typedMin: -100,
     typedMax: 100,
-    defaultValue: 1.0505,
+    defaultValue: 1.075,
   },
   {
     id: "letterPeakScale",
@@ -211,10 +211,12 @@ export const ANIMATOR_DEFAULTS = Object.freeze(
   ) as AnimatorValues,
 );
 /** Spikerko/spicy-lyrics main 2a14863f, kept apart from the editable
- * defaults as the fork does. */
+ * defaults as the fork does. Words rest at full size here rather than
+ * upstream's 0.95, so they peak at 1.075 instead of 1.0505 to keep more of
+ * the pop. */
 export const UPSTREAM_ANIMATOR_VALUES: Readonly<AnimatorValues> = Object.freeze(
   {
-    wordPeakScale: 1.0505,
+    wordPeakScale: 1.075,
     letterPeakScale: 1.175,
     verticalStrength: 1,
     glowStrength: 1,

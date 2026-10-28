@@ -315,7 +315,7 @@ export function naturalSpline(points: readonly (readonly [number, number])[]) {
 export const MOTION = {
   scale: naturalSpline([
     [0, 1],
-    [0.7, 1.0505],
+    [0.7, 1.075],
     [1, 1],
   ]),
   letterScale: naturalSpline([

@@ -194,7 +194,7 @@ it("rests unsung syllables low at full size, sweeps the fill, and settles sung o
     gradient: -20,
   });
   const singing = wordGoal(1000, 2000, 1700);
-  expect(singing.scale).toBeCloseTo(1.0505);
+  expect(singing.scale).toBeCloseTo(1.075);
   expect(singing.lift).toBeLessThan(0);
   expect(singing.gradient).toBeCloseTo(64);
   // The natural spline overshoots between its points; the glow peaks above

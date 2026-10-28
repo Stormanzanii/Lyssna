@@ -9466,7 +9466,7 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   await expect(saved).toHaveValue("default");
   await expect(
     page.getByLabel("Word peak scale value", { exact: true }),
-  ).toHaveValue("1.0505");
+  ).toHaveValue("1.075");
   await expect(
     page.getByRole("button", { name: "Delete Current", exact: true }),
   ).toBeDisabled();

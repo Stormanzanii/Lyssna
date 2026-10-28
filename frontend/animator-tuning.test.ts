@@ -26,7 +26,7 @@ describe("animator presets", () => {
     expect(
       animatorValues({ preset: "Default", custom: { wordPeakScale: 2 } })
         .wordPeakScale,
-    ).toBe(1.0505);
+    ).toBe(1.075);
   });
   it("copies the playing values the first time Custom is chosen", () => {
     const custom = choosePreset({ preset: "Default" }, "Custom");
@@ -41,7 +41,7 @@ describe("animator presets", () => {
     const edited = setValue({ preset: "Default" }, "glowStrength", 1e9);
     expect(edited.preset).toBe("Custom");
     expect(animatorValues(edited).glowStrength).toBe(100);
-    expect(animatorValues(edited).wordPeakScale).toBe(1.0505);
+    expect(animatorValues(edited).wordPeakScale).toBe(1.075);
   });
   it("saves, overwrites by name, loads and deletes presets", () => {
     let settings = setValue({}, "scaleDamping", 0.9);
@@ -67,7 +67,7 @@ describe("animator presets", () => {
   });
   it("round-trips SLP1 share codes and renames duplicates", () => {
     const code = shareCode("Bouncy", { verticalDamping: 0.2 });
-    expect(code).toMatch(/^SLP1:Bouncy\|1\.0505,1\.175,/);
+    expect(code).toMatch(/^SLP1:Bouncy\|1\.075,1\.175,/);
     const first = importCode({}, code);
     expect(first.name).toBe("Bouncy");
     expect(first.settings.custom?.verticalDamping).toBe(0.2);
@@ -93,7 +93,7 @@ describe("animator presets", () => {
   it("tunes the motion curves", () => {
     tuneMotion({ preset: "Default" });
     expect(MOTION.scale(0)).toBeCloseTo(1);
-    expect(MOTION.scale(0.7)).toBeCloseTo(1.0505);
+    expect(MOTION.scale(0.7)).toBeCloseTo(1.075);
     tuneMotion(setValue({}, "wordPeakScale", 1.2));
     expect(MOTION.scale(0)).toBeCloseTo(1);
     expect(MOTION.scale(0.7)).toBeCloseTo(1.2);

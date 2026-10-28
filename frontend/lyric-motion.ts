@@ -227,9 +227,11 @@ export class Spring {
   ) {
     this.position = this.goal = position;
   }
-  step(seconds: number): number {
-    const d = this.damping,
-      f = this.frequency * 2 * Math.PI,
+  /** `stiffness` multiplies the frequency and makes the spring critically
+   *  damped, so it reaches its goal fast without overshoot. */
+  step(seconds: number, stiffness = 1): number {
+    const d = stiffness > 1 ? Math.max(1, this.damping) : this.damping,
+      f = this.frequency * stiffness * 2 * Math.PI,
       offset = this.position - this.goal,
       v = this.velocity;
     if (d === 1) {
@@ -347,6 +349,8 @@ export const MOTION = {
   },
   /** Scale unsung text rests at on the active line. */
   idleScale: 1,
+  /** How much faster a finished word or letter settles to rest. */
+  settleStiffness: 10,
   /** Glow left on sung letters while their held word waits between letters. */
   sungLetterGlow: 0.2,
   /** Held words finish their letters this much before the word ends. */
@@ -500,13 +504,17 @@ export class SyllableSprings {
     this.lift = new Spring(restLift, lift[0], lift[1]);
     this.glow = new Spring(0, glow[0], glow[1]);
   }
+  /** A finished piece settles at once, critically damped, instead of
+   *  drifting back from its peak after it was sung and nudging its
+   *  neighbours; while sung it moves as the fork's springs do. */
   step(goal: SyllableGoal, seconds: number) {
     this.scale.goal = goal.scale;
     this.lift.goal = goal.lift;
     this.glow.goal = goal.glow;
+    const finished = goal.gradient >= 100 ? MOTION.settleStiffness : 1;
     return {
-      scale: this.scale.step(seconds),
-      lift: this.lift.step(seconds),
+      scale: this.scale.step(seconds, finished),
+      lift: this.lift.step(seconds, finished),
       glow: this.glow.step(seconds),
     };
   }

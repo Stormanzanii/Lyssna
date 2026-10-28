@@ -351,10 +351,8 @@ export const MOTION = {
   sungLetterGlow: 0.2,
   /** Held words finish their letters this much before the word ends. */
   emphasisTailMs: 250,
-  /** Syllable goals lead song time by this much. The scale spring takes about
-   * a quarter second to rise, and the fill shows nothing until its soft edge
-   * enters the syllable, so goals sampled on time land behind the voice. */
-  leadMs: 90,
+  /** Syllable goals lead song time by this much; none, as the fork's. */
+  leadMs: 0,
   blurPerLine: 1.25,
   maxBlur: 1.25 * 5.465,
 };

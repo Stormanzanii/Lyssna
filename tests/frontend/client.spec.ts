@@ -2310,7 +2310,9 @@ test("timed syllables lift independently and font choices apply separately", asy
   await expect
     .poll(async () => (await motion(letter)).scale)
     .toBeGreaterThan(1.02);
-  expect((await motion(letter)).glow).toMatch(/rgba\(255, 255, 255, 0\.[1-9]/);
+  expect((await motion(letter)).glow).toMatch(
+    /rgba?\(255, 255, 255(\)|, 0\.[1-9])/,
+  );
   // With no lyrics font chosen, song details keep the app font.
   expect(
     await page
@@ -3644,7 +3646,9 @@ test("compact lyrics centre the title and artists against cover and Canvas thumb
   await expect.poll(alignment).toBeLessThan(1);
 });
 
-test("unsung split words keep their syllables together", async ({ page }) => {
+test("split words keep their syllables together as the fork's do", async ({
+  page,
+}) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page.evaluate((uri) => {
@@ -3697,10 +3701,10 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     );
   for (let index = 1; index < boxes.length; index++)
     expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
-      0.5,
+      2,
     );
-  // Lines not yet reached keep a split first word's first piece at full
-  // size, so they share the left margin.
+  // As the fork's, a middle piece rests small about its centre, so joints
+  // open by at most a pixel or so, and every line keeps near its margin.
   const lefts = await page
     .locator(".lyrics-page .lyric-line .lyric-main")
     .evaluateAll((elements) =>
@@ -3710,7 +3714,7 @@ test("unsung split words keep their syllables together", async ({ page }) => {
             .left,
       ),
     );
-  expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(0.5);
+  expect(Math.abs(lefts[0] - lefts[1])).toBeLessThan(3);
   // While the word is sung, one piece pops as the next rests small; no seam
   // opens between them.
   await page.evaluate(
@@ -3732,9 +3736,7 @@ test("unsung split words keep their syllables together", async ({ page }) => {
       elements.map((element) => element.getBoundingClientRect().toJSON()),
     );
   for (let index = 1; index < sung.length; index++)
-    expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(
-      0.5,
-    );
+    expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(2);
 });
 
 test("restarting a song slides lyrics back to the start instead of crawling", async ({

@@ -2827,10 +2827,7 @@ small {
   color: transparent;
   -webkit-text-fill-color: transparent;
   opacity: 0.51;
-  filter: blur(calc(var(--blur) / 2));
-  transition:
-    opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1),
-    filter 0.5s cubic-bezier(0.61, 1, 0.88, 1);
+  transition: opacity 0.2s cubic-bezier(0.61, 1, 0.88, 1);
 }
 .lyrics-page .lyric-line,
 .lyrics-page .lyric-wait {
@@ -2908,45 +2905,39 @@ small {
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  transform-origin: center 75%;
-}
-.lyric-line.active .lyric-syllable {
-  translate: 0 0.01em;
+  transform-origin: center;
 }
 /* Text not sung yet rests at the animator's idle scale, as the fork builds
    every word, so a line never changes size as it starts; the animator's own
    values take over while a line plays. Keyed to lines not yet finished, not
    to the active class: Early scroll marks a line active before it starts.
-   Default's idle scale is 0.95; other presets rest at 1. A line that opens
-   with a split word keeps that first piece full size: it scales from its
-   joint, so resting small would pull it off the margin. */
+   Default's idle scale is 0.95; other presets rest at 1. Every piece of a
+   split word rests at the same size, so no part of it stands out. */
 :root[data-animator="Default"]
   .lyrics-display:not(.reduce-motion)
   .lyric-line:not(.past)
-  :is(.lyric-syllable, .lyric-letter):not(
-    .lyric-main > .lyric-word-group:first-child .lyric-syllable.joined-start,
-    .lyric-main
-      > .lyric-word-group:first-child
-      .lyric-syllable.joined-start
-      .lyric-letter
-  ) {
+  :is(.lyric-syllable, .lyric-letter) {
   scale: 0.95;
 }
 .lyrics-display:not(.reduce-motion) .lyric-line:not(.past) .lyric-syllable {
   translate: 0 0.01em;
 }
+.lyrics-display:not(.reduce-motion)
+  .lyric-line:not(.past)
+  :is(.lyric-syllable.emphasis, .lyric-letter) {
+  translate: 0 0.02em;
+}
 .lyric-syllable.emphasis {
   display: inline-flex;
 }
 .lyric-syllable.joined-start {
-  transform-origin: right 75%;
+  transform-origin: right center;
+}
+.lyric-syllable.joined-middle {
+  transform-origin: center;
 }
 .lyric-syllable.joined-end {
-  transform-origin: left 75%;
-}
-.lyric-syllable.joined-middle,
-.lyric-syllable.joined-middle .lyric-letter {
-  scale: none !important;
+  transform-origin: left center;
 }
 /* Custom animator preset, as the pixels-spicy-lyrics fork: split
    syllables keep full size while more of the line follows, so no gaps open;
@@ -2969,24 +2960,6 @@ small {
   .lyric-letter {
   scale: none !important;
 }
-.lyric-line:not(.opposite)
-  .lyric-main
-  > .lyric-word-group:first-child
-  :is(
-    .lyric-syllable:first-child:not(.joined-start),
-    .lyric-syllable:first-child > .lyric-letter:first-child
-  ) {
-  transform-origin: left 75%;
-}
-.lyric-line.opposite
-  .lyric-main
-  > .lyric-word-group:last-child
-  :is(
-    .lyric-syllable:last-child:not(.joined-end),
-    .lyric-syllable:last-child > .lyric-letter:last-child
-  ) {
-  transform-origin: right 75%;
-}
 .lyric-line.active .lyric-syllable,
 .lyric-line.active .lyric-letter {
   will-change: transform;
@@ -2994,12 +2967,6 @@ small {
 /* Avoid retaining one compositing layer per animated glyph over live video. */
 .application.macos .lyric-line.active :is(.lyric-syllable, .lyric-letter) {
   will-change: auto;
-}
-/* Filtered, moving text over video can retain stale WebKit tiles. Keep word
-   timing, gradients and motion, using opacity for inactive lines on macOS. */
-.application.macos .lyric-line {
-  filter: none;
-  transition: opacity 0.4s cubic-bezier(0.61, 1, 0.88, 1);
 }
 .application.macos .lyrics-display {
   caret-color: transparent;
@@ -3100,9 +3067,19 @@ small {
    whose 20% soft edge sweeps across as it is sung. LyricAnimator sets the
    edge and a white glow while a line is sung or settling; other text rests
    fully unsung or fully sung. */
-.lyric-syllable:not(.emphasis),
-.lyric-letter {
+.lyric-line.active :is(.lyric-syllable:not(.emphasis), .lyric-letter) {
   text-shadow: var(--glow, none);
+}
+/* Lines away from the active one blur as the fork's do: a soft halo of
+   their own colour around sharp glyphs, widening with distance. */
+.lyric-line:not(.active) :is(.lyric-syllable:not(.emphasis), .lyric-letter) {
+  text-shadow: 0 0 var(--blur)
+    rgb(var(--lyric-rgb, 255 255 255) / var(--unsung-alpha));
+}
+.lyric-line.past:not(.active)
+  :is(.lyric-syllable:not(.emphasis), .lyric-letter) {
+  text-shadow: 0 0 var(--blur)
+    rgb(var(--lyric-rgb, 255 255 255) / var(--sung-alpha));
 }
 /* Italics and display fonts can paint beyond their advance width. Keep that
    ink inside the gradient without widening syllables or changing line wraps.
@@ -3146,10 +3123,7 @@ small {
 }
 .lyric-letter {
   display: inline-block;
-  transform-origin: center 75%;
-}
-.lyric-line.active .lyric-letter {
-  translate: 0 0.02em;
+  transform-origin: center;
 }
 .lyric-translation,
 .lyric-romanization {

@@ -12661,14 +12661,18 @@ test("a line keeps its size as it becomes the active line", async ({
   }, track.uri);
   await at(3500);
   const second = page.locator(".lyrics-page .lyric-line").nth(1);
-  // The last word, sung last, is unsung both before and after.
+  // The last word, sung last, is unsung both before and after. Its drawn
+  // size counts the line's own shrink too.
   const busy = () =>
     second
       .locator(".lyric-syllable")
       .last()
       .evaluate((node) => {
-        const scale = getComputedStyle(node).scale;
-        return scale === "none" ? 1 : Number(scale);
+        const scale = (element: Element) => {
+          const value = getComputedStyle(element).scale;
+          return value === "none" ? 1 : Number(value);
+        };
+        return scale(node) * scale(node.closest(".lyric-main")!);
       });
   await expect(second).not.toHaveClass(/active/);
   const before = await busy();
@@ -12760,4 +12764,91 @@ test("split words keep their size as their line finishes", async ({ page }) => {
   after.forEach((height, index) =>
     expect(Math.abs(height - sung[index])).toBeLessThan(0.05),
   );
+});
+
+const emitHeldLyrics = (page: Page) =>
+  page.evaluate((uri) => {
+    const word = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+    });
+    const base = {
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+    };
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            ...base,
+            text: "Run from Dracula",
+            start_ms: 1000,
+            end_ms: 3600,
+            words: [
+              word("Run ", 1000, 1200),
+              word("from ", 1200, 1300),
+              word("Dra", 1300, 1600),
+              word("cu", 1600, 1900),
+              word("la", 1900, 3600),
+            ],
+          },
+          {
+            ...base,
+            text: "next line",
+            start_ms: 3700,
+            end_ms: 6000,
+            words: [word("next ", 3700, 4500), word("line", 4500, 6000)],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+
+test("lines not reached yet keep normal spacing between words", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await emitHeldLyrics(page);
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  const line = page
+    .locator(".lyrics-page .lyric-line")
+    .filter({ hasText: "Dracula" })
+    .first();
+  const gap = () =>
+    line.locator(".lyric-syllable").evaluateAll((pieces) => {
+      const [run, from] = pieces.map((piece) => piece.getBoundingClientRect());
+      return { gap: from.left - run.right, height: run.height };
+    });
+  await at(0);
+  await expect(line).toHaveClass(/upcoming/);
+  await page.waitForTimeout(200);
+  const upcoming = await gap();
+  await at(5000);
+  await expect(line).toHaveClass(/past/);
+  await page.waitForTimeout(2500);
+  const past = await gap();
+  // The whole line shrinks, so the gap shrinks with the words instead of
+  // widening as each word shrinks toward its own centre.
+  expect(upcoming.height / past.height).toBeCloseTo(0.95, 2);
+  expect(Math.abs(upcoming.gap - past.gap * 0.95)).toBeLessThan(0.75);
 });

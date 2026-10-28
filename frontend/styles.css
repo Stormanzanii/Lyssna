@@ -2918,12 +2918,28 @@ small {
    take over while a line plays. Keyed to lines not yet finished, not to the
    active class: Early scroll marks a line active before it starts.
    Default's idle scale is 0.95; other presets rest at 1. A held word rests
-   as a whole like any other word; its letters rest level inside it. */
+   as a whole like any other word; its letters rest level inside it.
+   Lines not reached yet shrink as a whole instead, from their aligned edge,
+   so their words keep normal spacing; each word only shrinks on its own
+   once its line is active and about to be sung. */
 :root[data-animator="Default"]
   .lyrics-display:not(.reduce-motion)
-  .lyric-line:not(.past)
+  .lyric-line.active:not(.past)
   .lyric-syllable {
   scale: 0.95;
+}
+:root[data-animator="Default"]
+  .lyrics-display:not(.reduce-motion)
+  .lyric-line.upcoming
+  > .lyric-main {
+  scale: 0.95;
+  transform-origin: left 75%;
+}
+:root[data-animator="Default"]
+  .lyrics-display:not(.reduce-motion)
+  .lyric-line.opposite.upcoming
+  > .lyric-main {
+  transform-origin: right 75%;
 }
 .lyrics-display:not(.reduce-motion) .lyric-line:not(.past) .lyric-syllable {
   translate: 0 0.01em;

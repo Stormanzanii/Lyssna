@@ -840,6 +840,7 @@ export function LyricsDisplay({
                 action={lineActions[index]}
                 playing={playing}
                 past={!playing && positionMs >= vocalEnd(line)}
+                upcoming={!playing && scrollTime < line.start_ms}
                 blur={compact || playing ? 0 : lineBlur(distance)}
                 synced={lyrics.synced}
                 highlighter={highlighter}
@@ -1076,6 +1077,7 @@ const LyricRow = memo(function LyricRow({
   action,
   playing,
   past,
+  upcoming,
   blur,
   synced,
   highlighter,
@@ -1089,6 +1091,8 @@ const LyricRow = memo(function LyricRow({
   };
   playing: boolean;
   past: boolean;
+  /** Not reached yet; rests shrunk as a whole. */
+  upcoming: boolean;
   blur: number;
   synced: boolean;
   highlighter: boolean;
@@ -1098,7 +1102,7 @@ const LyricRow = memo(function LyricRow({
   return (
     <button
       ref={action.ref}
-      className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${past ? "past" : ""}`}
+      className={`lyric-line ${playing ? "active" : ""} ${line.background ? "background-vocal" : ""} ${line.opposite ? "opposite" : ""} ${past ? "past" : ""} ${upcoming ? "upcoming" : ""}`}
       style={{ "--blur": `${blur}px` } as CSSProperties}
       onClick={action.click}
       disabled={!synced}

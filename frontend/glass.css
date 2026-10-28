@@ -227,6 +227,24 @@
 .liquid-glass .search-box:focus-within::before {
   background: #ffffff1f;
 }
+/* Home and the profile ring are glass like the search box beside them,
+   not the solid grey of the plain theme. */
+.liquid-glass .home-button {
+  background: #ffffff14;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 1px 0 #ffffff1f inset;
+}
+.liquid-glass .home-button:hover {
+  background: #ffffff1f;
+}
+.liquid-glass .avatar {
+  border-color: #ffffff14;
+  background-clip: padding-box;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 1px 0 #ffffff1f inset;
+}
 .liquid-glass .playlist-flyout-search {
   background: #ffffff14;
   box-shadow: 0 1px 0 #ffffff1f inset;

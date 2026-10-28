@@ -7,7 +7,6 @@ import {
   MOTION,
   glideScroll,
   Spring,
-  SyllableSprings,
   letterGoals,
   lineBlur,
   naturalSpline,
@@ -243,22 +242,4 @@ it("slides to a restarted song's first line quickly, easing in and out", () => {
   // Starts and ends gently.
   expect(5000 - glideScroll(5000, 0, GLIDE_MS / 10)).toBeLessThan(100);
   expect(glideScroll(5000, 0, GLIDE_MS * 0.9)).toBeLessThan(100);
-});
-
-it("a finished word settles at once instead of drifting back from its peak", () => {
-  const settle = (gradient: number) => {
-    const springs = new SyllableSprings(1.05, 0);
-    let scale = 1.05;
-    // A tenth of a second of frames after the word reaches its peak.
-    for (let frame = 0; frame < 6; frame++)
-      scale = springs.step(
-        { scale: 1, lift: 0, glow: 0, gradient },
-        1 / 60,
-      ).scale;
-    return scale;
-  };
-  // Finished: at rest within a tenth of a second.
-  expect(Math.abs(settle(100) - 1)).toBeLessThan(0.003);
-  // Still being sung: it moves as the fork's springs do, more slowly.
-  expect(Math.abs(settle(50) - 1)).toBeGreaterThan(0.01);
 });

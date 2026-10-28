@@ -328,8 +328,10 @@ export const MOTION = {
     [0.9, -1 / 60],
     [1, 0],
   ]),
+  // Letters rest level inside their held word, which carries the rest
+  // height and idle scale for the whole word like any other.
   letterLift: naturalSpline([
-    [0, 1 / 100],
+    [0, 0],
     [0.9, -1 / 56],
     [1, 0],
   ]),
@@ -372,7 +374,7 @@ export function tuneMotion(settings: AnimatorSettings = {}) {
     [1, 1],
   ]);
   MOTION.letterScale = naturalSpline([
-    [0, idle],
+    [0, 1],
     [0.7, tuning.letterPeakScale],
     [1, 1],
   ]);

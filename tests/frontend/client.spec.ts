@@ -2290,12 +2290,14 @@ test("timed syllables lift independently and font choices apply separately", asy
     });
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
     letter = page.locator(".lyrics-page .lyric-letter").first();
-  // "Hel" is rising; the held "lo" moves by letter and rests low at the
-  // unsung scale, where it waited before the line played.
+  // "Hel" is rising; the held "lo" rests as a whole word does, its letters
+  // level and full size inside it, so it matches the word beside it.
   await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
-  await expect.poll(async () => (await motion(letter)).lift).toBeGreaterThan(0);
   await expect
-    .poll(async () => Math.abs((await motion(letter)).scale - 0.95))
+    .poll(async () => Math.abs((await motion(letter)).lift))
+    .toBeLessThan(0.001);
+  await expect
+    .poll(async () => Math.abs((await motion(letter)).scale - 1))
     .toBeLessThan(0.005);
   await page.evaluate(
     (uri) =>
@@ -3697,10 +3699,24 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     .evaluateAll((elements) =>
       elements.map((element) => element.getBoundingClientRect().toJSON()),
     );
+  // Each piece rests small about its own joint, so joints open a pixel at
+  // most, and every piece rests at the same size and baseline.
   for (let index = 1; index < boxes.length; index++)
     expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
-      0.5,
+      1.5,
     );
+  const glyphs = await pieces
+    .locator(".lyric-syllable")
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        return [box.height, box.bottom];
+      }),
+    );
+  for (const [height, bottom] of glyphs) {
+    expect(Math.abs(height - glyphs[0][0])).toBeLessThan(0.05);
+    expect(Math.abs(bottom - glyphs[0][1])).toBeLessThan(0.05);
+  }
   // Lines not yet reached rest at the size the animator holds unsung words
   // at. A split first word turns on its joint, as it does once the line
   // plays, so it sits a few pixels in from the margin both before and after.
@@ -3736,7 +3752,7 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     );
   for (let index = 1; index < sung.length; index++)
     expect(Math.abs(sung[index].left - sung[index - 1].right)).toBeLessThan(
-      0.5,
+      1.5,
     );
 });
 

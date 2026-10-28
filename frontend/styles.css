@@ -2917,18 +2917,16 @@ small {
    words at, so a line never shrinks as it starts; the animator's own values
    take over while a line plays. Keyed to lines not yet finished, not to the
    active class: Early scroll marks a line active before it starts.
-   Default's idle scale is 0.95; other presets rest at 1. */
+   Default's idle scale is 0.95; other presets rest at 1. A held word rests
+   as a whole like any other word; its letters rest level inside it. */
 :root[data-animator="Default"]
   .lyrics-display:not(.reduce-motion)
   .lyric-line:not(.past)
-  :is(.lyric-syllable, .lyric-letter) {
+  .lyric-syllable {
   scale: 0.95;
 }
 .lyrics-display:not(.reduce-motion) .lyric-line:not(.past) .lyric-syllable {
   translate: 0 0.01em;
-}
-.lyrics-display:not(.reduce-motion) .lyric-line:not(.past) .lyric-letter {
-  translate: 0 0.02em;
 }
 .lyric-syllable.emphasis {
   display: inline-flex;
@@ -2939,9 +2937,18 @@ small {
 .lyric-syllable.joined-end {
   transform-origin: left 75%;
 }
+/* A split word's middle pieces stay still so no seam opens beside a
+   popping neighbour, but at the size unsung pieces rest at, so every piece
+   of the word matches until the line is sung. */
 .lyric-syllable.joined-middle,
 .lyric-syllable.joined-middle .lyric-letter {
   scale: none !important;
+}
+:root[data-animator="Default"]
+  .lyrics-display:not(.reduce-motion)
+  .lyric-line:not(.past)
+  .lyric-syllable.joined-middle {
+  scale: 0.95 !important;
 }
 /* Custom animator preset, as the pixels-spicy-lyrics fork: split
    syllables keep full size while more of the line follows, so no gaps open;
@@ -3142,9 +3149,6 @@ small {
 .lyric-letter {
   display: inline-block;
   transform-origin: center 75%;
-}
-.lyric-line.active .lyric-letter {
-  translate: 0 0.02em;
 }
 .lyric-translation,
 .lyric-romanization {

@@ -32,7 +32,7 @@ const STYLES = [
 const piece = (element: HTMLElement, letter = false): Piece => ({
   element,
   springs: letter
-    ? new SyllableSprings(MOTION.letterScale(0), MOTION.letterLift(0) * 2)
+    ? new SyllableSprings(MOTION.letterScale(0), MOTION.letterLift(0))
     : new SyllableSprings(),
   written: new Map(),
 });

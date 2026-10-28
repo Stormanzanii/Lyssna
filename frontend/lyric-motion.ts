@@ -492,10 +492,12 @@ export class SyllableSprings {
   scale: Spring;
   lift: Spring;
   glow: Spring;
-  constructor() {
+  /** Springs start where unsung text rests, so a line becoming active does
+   *  not visibly shrink from full size. */
+  constructor(restScale = MOTION.scale(0), restLift = MOTION.lift(0)) {
     const { scale, lift, glow } = MOTION.springs;
-    this.scale = new Spring(1, scale[0], scale[1]);
-    this.lift = new Spring(0, lift[0], lift[1]);
+    this.scale = new Spring(restScale, scale[0], scale[1]);
+    this.lift = new Spring(restLift, lift[0], lift[1]);
     this.glow = new Spring(0, glow[0], glow[1]);
   }
   step(goal: SyllableGoal, seconds: number) {

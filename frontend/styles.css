@@ -2906,6 +2906,28 @@ small {
 .lyric-line.active .lyric-syllable {
   translate: 0 0.01em;
 }
+/* Lines not reached yet rest as unsung text does on the active line, as the
+   fork builds every word at its idle scale; otherwise a line shrank as it
+   became active. Default's idle scale is 0.95; other presets rest at 1. A
+   line that opens with a split word keeps that first piece full size: it
+   scales from its joint, so resting small would pull it off the margin. */
+:root[data-animator="Default"]
+  .lyrics-display:not(.reduce-motion)
+  .lyric-line:not(.active, .past)
+  :is(.lyric-syllable, .lyric-letter):not(
+    .lyric-main > .lyric-word-group:first-child .lyric-syllable.joined-start,
+    .lyric-main
+      > .lyric-word-group:first-child
+      .lyric-syllable.joined-start
+      .lyric-letter
+  ) {
+  scale: 0.95;
+}
+.lyrics-display:not(.reduce-motion)
+  .lyric-line:not(.active, .past)
+  .lyric-syllable {
+  translate: 0 0.01em;
+}
 .lyric-syllable.emphasis {
   display: inline-flex;
 }

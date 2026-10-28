@@ -2286,11 +2286,11 @@ test("timed syllables lift independently and font choices apply separately", asy
     });
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
     letter = page.locator(".lyrics-page .lyric-letter").first();
-  // "Hel" is rising; the held "lo" moves by letter and eases down to rest
-  // low at full size, so its spacing stays even.
+  // "Hel" is rising; the held "lo" moves by letter and rests low at the
+  // unsung scale, as the fork builds letters, so its spacing stays even.
   await expect.poll(async () => (await motion(syllable)).lift).toBeLessThan(0);
   await expect.poll(async () => (await motion(letter)).lift).toBeGreaterThan(0);
-  expect((await motion(letter)).scale).toBeCloseTo(1, 2);
+  expect((await motion(letter)).scale).toBeCloseTo(0.95, 2);
   await page.evaluate(
     (uri) =>
       (window as any).__clientTest.emit({
@@ -3695,7 +3695,8 @@ test("unsung split words keep their syllables together", async ({ page }) => {
     expect(Math.abs(boxes[index].left - boxes[index - 1].right)).toBeLessThan(
       0.5,
     );
-  // Lines not yet reached rest at full size, so they share the left margin.
+  // Lines not yet reached keep a split first word's first piece at full
+  // size, so they share the left margin.
   const lefts = await page
     .locator(".lyrics-page .lyric-line .lyric-main")
     .evaluateAll((elements) =>
@@ -12430,4 +12431,69 @@ test("the discography page lists each release with its songs", async ({
       command: "play_home",
       context: "spotify:album:bbbbbbbbbbbbbbbbbbbbbb",
     });
+});
+
+test("a line keeps its size as it becomes the active line", async ({
+  page,
+}) => {
+  await startClient(page);
+  await showLyrics(page);
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  await page.evaluate((uri) => {
+    const line = (start: number, words: string[]) => ({
+      start_ms: start,
+      end_ms: start + 4000,
+      text: words.join(" "),
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: words.map((text, index) => ({
+        text: index ? ` ${text}` : text,
+        start_ms: start + index * 1000,
+        end_ms: start + index * 1000 + 900,
+      })),
+    });
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          line(0, ["I", "love,", "I", "love"]),
+          line(4000, ["I've", "been", "so", "busy"]),
+        ],
+      },
+    });
+  }, track.uri);
+  await at(3500);
+  const second = page.locator(".lyrics-page .lyric-line").nth(1);
+  // The last word, sung last, is unsung both before and after.
+  const busy = () =>
+    second
+      .locator(".lyric-syllable")
+      .last()
+      .evaluate((node) => {
+        const scale = getComputedStyle(node).scale;
+        return scale === "none" ? 1 : Number(scale);
+      });
+  await expect(second).not.toHaveClass(/active/);
+  const before = await busy();
+  await at(4100);
+  await expect(second).toHaveClass(/active/);
+  await page.waitForTimeout(300);
+  expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
 });

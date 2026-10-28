@@ -17,6 +17,7 @@ pub enum Launch {
 }
 
 /// The Run entry's command line for a choice, or `None` to remove it.
+#[cfg(any(windows, test))]
 fn command_line(exe: &str, launch: Launch) -> Option<String> {
     match launch {
         Launch::Off => None,
@@ -25,6 +26,7 @@ fn command_line(exe: &str, launch: Launch) -> Option<String> {
     }
 }
 
+#[cfg(any(windows, test))]
 fn parse(command: Option<&str>) -> Launch {
     match command {
         None => Launch::Off,

@@ -518,6 +518,7 @@ small {
 /* Reserve space for native traffic lights inside the 60 px toolbar. */
 .application.macos .topbar {
   padding-left: 104px;
+  padding-right: 16px;
 }
 /* Until sign-in completes there is nothing to browse or search, and no
    account; keep only the logo, the drag area and the window controls.
@@ -4832,23 +4833,29 @@ input[type="range"]:hover {
   .library-panel {
     width: var(--left-width, 230px);
   }
-  .now-playing,
-  .panel-resizer {
+  .application:not(.macos) .now-playing,
+  .application:not(.macos) .panel-resizer {
     display: none;
   }
   .search-group {
     width: 43%;
   }
-  .avatar {
-    display: none;
-  }
-  .player-extras > .icon-button:nth-child(2),
-  .player-extras > .icon-button:nth-child(4),
-  .player-extras > .icon-button:last-child {
+  .application:not(.macos) .player-extras > .icon-button:nth-child(2),
+  .application:not(.macos) .player-extras > .icon-button:nth-child(4),
+  .application:not(.macos) .player-extras > .icon-button:last-child {
     display: none;
   }
   .player-bar {
     grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.3fr) 160px;
+  }
+  .application.macos .player-bar {
+    grid-template-columns: minmax(150px, 1fr) minmax(250px, 1.3fr) minmax(
+        320px,
+        1fr
+      );
+  }
+  .application.macos .volume-range {
+    flex: 0 0 70px;
   }
 }
 /* Spotify-style Canvas: video bleeds to the panel edges behind the header,

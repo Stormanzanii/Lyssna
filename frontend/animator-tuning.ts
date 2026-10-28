@@ -286,9 +286,10 @@ export function animatorValues(
         ...(preset === "Custom" ? cleanAnimatorValues(settings.custom) : {}),
       };
 }
-/** Unsung text rests at 0.95 under Default, full size otherwise. */
-export const idleScale = (settings: AnimatorSettings = {}) =>
-  presetOf(settings) === "Default" ? 0.95 : 1;
+/** Unsung text rests at full size under every preset. Upstream's Default
+ *  rests it at 0.95, but words shrunk toward their own centres open wide
+ *  gaps between them that close again as they are sung. */
+export const idleScale = (_settings: AnimatorSettings = {}) => 1;
 
 /** Choosing Custom the first time copies the values playing now. */
 export function choosePreset(

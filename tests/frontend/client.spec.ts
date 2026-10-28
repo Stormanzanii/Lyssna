@@ -12812,9 +12812,7 @@ const emitHeldLyrics = (page: Page) =>
     });
   }, track.uri);
 
-test("lines not reached yet keep normal spacing between words", async ({
-  page,
-}) => {
+test("words keep their spacing from idle through sung", async ({ page }) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();
   await emitHeldLyrics(page);
@@ -12834,23 +12832,26 @@ test("lines not reached yet keep normal spacing between words", async ({
     .locator(".lyrics-page .lyric-line")
     .filter({ hasText: "Dracula" })
     .first();
+  // The gap between "from" and "Dra", both unsung until 1200ms.
   const gap = () =>
     line.locator(".lyric-syllable").evaluateAll((pieces) => {
-      const [run, from] = pieces.map((piece) => piece.getBoundingClientRect());
-      return { gap: from.left - run.right, height: run.height };
+      const [, from, dra] = pieces.map((piece) =>
+        piece.getBoundingClientRect(),
+      );
+      return dra.left - from.right;
     });
   await at(0);
-  await expect(line).toHaveClass(/upcoming/);
   await page.waitForTimeout(200);
-  const upcoming = await gap();
+  const idle = await gap();
+  // Early scroll makes the line active before it starts.
+  await at(900);
+  await expect(line).toHaveClass(/active/);
+  await page.waitForTimeout(300);
+  expect(Math.abs((await gap()) - idle)).toBeLessThan(0.75);
   await at(5000);
   await expect(line).toHaveClass(/past/);
   await page.waitForTimeout(2500);
-  const past = await gap();
-  // The whole line shrinks, so the gap shrinks with the words instead of
-  // widening as each word shrinks toward its own centre.
-  expect(upcoming.height / past.height).toBeCloseTo(0.95, 2);
-  expect(Math.abs(upcoming.gap - past.gap * 0.95)).toBeLessThan(0.75);
+  expect(Math.abs((await gap()) - idle)).toBeLessThan(0.75);
 });
 
 test("held letters glide back to rest once their word is sung", async ({

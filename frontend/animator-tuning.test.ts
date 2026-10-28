@@ -17,12 +17,11 @@ import {
 import { MOTION, tuneMotion } from "./lyric-motion";
 
 describe("animator presets", () => {
-  it("plays upstream values under Default and rests text at 0.95", () => {
+  it("plays upstream values under Default and rests text at full size", () => {
     expect(animatorValues({})).toEqual(ANIMATOR_DEFAULTS);
-    expect(idleScale({})).toBe(0.95);
+    // Unsung words keep the spacing sung ones have.
+    expect(idleScale({})).toBe(1);
     expect(idleScale({ preset: "Custom" })).toBe(1);
-    // The fork's Pixel preset is not offered; saved choices fall back.
-    expect(idleScale({ preset: "Pixel" as never })).toBe(0.95);
     // Default ignores Custom values.
     expect(
       animatorValues({ preset: "Default", custom: { wordPeakScale: 2 } })
@@ -93,7 +92,7 @@ describe("animator presets", () => {
   });
   it("tunes the motion curves", () => {
     tuneMotion({ preset: "Default" });
-    expect(MOTION.scale(0)).toBeCloseTo(0.95);
+    expect(MOTION.scale(0)).toBeCloseTo(1);
     expect(MOTION.scale(0.7)).toBeCloseTo(1.0505);
     tuneMotion(setValue({}, "wordPeakScale", 1.2));
     expect(MOTION.scale(0)).toBeCloseTo(1);

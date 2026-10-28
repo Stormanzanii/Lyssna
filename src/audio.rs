@@ -253,8 +253,22 @@ impl Sink for AudioSink {
             .map_err(|_| SinkError::OnWrite("Cannot decode audio samples".into()))?;
         let mut samples = converter.f64_to_f32(samples).to_vec();
         let fade_ms = self.buffer.crossfade_ms.load(Ordering::Relaxed);
-        if !narration
-            && fade_ms > 0
+        if narration {
+            // DJ speech never crossfades. A song's held end plays out whole
+            // first, so it finishes before DJ talks, and never returns later
+            // under the next song.
+            let mut held = std::mem::take(&mut self.crossfade.tail);
+            if !held.is_empty() {
+                self.crossfade.mix(&mut held);
+                self.append(held, false)?;
+            }
+            if !self.crossfade.fading.is_empty() {
+                let rest = self.crossfade.fading.split_off(self.crossfade.mixed);
+                self.crossfade.fading.clear();
+                self.crossfade.mixed = 0;
+                self.append(rest, false)?;
+            }
+        } else if fade_ms > 0
             && self
                 .crossfade
                 .remaining_ms
@@ -266,10 +280,15 @@ impl Sink for AudioSink {
                 let _ = self.seek_ready.send(());
             }
             return Ok(());
-        }
-        if !self.crossfade.fading.is_empty() {
+        } else if !self.crossfade.fading.is_empty() {
             self.crossfade.mix(&mut samples);
         }
+        self.append(samples, narration)
+    }
+}
+
+impl AudioSink {
+    fn append(&mut self, samples: Vec<f32>, narration: bool) -> SinkResult<()> {
         let sink = self
             .sink
             .as_ref()
@@ -556,6 +575,42 @@ mod tests {
         assert!((mixed[0] - 0.5).abs() < 1e-6);
         assert!(mixed[399] > 0.9 && mixed[399] < 1.12);
         assert!(mixed[400..].iter().all(|sample| *sample == 1.0));
+    }
+
+    #[test]
+    fn dj_speech_waits_for_the_songs_held_end_and_never_crossfades() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer);
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio.crossfade_hint(Some(900));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        // DJ signs off after the song: its end plays first, then the line.
+        audio
+            .write(AudioPacket::Narration(vec![0.25; 400]), &mut converter)
+            .unwrap();
+        assert!((0..400).all(|_| output.next() == Some(0.5)));
+        assert!((0..400).all(|_| output.next() == Some(0.25)));
+        // Nothing of the old song is left to return under the next one.
+        audio.set_track(&track(2));
+        assert!(audio.crossfade.fading.is_empty());
+
+        // A song held for a next track that DJ introduces ends before he talks.
+        audio.crossfade_hint(Some(900));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        audio.set_track(&track(3));
+        audio
+            .write(AudioPacket::Narration(vec![0.25; 400]), &mut converter)
+            .unwrap();
+        assert!((0..400).all(|_| output.next() == Some(0.5)));
+        assert!((0..400).all(|_| output.next() == Some(0.25)));
     }
 
     #[test]

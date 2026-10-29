@@ -19,6 +19,7 @@ desktop = ["dep:tauri", "dep:tauri-plugin-window-state", "dep:tauri-plugin-singl
 legacy-ui = ["dep:eframe", "dep:egui_extras", "dep:ttf-parser", "dep:tiny-skia"]
 
 [dependencies]
+log = "0.4"
 anyhow = "1"
 base64 = "0.22"
 directories = "6"

@@ -920,6 +920,9 @@ fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUr
     Some((librespot_core::SpotifyUri::from_uri(uri).ok()?, position))
 }
 
+/// How long a selection may take to start loading before Play gives up on it.
+const LOAD_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// Transport commands for the local player diagnostics log.
 fn command_kind(action: &PlayerAction) -> Option<&'static str> {
     Some(match action {
@@ -932,6 +935,9 @@ fn command_kind(action: &PlayerAction) -> Option<&'static str> {
         PlayerAction::Seek(_) => "seek",
         PlayerAction::PlayUris { .. } => "play-list",
         PlayerAction::PlayContext { .. } => "play-context",
+        PlayerAction::Resume { .. } => "resume",
+        PlayerAction::RestoreDJ { .. } => "restore-dj",
+        PlayerAction::PreparedDJ { .. } => "dj",
         _ => return None,
     })
 }
@@ -979,6 +985,38 @@ pub(crate) fn diagnostic(line: &str) {
         .open(path)
     {
         let _ = writeln!(file, "{when} {line}");
+    }
+}
+
+/// Sends librespot's warnings and errors to the diagnostics log, so a load
+/// Spotify Connect refused leaves a reason behind. Lines that mention a
+/// token are dropped whole.
+struct LibrespotLog;
+impl log::Log for LibrespotLog {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Warn && metadata.target().starts_with("librespot")
+    }
+    fn log(&self, record: &log::Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let message = record.args().to_string();
+        if message.to_lowercase().contains("token") {
+            return;
+        }
+        let message: String = message.chars().take(300).collect();
+        diagnostic(&format!(
+            "librespot {} {}: {message}",
+            record.level(),
+            record.target()
+        ));
+    }
+    fn flush(&self) {}
+}
+fn log_librespot() {
+    static LOG: LibrespotLog = LibrespotLog;
+    if log::set_logger(&LOG).is_ok() {
+        log::set_max_level(log::LevelFilter::Warn);
     }
 }
 
@@ -1859,6 +1897,7 @@ impl NativePlayer {
         repaint: crate::notify::Notifier,
         controls: NativeControls,
     ) -> Self {
+        log_librespot();
         Self::start_with_login(account, generation, events, repaint, controls, None)
     }
 
@@ -2237,6 +2276,8 @@ async fn run(
     ));
     let mut resume_prepared = false;
     let mut connection_lost = false;
+    // A load Spotify Connect never starts would leave Play doing nothing.
+    let mut load_due: Option<std::time::Instant> = None;
     loop {
         tokio::select! {
             prepared = &mut resume_preparation, if !resume_prepared => {
@@ -2282,7 +2323,7 @@ async fn run(
                     }
                     intent.request(matches!(action,PlayerAction::Play(None)));
                 }else{
-                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;intent.loading_track(selected_track(&action),std::time::Instant::now());}
+                if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;intent.loading_track(selected_track(&action),std::time::Instant::now());load_due=Some(std::time::Instant::now()+LOAD_TIMEOUT);}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
                 if apply_control(&spirc, action, &mut active, &mut pending_repeat).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
             }
@@ -2304,14 +2345,14 @@ async fn run(
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);
                     },
-                    Some(PlayerEvent::Loading{track_id,..})=>{unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
+                    Some(PlayerEvent::Loading{track_id,..})=>{load_due=None;unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;paused_position=None;loaded.store(false,Ordering::Release);},
                     Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;paused_position=None;intent.reset();emit(NativeEvent::Stopped);},
-                    Some(event @ PlayerEvent::TrackChanged { .. }) => {loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track_change(&event) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(event @ PlayerEvent::TrackChanged { .. }) => {load_due=None;loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track_change(&event) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
                         let uri = track_id.to_uri();
                         unavailable.playing(&uri);
@@ -2343,6 +2384,15 @@ async fn run(
             }
         }
         let now = std::time::Instant::now();
+        if load_due.is_some_and(|due| now >= due) {
+            load_due = None;
+            diagnostic("load never started");
+            loaded.store(false, Ordering::Release);
+            intent.reset();
+            emit(NativeEvent::ControlError(
+                "Spotify didn't start that. Press Play to try again.".into(),
+            ));
+        }
         let audible_narration = audio_buffer.narrating();
         if audible_narration != narrating {
             narrating = audible_narration;

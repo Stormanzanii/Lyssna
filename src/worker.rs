@@ -1745,6 +1745,7 @@ impl Backend {
                     let events = self.events.clone();
                     let context = self.context.clone();
                     let uri = track.uri;
+                    let native = self.scoped_native();
                     thread::spawn(move || {
                         let send = |overview: crate::artist::ArtistOverview| {
                             let _ = events.send(Event::ArtistStats {
@@ -1763,7 +1764,13 @@ impl Backend {
                         if let Some(saved) = crate::artist::saved(&artist_id) {
                             send(saved);
                         }
-                        if let Ok(overview) = crate::artist::fetch(&client, &artist_id) {
+                        // Spotify's own catalogue first, as the artist page does: the
+                        // public web page has no About photos for the card.
+                        if let Ok(overview) = native
+                            .catalogue("artist", &artist_id, 0)
+                            .and_then(|entity| crate::artist::from_entity(&entity, &artist_id))
+                            .or_else(|_| crate::artist::fetch(&client, &artist_id))
+                        {
                             send(overview);
                         }
                     });

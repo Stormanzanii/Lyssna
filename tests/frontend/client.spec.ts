@@ -4953,10 +4953,8 @@ test("Space Gravity marker links leave each word once it is inked, at the Highli
   await expect(links).toHaveCount(1);
   expect((await offsets())[0]).toBeGreaterThan(0.9);
   await at(150);
-  await expect
-    .poll(async () => (await offsets())[0])
-    .toBeGreaterThan(0.05);
-  expect((await offsets())[0]).toBeLessThan(0.95);
+  await expect.poll(async () => (await offsets())[0]).toBeLessThan(0.95);
+  expect((await offsets())[0]).toBeGreaterThan(0.05);
   await expect(links).toHaveCount(1);
   // It lands as "quick" ends, when the second link sets off, so the two
   // read as one line.
@@ -10170,6 +10168,29 @@ test("Space Gravity without Canvas floats around the artwork, not over it", asyn
     gap: innerHeight - node.getBoundingClientRect().bottom,
   }));
   expect(credits.size).toBeGreaterThanOrEqual(15);
+  // Credits keep their size and place when Space Gravity is turned off.
+  const look = (root: string) =>
+    page.locator(root).evaluate((node) => {
+      const text = (selector: string) => {
+        const element = node.querySelector(selector)!;
+        return {
+          size: parseFloat(getComputedStyle(element).fontSize),
+          left: Math.round(element.getBoundingClientRect().left),
+        };
+      };
+      return {
+        writers: text(".writer-credits"),
+        source: text(".lyric-source"),
+        lineHeight: getComputedStyle(node.querySelector(".writer-credits")!)
+          .lineHeight,
+      };
+    });
+  const floating = await look(".gravity-credits");
+  await openSettings(page, "Effects");
+  await page.getByLabel("Space Gravity", { exact: true }).uncheck();
+  await page.keyboard.press("Escape");
+  const still = await look(".lyric-end-credits");
+  expect(floating).toEqual(still);
 });
 
 test("Space Gravity keeps words in place when the same lyrics load again", async ({

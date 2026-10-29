@@ -903,6 +903,29 @@ export function SpaceGravityLyrics({
     animator.current = instance;
     return () => instance.dispose();
   }, [lyrics, reduceMotion, tuningKey]);
+  // The credits line up with the lyrics column, where the normal view's
+  // end credits sit, so they stay put when Space Gravity turns on or off.
+  const credited = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const footer = credited.current;
+    const column = footer
+      ?.closest(".lyrics-page")
+      ?.querySelector(".lyrics-body");
+    if (!footer || !column) return;
+    const place = () => {
+      const parent = footer.offsetParent?.getBoundingClientRect();
+      if (!parent) return;
+      const box = column.getBoundingClientRect();
+      footer.style.left = `${box.left - parent.left}px`;
+      footer.style.right = "auto";
+      footer.style.width = `${box.width}px`;
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(column);
+    if (footer.offsetParent) observer.observe(footer.offsetParent);
+    return () => observer.disconnect();
+  }, []);
   const lastTime = useRef(time);
   useLayoutEffect(() => {
     // A seek jumps song time; snap instead of springing through it.
@@ -989,7 +1012,9 @@ export function SpaceGravityLyrics({
           />
         )}
       </div>
-      <div className="gravity-credits">{credits}</div>
+      <div className="gravity-credits" ref={credited}>
+        {credits}
+      </div>
     </div>
   );
 }

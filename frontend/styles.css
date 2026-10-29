@@ -5215,30 +5215,39 @@ input[type="range"]:hover {
   will-change: transform;
   pointer-events: none;
 }
-/* Sized and placed like the pinned footer beside normal lyrics. */
+/* Sized and placed exactly like the end credits beside normal lyrics:
+   the script lines the box up with the lyrics column, and the padding
+   matches that column's text inset. */
 .gravity-credits {
   position: absolute;
   right: 5%;
   bottom: clamp(32px, 4.5vh, 64px);
   z-index: 3;
   width: 42%;
+  box-sizing: border-box;
+  padding-inline: calc(var(--lyric-size, 58px) * 0.35 + 2px);
   max-height: 160px;
   overflow: auto;
-  color: #fff9;
+  color: #ffffff8c;
   font-size: clamp(
     15px,
-    calc(min(var(--lyric-size, 58px), 4.6cqw) * 0.3),
-    24px
+    calc(min(var(--lyric-size, 58px), 4.6cqw) * 0.34),
+    26px
   );
-  line-height: 1.5;
+  line-height: 1.35;
 }
 .gravity-credits p {
-  margin: 0 0 4px;
+  margin: 0;
+}
+.gravity-credits .writer-credits {
+  margin-bottom: 0.2em;
 }
 .gravity-credits .lyric-source {
   position: static;
   padding: 0;
-  font-size: 0.88em;
+  font-size: 1em;
+  font-weight: 600;
+  color: inherit;
 }
 
 /* Dims the app while a creator profile sheet is open above it. */

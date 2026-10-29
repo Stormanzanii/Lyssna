@@ -2316,7 +2316,9 @@ function JamCard({
         <div className="jam-invite">
           <div className="jam-invite-head">
             <div>
-              <strong>Invite friends to your Jam</strong>
+              <strong>
+                Invite friends to {jam.is_owner ? "your" : "this"} Jam
+              </strong>
               <p>
                 Copy and share the link with your friends, or ask them to scan
                 the QR code.
@@ -2366,6 +2368,7 @@ export function QueuePanel({
   jam,
   jamInvite = false,
   onJamInvite,
+  onJamJoin,
   onJamCopy,
   onJamEnd,
   onJamControl,
@@ -2376,6 +2379,7 @@ export function QueuePanel({
   jam?: Jam | null;
   jamInvite?: boolean;
   onJamInvite?: (open: boolean) => void;
+  onJamJoin?: () => void;
   onJamCopy?: () => void;
   onJamEnd?: () => void;
   onJamControl?: (allowed: boolean) => void;
@@ -2536,9 +2540,24 @@ export function QueuePanel({
       <div className="now-playing-scroll" ref={scroller}>
         <div className="section-heading">
           <h2>Queue</h2>
-          <button className="icon-button" onClick={onClose} title="Close queue">
-            <X size={18} />
-          </button>
+          <div className="queue-header-actions">
+            {!jam && onJamJoin && (
+              <button
+                className="text-link muted"
+                onClick={onJamJoin}
+                title="Join a Jam from a link you copied"
+              >
+                Join a Jam
+              </button>
+            )}
+            <button
+              className="icon-button"
+              onClick={onClose}
+              title="Close queue"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
         {jam && (
           <JamCard

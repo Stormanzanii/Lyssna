@@ -231,6 +231,123 @@ pub async fn start(session: &Session) -> Result<Jam> {
     Ok(with_short_link(session, jam).await)
 }
 
+/// The join token in a Jam link from Spotify or SpotiFlex:
+/// `open.spotify.com/socialsession/…` or `spotify:socialsession:…`. Short
+/// `spotify.link` links are resolved with [`resolve_short_link`] first.
+pub fn link_token(text: &str) -> Option<String> {
+    let text = text.trim();
+    let rest = text.strip_prefix("spotify:socialsession:").or_else(|| {
+        let url = text
+            .strip_prefix("https://")
+            .or_else(|| text.strip_prefix("http://"))
+            .unwrap_or(text);
+        let path = url.strip_prefix("open.spotify.com/")?;
+        // Localised links carry a language segment first.
+        let path = match path.split_once('/') {
+            Some((locale, rest)) if locale.starts_with("intl-") => rest,
+            _ => path,
+        };
+        path.strip_prefix("socialsession/")
+    })?;
+    let token = rest.split(['?', '#', '/']).next().unwrap_or_default();
+    self::token(token).map(str::to_owned)
+}
+
+/// The `spotify.link` code in a short Jam link, if it is one.
+pub fn short_link_code(text: &str) -> Option<&str> {
+    let text = text.trim();
+    let url = text
+        .strip_prefix("https://")
+        .or_else(|| text.strip_prefix("http://"))
+        .unwrap_or(text);
+    let code = url
+        .strip_prefix("spotify.link/")?
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default();
+    (!code.is_empty() && code.len() <= 64 && code.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+        .then_some(code)
+}
+
+/// Follow a `spotify.link` short link to the Jam it opens. The page names
+/// the long `socialsession` link; redirects stay on Spotify's link hosts.
+pub fn resolve_short_link(code: &str) -> Result<String> {
+    use std::io::Read;
+    ensure!(
+        !code.is_empty()
+            && code.len() <= 64
+            && code.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid Jam link"
+    );
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            let allowed = attempt.url().scheme() == "https"
+                && matches!(
+                    attempt.url().host_str(),
+                    Some("spotify.link" | "spotify.app.link")
+                );
+            if allowed && attempt.previous().len() < 5 {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        }))
+        .build()?;
+    let response = client
+        .get(format!("https://spotify.link/{code}"))
+        .header(
+            header::USER_AGENT,
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        )
+        .send()?;
+    let mut page = String::new();
+    response.take(1_000_000).read_to_string(&mut page)?;
+    page.split("socialsession/")
+        .skip(1)
+        .find_map(|rest| {
+            let end = rest
+                .find(|character: char| {
+                    !(character.is_ascii_alphanumeric() || "-_".contains(character))
+                })
+                .unwrap_or(rest.len());
+            token(&rest[..end]).map(str::to_owned)
+        })
+        .context("That link isn't a Jam")
+}
+
+/// Join someone's Jam, listening along on this computer as Spotify's app does
+/// with a shared link.
+pub async fn join(session: &Session, join_token: &str) -> Result<Jam> {
+    let join_token = token(join_token).context("Invalid Jam link")?;
+    let device = token(session.device_id()).context("Invalid device ID")?;
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| anyhow::anyhow!("Cannot create join ID"))?;
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    let attempt = format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    );
+    let jam = call(
+        session,
+        Method::POST,
+        &format!(
+            "/v2/sessions/join/{join_token}?playback_control=listen_and_control&join_type=deeplinking&join_attempt_id={attempt}&local_device_id={device}"
+        ),
+    )
+    .await?
+    .as_ref()
+    .and_then(parse)
+    .context("That Jam has ended")?;
+    Ok(with_short_link(session, jam).await)
+}
+
 pub async fn end(session: &Session, id: &str) -> Result<()> {
     let id = token(id).context("Invalid Jam")?;
     call(session, Method::DELETE, &format!("/v3/sessions/{id}")).await?;
@@ -306,6 +423,39 @@ mod tests {
         ] {
             assert_eq!(short_link(&json!({"shareable_url": bad})), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn jam_links_from_spotify_and_spotiflex_give_their_token() {
+        for link in [
+            "https://open.spotify.com/socialsession/0AMT6YW2zwhkPgQz7iBlJ2",
+            "https://open.spotify.com/socialsession/0AMT6YW2zwhkPgQz7iBlJ2?si=abc&utm_source=share",
+            "open.spotify.com/intl-de/socialsession/0AMT6YW2zwhkPgQz7iBlJ2",
+            " spotify:socialsession:0AMT6YW2zwhkPgQz7iBlJ2 ",
+        ] {
+            assert_eq!(
+                link_token(link).as_deref(),
+                Some("0AMT6YW2zwhkPgQz7iBlJ2"),
+                "{link}"
+            );
+        }
+        for link in [
+            "https://open.spotify.com/track/0AMT6YW2zwhkPgQz7iBlJ2",
+            "https://evil.example/socialsession/0AMT6YW2zwhkPgQz7iBlJ2",
+            "https://spotify.link/IdREaHOTC7b",
+        ] {
+            assert_eq!(link_token(link), None, "{link}");
+        }
+        assert_eq!(
+            short_link_code("https://spotify.link/IdREaHOTC7b"),
+            Some("IdREaHOTC7b")
+        );
+        assert_eq!(
+            short_link_code("spotify.link/IdREaHOTC7b?x=1"),
+            Some("IdREaHOTC7b")
+        );
+        assert_eq!(short_link_code("https://spotify.link/a/b"), None);
+        assert_eq!(short_link_code("https://evil.example/IdREaHOTC7b"), None);
     }
 
     #[test]

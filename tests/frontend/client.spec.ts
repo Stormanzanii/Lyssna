@@ -613,7 +613,22 @@ async function startClient(
           if (command === "jam") {
             const test = host.__clientTest;
             if (args.action === "start") test.jam = test.jamToStart;
-            if (args.action === "end") test.jam = null;
+            if (args.action === "join")
+              test.jam = {
+                ...test.jamToStart,
+                is_owner: false,
+                owner_id: "friend",
+                members: [
+                  {
+                    id: "friend",
+                    username: "friend",
+                    display_name: "Friend",
+                    image_url: null,
+                  },
+                ],
+              };
+            if (args.action === "end" || args.action === "leave")
+              test.jam = null;
             if (args.action === "control" && test.jam)
               test.jam = { ...test.jam, queue_only: !args.allowed };
             return test.jam ?? null;
@@ -9788,7 +9803,42 @@ test("Start a Jam from a song copies the invite and shows the Jam above the queu
   ).not.toBeChecked();
   await jam.getByRole("button", { name: "Close invite" }).click();
   await expect(jam).not.toContainText("Invite friends to your Jam");
+  // While a Jam runs, the song menu invites to it instead.
+  await page
+    .locator(".queue-panel .queue-row")
+    .first()
+    .click({ button: "right", force: true });
+  await expect(menu.getByRole("menuitem", { name: "Start a Jam" })).toHaveCount(
+    0,
+  );
+  await menu.getByRole("menuitem", { name: "Invite to Jam" }).click();
+  await expect(jam).toContainText("Invite friends to your Jam");
   await jam.getByRole("button", { name: "End" }).click();
+  await expect(jam).toHaveCount(0);
+  // Pasting a Jam link from Spotify joins it.
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "https://spotify.link/IdREaHOTC7b");
+    document.body.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true }),
+    );
+  });
+  await expect(jam.getByRole("heading")).toHaveText("Friend’s Jam");
+  await expect(jam.getByRole("button", { name: "Leave" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "jam")
+            .at(-1)?.args,
+      ),
+    )
+    .toMatchObject({
+      action: "join",
+      link: "https://spotify.link/IdREaHOTC7b",
+    });
+  await jam.getByRole("button", { name: "Leave" }).click();
   await expect(jam).toHaveCount(0);
   await page
     .locator(".queue-panel .queue-row")

@@ -6602,3 +6602,12 @@ button.discography-track:hover {
 .jam-control:hover {
   color: #fff;
 }
+.queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.queue-header-actions .text-link {
+  font-size: 13px;
+  font-weight: 700;
+}

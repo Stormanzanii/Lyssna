@@ -67,6 +67,7 @@ import {
   Users,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import { isJamLink } from "./jam-link";
 import { listen } from "@tauri-apps/api/event";
 import type { CinemaRequest } from "./cinema";
 import { startIdleTrim } from "./memory-trim";
@@ -346,6 +347,37 @@ function App() {
   // The Spotify Jam this computer is in, shown above the queue.
   const [jam, setJam] = useState<Jam | null>(null);
   const [jamInvite, setJamInvite] = useState(false);
+  // Join a Jam from a link made by Spotify or SpotiFlex.
+  const joinJam = (link: string) =>
+    rpc<Jam>("jam", { action: "join", link: link.trim() })
+      .then((joined) => {
+        setJam(joined);
+        setJamInvite(false);
+        setPanel("queue");
+        setSidebar(true);
+        const host = joined.members.find(
+          (member) => member.id === joined.owner_id,
+        );
+        notify(
+          host
+            ? `You joined ${host.display_name || host.username}'s Jam.`
+            : "You joined the Jam.",
+        );
+      })
+      .catch((error) => notify(String(error), true));
+  const joinJamRef = useRef(joinJam);
+  joinJamRef.current = joinJam;
+  // Pasting a Jam link anywhere joins it.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData("text") ?? "";
+      if (!isJamLink(text)) return;
+      event.preventDefault();
+      void joinJamRef.current(text);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
   // Find a Jam already running after sign-in, then follow guests joining and
   // leaving while one is on.
   const jamOn = !!jam;
@@ -4190,6 +4222,18 @@ function App() {
                 jam={jam}
                 jamInvite={jamInvite}
                 onJamInvite={setJamInvite}
+                onJamJoin={() =>
+                  rpc<string>("read_clipboard")
+                    .catch(() => "")
+                    .then((text) =>
+                      isJamLink(text)
+                        ? joinJam(text)
+                        : notify(
+                            "Copy a Jam link from Spotify or SpotiFlex, then press Join a Jam.",
+                            true,
+                          ),
+                    )
+                }
                 onJamCopy={() =>
                   jam && copyText(jam.invite_url, "Jam link copied.")
                 }
@@ -4392,7 +4436,18 @@ function App() {
                 },
               ],
               ...(jam
-                ? []
+                ? [
+                    [
+                      "Invite to Jam",
+                      Users,
+                      () => {
+                        setJamInvite(true);
+                        setPanel("queue");
+                        setSidebar(true);
+                        copyText(jam.invite_url, "Jam link copied.");
+                      },
+                    ],
+                  ]
                 : [
                     [
                       "Start a Jam",

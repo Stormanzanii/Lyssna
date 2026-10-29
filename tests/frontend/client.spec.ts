@@ -13552,3 +13552,46 @@ test("an artist's About sent ahead fills the card as the song starts", async ({
     page.locator(".now-playing .artist-card .artist-portrait img"),
   ).toHaveAttribute("src", gallery);
 });
+
+test("the artist card's verified badge never gets cut off", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      host.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: {
+          artists: [
+            {
+              ...track.artists[0],
+              name: "John Michael Howell And A Much Longer Name",
+              verified: true,
+              monthly_listeners: 5_983_396,
+              about_loaded: true,
+            },
+          ],
+          queue: [],
+          queued: 0,
+        },
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  const name = page.locator(".now-playing .artist-card-name");
+  const badge = name.locator(".verified-badge");
+  await expect(badge).toBeVisible();
+  const box = (await name.boundingBox())!;
+  const tick = (await badge.boundingBox())!;
+  expect(tick.width).toBeGreaterThan(18);
+  expect(tick.x + tick.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+});

@@ -2229,7 +2229,9 @@ export function NowPlaying({
                             className="text-link artist-card-name"
                             onClick={() => onArtist(artist)}
                           >
-                            {artist.name}
+                            <span className="artist-card-name-text">
+                              {artist.name}
+                            </span>
                             {artist.verified && (
                               <VerifiedBadge label="Verified artist" />
                             )}

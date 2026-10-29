@@ -2328,9 +2328,13 @@ small {
   line-height: 1.3;
   color: #fff;
   max-width: 100%;
+  white-space: nowrap;
+}
+/* Only the name shortens; the badge after it always shows whole. */
+.artist-card-name-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .artist-card-name {
   display: inline-flex;

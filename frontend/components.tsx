@@ -2201,65 +2201,76 @@ export function NowPlaying({
             )}
             {artist && (
               <article className="now-card artist-card">
-                {!artist.about_loaded ||
-                artist.gallery_image ||
-                imageOf(artist.images) ? (
-                  <button
-                    className="artist-portrait"
-                    onClick={() => onArtist(artist)}
-                  >
-                    {/* Spotify's card shows the About section's photo; until
-                        it is known, nothing, so the avatar never flashes. */}
-                    {artist.about_loaded && (
-                      <img
-                        src={artist.gallery_image || imageOf(artist.images)}
-                        alt={artist.name}
-                      />
-                    )}
-                    <strong>About the artist</strong>
-                  </button>
-                ) : (
-                  <div className="card-heading">About the artist</div>
-                )}
-                <div className="card-content">
-                  <button
-                    className="text-link artist-card-name"
-                    onClick={() => onArtist(artist)}
-                  >
-                    {artist.name}
-                    {artist.verified && (
-                      <VerifiedBadge label="Verified artist" />
-                    )}
-                  </button>
-                  <div className="artist-card-row">
-                    <p className="artist-stat">
-                      {artist.monthly_listeners != null
-                        ? `${artist.monthly_listeners.toLocaleString()} monthly listeners`
-                        : artist.followers
-                          ? `${artist.followers.total.toLocaleString()} followers`
-                          : ""}
-                    </p>
-                    <button
-                      className="pill outline"
-                      onClick={() => onFollow(artist)}
+                {(() => {
+                  const photo = artist.gallery_image || imageOf(artist.images);
+                  const waiting = !artist.about_loaded;
+                  return (
+                    // Name, listeners and Follow sit on the photo, as on
+                    // Spotify's About section, so the card has no empty band.
+                    <div
+                      className={`artist-portrait ${photo || waiting ? "" : "no-photo"}`}
                     >
-                      {state.saved[artist.uri ?? `spotify:artist:${artist.id}`]
-                        ? "Following"
-                        : state.can_follow
-                          ? "Follow"
-                          : "Enable following"}
-                    </button>
-                  </div>
-                  {artist.biography ? (
+                      {(photo || waiting) && (
+                        <button
+                          className="artist-portrait-open"
+                          aria-label={`Open ${artist.name}`}
+                          onClick={() => onArtist(artist)}
+                        >
+                          {/* Spotify's card shows the About section's photo;
+                              until it is known, nothing, so the avatar never
+                              flashes. */}
+                          {!waiting && <img src={photo} alt={artist.name} />}
+                        </button>
+                      )}
+                      <strong>About the artist</strong>
+                      <div className="artist-card-row">
+                        <div className="artist-card-who">
+                          <button
+                            className="text-link artist-card-name"
+                            onClick={() => onArtist(artist)}
+                          >
+                            {artist.name}
+                            {artist.verified && (
+                              <VerifiedBadge label="Verified artist" />
+                            )}
+                          </button>
+                          <p className="artist-stat">
+                            {artist.monthly_listeners != null
+                              ? `${artist.monthly_listeners.toLocaleString()} monthly listeners`
+                              : artist.followers
+                                ? `${artist.followers.total.toLocaleString()} followers`
+                                : ""}
+                          </p>
+                        </div>
+                        <button
+                          className="pill outline"
+                          onClick={() => onFollow(artist)}
+                        >
+                          {state.saved[
+                            artist.uri ?? `spotify:artist:${artist.id}`
+                          ]
+                            ? "Following"
+                            : state.can_follow
+                              ? "Follow"
+                              : "Enable following"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {artist.biography ? (
+                  <div className="card-content artist-card-about">
                     <p className="artist-bio">{artist.biography}</p>
-                  ) : (
-                    !!artist.genres?.length && (
+                  </div>
+                ) : (
+                  !!artist.genres?.length && (
+                    <div className="card-content artist-card-about">
                       <p className="artist-genres">
                         {artist.genres.slice(0, 3).join(" · ")}
                       </p>
-                    )
-                  )}
-                </div>
+                    </div>
+                  )
+                )}
               </article>
             )}
             <CreditsCard

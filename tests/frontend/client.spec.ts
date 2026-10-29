@@ -7239,6 +7239,34 @@ test("clicking an artist in a song row opens it without selecting the song", asy
   ).toMatch(/^artist:/);
 });
 
+test("song rows link only the album name and underline artist and album, not the title", async ({
+  page,
+}) => {
+  await startClient(page);
+  const row = page.locator(".track-row").nth(1);
+  const album = row.locator(".album-link");
+  const width = await album.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return {
+      link: node.getBoundingClientRect().width,
+      text: range.getBoundingClientRect().width,
+    };
+  });
+  expect(width.link).toBeLessThanOrEqual(width.text + 1);
+  const underline = async (locator: Locator) => {
+    await locator.hover();
+    return locator.evaluate(
+      (node) => getComputedStyle(node).textDecorationLine,
+    );
+  };
+  expect(await underline(row.locator(".track-name"))).toBe("none");
+  expect(await underline(row.locator(".artist-link").first())).toBe(
+    "underline",
+  );
+  expect(await underline(album)).toBe("underline");
+});
+
 test("Load TTML offers Spicy Lyrics' load modes, reset and saved lyrics", async ({
   page,
 }) => {

@@ -1936,6 +1936,14 @@ small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Only the name is the link, as in Spotify, not the whole column. */
+  justify-self: start;
+  max-width: 100%;
+}
+/* Like Spotify, artist and album names underline on hover; the song
+   title, which plays the song, does not. */
+.text-link.track-name:hover {
+  text-decoration: none;
 }
 .row-end {
   display: grid;

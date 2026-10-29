@@ -478,7 +478,9 @@ impl Worker {
             // The song whose saved lyrics are showing: a failed refresh
             // must not replace them with an error.
             let mut showing_cached = None;
-            while let Ok(command) = receive_lyrics.recv() {
+            // Commands read ahead while checking for a newer song.
+            let mut pending = std::collections::VecDeque::new();
+            while let Some(command) = pending.pop_front().or_else(|| receive_lyrics.recv().ok()) {
                 let (track, result) = match command {
                     LyricCommand::Cached(track) => {
                         showing_cached = None;
@@ -507,6 +509,15 @@ impl Worker {
                         continue;
                     }
                     LyricCommand::Fetch(track, token) => {
+                        // Skipping through songs queues a fetch for each; only
+                        // the newest song's lyrics are worth waiting for.
+                        pending.extend(receive_lyrics.try_iter());
+                        if pending
+                            .iter()
+                            .any(|command| matches!(command, LyricCommand::Fetch(..)))
+                        {
+                            continue;
+                        }
                         let result = lyrics::fetch(&client, &track, &token, &lyric_native);
                         if result.is_err() && showing_cached.as_deref() == Some(&track.uri) {
                             continue;

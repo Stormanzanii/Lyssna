@@ -859,23 +859,101 @@ fn fetch_from(
         return Ok(lyrics);
     }
     // Every enabled source is asked at once; the best answer in the chosen
-    // order wins. Each source keeps its own three-day cache.
-    let cached = |namespace: &str, fetch: &dyn Fn() -> Result<Lyrics>| -> Result<Lyrics> {
-        let cache = root.join("cache").join(namespace);
-        let file = cache.join(format!("{key}.json"));
+    // order wins as soon as it is known, while slower sources finish in the
+    // background and keep their own three-day cache.
+    let cache = std::sync::Arc::new(SourceCache { root, key, network });
+    // Spicy Lyrics and Apple Music share one provider request.
+    // Errors keep whether the provider was unreachable, as text and a flag.
+    let provider: std::sync::Arc<std::sync::OnceLock<std::result::Result<Lyrics, (String, bool)>>> =
+        Default::default();
+    let (client, track, access_token, native) = (
+        client.clone(),
+        track.clone(),
+        access_token.to_owned(),
+        native.clone(),
+    );
+    let (sources, prefer_apple, words) = (
+        crate::lyric_sources::enabled(),
+        crate::lyric_sources::prefer_apple(),
+        crate::lyric_sources::musixmatch_words(),
+    );
+    let fetch = move |source: &str| -> Result<Lyrics> {
+        match source {
+            "spicy" | "apple" => {
+                let answer = provider.get_or_init(|| {
+                    crate::provider::cache_namespace()
+                        .and_then(|namespace| {
+                            cache.get(&namespace, &|| {
+                                crate::provider::fetch(&client, &track, &access_token)
+                            })
+                        })
+                        // Lyrics saved before usernames were looked up get them now.
+                        .map(|mut lyrics| {
+                            if cache.network {
+                                crate::provider::resolve_contributors(&mut lyrics);
+                            }
+                            lyrics
+                        })
+                        .map_err(|error| {
+                            (error.to_string(), crate::lyric_sources::unreachable(&error))
+                        })
+                });
+                let lyrics = answer.as_ref().map_err(|(message, unreachable)| {
+                    if *unreachable {
+                        crate::lyric_sources::Unreachable(message.clone()).into()
+                    } else {
+                        anyhow::anyhow!(message.clone())
+                    }
+                })?;
+                crate::lyric_sources::split_provider(lyrics, source)
+                    .with_context(|| format!("No {source} lyrics from the provider"))
+            }
+            // Line-only answers are cached apart, so switching shows the other.
+            "musixmatch" => cache.get(
+                if words {
+                    "musixmatch"
+                } else {
+                    "musixmatch-lines"
+                },
+                &|| crate::lyric_sources::musixmatch(&client, &track, words),
+            ),
+            "spotify" => cache.get("spotify", &|| {
+                crate::lyric_sources::spotify(&native, &track)
+            }),
+            "lrclib" => cache.get("lrclib", &|| crate::lyric_sources::lrclib(&client, &track)),
+            "netease" => cache.get("netease", &|| {
+                crate::lyric_sources::netease(&client, &track)
+            }),
+            _ => Err(anyhow::anyhow!("Unknown lyrics source")),
+        }
+    };
+    crate::lyric_sources::fetch_best(&sources, prefer_apple, std::sync::Arc::new(fetch))
+}
+
+/// One song's per-source lyrics cache.
+struct SourceCache {
+    root: std::path::PathBuf,
+    key: String,
+    network: bool,
+}
+
+impl SourceCache {
+    fn get(&self, namespace: &str, fetch: &dyn Fn() -> Result<Lyrics>) -> Result<Lyrics> {
+        let cache = self.root.join("cache").join(namespace);
+        let file = cache.join(format!("{}.json", self.key));
         let fresh = fs::metadata(&file)
             .and_then(|metadata| metadata.modified())
             .ok()
             .and_then(|modified| modified.elapsed().ok())
             .is_some_and(|age| age < std::time::Duration::from_secs(3 * 86_400));
         // Offline, any saved answer will do until the sources reply.
-        if (fresh || !network)
+        if (fresh || !self.network)
             && let Ok(bytes) = fs::read(&file)
             && let Ok(lyrics) = serde_json::from_slice::<Lyrics>(&bytes)
         {
             return Ok(lyrics);
         }
-        if !network {
+        if !self.network {
             return Err(crate::lyric_sources::Unreachable("Offline and not saved".into()).into());
         }
         let lyrics = fetch()?;
@@ -883,59 +961,7 @@ fn fetch_from(
             let _ = fs::write(file, serde_json::to_vec(&lyrics)?);
         }
         Ok(lyrics)
-    };
-    // Spicy Lyrics and Apple Music share one provider request.
-    // Errors keep whether the provider was unreachable, as text and a flag.
-    let provider: std::sync::OnceLock<std::result::Result<Lyrics, (String, bool)>> =
-        std::sync::OnceLock::new();
-    let from_provider = |source: &str| -> Result<Lyrics> {
-        let answer = provider.get_or_init(|| {
-            crate::provider::cache_namespace()
-                .and_then(|namespace| {
-                    cached(&namespace, &|| {
-                        crate::provider::fetch(client, track, access_token)
-                    })
-                })
-                // Lyrics saved before usernames were looked up get them now.
-                .map(|mut lyrics| {
-                    if network {
-                        crate::provider::resolve_contributors(&mut lyrics);
-                    }
-                    lyrics
-                })
-                .map_err(|error| (error.to_string(), crate::lyric_sources::unreachable(&error)))
-        });
-        let lyrics = answer.as_ref().map_err(|(message, unreachable)| {
-            if *unreachable {
-                crate::lyric_sources::Unreachable(message.clone()).into()
-            } else {
-                anyhow::anyhow!(message.clone())
-            }
-        })?;
-        crate::lyric_sources::split_provider(lyrics, source)
-            .with_context(|| format!("No {source} lyrics from the provider"))
-    };
-    let (sources, prefer_apple, words) = (
-        crate::lyric_sources::enabled(),
-        crate::lyric_sources::prefer_apple(),
-        crate::lyric_sources::musixmatch_words(),
-    );
-    crate::lyric_sources::fetch_best(&sources, prefer_apple, &|source| match source {
-        "spicy" | "apple" => from_provider(source),
-        // Line-only answers are cached apart, so switching shows the other.
-        "musixmatch" => cached(
-            if words {
-                "musixmatch"
-            } else {
-                "musixmatch-lines"
-            },
-            &|| crate::lyric_sources::musixmatch(client, track, words),
-        ),
-        "spotify" => cached("spotify", &|| crate::lyric_sources::spotify(native, track)),
-        "lrclib" => cached("lrclib", &|| crate::lyric_sources::lrclib(client, track)),
-        "netease" => cached("netease", &|| crate::lyric_sources::netease(client, track)),
-        _ => Err(anyhow::anyhow!("Unknown lyrics source")),
-    })
+    }
 }
 #[cfg(test)]
 mod tests {

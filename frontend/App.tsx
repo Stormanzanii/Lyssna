@@ -17,7 +17,6 @@ import { createDJReminder } from "./djHint";
 import {
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   Check,
   Settings as SettingsIcon,
   ChevronDown,
@@ -3267,7 +3266,15 @@ function App() {
                         </h1>
                         {artistPage && artistVerified && (
                           <p className="artist-verified">
-                            <BadgeCheck size={22} /> Verified by Spotify
+                            <svg
+                              className="verified-badge"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+                              <path d="m9 12 2 2 4-4" />
+                            </svg>
+                            <span>Verified by Spotify</span>
                           </p>
                         )}
                         {artistPage && monthlyListeners != null && (
@@ -3371,21 +3378,33 @@ function App() {
                         >
                           <Shuffle size={28} />
                         </button>
-                        {entity?.artist && (
+                        {entity?.artist &&
+                          (() => {
+                            const artist = entity.artist;
+                            const following =
+                              !!state.saved[
+                                artist.uri || `spotify:artist:${artist.id}`
+                              ];
+                            return (
+                              <button
+                                className="pill outline"
+                                aria-pressed={following}
+                                onClick={() => follow(artist)}
+                              >
+                                {following ? "Following" : "Follow"}
+                              </button>
+                            );
+                          })()}
+                        {/* Artist pages reload each time they open. */}
+                        {!artistPage && (
                           <button
-                            className="pill outline"
-                            onClick={() => follow(entity.artist!)}
+                            className="icon-button action-icon"
+                            title="Refresh page"
+                            onClick={() => navigate(state.route, false)}
                           >
-                            Follow
+                            <RefreshCw size={22} />
                           </button>
                         )}
-                        <button
-                          className="icon-button action-icon"
-                          title="Refresh page"
-                          onClick={() => navigate(state.route, false)}
-                        >
-                          <RefreshCw size={22} />
-                        </button>
                         {collection && (
                           <div className="song-filters">
                             <small aria-live="polite">

@@ -1075,9 +1075,27 @@ small {
 .artist-verified {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
+  line-height: 24px;
+}
+/* Spotify's blue badge, the tick centred on the text. */
+.verified-badge {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+.verified-badge path:first-child {
+  fill: #4cb3ff;
+}
+.verified-badge path:last-child {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 /* Popular beside You Liked, wrapping under it when the centre panel, not
    the window, is narrow; stacked, You Liked lines up with Discography. */

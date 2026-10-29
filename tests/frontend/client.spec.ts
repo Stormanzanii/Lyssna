@@ -121,6 +121,14 @@ test("artist portraits replace missing banners and metadata stays below either h
   const titleBox = (await hero.locator("h1").boundingBox())!;
   const verifiedBox = (await hero.locator(".artist-verified").boundingBox())!;
   expect(verifiedBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+  // The tick sits centred on its text, as in Spotify.
+  const badge = (await hero.locator(".verified-badge").boundingBox())!;
+  const label = (await hero.locator(".artist-verified span").boundingBox())!;
+  expect(
+    Math.abs(badge.y + badge.height / 2 - (label.y + label.height / 2)),
+  ).toBeLessThan(1.5);
+  // Artist pages reload when opened, so there is no Refresh.
+  await expect(page.getByTitle("Refresh page")).toHaveCount(0);
   expect(
     await hero
       .locator(".hero-cover")

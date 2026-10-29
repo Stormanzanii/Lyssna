@@ -1578,10 +1578,17 @@ impl Backend {
                 if let Some(overview) = info.overview.as_mut() {
                     let mut statuses = Vec::new();
                     {
+                        // The artist too, so Follow reads Following.
                         let uris: Vec<_> = overview
                             .popular
                             .iter()
                             .map(|item| item.track.uri.clone())
+                            .chain(
+                                info.artist
+                                    .as_ref()
+                                    .and_then(|artist| artist.id.as_ref())
+                                    .map(|id| format!("spotify:artist:{id}")),
+                            )
                             .collect();
                         let native = self.native_controls.saved_items(&uris);
                         if !uris.is_empty()

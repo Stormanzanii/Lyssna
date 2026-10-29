@@ -2605,7 +2605,7 @@ small {
   /* Artwork takes the same share of the page at any resolution, about
      half its height as in Spicy Lyrics, never wider than its column. The
      title and artists keep to the artwork's width. */
-  --lyrics-art: min(100%, 50vh);
+  --lyrics-art: min(100%, 44vh);
   min-width: 0;
   text-align: center;
 }

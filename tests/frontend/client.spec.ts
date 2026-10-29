@@ -9729,6 +9729,49 @@ test("queued songs show under Next in queue, then Next from the playlist", async
   await expect.poll(sent).toMatchObject({ command: "clear_queue" });
 });
 
+test("DJ's queue shows only Now playing and songs the listener queued", async ({
+  page,
+}) => {
+  await startClient(page);
+  const songs = ["Puppet", "The Red", "The Kill"].map((name, index) => {
+    const id = `djqueue${index}`.padEnd(22, "x");
+    return { ...track, id, uri: `spotify:track:${id}`, name };
+  });
+  await page.evaluate(
+    ({ track, songs, playback }) => {
+      const host = (window as any).__clientTest;
+      host.emit({ type: "dj_context", active: true });
+      host.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: true,
+          context: "spotify:playlist:37i9dQZF1EYkqdzj48dyYq",
+        },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      host.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: { artists: track.artists, queue: songs, queued: 1 },
+      });
+    },
+    { track, songs, playback: emptyState.playback },
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const sections = page.locator(".queue-panel .queue-section");
+  await expect(sections.locator("h3")).toHaveText([
+    "Now playing",
+    "Next in queue",
+  ]);
+  await expect(page.locator(".queue-panel")).not.toContainText("The Red");
+});
+
 test("Start a Jam from a song copies the invite and shows the Jam above the queue", async ({
   page,
   context,

@@ -2411,9 +2411,10 @@ export function QueuePanel({
     queue.length,
     early ? held.queued : (state.details.queued ?? 0),
   );
+  const dj = !!state.dj_context;
   const from =
     contextName(state.playback.context, {
-      dj: !!state.dj_context,
+      dj,
       playlists: state.playlists,
       track,
     }) ?? "";
@@ -2592,7 +2593,9 @@ export function QueuePanel({
               .map((item, index) => row(item, queueKeys[index], false, true))}
           </section>
         )}
-        {(queued < queue.length || !queue.length) && (
+        {/* DJ keeps its picks to itself, as in Spotify: only Now playing
+            and songs the listener queued show. */}
+        {!dj && (queued < queue.length || !queue.length) && (
           <section className="queue-section">
             <h3>{from ? `Next from: ${from}` : "Next up"}</h3>
             {queue.length ? (

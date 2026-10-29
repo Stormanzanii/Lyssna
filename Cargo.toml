@@ -87,7 +87,7 @@ tauri-build = { version = "2", features = [] }
 tao = { git = "https://github.com/tauri-apps/tao", rev = "2ada91bf6372cd9fd3071377a1da90edee601f39" }
 librespot-audio = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-connect = { path = "vendor/librespot-connect" }
-librespot-core = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
+librespot-core = { path = "vendor/librespot-core" }
 librespot-metadata = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-oauth = { git = "https://github.com/School-User/librespot.git", rev = "b199674d7c241eb82abce494f3f17a9d373b8d23" }
 librespot-playback = { path = "vendor/librespot-playback" }
@@ -104,6 +104,7 @@ opt-level = 3
 
 [patch."https://github.com/School-User/librespot.git"]
 librespot-connect = { path = "vendor/librespot-connect" }
+librespot-core = { path = "vendor/librespot-core" }
 librespot-playback = { path = "vendor/librespot-playback" }
 
 [profile.release]

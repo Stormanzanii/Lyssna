@@ -3716,7 +3716,6 @@ dependencies = [
 [[package]]
 name = "librespot-core"
 version = "0.8.0"
-source = "git+https://github.com/School-User/librespot.git?rev=b199674d7c241eb82abce494f3f17a9d373b8d23#b199674d7c241eb82abce494f3f17a9d373b8d23"
 dependencies = [
  "aes",
  "base64 0.22.1",

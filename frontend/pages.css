@@ -321,8 +321,8 @@
   font-size: 14px;
   color: var(--text-subdued);
 }
-.track-row:hover .track-artists,
-.track-row:hover .album-link {
+.track-row:is(:hover, .selected) .track-artists,
+.track-row:is(:hover, .selected) .album-link {
   color: #fff;
 }
 .album-link,

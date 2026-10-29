@@ -267,6 +267,12 @@
 .liquid-glass .album-tile:hover {
   background: #ffffff17;
 }
+/* Selected songs, with or without Liquid Glass and under the pointer,
+   take Spotify's lighter highlight. */
+.track-row.selected,
+.liquid-glass .track-row.selected {
+  background: #ffffff4d;
+}
 .liquid-glass .settings-select,
 .liquid-glass .number-field,
 .liquid-glass .settings-search {

@@ -7149,14 +7149,18 @@ test("songs Spotify cannot play are dimmed and never start", async ({
   expect(JSON.stringify(request)).not.toContain("spotify:track:gone");
 });
 
-test("a single click on a song selects nothing; a double click plays it", async ({
+test("a click highlights a song without a selection bar; a double click plays it", async ({
   page,
 }) => {
   await startClient(page);
   const row = page.locator(".track-row").nth(1);
+  const top = (await row.boundingBox())!.y;
   await row.locator(".track-name").click();
-  await expect(page.locator(".track-row.selected")).toHaveCount(0);
+  await expect(page.locator(".track-row.selected")).toHaveCount(1);
+  await expect(row).toHaveClass(/selected/);
+  // Nothing appears above the list to push it down.
   await expect(page.locator(".selection-bar")).toHaveCount(0);
+  expect((await row.boundingBox())!.y).toBe(top);
   const plays = () =>
     page.evaluate(
       () =>
@@ -7237,6 +7241,47 @@ test("clicking an artist in a song row opens it without selecting the song", asy
           .at(-1)?.args.key,
     ),
   ).toMatch(/^artist:/);
+});
+
+test("songs select like Spotify: Ctrl, Shift, Ctrl+A, right-click and Escape", async ({
+  page,
+}) => {
+  await startClient(page);
+  const rows = page.locator(".track-row");
+  const chosen = page.locator(".track-row.selected");
+  // A click on the row's blank space selects it alone.
+  await rows.nth(0).click({ position: { x: 400, y: 4 } });
+  await expect(chosen).toHaveCount(1);
+  await rows.nth(2).click({ modifiers: ["Shift"], position: { x: 400, y: 4 } });
+  await expect(chosen).toHaveCount(3);
+  await rows
+    .nth(1)
+    .click({ modifiers: ["Control"], position: { x: 400, y: 4 } });
+  await expect(chosen).toHaveCount(2);
+  await expect(rows.nth(1)).not.toHaveClass(/selected/);
+  // Ctrl+A takes every listed song once one is selected.
+  await page.keyboard.press("Control+a");
+  await expect(chosen).toHaveCount(await rows.count());
+  const background = await rows
+    .nth(0)
+    .evaluate((node) => getComputedStyle(node).backgroundColor);
+  expect(background).toBe("rgba(255, 255, 255, 0.3)");
+  // Right-clicking a selected song acts on the whole selection.
+  await rows.nth(1).click({ button: "right", position: { x: 400, y: 4 } });
+  const menu = page.getByRole("menu", { name: "Song actions" });
+  await expect(
+    menu.getByRole("menuitem", { name: "Copy song IDs" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(chosen).toHaveCount(0);
+  // Right-clicking an unselected song highlights it alone.
+  await rows.nth(3).click({ button: "right", position: { x: 400, y: 4 } });
+  await expect(chosen).toHaveCount(1);
+  await expect(rows.nth(3)).toHaveClass(/selected/);
+  await expect(
+    menu.getByRole("menuitem", { name: "Copy song ID" }),
+  ).toBeVisible();
 });
 
 test("song rows link only the album name and underline artist and album, not the title", async ({

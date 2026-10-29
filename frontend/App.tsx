@@ -160,7 +160,12 @@ import { ProfileMenu } from "./profile-menu";
 import { ProfilePage } from "./profile-page";
 import { SetupAmbience } from "./setup-ambience";
 import { coverJpeg } from "./playlist-cover";
-import { embedCode, inChosenFolders, songAndArtist } from "./spotify-plus";
+import {
+  embedCode,
+  inChosenFolders,
+  songAndArtist,
+  trackIds,
+} from "./spotify-plus";
 import {
   lastSettingsTab,
   SettingsWindow,
@@ -425,8 +430,14 @@ function App() {
     setFolderPicker(null);
     setDeleteFolder(null);
   }, [state.profile?.id]);
+  // Songs highlighted in the list, as in Spotify: click, Ctrl/Cmd-click and
+  // Shift-click select, and nothing counts them.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectAnchor = useRef<number | null>(null);
   const [songMenu, setSongMenu] = useState<{
     track: Track;
+    /** The selected songs, when the menu opened on a multi-song selection. */
+    tracks?: Track[];
     fromList?: boolean;
     x: number;
     y: number;
@@ -537,6 +548,8 @@ function App() {
       setAllAlbums(false);
       setPopularMore(false);
       setSongMenu(null);
+      setSelected(new Set());
+      selectAnchor.current = null;
       const next = ++generation.current;
       const hint = stateRef.current.home?.sections
         .flatMap((section) => section.items)
@@ -2298,6 +2311,65 @@ function App() {
     listedTracks.length,
     `${center}:${state.route}`,
   );
+  const selectRow = (
+    index: number,
+    keys: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
+  ) => {
+    const uri = listedTracks[index]?.uri;
+    if (!uri) return;
+    const add = keys.ctrlKey || keys.metaKey,
+      anchor = selectAnchor.current;
+    if (keys.shiftKey && anchor !== null) {
+      const range = listedTracks
+        .slice(Math.min(anchor, index), Math.max(anchor, index) + 1)
+        .map((track) => track.uri);
+      setSelected((old) => new Set([...(add ? old : []), ...range]));
+      return;
+    }
+    selectAnchor.current = index;
+    setSelected((old) => {
+      if (!add) return new Set([uri]);
+      const next = new Set(old);
+      if (next.has(uri)) next.delete(uri);
+      else next.add(uri);
+      return next;
+    });
+  };
+  const listedRef = useRef(listedTracks);
+  listedRef.current = listedTracks;
+  const anySelected = selected.size > 0;
+  useEffect(() => {
+    if (!anySelected) return;
+    const typing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      !!target.closest("input, textarea, select, [contenteditable=true]");
+    const key = (event: KeyboardEvent) => {
+      if (typing(event.target)) return;
+      if (event.key === "Escape") setSelected(new Set());
+      else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        setSelected(new Set(listedRef.current.map((track) => track.uri)));
+      }
+    };
+    // Clicking anywhere but a song or a menu clears the selection.
+    const outside = (event: PointerEvent) => {
+      if (
+        !(event.target as HTMLElement).closest?.(
+          ".track-row, .popover, .popover-dismiss, [role=menu]",
+        )
+      )
+        setSelected(new Set());
+    };
+    document.addEventListener("keydown", key);
+    document.addEventListener("pointerdown", outside);
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.removeEventListener("pointerdown", outside);
+    };
+  }, [anySelected]);
   return (
     <div
       className={`application ${IS_MAC ? "macos" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${immersive ? "immersive" : ""} ${state.settings.liquid_glass ? "liquid-glass" : ""} ${state.settings.liquid_glass ? "glass-refraction" : ""}`}
@@ -3348,7 +3420,8 @@ function App() {
                                     ? "This song is not available on Spotify"
                                     : undefined
                                 }
-                                className={`track-row ${current ? "playing" : ""} ${track.unavailable ? "unavailable" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
+                                aria-selected={selected.has(track.uri)}
+                                className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""} ${track.unavailable ? "unavailable" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
                                 key={`${track.uri}-${index}`}
                                 draggable={reorderable}
                                 onDragStart={(event) => {
@@ -3383,6 +3456,16 @@ function App() {
                                   dragRow.current = null;
                                   setDropAt(null);
                                 }}
+                                onClick={(event) => {
+                                  // Links and buttons keep their own clicks.
+                                  if (
+                                    (event.target as HTMLElement).closest(
+                                      "a, button",
+                                    )
+                                  )
+                                    return;
+                                  selectRow(index, event);
+                                }}
                                 onDoubleClick={(event) => {
                                   // The title already played on its first click.
                                   if (
@@ -3410,8 +3493,22 @@ function App() {
                                     return;
                                   event.preventDefault();
                                   setEntityMenu(null);
+                                  // The menu acts on the whole selection when
+                                  // opened on one of its songs; otherwise the
+                                  // song alone is selected, as in Spotify.
+                                  const group =
+                                    selected.has(track.uri) && selected.size > 1
+                                      ? listedTracks.filter((item) =>
+                                          selected.has(item.uri),
+                                        )
+                                      : undefined;
+                                  if (!selected.has(track.uri)) {
+                                    selectAnchor.current = index;
+                                    setSelected(new Set([track.uri]));
+                                  }
                                   setSongMenu({
                                     track,
+                                    tracks: group,
                                     fromList: true,
                                     x: event.clientX,
                                     y: event.clientY,
@@ -3465,6 +3562,14 @@ function App() {
                                       className="text-link track-name"
                                       onClick={(event) => {
                                         event.stopPropagation();
+                                        selectRow(index, event);
+                                        // Ctrl and Shift clicks only select.
+                                        if (
+                                          event.ctrlKey ||
+                                          event.metaKey ||
+                                          event.shiftKey
+                                        )
+                                          return;
                                         // The first click plays; the rest of a
                                         // double-click must not load it again.
                                         if (event.detail <= 1)
@@ -4216,7 +4321,10 @@ function App() {
               [
                 "Add to queue",
                 ListMusic,
-                () => play({ command: "enqueue", uri: songMenu.track.uri }),
+                () => {
+                  for (const track of songMenu.tracks ?? [songMenu.track])
+                    play({ command: "enqueue", uri: track.uri });
+                },
               ],
               ["Add to playlist", Plus, () => {}],
               ...(songMenu.fromList &&
@@ -4260,15 +4368,21 @@ function App() {
                     "Song and artist copied.",
                   ),
               ],
-              [
-                "Copy song ID",
-                Copy,
-                () =>
-                  copyText(
-                    songMenu.track.id || songMenu.track.uri.split(":")[2],
-                    "Song ID copied.",
-                  ),
-              ],
+              songMenu.tracks
+                ? [
+                    "Copy song IDs",
+                    Copy,
+                    () => copyText(trackIds(songMenu.tracks!), "IDs copied."),
+                  ]
+                : [
+                    "Copy song ID",
+                    Copy,
+                    () =>
+                      copyText(
+                        songMenu.track.id || songMenu.track.uri.split(":")[2],
+                        "Song ID copied.",
+                      ),
+                  ],
               [
                 "Copy embed code",
                 Code,
@@ -4289,7 +4403,7 @@ function App() {
                 const rect = button.getBoundingClientRect(),
                   right = rect.right + 300 + 8 <= window.innerWidth;
                 setPicker({
-                  tracks: [songMenu.track],
+                  tracks: songMenu.tracks ?? [songMenu.track],
                   x: right ? rect.right + 4 : rect.left - 304,
                   y: rect.top - 8,
                 });

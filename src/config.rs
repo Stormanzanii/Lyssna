@@ -166,6 +166,10 @@ pub struct Settings {
     pub last_view: String,
     pub show_lyrics: bool,
     pub compact_library: bool,
+    /// Your Library's dragged width; `None` keeps the responsive default.
+    pub library_width: Option<u32>,
+    /// Now playing's dragged width; `None` keeps the default.
+    pub now_playing_width: Option<u32>,
     /// Your Library's order: recents, recently_added, alphabetical,
     /// creator or custom (Spotify's own order, folders included).
     pub library_sort: String,
@@ -329,6 +333,8 @@ impl Default for Settings {
             last_view: "home".into(),
             show_lyrics: true,
             compact_library: false,
+            library_width: None,
+            now_playing_width: None,
             library_sort: "recents".into(),
             library_view: "list".into(),
             lyric_size: 36.0,

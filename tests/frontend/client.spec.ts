@@ -13601,3 +13601,46 @@ test("the artist card's verified badge never gets cut off", async ({
   expect(tick.width).toBeGreaterThan(18);
   expect(tick.x + tick.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
 });
+
+test("Your Library and Now playing keep their dragged widths", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  const saved = () =>
+    page.evaluate(() => {
+      const last = (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "save_settings")
+        .at(-1);
+      return last?.args.settings ?? {};
+    });
+  const drag = async (handle: Locator, by: number) => {
+    const box = (await handle.boundingBox())!;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + 1, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 1 + by, y, { steps: 6 });
+    await page.mouse.up();
+  };
+  await drag(page.locator(".library-resizer"), 80);
+  await expect
+    .poll(async () => (await saved()).library_width)
+    .toBeGreaterThan(250);
+  await drag(page.locator(".panel-resizer:not(.library-resizer)"), -60);
+  await expect
+    .poll(async () => (await saved()).now_playing_width)
+    .toBeGreaterThan(360);
+  // Saved widths come back with the settings on the next launch.
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const settings = (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "save_settings")
+      .at(-1).args.settings;
+    host.emit({
+      type: "settings",
+      settings: { ...settings, library_width: 400, now_playing_width: 450 },
+    });
+  });
+  await expect(page.locator(".library-panel")).toHaveCSS("width", "400px");
+  await expect(page.locator("aside.now-playing")).toHaveCSS("width", "450px");
+});

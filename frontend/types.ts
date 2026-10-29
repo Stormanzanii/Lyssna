@@ -132,6 +132,10 @@ export interface Settings {
   last_view: string;
   show_lyrics: boolean;
   compact_library: boolean;
+  /** Your Library's dragged width, kept between launches. */
+  library_width?: number | null;
+  /** Now playing's dragged width, kept between launches. */
+  now_playing_width?: number | null;
   lyric_size: number;
   lyric_offset_ms: number;
   romanized: boolean;

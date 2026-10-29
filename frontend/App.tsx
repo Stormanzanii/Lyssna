@@ -409,9 +409,17 @@ function App() {
       setSidebar(true);
     }
   };
-  const [rightWidth, setRightWidth] = useState(360);
-  // Your Library's width; null keeps the default responsive width.
-  const [leftWidth, setLeftWidth] = useState<number | null>(null);
+  // Panel widths while dragging; once let go they are saved in settings,
+  // so they survive restarts and rebuilds. Library null keeps the default
+  // responsive width.
+  const [rightDrag, setRightDrag] = useState<number | null>(null);
+  const [leftDrag, setLeftDrag] = useState<number | null>(null);
+  const savedRight = state.settings.now_playing_width;
+  const savedLeft = state.settings.library_width;
+  const rightWidth =
+    rightDrag ?? (savedRight ? Math.max(300, Math.min(520, savedRight)) : 360);
+  const leftWidth =
+    leftDrag ?? (savedLeft ? Math.max(250, Math.min(480, savedLeft)) : null);
   const [target, setTarget] = useState("native");
   const [deviceMenu, setDeviceMenu] = useState(false);
   // Controls follow the device Spotify reports active, so a failed
@@ -2342,13 +2350,18 @@ function App() {
   ]);
   const resizeRight = (event: React.PointerEvent) => {
     event.currentTarget.setPointerCapture(event.pointerId);
-    const move = (event: PointerEvent) =>
-      setRightWidth(
+    let width: number | null = null;
+    const move = (event: PointerEvent) => {
+      width = Math.round(
         Math.max(300, Math.min(520, window.innerWidth - event.clientX - 8)),
       );
+      setRightDrag(width);
+    };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      if (width !== null) updateSettings({ now_playing_width: width });
+      setRightDrag(null);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -2359,16 +2372,22 @@ function App() {
     event.currentTarget.setPointerCapture(event.pointerId);
     const left =
       event.currentTarget.parentElement?.getBoundingClientRect().left ?? 0;
+    let kept: number | null = null;
     const move = (event: PointerEvent) => {
       const width = event.clientX - left - 8;
       const compact = width < 170;
       if (compact !== !!stateRef.current.settings.compact_library)
         updateSettings({ compact_library: compact });
-      if (!compact) setLeftWidth(Math.max(250, Math.min(480, width)));
+      if (!compact) {
+        kept = Math.round(Math.max(250, Math.min(480, width)));
+        setLeftDrag(kept);
+      }
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      if (kept !== null) updateSettings({ library_width: kept });
+      setLeftDrag(null);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);

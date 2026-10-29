@@ -136,6 +136,104 @@ pub async fn songwriters(session: &Session, id: &str) -> Result<Vec<String>> {
     .await?;
     Ok(credited_writers(&data))
 }
+/// A song's full credits, as Spotify's credits dialog shows them.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct TrackCredits {
+    pub name: String,
+    pub groups: Vec<CreditGroup>,
+    pub sources: Vec<String>,
+}
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct CreditGroup {
+    pub name: String,
+    pub credits: Vec<Credit>,
+}
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct Credit {
+    pub name: String,
+    pub roles: Vec<String>,
+    /// The person's artist page, when they have one.
+    pub uri: Option<String>,
+}
+pub async fn credits(session: &Session, id: &str) -> Result<TrackCredits> {
+    ensure!(
+        id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()),
+        "Invalid track ID"
+    );
+    let data = query(
+        session,
+        "queryTrackCreditsGroupedModal",
+        "f135fb9be58a72d041ab5d214d817021a272405d883860468e2627afb01a3ca9",
+        json!({"trackUri":format!("spotify:track:{id}"),"contributorsLimit":100,"contributorsOffset":0}),
+    )
+    .await?;
+    Ok(grouped_credits(&data))
+}
+/// Groups contributors by their role group in Spotify's order, each person
+/// once per group with all their roles in it.
+fn grouped_credits(data: &Value) -> TrackCredits {
+    let track = &data["data"]["trackUnion"];
+    let text = |value: &Value| value.as_str().map(str::trim).unwrap_or_default().to_owned();
+    let mut groups: Vec<CreditGroup> = Vec::new();
+    for item in track["creditsTrait"]["contributors"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let name = text(&item["name"]);
+        if name.is_empty() {
+            continue;
+        }
+        let group_name = Some(text(&item["roleGroup"]["name"]))
+            .filter(|group| !group.is_empty())
+            .unwrap_or_else(|| "Other".into());
+        let role = text(&item["role"]);
+        let uri = item["uri"].as_str().filter(|uri| {
+            uri.strip_prefix("spotify:artist:").is_some_and(|id| {
+                id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+            })
+        });
+        let group = match groups.iter().position(|group| group.name == group_name) {
+            Some(index) => &mut groups[index],
+            None => {
+                groups.push(CreditGroup {
+                    name: group_name,
+                    credits: Vec::new(),
+                });
+                groups.last_mut().unwrap()
+            }
+        };
+        match group.credits.iter_mut().find(|credit| credit.name == name) {
+            Some(credit) => {
+                if !role.is_empty() && !credit.roles.contains(&role) {
+                    credit.roles.push(role);
+                }
+                if credit.uri.is_none() {
+                    credit.uri = uri.map(str::to_owned);
+                }
+            }
+            None => group.credits.push(Credit {
+                name,
+                roles: Some(role)
+                    .filter(|role| !role.is_empty())
+                    .into_iter()
+                    .collect(),
+                uri: uri.map(str::to_owned),
+            }),
+        }
+    }
+    TrackCredits {
+        name: text(&track["name"]),
+        groups,
+        sources: track["creditsTrait"]["sources"]["items"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|source| text(&source["name"]))
+            .filter(|name| !name.is_empty())
+            .collect(),
+    }
+}
 fn credited_writers(data: &Value) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for item in data["data"]["trackUnion"]["creditsTrait"]["contributors"]["items"]
@@ -197,6 +295,42 @@ mod base_tests {
             vec!["Kevin Parker", "Sarah Aarons"]
         );
         assert!(credited_writers(&json!({"data":{"trackUnion":null}})).is_empty());
+    }
+    #[test]
+    fn credits_group_like_spotifys_dialog() {
+        let artist = "spotify:artist:0123456789abcdefghijkl";
+        let data = json!({"data":{"trackUnion":{"name":"it boy","creditsTrait":{
+            "contributors":{"items":[
+                {"name":"bbno$","role":"Main Artist","roleGroup":{"name":"Artist"},"uri":artist},
+                {"name":"Kyle","role":"Lyricist","roleGroup":{"name":"Composition & Lyrics"}},
+                {"name":"Kyle","role":"Composer","roleGroup":{"name":"Composition & Lyrics"}},
+                {"name":"Pink Slip","role":"Producer","roleGroup":{"name":"Production & Engineering"},"uri":"spotify:artist:bad"},
+                {"name":"Kyle","role":"Musician","roleGroup":{"name":"Performers"}},
+                {"name":"Someone","role":"Mixer"}
+            ]},
+            "sources":{"items":[{"name":"bbno$$"}]}
+        }}}});
+        let credits = grouped_credits(&data);
+        assert_eq!(credits.name, "it boy");
+        let names: Vec<_> = credits
+            .groups
+            .iter()
+            .map(|group| group.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Artist",
+                "Composition & Lyrics",
+                "Production & Engineering",
+                "Performers",
+                "Other"
+            ]
+        );
+        assert_eq!(credits.groups[0].credits[0].uri.as_deref(), Some(artist));
+        assert_eq!(credits.groups[1].credits[0].roles, ["Lyricist", "Composer"]);
+        assert_eq!(credits.groups[2].credits[0].uri, None);
+        assert_eq!(credits.sources, ["bbno$$"]);
     }
     #[test]
     fn native_album_supplies_header_without_public_api() {

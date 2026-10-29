@@ -6630,3 +6630,68 @@ button.discography-track:hover {
   font-size: 13px;
   font-weight: 700;
 }
+
+/* Spotify's Credits dialog, opened from the credits card's Show all. */
+.credits-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  max-height: min(560px, 100%);
+  border-radius: 8px;
+  background: #121212;
+  box-shadow: 0 16px 48px #000a;
+  overflow: hidden;
+}
+.credits-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 24px 20px 16px 24px;
+  border-bottom: 1px solid #ffffff1a;
+}
+.credits-dialog h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.credits-dialog h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.credits-dialog-body {
+  padding: 8px 24px 24px;
+  overflow-y: auto;
+}
+.credits-group h3 {
+  margin: 20px 0 12px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.credits-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.credits-person > div {
+  min-width: 0;
+}
+.credits-person :is(span, .text-link) {
+  font-weight: 500;
+}
+.credits-person p,
+.credits-sources p {
+  margin: 2px 0 0;
+  color: #b3b3b3;
+  font-size: 0.85rem;
+}
+.credits-sources {
+  margin-top: 24px;
+}
+.credits-note {
+  margin: 16px 0 0;
+  color: #b3b3b3;
+}

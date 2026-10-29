@@ -2476,6 +2476,21 @@ async fn jam(
     .map_err(|_| "Jam worker unavailable".to_owned())?
     .map_err(error)
 }
+/// A song's full credits, for the Credits dialog.
+#[tauri::command]
+async fn track_credits(
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<crate::catalogue::TrackCredits, String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::catalogue::credits(session, &id).await)
+    })
+    .await
+    .map_err(|_| "Credits worker unavailable".to_owned())?
+    .map_err(error)
+}
 /// Every release of an artist, for the Discography page.
 #[tauri::command]
 async fn artist_discography(
@@ -3712,6 +3727,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             toggle_cinema_lyrics,
             artist_discography,
             jam,
+            track_credits,
             release_tracks,
             read_clipboard,
             dj_request,

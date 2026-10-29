@@ -610,6 +610,35 @@ async function startClient(
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "track_credits")
+            return {
+              name: "Timing test",
+              groups: [
+                {
+                  name: "Artist",
+                  credits: [
+                    {
+                      name: "Test artist",
+                      roles: ["Main Artist"],
+                      uri: "spotify:artist:0123456789abcdefghijkl",
+                    },
+                  ],
+                },
+                {
+                  name: "Composition & Lyrics",
+                  credits: [
+                    { name: "Writer One", roles: ["Lyricist"], uri: null },
+                  ],
+                },
+                {
+                  name: "Production & Engineering",
+                  credits: [
+                    { name: "Maker Two", roles: ["Producer"], uri: null },
+                  ],
+                },
+              ],
+              sources: ["Test Label"],
+            };
           if (command === "jam") {
             const test = host.__clientTest;
             if (args.action === "start") test.jam = test.jamToStart;
@@ -10131,6 +10160,45 @@ async function gravityWithoutCanvas(page: Page) {
     page.locator(".gravity-word[data-spawned]").first(),
   ).toBeVisible();
 }
+
+test("credits Show all opens Spotify's grouped Credits dialog", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: false,
+          progress_ms: 0,
+          device: { name: "SpotiFlex", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  const card = page.locator(".now-card", { hasText: "Credits" });
+  await card.getByRole("button", { name: "Show all" }).click();
+  const dialog = page.getByRole("dialog", { name: "Credits" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("h2")).toHaveText("Timing test");
+  await expect(dialog.locator(".credits-group h3")).toHaveText([
+    "Artist",
+    "Composition & Lyrics",
+    "Production & Engineering",
+  ]);
+  await expect(dialog).toContainText("Lyricist");
+  await expect(dialog).toContainText("Test Label");
+  // Main artists can be followed from the dialog, as in Spotify.
+  await expect(dialog.getByRole("button", { name: /^Follow/ })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
 
 test("lyrics artwork scales with the window and the title keeps to its width", async ({
   page,

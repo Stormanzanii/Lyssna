@@ -65,6 +65,7 @@ import type { AppState } from "./state";
 import { activeLines, endsOnRight, formatTime } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
+import { CreditsDialog } from "./credits-dialog";
 import { useCreatorProfile } from "./creator-profile";
 import {
   stepScroll,
@@ -2643,18 +2644,28 @@ function CreditsCard({
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [track.uri]);
   const credits = trackCredits(track);
+  // Show all opens Spotify's full Credits dialog, when Spotify knows the song.
   return (
     <article className="now-card">
       <div className="card-heading">
         <span>Credits</span>
-        {credits.length > 3 && (
-          <button className="text-link muted" onClick={() => setAll(!all)}>
-            {all ? "Show less" : "Show all"}
+        {(track.id || credits.length > 3) && (
+          <button className="text-link muted" onClick={() => setAll(true)}>
+            Show all
           </button>
         )}
       </div>
+      {all && track.id && (
+        <CreditsDialog
+          track={track}
+          saved={saved}
+          onArtist={onArtist}
+          onFollow={onFollow}
+          onClose={() => setAll(false)}
+        />
+      )}
       <div className="card-content credit-list">
-        {(all ? credits : credits.slice(0, 3)).map((credit) => (
+        {(all && !track.id ? credits : credits.slice(0, 3)).map((credit) => (
           <div key={credit.name} className="credit">
             <div>
               {credit.artist ? (

@@ -71,6 +71,7 @@ impl From<SpircError> for Error {
 
 struct SpircTask {
     devices: ConnectedDevices,
+    narrated: crate::narrated::Narrated,
     state_updates: crate::state_updates::StateUpdates,
     resume_on_startup: bool,
     player: Arc<Player>,
@@ -655,6 +656,7 @@ impl Spirc {
         let mut task = SpircTask {
             devices: ConnectedDevices::default(),
             state_updates: Default::default(),
+            narrated: Default::default(),
             resume_on_startup,
             player,
             mixer,
@@ -2341,6 +2343,7 @@ impl SpircTask {
         }
 
         if let Some((track_id, narration)) = self.connect_state.preview_next_track() {
+            let narration = self.narrated.unheard(&track_id.to_uri(), narration);
             self.player.set_narration(track_id.clone(), narration);
             self.player.preload(track_id);
         }
@@ -2564,8 +2567,11 @@ impl SpircTask {
         let current_uri = self.connect_state.current_track(|t| &t.uri);
         let id = SpotifyUri::from_uri(current_uri)?;
         self.emit_set_queue_event();
-        self.player
-            .set_narration(id.clone(), self.connect_state.current_narration());
+        let narration = self
+            .narrated
+            .unheard(current_uri, self.connect_state.current_narration());
+        self.narrated.spoken(current_uri, narration.as_ref());
+        self.player.set_narration(id.clone(), narration);
         self.player.load(id, start_playing, position_ms);
 
         self.connect_state
@@ -2671,6 +2677,7 @@ mod shuffle_tests {
         SpircTask {
             devices: Default::default(),
             state_updates: Default::default(),
+            narrated: Default::default(),
             resume_on_startup: false,
             player,
             mixer,

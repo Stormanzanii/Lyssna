@@ -15,3 +15,5 @@ The next queued track preloads when the current decoder becomes ready. A stale t
 Queue snapshots also emit after the current selection resolves, before its player load. Local queue views therefore receive the updated upcoming tracks instead of the empty snapshot from initial context creation.
 
 SpotiFlex also exposes the account-local Connect cluster snapshot already received by device discovery. This supplies remote playback state without public Web API polling. No new subscription, credentials or network listener is added. Remote command payloads are independently constructed against librespot's MIT-licensed dealer protocol definitions; no other project source is copied.
+
+DJ speaks each introduction once: going back to a song it introduced plays the song alone. The same song introduced anew in a later set still speaks.

@@ -484,6 +484,7 @@ enum SpircCommand {
     Transfer(Option<TransferRequest>),
     Load(LoadRequest),
     AddToQueue(SpotifyUri),
+    RemoveFromQueue(String),
     ClearQueue,
     NextTo(String),
 }
@@ -851,6 +852,14 @@ impl Spirc {
     /// context are kept; the next tracks are filled up from the context again.
     pub fn clear_queue(&self) -> Result<(), Error> {
         Ok(self.commands.send(SpircCommand::ClearQueue)?)
+    }
+
+    /// Removes the first queued track with this URI from the next tracks.
+    /// Songs from the context are never removed.
+    ///
+    /// Does nothing if we are not the active device.
+    pub fn remove_from_queue(&self, uri: String) -> Result<(), Error> {
+        Ok(self.commands.send(SpircCommand::RemoveFromQueue(uri))?)
     }
 
     /// Skips forward to an upcoming track, keeping the context and the queue
@@ -1234,6 +1243,12 @@ impl SpircTask {
                 self.connect_state.clear_queue()?;
                 self.emit_set_queue_event();
                 self.refresh_preload();
+            }
+            SpircCommand::RemoveFromQueue(uri) => {
+                if self.connect_state.remove_from_queue(&uri)? {
+                    self.emit_set_queue_event();
+                    self.refresh_preload();
+                }
             }
         };
 

@@ -438,6 +438,8 @@ function App() {
     track: Track;
     /** The selected songs, when the menu opened on a multi-song selection. */
     tracks?: Track[];
+    /** Opened on a song the listener queued, which it can remove. */
+    queued?: boolean;
     fromList?: boolean;
     x: number;
     y: number;
@@ -2410,7 +2412,12 @@ function App() {
             );
           if (track) {
             setEntityMenu(null);
-            setSongMenu({ track, x: event.clientX, y: event.clientY });
+            setSongMenu({
+              track,
+              queued: element.dataset.queued === "true",
+              x: event.clientX,
+              y: event.clientY,
+            });
           }
           return;
         }
@@ -4326,6 +4333,19 @@ function App() {
                     play({ command: "enqueue", uri: track.uri });
                 },
               ],
+              ...(songMenu.queued
+                ? [
+                    [
+                      "Remove from queue",
+                      Trash2,
+                      () =>
+                        play({
+                          command: "remove_from_queue",
+                          uri: songMenu.track.uri,
+                        }),
+                    ],
+                  ]
+                : []),
               ["Add to playlist", Plus, () => {}],
               ...(songMenu.fromList &&
               state.playlists.some(

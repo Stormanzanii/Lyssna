@@ -1867,6 +1867,12 @@ impl PlayerRequest {
                 native::queue_uri(&uri)?;
                 PlayerAction::Enqueue(uri)
             }
+            "remove_from_queue" => {
+                let uri = self.uri.clone().context("Track URI missing")?;
+                native::queue_uri(&uri)?;
+                PlayerAction::RemoveFromQueue(uri)
+            }
+            "clear_queue" => PlayerAction::ClearQueue,
             "transfer" => PlayerAction::Transfer(self.uri.clone().context("Device missing")?),
             _ => anyhow::bail!("Unknown playback command"),
         })

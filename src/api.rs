@@ -501,6 +501,9 @@ impl Spotify {
                 query.push(("uri", uri));
                 (Method::POST, "queue", None)
             }
+            PlayerAction::RemoveFromQueue(_) | PlayerAction::ClearQueue => {
+                anyhow::bail!(QUEUE_EDIT_LOCAL)
+            }
             PlayerAction::Transfer(id) => {
                 self.request(
                     Method::PUT,
@@ -619,6 +622,10 @@ fn parse_track_items(response: &Value) -> Result<Vec<Track>> {
     Ok(tracks)
 }
 
+/// Spotify's Web API can add to the queue but not take songs out of it.
+pub(crate) const QUEUE_EDIT_LOCAL: &str =
+    "Removing from the queue works while songs play on this computer.";
+
 #[derive(Clone)]
 pub enum PlayerAction {
     PreparedDJ {
@@ -665,6 +672,10 @@ pub enum PlayerAction {
     Shuffle(bool),
     Repeat(String),
     Enqueue(String),
+    /// Remove a song the listener queued; songs from the context stay.
+    RemoveFromQueue(String),
+    /// Remove every song the listener queued.
+    ClearQueue,
     Transfer(String),
 }
 

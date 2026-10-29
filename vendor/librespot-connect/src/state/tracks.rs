@@ -283,6 +283,23 @@ impl<'ct> ConnectState {
         Ok(())
     }
 
+    /// Remove the first queued track with this URI, as Spotify's
+    /// Remove from queue does, and fill up from the context again.
+    /// Returns whether a track was removed.
+    pub fn remove_from_queue(&mut self, uri: &str) -> Result<bool, Error> {
+        let Some(index) = self
+            .next_tracks()
+            .iter()
+            .position(|t| t.is_queue() && t.uri == uri)
+        else {
+            return Ok(false);
+        };
+        self.next_tracks_mut().remove(index);
+        self.fill_up_next_tracks()?;
+        self.update_queue_revision();
+        Ok(true)
+    }
+
     pub fn clear_next_tracks(&mut self) {
         // respect queued track and don't throw them out of our next played tracks
         let first_non_queued_track = self

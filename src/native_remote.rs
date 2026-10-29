@@ -240,6 +240,9 @@ fn command_body(action: &PlayerAction) -> Result<Value> {
             );
             json!({"endpoint":"set_options","repeating_context":value=="context","repeating_track":value=="track"})
         }
+        PlayerAction::RemoveFromQueue(_) | PlayerAction::ClearQueue => {
+            anyhow::bail!(crate::api::QUEUE_EDIT_LOCAL)
+        }
         PlayerAction::Enqueue(uri) => {
             valid_track(uri)?;
             json!({"endpoint":"add_to_queue","track":{"uri":uri,"provider":"queue","metadata":{"is_queued":"true"}}})

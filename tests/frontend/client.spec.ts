@@ -9637,11 +9637,10 @@ test("queued songs show under Next in queue, then Next from the playlist", async
   page,
 }) => {
   await startClient(page);
-  const songs = ["Puppet", "High Forever", "Dracula"].map((name, index) => ({
-    ...track,
-    uri: `spotify:track:queued${index}`,
-    name,
-  }));
+  const songs = ["Puppet", "High Forever", "Dracula"].map((name, index) => {
+    const id = `queuedsong${index}`.padEnd(22, "x");
+    return { ...track, id, uri: `spotify:track:${id}`, name };
+  });
   await page.evaluate(
     ({ track, songs, playback }) => {
       const host = (window as any).__clientTest;
@@ -9676,6 +9675,35 @@ test("queued songs show under Next in queue, then Next from the playlist", async
   ]);
   await expect(sections.nth(1).locator(".queue-row")).toHaveText(/Puppet/);
   await expect(sections.nth(2).locator(".queue-row")).toHaveCount(2);
+  const sent = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "player")
+          .at(-1)?.args.request,
+    );
+  // A queued song can be removed from its menu; playlist songs cannot.
+  const menu = page.getByRole("menu", { name: "Song actions" });
+  await sections.nth(1).locator(".queue-row").click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Remove from queue" }).click();
+  await expect.poll(sent).toMatchObject({
+    command: "remove_from_queue",
+    uri: songs[0].uri,
+  });
+  await sections
+    .nth(2)
+    .locator(".queue-row")
+    .first()
+    .click({ button: "right" });
+  await expect(
+    menu.getByRole("menuitem", { name: "Add to queue" }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: "Remove from queue" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await sections.nth(1).getByRole("button", { name: "Clear queue" }).click();
+  await expect.poll(sent).toMatchObject({ command: "clear_queue" });
 });
 
 test("a reshuffled queue never slides rows in from far away", async ({

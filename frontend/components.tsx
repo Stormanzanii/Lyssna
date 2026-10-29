@@ -2376,9 +2376,13 @@ export function QueuePanel({
       }
     tops.current = next;
   }, [order, state.settings.reduce_motion]);
-  const row = (item: Track, key: string, current = false) => (
+  const row = (item: Track, key: string, current = false, added = false) => (
     <button
       key={key}
+      // Right-click opens the song menu; songs the listener queued can be
+      // removed from it.
+      data-context-route={item.id ? `track:${item.id}` : undefined}
+      data-queued={added || undefined}
       ref={(element) => {
         if (element) rows.current.set(key, element);
         else rows.current.delete(key);
@@ -2426,10 +2430,18 @@ export function QueuePanel({
         )}
         {queued > 0 && (
           <section className="queue-section">
-            <h3>Next in queue</h3>
+            <div className="queue-heading">
+              <h3>Next in queue</h3>
+              <button
+                className="text-link muted"
+                onClick={() => onPlayer({ command: "clear_queue" })}
+              >
+                Clear queue
+              </button>
+            </div>
             {queue
               .slice(0, queued)
-              .map((item, index) => row(item, queueKeys[index]))}
+              .map((item, index) => row(item, queueKeys[index], false, true))}
           </section>
         )}
         {(queued < queue.length || !queue.length) && (

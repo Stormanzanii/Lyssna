@@ -1368,6 +1368,8 @@ fn apply_control(
             }
         }
         PlayerAction::Enqueue(uri) => spirc.add_to_queue(queue_uri(&uri)?)?,
+        PlayerAction::RemoveFromQueue(uri) => spirc.remove_from_queue(queue_uri(&uri)?.to_uri())?,
+        PlayerAction::ClearQueue => spirc.clear_queue()?,
         PlayerAction::Transfer(_) => {
             anyhow::bail!("This command requires Spotify's Web API")
         }

@@ -9736,7 +9736,8 @@ test("Start a Jam from a song copies the invite and shows the Jam above the queu
           },
         ],
         invite_url: "https://open.spotify.com/socialsession/jamtoken1",
-        qr_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>',
+        qr_svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0h1v1H0zM1 1h1v1H1z"/></svg>',
         queue_only: false,
       };
       host.emit({

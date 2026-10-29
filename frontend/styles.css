@@ -3376,6 +3376,15 @@ small {
     color 0.15s,
     background 0.15s,
     transform 0.15s;
+  /* Each button on its own GPU layer: its hover scale and moving icon
+     parts are drawn inside it, not re-snapped to screen pixels each frame,
+     which made icons away from the toolbar's anchored side wobble on
+     scaled displays. */
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.lyrics-toolbar .toolbar-icon {
+  shape-rendering: geometricPrecision;
 }
 /* Hidden until the pointer moves over the lyrics; stays while used. */
 .lyrics-toolbar {

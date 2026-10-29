@@ -132,6 +132,7 @@ import {
   useStickyLoadedImage,
   preloadImage,
   ExplicitBadge,
+  VerifiedBadge,
   usePosition,
 } from "./components";
 import "./styles.css";
@@ -3264,29 +3265,7 @@ function App() {
                         </h1>
                         {artistPage && artistVerified && (
                           <p className="artist-verified">
-                            <svg
-                              className="verified-badge"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              {/* The tick is cut out of the badge, so the
-                                  header shows through it. */}
-                              <mask id="verified-tick">
-                                <rect width="24" height="24" fill="#fff" />
-                                <path
-                                  d="m8.5 12 2.5 2.5 4.5-5"
-                                  fill="none"
-                                  stroke="#000"
-                                  strokeWidth="2.4"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </mask>
-                              <path
-                                mask="url(#verified-tick)"
-                                d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
-                              />
-                            </svg>
+                            <VerifiedBadge />
                             <span>Verified by Spotify</span>
                           </p>
                         )}

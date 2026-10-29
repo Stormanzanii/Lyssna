@@ -4,6 +4,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -20,7 +21,6 @@ import { filterWords } from "./word-filter";
 import { frameDue } from "./frame-cap";
 import { useArtworkColor } from "./artwork-color";
 import {
-  BadgeCheck,
   Music2,
   Maximize2,
   Upload,
@@ -389,6 +389,37 @@ export const EXPLICIT_MARK = (
     <path d="M5.5 4.2h5.1v1.7H7.3v1.25h3v1.7h-3v1.25h3.3v1.7H5.5z" />
   </svg>
 );
+/** Spotify's mint verified badge, its tick cut out so the background shows
+ * through. */
+export function VerifiedBadge({ label }: { label?: string }) {
+  const mask = useId();
+  return (
+    <svg
+      className="verified-badge"
+      viewBox="0 0 24 24"
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
+      <mask id={mask}>
+        <rect width="24" height="24" fill="#fff" />
+        <path
+          d="m8.5 12 2.5 2.5 4.5-5"
+          fill="none"
+          stroke="#000"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </mask>
+      <path
+        mask={`url(#${CSS.escape(mask)})`}
+        d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+      />
+    </svg>
+  );
+}
+
 export function ExplicitBadge({ track }: { track: Track }) {
   return track.explicit ? (
     <span className="explicit-badge" aria-label="Explicit" title="Explicit">
@@ -2197,11 +2228,7 @@ export function NowPlaying({
                   >
                     {artist.name}
                     {artist.verified && (
-                      <BadgeCheck
-                        className="verified-badge"
-                        size={20}
-                        aria-label="Verified artist"
-                      />
+                      <VerifiedBadge label="Verified artist" />
                     )}
                   </button>
                   <div className="artist-card-row">

@@ -1082,7 +1082,7 @@ small {
   line-height: 24px;
 }
 /* Spotify's mint badge with the tick cut out, centred on the text. */
-.artist-verified .verified-badge {
+.verified-badge {
   flex: none;
   width: 24px;
   height: 24px;
@@ -2239,7 +2239,7 @@ small {
   display: block;
   position: relative;
   width: 100%;
-  aspect-ratio: 1.4;
+  aspect-ratio: 1.5;
   overflow: hidden;
   text-align: left;
 }
@@ -2270,7 +2270,7 @@ small {
 }
 .artist-card-name {
   display: block;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.3;
   color: #fff;
@@ -2284,19 +2284,14 @@ small {
   align-items: center;
   gap: 6px;
 }
-.verified-badge {
-  flex-shrink: 0;
-  color: #4cb3ff;
-  fill: #4cb3ff;
-}
-.verified-badge path:last-child {
-  fill: none;
-  stroke: #fff;
+.artist-card-name .verified-badge {
+  width: 20px;
+  height: 20px;
 }
 .artist-bio {
-  margin-top: 12px;
-  font-size: 14px;
-  line-height: 1.5;
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.45;
   color: #ffffffb3;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -2308,19 +2303,22 @@ small {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .artist-card-row .pill,
 .credit > .pill {
   flex-shrink: 0;
-  font-size: 13px;
-  padding: 6px 15px;
+  font-size: 14px;
+  padding: 7px 16px;
   border-color: #ffffff80;
 }
 .artist-stat {
-  font-size: 14px;
+  font-size: 16px;
   color: #ffffffb3;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .artist-genres {
   font-size: 14px;

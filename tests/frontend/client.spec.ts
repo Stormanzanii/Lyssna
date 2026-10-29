@@ -127,6 +127,12 @@ test("artist portraits replace missing banners and metadata stays below either h
   expect(
     Math.abs(badge.y + badge.height / 2 - (label.y + label.height / 2)),
   ).toBeLessThan(1.5);
+  // The badge itself is drawn, filled in Spotify's mint.
+  expect(
+    await hero
+      .locator(".verified-badge > path")
+      .evaluate((node) => getComputedStyle(node).fill),
+  ).toBe("rgb(197, 240, 201)");
   // Artist pages reload when opened, so there is no Refresh.
   await expect(page.getByTitle("Refresh page")).toHaveCount(0);
   expect(

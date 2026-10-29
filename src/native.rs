@@ -2031,6 +2031,9 @@ async fn run(
         resume_on_startup: false,
         emit_set_queue_events: true,
         name: device_name(),
+        // A desktop client is a computer to Spotify, as the official app is.
+        // Discord's listen-along only plays on computers.
+        device_type: librespot_core::config::DeviceType::Computer,
         initial_volume: crate::config::Settings::load()
             .ok()
             .map(|settings| {

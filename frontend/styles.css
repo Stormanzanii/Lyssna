@@ -5584,6 +5584,10 @@ input[type="range"]:hover {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Room inside the clip for tall or slanted custom fonts, so descenders
+     and italic overhangs are not cut off; the margin keeps the layout. */
+  padding: 0.25em 0.15em;
+  margin: -0.25em -0.15em;
 }
 .community-credits .community-profile {
   display: inline-flex;
@@ -5624,7 +5628,8 @@ input[type="range"]:hover {
 .lyrics-title,
 .lyrics-artists,
 .lyric-source,
-.lyric-end-credits {
+.lyric-end-credits,
+.writer-credits {
   font-family: var(--lyric-detail-font, inherit);
 }
 

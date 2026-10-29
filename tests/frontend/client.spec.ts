@@ -3377,6 +3377,17 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   await expect(pinned).toContainText("Written by Writer One, Writer Two");
   await expect(pinned).toContainText("@TestMaker");
   await expect(flow.locator(".lyric-end-credits")).toHaveCount(0);
+  // The lyrics font sets the writers line as well as the provider line.
+  const fonts = await pinned.evaluate((node) => {
+    (node as HTMLElement).style.setProperty(
+      "--lyric-detail-font",
+      '"Courier New"',
+    );
+    const family = (selector: string) =>
+      getComputedStyle(node.querySelector(selector)!).fontFamily;
+    return [family(".writer-credits"), family(".lyric-source")];
+  });
+  expect(fonts).toEqual(['"Courier New"', '"Courier New"']);
   await page.screenshot({ path: "target/diagnostics/pinned-lyrics-full.png" });
   await page.evaluate(
     (uri) =>

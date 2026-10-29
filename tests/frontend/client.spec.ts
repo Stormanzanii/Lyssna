@@ -8250,12 +8250,13 @@ test("lyrics toolbar icons animate their parts on hover", async ({ page }) => {
     (await scaleOf("[data-icon='romanized'] .part-latin"))
       ? "symbol"
       : "latin";
-  // The A is in front until hovered; romanizing keeps the symbol in front.
+  // The A is in front, hovered too; romanizing puts the symbol in front.
   await page.mouse.move(5, 5);
   await expect.poll(front).toBe("latin");
   const translate = toolbar.getByTitle("Romanization", { exact: true });
   await translate.hover();
-  await expect.poll(front).toBe("symbol");
+  await page.waitForTimeout(350);
+  expect(await front()).toBe("latin");
   await translate.click();
   await page.mouse.move(5, 5);
   await expect.poll(front).toBe("symbol");
@@ -8263,13 +8264,30 @@ test("lyrics toolbar icons animate their parts on hover", async ({ page }) => {
   await translate.click();
   await page.mouse.move(5, 5);
   await expect.poll(front).toBe("latin");
+  // The layout toggles keep still on hover; moving parts read as a wobble.
+  for (const icon of [
+    "experimental_word_sync",
+    "lyrics_compact",
+    "lyrics_hide_artwork",
+    "lyrics_artwork_right",
+  ]) {
+    await toolbar.locator(`[data-icon="${icon}"]`).hover();
+    await page.waitForTimeout(250);
+    expect(
+      await page.evaluate(
+        (icon) =>
+          document
+            .querySelector(`[data-icon="${icon}"] svg`)!
+            .getAnimations({ subtree: true }).length,
+        icon,
+      ),
+    ).toBe(0);
+  }
   // The other icons run their own animation while hovered.
   for (const [icon, part] of [
     ["upload", ".part-arrow"],
     ["retry", ".part-spinner"],
     ["fullscreen", ".part-corner-out"],
-    ["lyrics_artwork_right", ".part-left"],
-    ["experimental_word_sync", ".part-bar"],
   ]) {
     await toolbar.locator(`[data-icon="${icon}"]`).hover();
     await expect

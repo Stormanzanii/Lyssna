@@ -3421,86 +3421,16 @@ small {
 .toolbar-icon-translate .part-latin {
   scale: 1.08;
 }
-[data-icon="romanized"]:hover .part-symbol,
 [data-icon="romanized"].active .part-symbol {
   opacity: 1;
   scale: 1.12;
 }
-[data-icon="romanized"]:hover .part-latin,
 [data-icon="romanized"].active .part-latin {
   opacity: 0.5;
   scale: 0.86;
 }
-/* Word sync: a level meter. Every bar starts from rest, so hovering
-   never jumps them to mid-bounce. */
-[data-icon="experimental_word_sync"]:hover .part-bar {
-  animation: icon-bar 0.9s ease-in-out infinite;
-}
-[data-icon="experimental_word_sync"]:hover .part-bar-1 {
-  animation-delay: 0.15s;
-}
-[data-icon="experimental_word_sync"]:hover .part-bar-2 {
-  animation-delay: 0.3s;
-}
-[data-icon="experimental_word_sync"]:hover .part-bar-3 {
-  animation-delay: 0.1s;
-}
-[data-icon="experimental_word_sync"]:hover .part-bar-4 {
-  animation-delay: 0.25s;
-}
-@keyframes icon-bar {
-  50% {
-    scale: 1 0.55;
-  }
-}
-/* Compact: the rows squeeze together. */
-.toolbar-icon-compact rect,
-.toolbar-icon-compact path {
-  transition:
-    scale 0.25s,
-    translate 0.25s;
-}
-[data-icon="lyrics_compact"]:hover .part-frame {
-  scale: 1 0.82;
-}
-[data-icon="lyrics_compact"]:hover .part-row-top {
-  translate: 0 1.5px;
-}
-[data-icon="lyrics_compact"]:hover .part-row-bottom {
-  translate: 0 -1.5px;
-}
-/* Hide artwork: the chevron pushes left, inside its panel. */
-[data-icon="lyrics_hide_artwork"]:hover .part-chevron {
-  animation: icon-push-left 0.9s ease-in-out infinite;
-}
-@keyframes icon-push-left {
-  50% {
-    translate: -2px 0;
-  }
-}
-/* Swap sides: the arrows pulse left and right in turn. */
-[data-icon="lyrics_artwork_right"]:hover .part-left {
-  animation: icon-pulse-left 0.9s ease-in-out infinite;
-}
-[data-icon="lyrics_artwork_right"]:hover .part-right {
-  animation: icon-pulse-right 0.9s ease-in-out infinite;
-}
-@keyframes icon-pulse-left {
-  25% {
-    translate: -2px 0;
-  }
-  50% {
-    translate: 0 0;
-  }
-}
-@keyframes icon-pulse-right {
-  50% {
-    translate: 0 0;
-  }
-  75% {
-    translate: 2px 0;
-  }
-}
+/* The five layout toggles keep still on hover: moving their parts read as
+   a wobble. Only the button itself lifts, as with the others. */
 /* Upload: the arrow shoots up and a new one rises from the tray. */
 [data-icon="upload"]:hover .part-arrow {
   animation: icon-shoot 1.1s ease-in-out infinite;

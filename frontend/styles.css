@@ -2350,7 +2350,7 @@ small {
   height: 20px;
   /* The line box centres below the letters; this lines the tick up with
      the name's capitals. */
-  translate: 0 -3px;
+  translate: 0 -1px;
 }
 .artist-bio {
   font-size: 15px;

@@ -1969,6 +1969,9 @@ fn player(
                     snapshot.playback.progress_ms.unwrap_or_default()
                 },
             );
+            if let Some(profile) = snapshot.profile.as_ref() {
+                action = crate::resume::in_context(&profile.id, action, !finished);
+            }
         }
         // Skipping to a queued song needs it coming up on this computer.
         // Otherwise, as after a restart, start the saved queue at it, or play
@@ -2036,6 +2039,9 @@ fn player(
             } else {
                 "No previous song in the saved queue"
             })?;
+            if let Some(profile) = snapshot.profile.as_ref() {
+                action = crate::resume::in_context(&profile.id, action, true);
+            }
         }
         if local && action.supports_native() {
             if matches!(action, PlayerAction::Enqueue(_)) {

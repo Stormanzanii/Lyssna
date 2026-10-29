@@ -910,6 +910,7 @@ fn preload_selection(action: &PlayerAction) -> Option<(librespot_core::SpotifyUr
             uris,
             offset,
             position_ms,
+            ..
         } => (
             uris.get(*offset)?.as_str(),
             (*position_ms).min(u64::from(u32::MAX)) as u32,
@@ -1030,6 +1031,15 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
         .map(|track| track.uri.clone())
         .collect();
     crate::resume::remember_native_queue(account, queue);
+    crate::resume::remember_native_context(
+        account,
+        (!is_dj_context(&context_uri)).then(|| context_uri.clone()),
+        next_tracks
+            .iter()
+            .filter(|track| track.provider == "queue")
+            .map(|track| track.uri.clone())
+            .collect(),
+    );
     let context = if is_dj_context(&context_uri) {
         (context_uri != librespot_connect::REQUESTED_DJ_CONTEXT).then_some(
             crate::resume::DJContext {
@@ -1255,10 +1265,26 @@ fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
                 (*offset).min(u32::MAX as usize) as u32
             ))),
         ),
+        // A restored song carries on through the playlist it came from, as
+        // Spotify's own app restores it.
         PlayerAction::Resume {
             uris,
             offset,
             position_ms,
+            context: Some(context),
+            ..
+        } if uris.get(*offset).is_some() => LoadRequest::from_context_uri(
+            context.clone(),
+            LoadRequestOptions {
+                seek_to: (*position_ms).min(u64::from(u32::MAX)) as u32,
+                ..options(uris.get(*offset).cloned().map(PlayingTrack::Uri))
+            },
+        ),
+        PlayerAction::Resume {
+            uris,
+            offset,
+            position_ms,
+            ..
         } => LoadRequest::from_tracks(
             uris.clone(),
             LoadRequestOptions {
@@ -1338,6 +1364,15 @@ fn apply_control(
         spirc.activate()?;
         *active = true;
         spirc.load(request)?;
+        // Spirc handles commands in order, so the restored queue follows the
+        // loaded song.
+        if let PlayerAction::Resume { queued, .. } = &action {
+            for uri in queued {
+                if let Ok(uri) = queue_uri(uri) {
+                    spirc.add_to_queue(uri)?;
+                }
+            }
+        }
         if let Some(state) = pending_repeat.take() {
             spirc.repeat(state == "context")?;
             spirc.repeat_track(state == "track")?;
@@ -2610,6 +2645,20 @@ mod tests {
             Some(PlayingTrack::Index(0))
         ));
         assert!(load_request(&PlayerAction::Pause).is_none());
+        // With its playlist saved, the song loads from the playlist itself.
+        let request = load_request(&PlayerAction::Resume {
+            uris: queue.clone(),
+            offset: 1,
+            position_ms: 77000,
+            context: Some("spotify:playlist:0123456789abcdefghijkl".into()),
+            queued: Vec::new(),
+        })
+        .unwrap();
+        assert_eq!(request.seek_to, 77000);
+        assert!(matches!(
+            &request.playing_track,
+            Some(PlayingTrack::Uri(uri)) if *uri == queue[1]
+        ));
     }
     #[test]
     fn listed_songs_load_under_their_context_without_resolving_it() {
@@ -2661,6 +2710,8 @@ mod tests {
                 session_url: None,
                 track_uid: Some("old-uid".into()),
             }),
+            context: None,
+            queued: Vec::new(),
         };
         let context = Context {
             pages: vec![ContextPage {
@@ -2801,6 +2852,8 @@ mod tests {
             uris: vec![uri.clone()],
             offset: 0,
             position_ms: 77000,
+            context: None,
+            queued: Vec::new(),
         };
         let (actual, position) = preload_selection(&action).unwrap();
         assert_eq!(actual.to_uri(), uri);

@@ -292,6 +292,11 @@ impl Spotify {
                     session_url: None,
                     track_uid: None,
                 }),
+            context: item["context"]["uri"]
+                .as_str()
+                .filter(|uri| crate::resume::valid_context(uri))
+                .map(Into::into),
+            queued: Vec::new(),
             queue: Vec::new(),
             track,
             position_ms: 0,
@@ -638,6 +643,10 @@ pub enum PlayerAction {
         uris: Vec<String>,
         offset: usize,
         position_ms: u64,
+        /// The saved playlist, album or Liked Songs to carry on through.
+        context: Option<String>,
+        /// Songs the listener had queued, added back after loading.
+        queued: Vec<String>,
     },
     /// Restore a paged DJ session before resuming or advancing its queue.
     RestoreDJ {

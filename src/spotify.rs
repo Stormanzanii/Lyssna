@@ -191,6 +191,8 @@ impl Spotify {
                         position_ms: 0,
                         queue: Vec::new(),
                         dj_context: None,
+                        context: None,
+                        queued: Vec::new(),
                     }
                 }))
             }

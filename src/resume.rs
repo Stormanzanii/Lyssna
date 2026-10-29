@@ -18,6 +18,92 @@ pub struct LastPlayed {
     pub queue: Vec<String>,
     #[serde(default)]
     pub dj_context: Option<DJContext>,
+    /// The playlist, album, artist or Liked Songs the song played from, so a
+    /// restart carries on through it instead of a short saved list.
+    #[serde(default)]
+    pub context: Option<String>,
+    /// Songs the listener queued, put back in the queue on restore.
+    #[serde(default)]
+    pub queued: Vec<String>,
+}
+
+fn valid_track(uri: &str) -> bool {
+    uri.strip_prefix("spotify:track:")
+        .is_some_and(|id| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+}
+
+/// A context a restart may load: a playlist, album or artist by ID, or a
+/// user's Liked Songs collection.
+pub(crate) fn valid_context(uri: &str) -> bool {
+    let id = |id: &str| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric());
+    if let Some(user) = uri
+        .strip_prefix("spotify:user:")
+        .and_then(|rest| rest.strip_suffix(":collection"))
+    {
+        return !user.is_empty()
+            && user.len() <= 64
+            && user
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte));
+    }
+    // DJ restores through its own session, never as a plain playlist.
+    uri != crate::home::DJ_URI
+        && ["spotify:playlist:", "spotify:album:", "spotify:artist:"]
+            .iter()
+            .any(|prefix| uri.strip_prefix(prefix).is_some_and(id))
+}
+
+type Contexts = HashMap<String, (Option<String>, Vec<String>)>;
+static CONTEXTS: LazyLock<Mutex<Contexts>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+/// What is playing from, and which songs the listener queued, as the native
+/// player last reported them.
+pub fn remember_native_context(account: &str, context: Option<String>, queued: Vec<String>) {
+    if let Ok(mut contexts) = CONTEXTS.lock() {
+        contexts.insert(
+            account.into(),
+            (
+                context.filter(|uri| valid_context(uri)),
+                queued
+                    .into_iter()
+                    .filter(|uri| valid_track(uri))
+                    .take(50)
+                    .collect(),
+            ),
+        );
+    }
+}
+fn saved_context(account: &str) -> (Option<String>, Vec<String>) {
+    CONTEXTS
+        .lock()
+        .ok()
+        .and_then(|contexts| contexts.get(account).cloned())
+        .unwrap_or_default()
+}
+/// Load a restored song from its playlist, album or Liked Songs, with the
+/// listener's queue after it, when the saved song played from one.
+pub fn in_context(
+    account: &str,
+    action: crate::api::PlayerAction,
+    with_queue: bool,
+) -> crate::api::PlayerAction {
+    match action {
+        crate::api::PlayerAction::Resume {
+            uris,
+            offset,
+            position_ms,
+            ..
+        } => {
+            let (context, queued) = saved_context(account);
+            crate::api::PlayerAction::Resume {
+                uris,
+                offset,
+                position_ms,
+                context,
+                queued: if with_queue { queued } else { Vec::new() },
+            }
+        }
+        action => action,
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -116,6 +202,11 @@ pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
         _ => return,
     };
     remember_dj_context(account, "", None);
+    let context = match action {
+        crate::api::PlayerAction::PlayUris { context, .. } => context.clone(),
+        _ => None,
+    };
+    remember_native_context(account, context, Vec::new());
     if let Ok(mut queues) = QUEUES.lock() {
         queues.insert(account.into(), queue.into_iter().take(100).collect());
     }
@@ -129,6 +220,8 @@ pub fn restore_action(uri: &str, queue: &[String], position_ms: u64) -> crate::a
         uris,
         offset,
         position_ms,
+        context: None,
+        queued: Vec::new(),
     }
 }
 /// Next or Previous on a restored, not yet loaded song: start the saved queue
@@ -152,6 +245,8 @@ pub fn skip_action(
         uris: queue.to_vec(),
         offset,
         position_ms: 0,
+        context: None,
+        queued: Vec::new(),
     })
 }
 pub fn queue(account: &str) -> Vec<String> {
@@ -182,6 +277,11 @@ pub fn load(account: &str) -> Option<LastPlayed> {
     if let Ok(mut queues) = QUEUES.lock() {
         queues.insert(account.into(), value.queue.clone());
     }
+    if let Ok(mut contexts) = CONTEXTS.lock() {
+        contexts
+            .entry(account.into())
+            .or_insert_with(|| (value.context.clone(), value.queued.clone()));
+    }
     if value.dj_context.is_some() && dj_context(account, &value.track.uri).is_none() {
         remember_dj_context(account, &value.track.uri, value.dj_context.clone());
     }
@@ -192,15 +292,12 @@ fn decode(bytes: &[u8]) -> Option<LastPlayed> {
         return None;
     }
     let mut value: LastPlayed = serde_json::from_slice(bytes).ok()?;
-    if value.queue.len() > 100
-        || value.queue.iter().any(|uri| {
-            !uri.strip_prefix("spotify:track:").is_some_and(|id| {
-                id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
-            })
-        })
-    {
+    if value.queue.len() > 100 || value.queue.iter().any(|uri| !valid_track(uri)) {
         return None;
     }
+    value.context = value.context.filter(|uri| valid_context(uri));
+    value.queued.retain(|uri| valid_track(uri));
+    value.queued.truncate(50);
     value.dj_context = value.dj_context.filter(DJContext::valid);
     value
         .track
@@ -260,6 +357,8 @@ pub fn save(account: &str, playback: &Playback, observed_at: u64, force: bool) -
             })
             .unwrap_or_default(),
         dj_context: dj_context(account, &track.uri),
+        context: saved_context(account).0,
+        queued: saved_context(account).1,
     };
     let path = path(account)?;
     std::fs::create_dir_all(path.parent().unwrap())?;
@@ -323,6 +422,8 @@ mod tests {
             played_at: 10,
             queue: vec![uri.into(), "spotify:track:bcdefghijklmnopqrstuvw".into()],
             dj_context: Some(context.clone()),
+            context: None,
+            queued: Vec::new(),
         };
         let reopened = decode(&serde_json::to_vec(&saved).unwrap()).unwrap();
         remember_dj_context(account, uri, reopened.dj_context);
@@ -375,6 +476,52 @@ mod tests {
         assert!(!context.valid());
     }
     #[test]
+    fn a_restore_carries_on_through_its_playlist_with_the_queue() {
+        let account = "context-restore-test";
+        let song = "spotify:track:abcdefghijklmnopqrstuv";
+        let queued = "spotify:track:bcdefghijklmnopqrstuvw";
+        remember_native_context(
+            account,
+            Some("spotify:playlist:0123456789abcdefghijkl".into()),
+            vec![queued.into(), "spotify:episode:nope".into()],
+        );
+        let restored = in_context(account, restore_action(song, &[song.into()], 5000), true);
+        assert!(matches!(
+            &restored,
+            crate::api::PlayerAction::Resume { context: Some(context), queued: list, .. }
+                if context == "spotify:playlist:0123456789abcdefghijkl" && list == &[queued]
+        ));
+        // A finished song starts over without bringing the old queue back.
+        let finished = in_context(account, restore_action(song, &[song.into()], 0), false);
+        assert!(matches!(
+            finished,
+            crate::api::PlayerAction::Resume { queued, .. } if queued.is_empty()
+        ));
+        // DJ and unknown contexts are never saved as a playlist.
+        remember_native_context(account, Some(crate::home::DJ_URI.into()), vec![]);
+        assert!(saved_context(account).0.is_none());
+    }
+    #[test]
+    fn saved_contexts_are_limited_to_playlists_albums_artists_and_liked_songs() {
+        for uri in [
+            "spotify:playlist:0123456789abcdefghijkl",
+            "spotify:album:0123456789abcdefghijkl",
+            "spotify:artist:0123456789abcdefghijkl",
+            "spotify:user:some.user_1:collection",
+        ] {
+            assert!(valid_context(uri), "{uri}");
+        }
+        for uri in [
+            "spotify:playlist:short",
+            "spotify:user::collection",
+            "spotify:user:a/b:collection",
+            "https://example.test/",
+            "spotify:show:0123456789abcdefghijkl",
+        ] {
+            assert!(!valid_context(uri), "{uri}");
+        }
+    }
+    #[test]
     fn restoring_playback_preserves_its_queue_position() {
         let queue: Vec<String> = vec![
             "spotify:track:first".into(),
@@ -382,10 +529,10 @@ mod tests {
             "spotify:track:third".into(),
         ];
         assert!(
-            matches!(restore_action(&queue[1],&queue,77000),crate::api::PlayerAction::Resume{uris,offset:1,position_ms:77000}if uris==queue)
+            matches!(restore_action(&queue[1],&queue,77000),crate::api::PlayerAction::Resume{uris,offset:1,position_ms:77000,..}if uris==queue)
         );
         assert!(
-            matches!(restore_action("spotify:track:other",&queue,45000),crate::api::PlayerAction::Resume{uris,offset:0,position_ms:45000}if uris==["spotify:track:other"])
+            matches!(restore_action("spotify:track:other",&queue,45000),crate::api::PlayerAction::Resume{uris,offset:0,position_ms:45000,..}if uris==["spotify:track:other"])
         );
     }
     #[test]
@@ -396,6 +543,8 @@ mod tests {
             played_at,
             queue: Vec::new(),
             dj_context: None,
+            context: None,
+            queued: Vec::new(),
         };
         assert_eq!(
             newer(Some(value(20)), Some(value(10))).unwrap().played_at,

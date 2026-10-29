@@ -3637,7 +3637,7 @@ small {
   }
 }
 .lyric-preview {
-  height: 350px;
+  height: 304px;
   container-type: inline-size;
   position: relative;
   display: flex;

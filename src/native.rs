@@ -1897,7 +1897,6 @@ impl NativePlayer {
         repaint: crate::notify::Notifier,
         controls: NativeControls,
     ) -> Self {
-        log_librespot();
         Self::start_with_login(account, generation, events, repaint, controls, None)
     }
 
@@ -1926,6 +1925,7 @@ impl NativePlayer {
         controls: NativeControls,
         login: Option<crate::native_login::Authenticated>,
     ) -> Self {
+        log_librespot();
         let (stop, mut stopped) = oneshot::channel();
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel = cancelled.clone();

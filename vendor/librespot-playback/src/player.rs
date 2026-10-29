@@ -1089,7 +1089,17 @@ impl PlayerTrackLoader {
         position_ms: u32,
         narration: Option<Narration>,
     ) -> Option<PlayerLoadedTrackData> {
-        let music = async { self.load_bare_track(track_uri, position_ms).await.ok_or(()) };
+        // SpotiFlex: a fetch can fail once (audio key, file or metadata
+        // request) and work a moment later, as going back to the song
+        // showed. Try again once before calling it unavailable.
+        let music = async {
+            if let Some(loaded) = self.load_bare_track(track_uri.clone(), position_ms).await {
+                return Ok(loaded);
+            }
+            warn!("<{track_uri}> failed to load, trying once more");
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            self.load_bare_track(track_uri, position_ms).await.ok_or(())
+        };
         let speech = async {
             if !self.config.passthrough
                 && let Some(narration) = narration.as_ref()

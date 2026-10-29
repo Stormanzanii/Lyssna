@@ -2150,16 +2150,21 @@ export function NowPlaying({
             )}
             {artist && (
               <article className="now-card artist-card">
-                {artist.gallery_image || imageOf(artist.images) ? (
+                {!artist.about_loaded ||
+                artist.gallery_image ||
+                imageOf(artist.images) ? (
                   <button
                     className="artist-portrait"
                     onClick={() => onArtist(artist)}
                   >
-                    {/* Spotify's card shows the About section's photo. */}
-                    <img
-                      src={artist.gallery_image || imageOf(artist.images)}
-                      alt={artist.name}
-                    />
+                    {/* Spotify's card shows the About section's photo; until
+                        it is known, nothing, so the avatar never flashes. */}
+                    {artist.about_loaded && (
+                      <img
+                        src={artist.gallery_image || imageOf(artist.images)}
+                        alt={artist.name}
+                      />
+                    )}
                     <strong>About the artist</strong>
                   </button>
                 ) : (

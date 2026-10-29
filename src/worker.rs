@@ -1760,19 +1760,27 @@ impl Backend {
                             });
                             context.request_repaint();
                         };
-                        // Last visit's card first; the page then refreshes it.
-                        if let Some(saved) = crate::artist::saved(&artist_id) {
+                        // Last visit's card first, when it has the About photo; an
+                        // older copy without one would flash the avatar first.
+                        if let Some(saved) = crate::artist::saved(&artist_id)
+                            .filter(|saved| saved.gallery_image.is_some())
+                        {
                             send(saved);
                         }
                         // Spotify's own catalogue first, as the artist page does: the
                         // public web page has no About photos for the card.
-                        if let Ok(overview) = native
+                        let native = native
                             .catalogue("artist", &artist_id, 0)
-                            .and_then(|entity| crate::artist::from_entity(&entity, &artist_id))
-                            .or_else(|_| crate::artist::fetch(&client, &artist_id))
-                        {
-                            send(overview);
+                            .and_then(|entity| crate::artist::from_entity(&entity, &artist_id));
+                        if let Ok(overview) = &native {
+                            crate::artist::save(&artist_id, overview);
                         }
+                        // Sent even when nothing loaded, so the card stops waiting.
+                        send(
+                            native
+                                .or_else(|_| crate::artist::fetch(&client, &artist_id))
+                                .unwrap_or_default(),
+                        );
                     });
                 }
             }

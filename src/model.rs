@@ -27,6 +27,10 @@ pub struct Artist {
     /// About the artist card shows.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gallery_image: String,
+    /// Set once the artist's About details arrived, so Now playing's card
+    /// waits for its photo instead of showing the avatar first.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub about_loaded: bool,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

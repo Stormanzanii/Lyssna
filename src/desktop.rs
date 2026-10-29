@@ -464,6 +464,7 @@ impl Desktop {
                                         if let Some(url) = &gallery {
                                             artist.gallery_image = url.clone();
                                         }
+                                        artist.about_loaded = true;
                                         // Local playback only knows artists whose page
                                         // was opened; fall back to the header photo.
                                         if artist.images.is_empty()
@@ -837,7 +838,27 @@ impl Desktop {
                                 .as_ref()
                                 .is_some_and(|track| track.uri == uri)
                             {
-                                snapshot.details = *details.clone();
+                                let mut details = *details;
+                                // Same song again: keep the About details already
+                                // shown, so the card's photo never blinks out.
+                                for artist in &mut details.artists {
+                                    if let Some(known) =
+                                        snapshot.details.artists.iter().find(|known| {
+                                            known.about_loaded && known.id == artist.id
+                                        })
+                                    {
+                                        artist.about_loaded = true;
+                                        artist.gallery_image = known.gallery_image.clone();
+                                        artist.header_image = known.header_image.clone();
+                                        artist.monthly_listeners = known.monthly_listeners;
+                                        artist.verified = known.verified;
+                                        artist.biography = known.biography.clone();
+                                        if artist.images.is_empty() {
+                                            artist.images = known.images.clone();
+                                        }
+                                    }
+                                }
+                                snapshot.details = details.clone();
                                 emit(json!({"type":"playing_details","uri":uri,"details":details}));
                             }
                         }

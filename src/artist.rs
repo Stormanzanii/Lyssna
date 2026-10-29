@@ -116,7 +116,7 @@ pub fn saved(id: &str) -> Option<ArtistOverview> {
     serde_json::from_slice(&std::fs::read(saved_path(id)?).ok()?).ok()
 }
 
-fn save(id: &str, overview: &ArtistOverview) {
+pub(crate) fn save(id: &str, overview: &ArtistOverview) {
     if let Some(path) = saved_path(id)
         && path
             .parent()

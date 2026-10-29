@@ -13479,33 +13479,45 @@ test("About the artist shows the About section's photo, as Spotify does", async 
   await startClient(page);
   const avatar = "https://i.scdn.co/image/avatar";
   const gallery = "https://i.scdn.co/image/gallery";
-  await page.evaluate(
-    ({ track, playback, avatar, gallery }) => {
-      const host = (window as any).__clientTest;
-      host.emit({
-        type: "playback",
-        playback: { ...playback, item: track, is_playing: true },
-        observed_at: Date.now(),
-        changed: true,
-      });
-      host.emit({
-        type: "playing_details",
-        uri: track.uri,
-        details: {
-          artists: [
-            {
-              ...track.artists[0],
-              images: [{ url: avatar }],
-              gallery_image: gallery,
-            },
-          ],
-          queue: [],
-          queued: 0,
-        },
-      });
-    },
-    { track, playback: emptyState.playback, avatar, gallery },
-  );
+  const emit = (loaded: boolean) =>
+    page.evaluate(
+      ({ track, playback, avatar, gallery, loaded }) => {
+        const host = (window as any).__clientTest;
+        host.emit({
+          type: "playback",
+          playback: { ...playback, item: track, is_playing: true },
+          observed_at: Date.now(),
+          changed: true,
+        });
+        host.emit({
+          type: "playing_details",
+          uri: track.uri,
+          details: {
+            artists: [
+              {
+                ...track.artists[0],
+                images: [{ url: avatar }],
+                ...(loaded
+                  ? { gallery_image: gallery, about_loaded: true }
+                  : {}),
+              },
+            ],
+            queue: [],
+            queued: 0,
+          },
+        });
+      },
+      { track, playback: emptyState.playback, avatar, gallery, loaded },
+    );
+  // Until the About details arrive, no photo: the avatar never flashes.
+  await emit(false);
+  await expect(
+    page.locator(".now-playing .artist-card .artist-portrait"),
+  ).toBeVisible();
+  await expect(
+    page.locator(".now-playing .artist-card .artist-portrait img"),
+  ).toHaveCount(0);
+  await emit(true);
   await expect(
     page.locator(".now-playing .artist-card .artist-portrait img"),
   ).toHaveAttribute("src", gallery);

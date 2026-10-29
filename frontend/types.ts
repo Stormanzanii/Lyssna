@@ -8,6 +8,8 @@ export interface Artist {
   header_image?: string;
   /** The About section's first photo, for Now playing's artist card. */
   gallery_image?: string;
+  /** The About details arrived; Now playing's card waits for them. */
+  about_loaded?: boolean;
   monthly_listeners?: number;
   id?: string;
   uri?: string;

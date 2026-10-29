@@ -461,8 +461,8 @@ small {
   font-size: 14px;
 }
 .lyrics-album > .dj-art {
-  width: 100%;
-  max-width: 460px;
+  width: var(--lyrics-art, 100%);
+  max-width: none;
   margin: 0 auto;
   border-radius: 8px;
   box-shadow: 0 18px 50px #0005;
@@ -2602,8 +2602,18 @@ small {
   overflow: hidden;
 }
 .lyrics-album {
+  /* Artwork takes the same share of the page at any resolution, about
+     half its height as in Spicy Lyrics, never wider than its column. The
+     title and artists keep to the artwork's width. */
+  --lyrics-art: min(100%, 50vh);
   min-width: 0;
   text-align: center;
+}
+.lyrics-page:not(.narrow, .canvas-lyrics)
+  .lyrics-album
+  :is(.lyrics-title, .lyrics-artists) {
+  max-width: var(--lyrics-art);
+  margin-inline: auto;
 }
 .lyrics-album > .cover {
   width: 100%;

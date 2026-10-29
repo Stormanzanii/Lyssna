@@ -10132,6 +10132,64 @@ async function gravityWithoutCanvas(page: Page) {
   ).toBeVisible();
 }
 
+test("lyrics artwork scales with the window and the title keeps to its width", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            name: "A song title long enough to run well past the artwork",
+          },
+          is_playing: false,
+          progress_ms: 0,
+          device: { name: "SpotiFlex", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  const measure = () =>
+    page.locator(".lyrics-page").evaluate((root) => {
+      const width = (selector: string) =>
+        root.querySelector(selector)!.getBoundingClientRect().width;
+      return {
+        // The most the artwork may take: its column, or half the height.
+        room: Math.min(width(".lyrics-album"), innerHeight / 2),
+        cover: width(".lyrics-media > .cover"),
+        title: width(".lyrics-title"),
+        artists: width(".lyrics-artists"),
+      };
+    });
+  const small = await measure();
+  // It fills that room rather than stopping at a fixed size.
+  expect(small.cover).toBeCloseTo(small.room, 0);
+  expect(small.title).toBeLessThanOrEqual(small.cover + 1);
+  expect(small.artists).toBeLessThanOrEqual(small.cover + 1);
+  await page.screenshot({ path: "test-results/lyrics-art-1600.png" });
+  await page.setViewportSize({ width: 2400, height: 1400 });
+  await expect
+    .poll(async () => (await measure()).cover)
+    .toBeGreaterThan(small.cover * 1.2);
+  const large = await measure();
+  expect(large.cover).toBeCloseTo(large.room, 0);
+  expect(large.cover).toBeGreaterThan(460);
+  expect(large.title).toBeLessThanOrEqual(large.cover + 1);
+  await page.screenshot({ path: "test-results/lyrics-art-2400.png" });
+});
+
 test("Space Gravity without Canvas floats around the artwork, not over it", async ({
   page,
 }) => {

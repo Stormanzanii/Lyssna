@@ -1,7 +1,7 @@
 .lyrics-media {
   position: relative;
-  width: 100%;
-  max-width: 460px;
+  width: var(--lyrics-art, 100%);
+  max-width: none;
   margin: 0 auto;
   border-radius: 8px;
 }
@@ -72,9 +72,12 @@
 }
 /* Artwork takes the same share of the screen at any resolution: about
    half its height, never wider than its column. */
+.immersive .lyrics-album {
+  --lyrics-art: min(100%, 52vh);
+}
 .immersive .lyrics-media {
   container-type: inline-size;
-  width: min(100%, 52vh);
+  width: var(--lyrics-art);
   max-width: none;
 }
 .immersive .lyrics-media > .cover {

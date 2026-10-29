@@ -1,5 +1,6 @@
 import type {
   AppEvent,
+  ArtistAbout,
   BrowseInfo,
   Device,
   Snapshot,
@@ -85,6 +86,8 @@ export function nextToggle(
 export interface AppState extends Snapshot {
   restoring_session: boolean;
   canvases: Record<string, string | undefined>;
+  /** About details by artist ID, upcoming artists included. */
+  artist_about: Record<string, ArtistAbout>;
   facts: Record<string, TrackFacts>;
   booted: boolean;
   devices: Device[];
@@ -110,6 +113,7 @@ export const emptyState: AppState = {
   home_loading: false,
   home_error: "",
   canvases: {},
+  artist_about: {},
   facts: {},
   booted: false,
   restoring_session: true,
@@ -318,6 +322,17 @@ export function reducer(state: AppState, action: Action): AppState {
       return state.profile
         ? { ...state, facts: { ...state.facts, ...action.facts } }
         : state;
+    case "artist_about": {
+      const kept = { ...state.artist_about };
+      delete kept[action.id];
+      return {
+        ...state,
+        artist_about: {
+          ...Object.fromEntries(Object.entries(kept).slice(-127)),
+          [action.id]: action.about,
+        },
+      };
+    }
     case "canvas_prefetch":
       return {
         ...state,

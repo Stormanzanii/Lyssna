@@ -441,6 +441,22 @@ impl Desktop {
                             verified,
                             biography,
                         } => {
+                            // Every artist's About, upcoming ones too: the window
+                            // keeps them by artist and preloads the photo, so the
+                            // card fills the moment a song starts.
+                            emit(json!({
+                                "type": "artist_about",
+                                "id": artist_id,
+                                "about": {
+                                    "about_loaded": true,
+                                    "gallery_image": gallery,
+                                    "header_image": header,
+                                    "monthly_listeners": listeners,
+                                    "verified": verified,
+                                    "biography": biography,
+                                    "image": image,
+                                },
+                            }));
                             if snapshot
                                 .playback
                                 .item

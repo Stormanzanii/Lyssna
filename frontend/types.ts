@@ -3,6 +3,17 @@ export interface Artwork {
   url: string;
   width?: number;
 }
+/** An artist's About details for Now playing's card, kept by artist. */
+export type ArtistAbout = {
+  about_loaded: true;
+  gallery_image?: string | null;
+  header_image?: string | null;
+  monthly_listeners?: number | null;
+  verified?: boolean | null;
+  biography?: string;
+  /** Header photo or avatar, for artists with no other picture. */
+  image?: string | null;
+};
 export interface Artist {
   /** The artist page's wide header photo. */
   header_image?: string;
@@ -424,6 +435,7 @@ export type AppEvent =
   | { type: "track_facts"; facts: Record<string, TrackFacts> }
   | { type: "canvas"; uri: string; url?: string }
   | { type: "canvas_prefetch"; uri: string; url: string }
+  | { type: "artist_about"; id: string; about: ArtistAbout }
   | { type: "page_prefetch"; key: string; tracks: Track[]; more: boolean }
   | { type: "info_prefetch"; info: BrowseInfo }
   | { type: "session"; profile: Profile; can_follow: boolean }

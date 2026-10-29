@@ -2021,8 +2021,28 @@ export function NowPlaying({
   canvasInLyrics?: boolean;
 } & Links) {
   const track = state.playback.item;
-  const artist = state.details.artists[0] ?? track?.artists[0],
-    next = state.details.queue[0];
+  const listed = state.details.artists[0] ?? track?.artists[0];
+  // About details arrive by artist, often before the song's details, and
+  // for upcoming songs ahead of time.
+  const about = listed?.id ? state.artist_about[listed.id] : undefined;
+  const artist: Artist | undefined =
+    listed && about && !listed.about_loaded
+      ? {
+          ...listed,
+          about_loaded: true,
+          gallery_image: about.gallery_image || listed.gallery_image,
+          header_image: about.header_image || listed.header_image,
+          monthly_listeners:
+            about.monthly_listeners ?? listed.monthly_listeners,
+          verified: about.verified ?? listed.verified,
+          biography: about.biography || listed.biography,
+          images:
+            listed.images?.length || !about.image
+              ? listed.images
+              : [{ url: about.image }],
+        }
+      : listed;
+  const next = state.details.queue[0];
   const saved = track && state.saved[track.uri];
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
   if (state.narrating)

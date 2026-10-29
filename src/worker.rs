@@ -1618,6 +1618,19 @@ impl Backend {
                 });
             }
             Command::PlayingDetails(track) => {
+                // The artist card's About details first, before the queue and
+                // metadata calls below can hold them up.
+                if let Some(artist_id) = track.artists.first().and_then(|artist| artist.id.clone())
+                {
+                    spawn_artist_about(
+                        self.scoped_native(),
+                        self.client.clone(),
+                        self.events.clone(),
+                        self.context.clone(),
+                        track.uri.clone(),
+                        artist_id,
+                    );
+                }
                 self.publish_saved(vec![track.uri.clone()]);
                 let canvas_track = track.uri.clone();
                 let native = self.scoped_native();
@@ -1707,12 +1720,18 @@ impl Backend {
                             .lyrics
                             .send(LyricCommand::Prefetch(track, token.clone()));
                     }
-                    let client = self.client.clone();
-                    thread::spawn(move || {
-                        for id in artists {
-                            let _ = crate::artist::fetch(&client, &id);
-                        }
-                    });
+                    // Through Spotify's catalogue, as the card loads it, so the
+                    // About photo is ready (and preloaded) before the skip.
+                    for id in artists {
+                        spawn_artist_about(
+                            self.scoped_native(),
+                            self.client.clone(),
+                            self.events.clone(),
+                            self.context.clone(),
+                            String::new(),
+                            id,
+                        );
+                    }
                 }
                 {
                     // Warm the next tracks' Canvas so skipping shows video at once.
@@ -1739,50 +1758,6 @@ impl Backend {
                         queued,
                     }),
                 });
-                if let Some(artist_id) = track.artists.first().and_then(|artist| artist.id.clone())
-                {
-                    let client = self.client.clone();
-                    let events = self.events.clone();
-                    let context = self.context.clone();
-                    let uri = track.uri;
-                    let native = self.scoped_native();
-                    thread::spawn(move || {
-                        let send = |overview: crate::artist::ArtistOverview| {
-                            let _ = events.send(Event::ArtistStats {
-                                uri: uri.clone(),
-                                artist_id: artist_id.clone(),
-                                listeners: overview.monthly_listeners,
-                                header: overview.header_image.clone(),
-                                gallery: overview.gallery_image.clone(),
-                                image: overview.header_image.or(overview.avatar_image),
-                                verified: overview.verified,
-                                biography: overview.biography,
-                            });
-                            context.request_repaint();
-                        };
-                        // Last visit's card first, when it has the About photo; an
-                        // older copy without one would flash the avatar first.
-                        if let Some(saved) = crate::artist::saved(&artist_id)
-                            .filter(|saved| saved.gallery_image.is_some())
-                        {
-                            send(saved);
-                        }
-                        // Spotify's own catalogue first, as the artist page does: the
-                        // public web page has no About photos for the card.
-                        let native = native
-                            .catalogue("artist", &artist_id, 0)
-                            .and_then(|entity| crate::artist::from_entity(&entity, &artist_id));
-                        if let Ok(overview) = &native {
-                            crate::artist::save(&artist_id, overview);
-                        }
-                        // Sent even when nothing loaded, so the card stops waiting.
-                        send(
-                            native
-                                .or_else(|_| crate::artist::fetch(&client, &artist_id))
-                                .unwrap_or_default(),
-                        );
-                    });
-                }
             }
             Command::SetSaved { uri, saved } => {
                 if (!self.native_ready() || self.native_controls.set_saved(&uri, saved).is_err())
@@ -1947,6 +1922,72 @@ fn fetch_live_tracks(
 
 /// Canvas video URL for a track, from the cache or the Spotify Connect
 /// metadata service.
+/// Loads an artist's About details for Now playing's card: the saved copy
+/// at once when it has the About photo, then Spotify's catalogue, saved for
+/// next time. `uri` is the song it is for, empty when warming an upcoming one.
+fn spawn_artist_about(
+    native: NativeControls,
+    client: reqwest::blocking::Client,
+    events: mpsc::Sender<Event>,
+    context: Notifier,
+    uri: String,
+    artist_id: String,
+) {
+    thread::spawn(move || {
+        let send = |overview: crate::artist::ArtistOverview| {
+            let _ = events.send(Event::ArtistStats {
+                uri: uri.clone(),
+                artist_id: artist_id.clone(),
+                listeners: overview.monthly_listeners,
+                header: overview.header_image.clone(),
+                gallery: overview.gallery_image.clone(),
+                image: overview.header_image.or(overview.avatar_image),
+                verified: overview.verified,
+                biography: overview.biography,
+            });
+            context.request_repaint();
+        };
+        // Loaded from the catalogue lately: the saved copy is that answer.
+        static RECENT: std::sync::Mutex<Option<HashMap<String, Instant>>> =
+            std::sync::Mutex::new(None);
+        let recent = RECENT.lock().ok().is_some_and(|mut recent| {
+            let recent = recent.get_or_insert_with(HashMap::new);
+            recent.retain(|_, when| when.elapsed() < Duration::from_secs(600));
+            recent.contains_key(&artist_id)
+        });
+        if recent {
+            send(crate::artist::saved(&artist_id).unwrap_or_default());
+            return;
+        }
+        // An older copy without the About photo would flash the avatar.
+        if let Some(saved) =
+            crate::artist::saved(&artist_id).filter(|saved| saved.gallery_image.is_some())
+        {
+            send(saved);
+        }
+        // The public web page has no About photos, so the catalogue comes first.
+        let native = native
+            .catalogue("artist", &artist_id, 0)
+            .and_then(|entity| crate::artist::from_entity(&entity, &artist_id));
+        if let Ok(overview) = &native {
+            crate::artist::save(&artist_id, overview);
+            // Marked only once saved, so a parallel request never reads an
+            // unsaved copy.
+            if let Ok(mut recent) = RECENT.lock() {
+                recent
+                    .get_or_insert_with(HashMap::new)
+                    .insert(artist_id.clone(), Instant::now());
+            }
+        }
+        // Sent even when nothing loaded, so the card stops waiting.
+        send(
+            native
+                .or_else(|_| crate::artist::fetch(&client, &artist_id))
+                .unwrap_or_default(),
+        );
+    });
+}
+
 fn canvas_url(native: &NativeControls, uri: &str) -> Option<String> {
     if let Some(url) = crate::canvas::cached(uri) {
         return url;

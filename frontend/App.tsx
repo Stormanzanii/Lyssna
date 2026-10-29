@@ -649,6 +649,11 @@ function App() {
           return;
         }
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);
+        // Upcoming artists' About photos, decoded before their songs start.
+        if (event.type === "artist_about")
+          void preloadImage(
+            event.about.gallery_image || event.about.image || undefined,
+          );
         if (event.type === "session")
           void preloadImage(imageOf(event.profile.images));
         if (event.type === "browse_info" || event.type === "info_prefetch") {

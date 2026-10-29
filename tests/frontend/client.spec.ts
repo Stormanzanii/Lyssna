@@ -13522,3 +13522,33 @@ test("About the artist shows the About section's photo, as Spotify does", async 
     page.locator(".now-playing .artist-card .artist-portrait img"),
   ).toHaveAttribute("src", gallery);
 });
+
+test("an artist's About sent ahead fills the card as the song starts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  const gallery = "https://i.scdn.co/image/ahead";
+  await page.evaluate(
+    ({ track, playback, gallery }) => {
+      const host = (window as any).__clientTest;
+      // Warmed while the previous song played.
+      host.emit({
+        type: "artist_about",
+        id: track.artists[0].id,
+        about: { about_loaded: true, gallery_image: gallery },
+      });
+      // The song starts; its details have not arrived yet.
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+    },
+    { track, playback: emptyState.playback, gallery },
+  );
+  await expect(
+    page.locator(".now-playing .artist-card .artist-portrait img"),
+  ).toHaveAttribute("src", gallery);
+});

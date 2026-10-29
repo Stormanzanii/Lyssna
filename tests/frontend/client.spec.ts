@@ -4946,20 +4946,24 @@ test("Space Gravity marker links leave each word once it is inked, at the Highli
         Number((path as SVGPathElement).style.strokeDashoffset),
       ),
     );
-  // Back to back, a link glides out while the word before is sung, so it
-  // reaches its word as that word starts.
+  // A link never leaves a word still being inked: "Quick" must finish
+  // first. Back to back, it still glides rather than snapping whole.
+  await expect(links).toHaveCount(0);
+  await at(100);
   await expect(links).toHaveCount(1);
+  expect((await offsets())[0]).toBeGreaterThan(0.9);
+  await at(150);
   await expect
     .poll(async () => (await offsets())[0])
     .toBeGreaterThan(0.05);
   expect((await offsets())[0]).toBeLessThan(0.95);
-  // "quick" starts: the first link has landed and only then does the
-  // second set off, so the two read as one line.
-  await at(100);
+  await expect(links).toHaveCount(1);
+  // It lands as "quick" ends, when the second link sets off, so the two
+  // read as one line.
+  await at(200);
   await expect.poll(async () => (await offsets())[0]).toBe(0);
   await expect(links).toHaveCount(2);
-  expect((await offsets())[1]).toBeGreaterThan(0.9);
-  await at(200);
+  await at(450);
   await expect.poll(offsets).toEqual([0, 0]);
   // As broad as the Highlighter's band on the words.
   const width = await links

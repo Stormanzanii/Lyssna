@@ -3655,7 +3655,14 @@ small {
   padding: 0 8px;
 }
 /* The card's lyrics start just under its header, so the top fade grows
-   with scrolling: the first line is never faded while nothing is above. */
+   with scrolling: the first line is never faded while nothing is above.
+   Registered as not inherited, so changing it restyles only the scroller,
+   not every lyric inside it. */
+@property --scrolled {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
 .compact .lyric-scroll {
   mask-image: linear-gradient(
     transparent,

@@ -803,7 +803,14 @@ export function LyricsDisplay({
         data-at-end={atEnd}
         onScroll={(event) => {
           const node = event.currentTarget;
-          node.style.setProperty("--scrolled", `${node.scrollTop}px`);
+          // Only the Now playing card fades its top by scroll distance. The
+          // value stops changing once the fade is whole, so scrolling does
+          // not restyle the lyrics on every frame.
+          if (compact) {
+            const scrolled = `${Math.min(80, Math.round(node.scrollTop))}px`;
+            if (node.style.getPropertyValue("--scrolled") !== scrolled)
+              node.style.setProperty("--scrolled", scrolled);
+          }
           setAtEnd(
             node.scrollTop + node.clientHeight >= node.scrollHeight - 24,
           );

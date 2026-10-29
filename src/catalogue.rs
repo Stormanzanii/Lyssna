@@ -170,10 +170,18 @@ pub async fn credits(session: &Session, id: &str) -> Result<TrackCredits> {
     Ok(grouped_credits(&data))
 }
 /// Groups contributors by their role group in Spotify's order, each person
-/// once per group with all their roles in it.
+/// once per group with all their roles in it. As in Spotify, only the
+/// track's own artists, in the first group, link and can be followed.
 fn grouped_credits(data: &Value) -> TrackCredits {
     let track = &data["data"]["trackUnion"];
     let text = |value: &Value| value.as_str().map(str::trim).unwrap_or_default().to_owned();
+    let main: Option<std::collections::HashSet<&str>> =
+        track["artists"]["items"].as_array().map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item["uri"].as_str())
+                .collect()
+        });
     let mut groups: Vec<CreditGroup> = Vec::new();
     for item in track["creditsTrait"]["contributors"]["items"]
         .as_array()
@@ -188,10 +196,13 @@ fn grouped_credits(data: &Value) -> TrackCredits {
             .filter(|group| !group.is_empty())
             .unwrap_or_else(|| "Other".into());
         let role = text(&item["role"]);
+        let first = groups.first().is_none_or(|group| group.name == group_name);
         let uri = item["uri"].as_str().filter(|uri| {
-            uri.strip_prefix("spotify:artist:").is_some_and(|id| {
-                id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
-            })
+            first
+                && main.as_ref().is_none_or(|main| main.contains(uri))
+                && uri.strip_prefix("spotify:artist:").is_some_and(|id| {
+                    id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                })
         });
         let group = match groups.iter().position(|group| group.name == group_name) {
             Some(index) => &mut groups[index],
@@ -299,9 +310,13 @@ mod base_tests {
     #[test]
     fn credits_group_like_spotifys_dialog() {
         let artist = "spotify:artist:0123456789abcdefghijkl";
-        let data = json!({"data":{"trackUnion":{"name":"it boy","creditsTrait":{
+        let writer = "spotify:artist:abcdefghijkl0123456789";
+        let data = json!({"data":{"trackUnion":{"name":"it boy",
+            "artists":{"items":[{"uri":artist}]},
+            "creditsTrait":{
             "contributors":{"items":[
                 {"name":"bbno$","role":"Main Artist","roleGroup":{"name":"Artist"},"uri":artist},
+                {"name":"Vi","role":"Composer","roleGroup":{"name":"Composition & Lyrics"},"uri":writer},
                 {"name":"Kyle","role":"Lyricist","roleGroup":{"name":"Composition & Lyrics"}},
                 {"name":"Kyle","role":"Composer","roleGroup":{"name":"Composition & Lyrics"}},
                 {"name":"Pink Slip","role":"Producer","roleGroup":{"name":"Production & Engineering"},"uri":"spotify:artist:bad"},
@@ -328,7 +343,10 @@ mod base_tests {
             ]
         );
         assert_eq!(credits.groups[0].credits[0].uri.as_deref(), Some(artist));
-        assert_eq!(credits.groups[1].credits[0].roles, ["Lyricist", "Composer"]);
+        // Spotify offers Follow only for the track's own artists.
+        assert_eq!(credits.groups[1].credits[0].name, "Vi");
+        assert_eq!(credits.groups[1].credits[0].uri, None);
+        assert_eq!(credits.groups[1].credits[1].roles, ["Lyricist", "Composer"]);
         assert_eq!(credits.groups[2].credits[0].uri, None);
         assert_eq!(credits.sources, ["bbno$$"]);
     }

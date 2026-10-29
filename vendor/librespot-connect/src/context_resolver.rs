@@ -276,7 +276,13 @@ impl ContextResolver {
 
         match next.update {
             ContextType::Default => {
-                if let Some(mut context) = self.dj.take(resolve_uri, next.fresh).await {
+                if let Some(context) = self.dj.take(resolve_uri, next.fresh).await {
+                    let mut context = if next.fresh && resolve_uri == crate::dj_cache::DJ_URI {
+                        self.dj.fresh_set(context).await
+                    } else {
+                        context
+                    };
+                    self.dj.prepare(Some(context.clone()));
                     context.uri = Some(next.context_uri().to_owned());
                     context.url = Some(format!("context://{}", next.context_uri()));
                     return Ok(context);
@@ -306,24 +312,11 @@ impl ContextResolver {
                 if let Some((session, shell_metadata)) = session {
                     debug!("resolving {resolve_uri} through its session {session}");
                     ctx = self.session.spclient().get_context_url(&session).await;
-                    // The session holds every set since it began, and nothing tells which
-                    // were heard, so a fresh start asks for a new set, as "Let DJ pick" does.
-                    let new_set = ctx
-                        .as_ref()
-                        .ok()
-                        .filter(|_| next.fresh)
-                        .and_then(|ctx| ctx.pages.last()?.next_page_url.clone());
-                    if let Some(new_set) = new_set {
-                        match self.session.spclient().get_context_page(&new_set).await {
-                            Ok(page) => {
-                                if let Ok(ctx) = ctx.as_mut() {
-                                    ctx.pages = vec![page];
-                                }
-                            }
-                            Err(e) => {
-                                warn!("no new set for {resolve_uri}, resuming its session: {e}")
-                            }
-                        }
+                    // Starting DJ plays the set its session is on, as Spotify does.
+                    if next.fresh
+                        && let Ok(context) = ctx
+                    {
+                        ctx = Ok(self.dj.fresh_set(context).await);
                     }
                     if let Ok(ctx) = ctx.as_mut() {
                         for (key, value) in shell_metadata {

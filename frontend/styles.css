@@ -3360,7 +3360,7 @@ small {
 .toolbar-icon-translate g {
   transition:
     opacity 0.3s,
-    scale 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+    scale 0.3s ease;
 }
 .toolbar-icon-translate .part-symbol {
   opacity: 0.5;
@@ -3379,25 +3379,26 @@ small {
   opacity: 0.5;
   scale: 0.86;
 }
-/* Word sync: a level meter. */
+/* Word sync: a level meter. Every bar starts from rest, so hovering
+   never jumps them to mid-bounce. */
 [data-icon="experimental_word_sync"]:hover .part-bar {
-  animation: icon-bar 0.6s ease-in-out infinite alternate;
+  animation: icon-bar 0.9s ease-in-out infinite;
 }
 [data-icon="experimental_word_sync"]:hover .part-bar-1 {
-  animation-delay: -0.2s;
+  animation-delay: 0.15s;
 }
 [data-icon="experimental_word_sync"]:hover .part-bar-2 {
-  animation-delay: -0.4s;
+  animation-delay: 0.3s;
 }
 [data-icon="experimental_word_sync"]:hover .part-bar-3 {
-  animation-delay: -0.1s;
+  animation-delay: 0.1s;
 }
 [data-icon="experimental_word_sync"]:hover .part-bar-4 {
-  animation-delay: -0.3s;
+  animation-delay: 0.25s;
 }
 @keyframes icon-bar {
-  to {
-    scale: 1 0.45;
+  50% {
+    scale: 1 0.55;
   }
 }
 /* Compact: the rows squeeze together. */
@@ -3416,14 +3417,13 @@ small {
 [data-icon="lyrics_compact"]:hover .part-row-bottom {
   translate: 0 -1.5px;
 }
-/* Hide artwork: the panel slides shut and the chevron pushes left. */
-[data-icon="lyrics_hide_artwork"]:hover .part-divider,
+/* Hide artwork: the chevron pushes left, inside its panel. */
 [data-icon="lyrics_hide_artwork"]:hover .part-chevron {
   animation: icon-push-left 0.9s ease-in-out infinite;
 }
 @keyframes icon-push-left {
   50% {
-    translate: -3px 0;
+    translate: -2px 0;
   }
 }
 /* Swap sides: the arrows pulse left and right in turn. */
@@ -3435,7 +3435,7 @@ small {
 }
 @keyframes icon-pulse-left {
   25% {
-    translate: -3px 0;
+    translate: -2px 0;
   }
   50% {
     translate: 0 0;
@@ -3446,7 +3446,7 @@ small {
     translate: 0 0;
   }
   75% {
-    translate: 3px 0;
+    translate: 2px 0;
   }
 }
 /* Upload: the arrow shoots up and a new one rises from the tray. */

@@ -2873,7 +2873,7 @@ small {
 /* Stacked (narrow) layouts give lyrics the full width, so size them from it. */
 .lyrics-page.narrow .lyric-line,
 .lyrics-page.narrow .lyric-wait {
-  --lead-lyric-size: clamp(26px, 5.4cqw, var(--lyric-size));
+  --lead-lyric-size: clamp(30px, 6.2cqw, var(--lyric-size));
 }
 .lyric-line:focus,
 .lyric-line:focus-visible {

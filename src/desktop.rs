@@ -437,6 +437,7 @@ impl Desktop {
                             listeners,
                             image,
                             header,
+                            gallery,
                             verified,
                             biography,
                         } => {
@@ -459,6 +460,9 @@ impl Desktop {
                                         }
                                         if let Some(url) = &header {
                                             artist.header_image = url.clone();
+                                        }
+                                        if let Some(url) = &gallery {
+                                            artist.gallery_image = url.clone();
                                         }
                                         // Local playback only knows artists whose page
                                         // was opened; fall back to the header photo.

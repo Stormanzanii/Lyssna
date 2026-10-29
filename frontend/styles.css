@@ -1082,15 +1082,15 @@ small {
   line-height: 24px;
 }
 /* Spotify's blue badge, the tick centred on the text. */
-.verified-badge {
+.artist-verified .verified-badge {
   flex: none;
   width: 24px;
   height: 24px;
 }
-.verified-badge path:first-child {
+.artist-verified .verified-badge path:first-child {
   fill: #4cb3ff;
 }
-.verified-badge path:last-child {
+.artist-verified .verified-badge path:last-child {
   fill: none;
   stroke: #fff;
   stroke-width: 2.4;

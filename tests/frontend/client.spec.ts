@@ -13471,3 +13471,42 @@ test("held letters glide back to rest once their word is sung", async ({
   for (const scales of samples)
     for (const scale of scales) expect(scale).toBeGreaterThan(0.999);
 });
+
+test("About the artist shows the About section's photo, as Spotify does", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  const avatar = "https://i.scdn.co/image/avatar";
+  const gallery = "https://i.scdn.co/image/gallery";
+  await page.evaluate(
+    ({ track, playback, avatar, gallery }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      host.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: {
+          artists: [
+            {
+              ...track.artists[0],
+              images: [{ url: avatar }],
+              gallery_image: gallery,
+            },
+          ],
+          queue: [],
+          queued: 0,
+        },
+      });
+    },
+    { track, playback: emptyState.playback, avatar, gallery },
+  );
+  await expect(
+    page.locator(".now-playing .artist-card .artist-portrait img"),
+  ).toHaveAttribute("src", gallery);
+});

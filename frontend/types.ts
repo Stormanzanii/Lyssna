@@ -6,6 +6,8 @@ export interface Artwork {
 export interface Artist {
   /** The artist page's wide header photo. */
   header_image?: string;
+  /** The About section's first photo, for Now playing's artist card. */
+  gallery_image?: string;
   monthly_listeners?: number;
   id?: string;
   uri?: string;

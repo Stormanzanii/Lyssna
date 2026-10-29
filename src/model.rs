@@ -23,6 +23,10 @@ pub struct Artist {
     /// Artist header background.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub header_image: String,
+    /// The first photo of the artist's About section, which Spotify's
+    /// About the artist card shows.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub gallery_image: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

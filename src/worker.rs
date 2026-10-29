@@ -158,6 +158,8 @@ pub enum Event {
         image: Option<String>,
         /// The header photo alone.
         header: Option<String>,
+        /// The About section's first photo.
+        gallery: Option<String>,
         verified: Option<bool>,
         biography: String,
     },
@@ -1750,6 +1752,7 @@ impl Backend {
                                 artist_id: artist_id.clone(),
                                 listeners: overview.monthly_listeners,
                                 header: overview.header_image.clone(),
+                                gallery: overview.gallery_image.clone(),
                                 image: overview.header_image.or(overview.avatar_image),
                                 verified: overview.verified,
                                 biography: overview.biography,

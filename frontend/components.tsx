@@ -2150,12 +2150,16 @@ export function NowPlaying({
             )}
             {artist && (
               <article className="now-card artist-card">
-                {imageOf(artist.images) ? (
+                {artist.gallery_image || imageOf(artist.images) ? (
                   <button
                     className="artist-portrait"
                     onClick={() => onArtist(artist)}
                   >
-                    <img src={imageOf(artist.images)} alt={artist.name} />
+                    {/* Spotify's card shows the About section's photo. */}
+                    <img
+                      src={artist.gallery_image || imageOf(artist.images)}
+                      alt={artist.name}
+                    />
                     <strong>About the artist</strong>
                   </button>
                 ) : (

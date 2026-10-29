@@ -42,7 +42,6 @@ import {
   Music2,
   Pause,
   Play,
-  RefreshCw,
   Repeat,
   Repeat1,
   Search,
@@ -1037,11 +1036,15 @@ function App() {
         searchInput.current?.focus();
         return;
       }
+      // F5 is the one refresh, as in a browser: the library and the open
+      // page, picking up changes from other devices.
       if (event.key === "F5") {
         event.preventDefault();
+        if (!stateRef.current.profile) return;
         void call("refresh");
-        // Also reload the open page, picking up changes from other devices.
-        if (stateRef.current.profile) navigate(stateRef.current.route, false);
+        setCollectionReload((count) => count + 1);
+        if (stateRef.current.route === "home") refreshHome();
+        else navigate(stateRef.current.route, false);
         return;
       }
       if (!stateRef.current.profile || editing) return;
@@ -1105,7 +1108,7 @@ function App() {
       window.removeEventListener("keyup", keyup, true);
       document.removeEventListener("click", click);
     };
-  }, [toggle, call, navigate]);
+  }, [toggle, call, navigate, refreshHome]);
   const prefetchOn = useCallback(
     (key: string) => ({
       onMouseEnter: () => {
@@ -2743,16 +2746,6 @@ function App() {
             <div>
               <button
                 className="icon-button"
-                title="Refresh library"
-                onClick={() => {
-                  setCollectionReload((count) => count + 1);
-                  void call("refresh");
-                }}
-              >
-                <RefreshCw size={16} />
-              </button>
-              <button
-                className="icon-button"
                 title="Create folder"
                 onClick={() => setFolderDialog(true)}
               >
@@ -3395,16 +3388,6 @@ function App() {
                               </button>
                             );
                           })()}
-                        {/* Artist pages reload each time they open. */}
-                        {!artistPage && (
-                          <button
-                            className="icon-button action-icon"
-                            title="Refresh page"
-                            onClick={() => navigate(state.route, false)}
-                          >
-                            <RefreshCw size={22} />
-                          </button>
-                        )}
                         {collection && (
                           <div className="song-filters">
                             <small aria-live="polite">

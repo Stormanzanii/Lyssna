@@ -10810,7 +10810,11 @@ test("Your Library lists saved albums and followed artists", async ({
     };
   });
   const library = page.locator(".library-panel");
-  await library.getByTitle("Refresh library").click();
+  // No Refresh buttons: F5 reloads the library, as in a browser.
+  await expect(
+    page.getByTitle(/^Refresh (library|page|personalized Home)$/),
+  ).toHaveCount(0);
+  await page.keyboard.press("F5");
   // No chip is chosen at first: playlists, albums and artists all show.
   await expect(library.locator(".library-filters .chip.selected")).toHaveCount(
     0,

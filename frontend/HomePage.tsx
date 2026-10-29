@@ -5,7 +5,6 @@ import {
   Heart,
   LoaderCircle,
   Play,
-  RefreshCw,
 } from "lucide-react";
 import type {
   HomeItem,
@@ -347,18 +346,7 @@ export const HomePage = memo(function HomePage({
             </button>
           ))}
         </div>
-        <button
-          className="icon-button"
-          title="Refresh personalized Home"
-          onClick={refresh}
-          disabled={!ready || loading}
-        >
-          {loading ? (
-            <LoaderCircle className="spin" size={20} />
-          ) : (
-            <RefreshCw size={20} />
-          )}
-        </button>
+        {loading && <LoaderCircle className="spin home-loading" size={20} />}
       </div>
       <div className="home-quick-links">
         <button className="quick-tile" onClick={() => navigate("liked")}>

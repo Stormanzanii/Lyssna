@@ -10161,6 +10161,44 @@ async function gravityWithoutCanvas(page: Page) {
   ).toBeVisible();
 }
 
+test("in a small window the player's extra buttons keep clear of the progress bar", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: false,
+          progress_ms: 0,
+          device: { name: "SpotiFlex", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  const gap = await page.locator(".player-bar").evaluate((bar) => {
+    const transport = bar.querySelector(".player-transport")!;
+    const right = Math.max(
+      ...[...transport.querySelectorAll("*")].map(
+        (node) => node.getBoundingClientRect().right,
+      ),
+    );
+    const extras = [...bar.querySelectorAll(".player-extras > *")]
+      .map((node) => node.getBoundingClientRect())
+      .filter((rect) => rect.width > 0);
+    return Math.min(...extras.map((rect) => rect.left)) - right;
+  });
+  await page.screenshot({ path: "test-results/player-small.png" });
+  expect(gap).toBeGreaterThanOrEqual(12);
+});
+
 test("credits Show all opens Spotify's grouped Credits dialog", async ({
   page,
 }) => {

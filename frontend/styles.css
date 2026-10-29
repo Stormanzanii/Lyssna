@@ -1077,7 +1077,7 @@ small {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 24px;
 }
@@ -1087,6 +1087,9 @@ small {
   width: 24px;
   height: 24px;
   fill: #c5f0c9;
+}
+.artist-verified .verified-badge {
+  translate: 0 -1px;
 }
 /* Popular beside You Liked, wrapping under it when the centre panel, not
    the window, is narrow; stacked, You Liked lines up with Discography. */
@@ -2345,6 +2348,9 @@ small {
 .artist-card-name .verified-badge {
   width: 20px;
   height: 20px;
+  /* The line box centres below the letters; this lines the tick up with
+     the name's capitals. */
+  translate: 0 -3px;
 }
 .artist-bio {
   font-size: 15px;

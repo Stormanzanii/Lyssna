@@ -482,3 +482,20 @@ export type AppEvent =
 export type LibrarySort =
   "recents" | "recently_added" | "alphabetical" | "creator" | "custom";
 export type LibraryView = "compact" | "list" | "grid" | "large_grid";
+
+/** A Spotify Jam this computer is in. */
+export type JamMember = {
+  id: string;
+  username: string;
+  display_name: string;
+  image_url: string | null;
+};
+export type Jam = {
+  session_id: string;
+  owner_id: string;
+  is_owner: boolean;
+  members: JamMember[];
+  invite_url: string;
+  qr_svg: string;
+  queue_only: boolean;
+};

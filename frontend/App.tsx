@@ -64,6 +64,7 @@ import {
   Folder,
   Copy,
   Plus,
+  Users,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { listen } from "@tauri-apps/api/event";
@@ -105,6 +106,7 @@ import type {
   Settings,
   Snapshot,
   Track,
+  Jam,
   HomeItem,
   AppEvent,
   Profile,
@@ -341,6 +343,34 @@ function App() {
     updateSettings({ now_playing_open: open });
   // The right panel shows Now playing or the queue.
   const [panel, setPanel] = useState<"now" | "queue">("now");
+  // The Spotify Jam this computer is in, shown above the queue.
+  const [jam, setJam] = useState<Jam | null>(null);
+  const [jamInvite, setJamInvite] = useState(false);
+  // Find a Jam already running after sign-in, then follow guests joining and
+  // leaving while one is on.
+  const jamOn = !!jam;
+  useEffect(() => {
+    if (!state.profile || !state.native_ready) {
+      setJam(null);
+      return;
+    }
+    let live = true;
+    const check = () =>
+      rpc<Jam | null>("jam", { action: "current" })
+        .then((current) => live && setJam(current))
+        .catch(() => {});
+    if (!jamOn) {
+      void check();
+      return () => {
+        live = false;
+      };
+    }
+    const timer = window.setInterval(check, 5000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [state.profile?.id, state.native_ready, jamOn]);
   const toggleQueue = () => {
     if (sidebar && panel === "queue") setPanel("now");
     else {
@@ -4157,6 +4187,34 @@ function App() {
                 state={state}
                 onPlayer={play}
                 onClose={() => setPanel("now")}
+                jam={jam}
+                jamInvite={jamInvite}
+                onJamInvite={setJamInvite}
+                onJamCopy={() =>
+                  jam && copyText(jam.invite_url, "Jam link copied.")
+                }
+                onJamEnd={() => {
+                  if (!jam) return;
+                  rpc("jam", {
+                    action: jam.is_owner ? "end" : "leave",
+                    id: jam.session_id,
+                  })
+                    .then(() => {
+                      setJam(null);
+                      setJamInvite(false);
+                    })
+                    .catch((error) => notify(String(error), true));
+                }}
+                onJamControl={(allowed) => {
+                  if (!jam) return;
+                  setJam({ ...jam, queue_only: !allowed });
+                  rpc<Jam | null>("jam", { action: "control", allowed })
+                    .then((next) => next && setJam(next))
+                    .catch((error) => {
+                      setJam(jam);
+                      notify(String(error), true);
+                    });
+                }}
               />
             ) : (
               <NowPlaying
@@ -4333,6 +4391,35 @@ function App() {
                     play({ command: "enqueue", uri: track.uri });
                 },
               ],
+              ...(jam
+                ? []
+                : [
+                    [
+                      "Start a Jam",
+                      Users,
+                      () => {
+                        // Like Spotify, the Jam starts on this song.
+                        if (state.playback.item?.uri !== songMenu.track.uri) {
+                          if (songMenu.fromList) playTrack(songMenu.track);
+                          else
+                            play({
+                              command: "play",
+                              uri: songMenu.track.uri,
+                              track: songMenu.track,
+                            });
+                        }
+                        rpc<Jam>("jam", { action: "start" })
+                          .then((started) => {
+                            setJam(started);
+                            setJamInvite(true);
+                            setPanel("queue");
+                            setSidebar(true);
+                            copyText(started.invite_url, "Jam link copied.");
+                          })
+                          .catch((error) => notify(String(error), true));
+                      },
+                    ],
+                  ]),
               ...(songMenu.queued
                 ? [
                     [

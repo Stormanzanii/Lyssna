@@ -37,7 +37,9 @@ import {
   FoldVertical,
   Volume2,
   VolumeX,
+  Copy,
 } from "lucide-react";
+import { Toggle } from "./setting-row";
 import { VolumeControl } from "./volume-control";
 import { DJArtwork, DJ_COVER } from "./brand";
 import {
@@ -57,6 +59,7 @@ import type {
   Lyrics,
   Settings,
   Line,
+  Jam,
 } from "./types";
 import type { AppState } from "./state";
 import { activeLines, endsOnRight, formatTime } from "./state";
@@ -2260,14 +2263,122 @@ export function NowPlaying({
 }
 
 /** The play queue, shown in the right panel in place of Now playing. */
+/** The Jam this computer hosts or joined, above the queue as in Spotify. */
+function JamCard({
+  jam,
+  invite,
+  hostName,
+  onInvite,
+  onCopy,
+  onEnd,
+  onControl,
+}: {
+  jam: Jam;
+  invite: boolean;
+  hostName: string;
+  onInvite: (open: boolean) => void;
+  onCopy: () => void;
+  onEnd: () => void;
+  onControl: (allowed: boolean) => void;
+}) {
+  const host =
+    jam.members.find((member) => member.id === jam.owner_id) ?? jam.members[0];
+  const name = host?.display_name || host?.username || hostName;
+  return (
+    <section className="jam-card" aria-label="Jam">
+      <h2>{name ? `${name}\u2019s Jam` : "Jam"}</h2>
+      <div className="jam-actions">
+        <div
+          className="jam-members"
+          title={`${jam.members.length} in this Jam`}
+        >
+          {jam.members.slice(0, 3).map((member) =>
+            member.image_url ? (
+              <img key={member.id} src={member.image_url} alt="" />
+            ) : (
+              <span key={member.id} className="jam-member-initial">
+                {(member.display_name || member.username).slice(0, 1)}
+              </span>
+            ),
+          )}
+          {jam.members.length > 3 && (
+            <span className="jam-member-more">+{jam.members.length - 3}</span>
+          )}
+        </div>
+        <button className="jam-pill" onClick={() => onInvite(true)}>
+          Invite
+        </button>
+        <button className="jam-pill" onClick={onEnd}>
+          {jam.is_owner ? "End" : "Leave"}
+        </button>
+      </div>
+      {invite && (
+        <div className="jam-invite">
+          <div className="jam-invite-head">
+            <div>
+              <strong>Invite friends to your Jam</strong>
+              <p>
+                Copy and share the link with your friends, or ask them to scan
+                the QR code.
+              </p>
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => onInvite(false)}
+              aria-label="Close invite"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="jam-invite-body">
+            <button className="jam-copy" onClick={onCopy}>
+              <Copy size={18} />
+              Copy link
+            </button>
+            {jam.qr_svg && (
+              <img
+                className="jam-qr"
+                alt="Jam QR code"
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(jam.qr_svg)}`}
+              />
+            )}
+          </div>
+        </div>
+      )}
+      {jam.is_owner && (
+        <label className="jam-control">
+          <span>Let others change what's playing</span>
+          <Toggle
+            label="Let others change what's playing"
+            checked={!jam.queue_only}
+            onChange={onControl}
+          />
+        </label>
+      )}
+    </section>
+  );
+}
+
 export function QueuePanel({
   state,
   onPlayer,
   onClose,
+  jam,
+  jamInvite = false,
+  onJamInvite,
+  onJamCopy,
+  onJamEnd,
+  onJamControl,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onClose: () => void;
+  jam?: Jam | null;
+  jamInvite?: boolean;
+  onJamInvite?: (open: boolean) => void;
+  onJamCopy?: () => void;
+  onJamEnd?: () => void;
+  onJamControl?: (allowed: boolean) => void;
 }) {
   const track = state.playback.item,
     raw = state.details.queue;
@@ -2429,6 +2540,17 @@ export function QueuePanel({
             <X size={18} />
           </button>
         </div>
+        {jam && (
+          <JamCard
+            jam={jam}
+            invite={jamInvite}
+            hostName={state.profile?.display_name ?? ""}
+            onInvite={(open) => onJamInvite?.(open)}
+            onCopy={() => onJamCopy?.()}
+            onEnd={() => onJamEnd?.()}
+            onControl={(allowed) => onJamControl?.(allowed)}
+          />
+        )}
         {track && !state.narrating && (
           <section className="queue-section">
             <h3>Now playing</h3>

@@ -2435,6 +2435,35 @@ fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         .send(Command::FetchLyrics(track))
         .map_err(error)
 }
+/// Host a Spotify Jam from this computer: `current`, `start`, `end`,
+/// `leave`, or `control` (whether guests may change what's playing).
+#[tauri::command]
+async fn jam(
+    action: String,
+    id: Option<String>,
+    allowed: Option<bool>,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Option<crate::jam::Jam>, String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| match action.as_str() {
+            "current" => crate::jam::current(session).await,
+            "start" => crate::jam::start(session).await.map(Some),
+            "end" => crate::jam::end(session, id.as_deref().unwrap_or_default())
+                .await
+                .map(|()| None),
+            "leave" => crate::jam::leave(session, id.as_deref().unwrap_or_default())
+                .await
+                .map(|()| None),
+            "control" => crate::jam::let_others_control(session, allowed.unwrap_or(true)).await,
+            _ => anyhow::bail!("Unknown Jam action"),
+        })
+    })
+    .await
+    .map_err(|_| "Jam worker unavailable".to_owned())?
+    .map_err(error)
+}
 /// Every release of an artist, for the Discography page.
 #[tauri::command]
 async fn artist_discography(
@@ -3670,6 +3699,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             open_lyrics_popout,
             toggle_cinema_lyrics,
             artist_discography,
+            jam,
             release_tracks,
             read_clipboard,
             dj_request,

@@ -6454,3 +6454,117 @@ button.discography-track:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Jam, above the queue as in Spotify. */
+.jam-card {
+  display: grid;
+  gap: 16px;
+  margin: 4px 0 28px;
+  padding: 0 10px;
+}
+.jam-card h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.jam-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jam-members {
+  display: flex;
+  margin-right: 4px;
+}
+.jam-members > * {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #121212;
+  object-fit: cover;
+  background: #535353;
+}
+.jam-members > * + * {
+  margin-left: -10px;
+}
+.jam-member-initial,
+.jam-member-more {
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.jam-pill {
+  height: 34px;
+  padding: 0 18px;
+  border: 1px solid #ffffff80;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+.jam-pill:hover {
+  border-color: #fff;
+  transform: scale(1.04);
+}
+.jam-invite {
+  border-radius: 8px;
+  background: #ffffff1a;
+  overflow: hidden;
+}
+.jam-invite-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  border-bottom: 1px solid #ffffff1a;
+}
+.jam-invite-head > div {
+  flex: 1;
+}
+.jam-invite-head p {
+  margin: 6px 0 0;
+  color: #b3b3b3;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.jam-invite-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+.jam-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.jam-copy:hover {
+  transform: scale(1.04);
+}
+.jam-qr {
+  width: 108px;
+  height: 108px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+.jam-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #b3b3b3;
+  font-size: 0.9rem;
+}

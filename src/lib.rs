@@ -21,6 +21,7 @@ pub mod credential;
 pub mod desktop;
 pub mod dj;
 pub mod home;
+pub mod jam;
 pub mod library_cache;
 pub mod library_items;
 pub mod lyric_sources;

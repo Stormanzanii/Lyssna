@@ -610,6 +610,14 @@ async function startClient(
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
+          if (command === "jam") {
+            const test = host.__clientTest;
+            if (args.action === "start") test.jam = test.jamToStart;
+            if (args.action === "end") test.jam = null;
+            if (args.action === "control" && test.jam)
+              test.jam = { ...test.jam, queue_only: !args.allowed };
+            return test.jam ?? null;
+          }
           if (command === "artist_discography")
             return (window as any).__discography?.list ?? [];
           if (command === "release_tracks")
@@ -9704,6 +9712,90 @@ test("queued songs show under Next in queue, then Next from the playlist", async
   await page.keyboard.press("Escape");
   await sections.nth(1).getByRole("button", { name: "Clear queue" }).click();
   await expect.poll(sent).toMatchObject({ command: "clear_queue" });
+});
+
+test("Start a Jam from a song copies the invite and shows the Jam above the queue", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await startClient(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const host = (window as any).__clientTest;
+      host.jamToStart = {
+        session_id: "jamsession1",
+        owner_id: "test-user",
+        is_owner: true,
+        members: [
+          {
+            id: "test-user",
+            username: "test-user",
+            display_name: "Stormanzani",
+            image_url: null,
+          },
+        ],
+        invite_url: "https://open.spotify.com/socialsession/jamtoken1",
+        qr_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>',
+        queue_only: false,
+      };
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      host.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: { artists: track.artists, queue: [], queued: 0 },
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  await page
+    .locator(".queue-panel .queue-row")
+    .first()
+    .click({ button: "right", force: true });
+  const menu = page.getByRole("menu", { name: "Song actions" });
+  await menu.getByRole("menuitem", { name: "Start a Jam" }).click();
+  const jam = page.locator(".queue-panel .jam-card");
+  await expect(jam.getByRole("heading")).toHaveText("Stormanzani’s Jam");
+  await expect(jam).toContainText("Invite friends to your Jam");
+  await expect(jam.locator(".jam-qr")).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("https://open.spotify.com/socialsession/jamtoken1");
+  // The Jam sits above Now playing.
+  const above = await page.evaluate(
+    () =>
+      document
+        .querySelector(".jam-card")!
+        .compareDocumentPosition(document.querySelector(".queue-section")!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  expect(above).toBeTruthy();
+  await jam
+    .getByRole("switch", { name: "Let others change what's playing" })
+    .click();
+  await expect(
+    jam.getByRole("switch", { name: "Let others change what's playing" }),
+  ).not.toBeChecked();
+  await jam.getByRole("button", { name: "Close invite" }).click();
+  await expect(jam).not.toContainText("Invite friends to your Jam");
+  await jam.getByRole("button", { name: "End" }).click();
+  await expect(jam).toHaveCount(0);
+  await page
+    .locator(".queue-panel .queue-row")
+    .first()
+    .click({ button: "right", force: true });
+  await expect(
+    menu.getByRole("menuitem", { name: "Start a Jam" }),
+  ).toBeVisible();
 });
 
 test("a reshuffled queue never slides rows in from far away", async ({

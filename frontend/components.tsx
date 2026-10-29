@@ -1,3 +1,4 @@
+import { contextName } from "./playing-context";
 import {
   memo,
   Fragment,
@@ -2265,7 +2266,12 @@ export function QueuePanel({
     raw = state.details.queue;
   // Spotify can report the advanced queue a moment before the song changes.
   // The leaving song stays listed until then, so the list moves once.
-  const hold = useRef({ track: "", queue: [] as Track[], since: 0 });
+  const hold = useRef({
+    track: "",
+    queue: [] as Track[],
+    queued: 0,
+    since: 0,
+  });
   const holdTimer = useRef(0);
   const [, wake] = useState(0);
   const held = hold.current;
@@ -2278,9 +2284,25 @@ export function QueuePanel({
     held.queue[1].uri === raw[0].uri &&
     (!held.since || performance.now() - held.since < 1500);
   const queue = early ? [held.queue[0], ...raw] : raw;
+  // Songs the listener queued play first, then the playing context's.
+  const queued = Math.min(
+    queue.length,
+    early ? held.queued : (state.details.queued ?? 0),
+  );
+  const from =
+    contextName(state.playback.context, {
+      dj: !!state.dj_context,
+      playlists: state.playlists,
+      track,
+    }) ?? "";
   useEffect(() => {
     if (!early) {
-      hold.current = { track: track?.uri ?? "", queue: raw, since: 0 };
+      hold.current = {
+        track: track?.uri ?? "",
+        queue: raw,
+        queued: state.details.queued ?? 0,
+        since: 0,
+      };
       return;
     }
     if (held.since) return;
@@ -2402,14 +2424,26 @@ export function QueuePanel({
             {row(track, currentKey, true)}
           </section>
         )}
-        <section className="queue-section">
-          <h3>Next up</h3>
-          {queue.length ? (
-            queue.map((item, index) => row(item, queueKeys[index]))
-          ) : (
-            <p className="queue-empty">Nothing is queued yet.</p>
-          )}
-        </section>
+        {queued > 0 && (
+          <section className="queue-section">
+            <h3>Next in queue</h3>
+            {queue
+              .slice(0, queued)
+              .map((item, index) => row(item, queueKeys[index]))}
+          </section>
+        )}
+        {(queued < queue.length || !queue.length) && (
+          <section className="queue-section">
+            <h3>{from ? `Next from: ${from}` : "Next up"}</h3>
+            {queue.length ? (
+              queue
+                .slice(queued)
+                .map((item, index) => row(item, queueKeys[queued + index]))
+            ) : (
+              <p className="queue-empty">Nothing is queued yet.</p>
+            )}
+          </section>
+        )}
       </div>
     </aside>
   );

@@ -139,7 +139,7 @@ struct ControlConnection {
     sender: async_channel::UnboundedSender<PlayerAction>,
     ready: Arc<AtomicBool>,
     loaded: Arc<AtomicBool>,
-    queue_snapshot: Arc<Mutex<Option<Vec<String>>>>,
+    queue_snapshot: Arc<Mutex<Option<Vec<QueueEntry>>>>,
     playlists: Option<async_channel::UnboundedSender<PlaylistRead>>,
     metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
 }
@@ -163,7 +163,15 @@ struct PlaybackServices<'a> {
     latest_volume: &'a AtomicU32,
     shared_session: &'a Mutex<Option<Session>>,
     loaded: &'a AtomicBool,
-    queue_snapshot: &'a Mutex<Option<Vec<String>>>,
+    queue_snapshot: &'a Mutex<Option<Vec<QueueEntry>>>,
+}
+
+/// An upcoming song, and whether the listener queued it rather than it
+/// coming from the playing context.
+#[derive(Clone)]
+struct QueueEntry {
+    uri: String,
+    added: bool,
 }
 
 /// Local transport commands never wait for the browsing/Web API worker.
@@ -493,13 +501,17 @@ impl NativeControls {
                 connection.queue_snapshot.lock().is_ok_and(|queue| {
                     queue
                         .as_ref()
-                        .is_some_and(|queue| queue.iter().any(|item| item == uri))
+                        .is_some_and(|queue| queue.iter().any(|item| item.uri == uri))
                 })
             })
         })
     }
     pub fn queue(&self) -> Result<Vec<crate::model::Track>> {
-        let uris = {
+        self.queue_details().map(|(tracks, _)| tracks)
+    }
+    /// The upcoming songs, and how many at the front the listener queued.
+    pub fn queue_details(&self) -> Result<(Vec<crate::model::Track>, usize)> {
+        let entries = {
             let connection = self
                 .0
                 .lock()
@@ -515,14 +527,17 @@ impl NativeControls {
                 .clone()
                 .context("Native queue is not ready")?
         };
-        if uris.is_empty() {
-            return Ok(Vec::new());
+        if entries.is_empty() {
+            return Ok((Vec::new(), 0));
         }
+        let uris: Vec<String> = entries.iter().map(|entry| entry.uri.clone()).collect();
         let session = self.session()?;
-        tokio::runtime::Builder::new_current_thread()
+        let tracks = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
-            .block_on(crate::native_browse::resolve_tracks(&session, &uris))
+            .block_on(crate::native_browse::resolve_tracks(&session, &uris))?;
+        let added = added_count(&entries, &tracks);
+        Ok((tracks, added))
     }
     /// Song details for up to 50 song URIs.
     pub fn resolve(&self, uris: &[String]) -> Result<Vec<crate::model::Track>> {
@@ -966,6 +981,24 @@ pub(crate) fn diagnostic(line: &str) {
     }
 }
 
+/// How many of the resolved songs, from the front, the listener queued.
+/// Songs Spotify could not describe are left out of `tracks`, so they are
+/// skipped here too.
+fn added_count(entries: &[QueueEntry], tracks: &[crate::model::Track]) -> usize {
+    let mut entries = entries.iter();
+    let mut added = 0;
+    for track in tracks {
+        let Some(entry) = entries.find(|entry| entry.uri == track.uri) else {
+            break;
+        };
+        if !entry.added {
+            break;
+        }
+        added += 1;
+    }
+    added
+}
+
 fn is_dj_context(uri: &str) -> bool {
     uri == crate::home::DJ_URI
         || uri.starts_with("spotify:lexicon:")
@@ -1051,6 +1084,29 @@ mod dj_queue_tests {
             crate::resume::skip_action(&queue[1], &queue, 0, true),
             Some(PlayerAction::Resume { offset: 2, .. })
         ));
+    }
+
+    #[test]
+    fn queued_songs_are_counted_from_the_front_past_unresolved_ones() {
+        let entry = |uri: &str, added| QueueEntry {
+            uri: uri.into(),
+            added,
+        };
+        let track = |uri: &str| crate::model::Track {
+            uri: uri.into(),
+            ..Default::default()
+        };
+        let entries = [
+            entry("a", true),
+            entry("gone", true),
+            entry("b", true),
+            entry("c", false),
+            entry("d", true),
+        ];
+        // "gone" could not be resolved; "d" follows the playlist's songs.
+        let tracks = [track("a"), track("b"), track("c"), track("d")];
+        assert_eq!(added_count(&entries, &tracks), 2);
+        assert_eq!(added_count(&entries[3..], &tracks[2..]), 0);
     }
 
     #[test]
@@ -2202,7 +2258,7 @@ async fn run(
                         if let PlayerEvent::SetQueue { next_tracks, .. } = &event
                             && let Ok(mut queue) = queue_snapshot.lock()
                         {
-                            *queue = Some(next_tracks.iter().take(50).map(|track| track.uri.clone()).collect());
+                            *queue = Some(next_tracks.iter().take(50).map(|track| QueueEntry { uri: track.uri.clone(), added: track.provider == "queue" }).collect());
                         }
                         if let PlayerEvent::SetQueue { context_uri, .. } = &event {
                             emit(NativeEvent::DJContext(is_dj_context(context_uri)));
@@ -3301,7 +3357,7 @@ mod tests {
                     .unwrap()
                     .clone()
                     .unwrap_or_default();
-                if queued.contains(&uri) {
+                if queued.iter().any(|entry| entry.uri == uri) {
                     assert!(
                         controls
                             .queue()

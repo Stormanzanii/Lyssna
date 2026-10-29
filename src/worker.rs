@@ -1663,10 +1663,11 @@ impl Backend {
                     }
                     artists
                 };
-                let queue = if local {
-                    self.native_controls.queue().unwrap_or_default()
+                // Spotify's Web API does not say which songs were queued.
+                let (queue, queued) = if local {
+                    self.native_controls.queue_details().unwrap_or_default()
                 } else {
-                    self.api()?.queue().unwrap_or_default()
+                    (self.api()?.queue().unwrap_or_default(), 0)
                 };
                 // Warm the next songs' lyrics and artist cards so skipping
                 // shows them at once, as Canvas below.
@@ -1712,7 +1713,11 @@ impl Backend {
                 }
                 self.emit(Event::PlayingDetails {
                     uri: track.uri.clone(),
-                    details: Box::new(PlayingDetails { artists, queue }),
+                    details: Box::new(PlayingDetails {
+                        artists,
+                        queue,
+                        queued,
+                    }),
                 });
                 if let Some(artist_id) = track.artists.first().and_then(|artist| artist.id.clone())
                 {

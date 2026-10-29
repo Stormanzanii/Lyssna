@@ -264,21 +264,30 @@ export function advanceDetails(
   keep = false,
 ): PlayingDetails {
   const played = details.played ?? [];
-  if (!to) return { artists: [], queue: [], played: [] };
+  const queued = details.queued ?? 0;
+  if (!to) return { artists: [], queue: [], played: [], queued: 0 };
+  // Previous returns the old song to the playlist, after the songs the
+  // listener queued, as in Spotify.
   if (played.at(-1)?.uri === to.uri)
     return {
       artists: [],
       queue:
-        from && details.queue[0]?.uri !== from.uri
-          ? [from, ...details.queue]
+        from && details.queue[queued]?.uri !== from.uri
+          ? [
+              ...details.queue.slice(0, queued),
+              from,
+              ...details.queue.slice(queued),
+            ]
           : details.queue,
       played: played.slice(0, -1),
+      queued,
     };
   const at = details.queue.findIndex((track) => track.uri === to.uri);
   return {
     artists: [],
     queue: at >= 0 ? details.queue.slice(at + 1) : keep ? details.queue : [],
     played: from ? [...played, from].slice(-20) : played,
+    queued: at >= 0 ? Math.max(0, queued - at - 1) : keep ? queued : 0,
   };
 }
 export function reducer(state: AppState, action: Action): AppState {

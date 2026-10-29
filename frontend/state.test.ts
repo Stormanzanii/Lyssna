@@ -681,6 +681,24 @@ describe("queue across song changes", () => {
     expect(back.queue.map((item) => item.uri)).toEqual(["b", "c", "d"]);
     expect(back.played).toEqual([]);
   });
+  it("counts down queued songs and returns Previous after them", () => {
+    const skipped = advanceDetails(
+      { artists: [], queue: [b, c, d], queued: 2 },
+      a,
+      b,
+    );
+    expect(skipped.queued).toBe(1);
+    // The old song goes back to the playlist, behind the queued song.
+    const back = advanceDetails(skipped, b, a);
+    expect(back.queue.map((item) => item.uri)).toEqual(["c", "b", "d"]);
+    expect(back.queued).toBe(1);
+    const past = advanceDetails(
+      { artists: [], queue: [b, c, d], queued: 1 },
+      a,
+      c,
+    );
+    expect(past.queued).toBe(0);
+  });
   it("skips over songs picked further down the queue", () => {
     const picked = advanceDetails({ artists: [], queue: [b, c, d] }, a, c);
     expect(picked.queue.map((item) => item.uri)).toEqual(["d"]);

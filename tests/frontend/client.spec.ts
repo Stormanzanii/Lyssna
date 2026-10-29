@@ -9633,6 +9633,51 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   await expect(page.locator(".application")).toHaveClass(/immersive/);
 });
 
+test("queued songs show under Next in queue, then Next from the playlist", async ({
+  page,
+}) => {
+  await startClient(page);
+  const songs = ["Puppet", "High Forever", "Dracula"].map((name, index) => ({
+    ...track,
+    uri: `spotify:track:queued${index}`,
+    name,
+  }));
+  await page.evaluate(
+    ({ track, songs, playback }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "playback",
+        playback: {
+          ...playback,
+          item: track,
+          is_playing: true,
+          context: "spotify:user:test-user:collection",
+        },
+        observed_at: Date.now(),
+        changed: true,
+      });
+      host.emit({
+        type: "playing_details",
+        uri: track.uri,
+        details: { artists: track.artists, queue: songs, queued: 1 },
+      });
+    },
+    { track, songs, playback: emptyState.playback },
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const sections = page.locator(".queue-panel .queue-section");
+  await expect(sections.locator("h3")).toHaveText([
+    "Now playing",
+    "Next in queue",
+    "Next from: Liked Songs",
+  ]);
+  await expect(sections.nth(1).locator(".queue-row")).toHaveText(/Puppet/);
+  await expect(sections.nth(2).locator(".queue-row")).toHaveCount(2);
+});
+
 test("a reshuffled queue never slides rows in from far away", async ({
   page,
 }) => {

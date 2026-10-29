@@ -255,6 +255,8 @@ export interface Contributor {
 export interface PlayingDetails {
   artists: Artist[];
   queue: Track[];
+  /** How many songs at the front of `queue` the listener queued. */
+  queued?: number;
   /** Songs played before this one, newest last, to predict Previous. */
   played?: Track[];
 }

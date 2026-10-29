@@ -243,6 +243,10 @@ pub struct BrowseInfo {
 pub struct PlayingDetails {
     pub artists: Vec<Artist>,
     pub queue: Vec<Track>,
+    /// How many songs at the front of `queue` the listener added, shown
+    /// under Next in queue before the playing context's songs.
+    #[serde(default)]
+    pub queued: usize,
 }
 
 impl Playback {

@@ -485,8 +485,10 @@ fn related_sections(artist: &Value) -> Vec<crate::home::HomeSection> {
     .collect()
 }
 
-/// The pinned "Artist pick": Spotify's own subtitle ("Album • New Release",
-/// "Playlist") and the item's artwork, falling back to the pick thumbnail.
+/// The pinned "Artist pick" with the item's artwork, falling back to the
+/// pick thumbnail. Like Spotify's client, the subtitle names the item's type
+/// ("Single", "Playlist"); the server's own ("Single • New Release") only
+/// shows for music videos.
 fn artist_pick(pin: &Value) -> Option<crate::home::HomeItem> {
     let data = &pin["itemV2"]["data"];
     let uri = data["uri"].as_str()?;
@@ -515,22 +517,32 @@ fn artist_pick(pin: &Value) -> Option<crate::home::HomeItem> {
             .to_owned(),
         subtitle: pin["subtitle"]
             .as_str()
-            .filter(|text| !text.is_empty())
-            .map_or_else(
-                || {
-                    let mut kind = kind.clone();
-                    if let Some(first) = kind.get_mut(..1) {
-                        first.make_ascii_uppercase();
-                    }
-                    kind
-                },
-                str::to_owned,
-            ),
+            .filter(|text| !text.is_empty() && pin["type"].as_str() == Some("MUSIC_VIDEO"))
+            .map_or_else(|| pick_type(data, &kind), str::to_owned),
         images,
         playable: kind != "artist",
         kind,
         format: String::new(),
     })
+}
+
+/// The type label Spotify's client gives an Artist pick.
+fn pick_type(data: &Value, kind: &str) -> String {
+    match data["__typename"].as_str().unwrap_or(kind) {
+        "Album" | "album" => match data["type"].as_str().unwrap_or_default() {
+            "SINGLE" => "Single",
+            "COMPILATION" => "Compilation",
+            "EP" => "EP",
+            _ => "Album",
+        },
+        "Artist" | "artist" => "Artist",
+        "Playlist" | "playlist" => "Playlist",
+        "Track" | "track" => "Song",
+        "Episode" | "episode" => "Episode",
+        "Merch" => "Merch",
+        _ => "",
+    }
+    .to_owned()
 }
 
 fn shelf_item(data: &Value, kind: &str) -> Option<crate::home::HomeItem> {
@@ -745,13 +757,17 @@ mod section_tests {
     }
     use serde_json::json;
     #[test]
-    fn artist_pick_keeps_spotify_subtitle_and_artwork() {
-        let pin = json!({"subtitle": "Album • New Release", "comment": "Hi",
-            "itemV2": {"data": {"uri": "spotify:album:0123456789abcdefghij09", "name": "Showgirl",
+    fn artist_pick_names_its_type_like_spotify_and_keeps_artwork() {
+        let pin = json!({"subtitle": "Single • New Release", "comment": "Hi",
+            "itemV2": {"data": {"__typename": "Album", "type": "SINGLE",
+                "uri": "spotify:album:0123456789abcdefghij09", "name": "Showgirl",
                 "coverArt": {"sources": [{"url": "https://i.scdn.co/image/cover"}]}}}});
         let pick = artist_pick(&pin).unwrap();
         assert_eq!(pick.name, "Showgirl");
-        assert_eq!(pick.subtitle, "Album • New Release");
+        assert_eq!(pick.subtitle, "Single");
+        let video = json!({"subtitle": "Music video", "type": "MUSIC_VIDEO",
+            "itemV2": {"data": {"__typename": "Track", "uri": "spotify:track:0123456789abcdefghij07", "name": "Clip"}}});
+        assert_eq!(artist_pick(&video).unwrap().subtitle, "Music video");
         assert_eq!(pick.route, "album:0123456789abcdefghij09");
         assert_eq!(pick.images[0].url, "https://i.scdn.co/image/cover");
         let bare = json!({"itemV2": {"data": {"uri": "spotify:playlist:0123456789abcdefghij08", "name": "Essentials"}},

@@ -353,6 +353,10 @@ function edge(body: Body, side: -1 | 1, inset = 0) {
  *  off from the line. */
 const LANDS_EARLY_MS = 100;
 
+/** The shortest time a link takes to draw, so words sung back to back
+ *  still pass the pen along instead of snapping. */
+const MIN_DRAW_MS = 240;
+
 /** The shortest pause between lines that shows the waiting dots. */
 const BREAK_MS = 2500;
 
@@ -418,11 +422,14 @@ function drawLinks(
   );
   // A link sets off only once the word before is fully inked, and lands
   // just before its word is sung, so that word's ink starts from the line.
-  // Words sung back to back leave no time: the link then shows whole the
-  // moment the word before finishes.
+  // Words sung back to back still give it a short glide, ending by the
+  // time its word ends, when the next link sets off, so links never overlap.
   const setsOff = (from: Entity) => from.end;
   const lands = (from: Entity, to: Entity) =>
-    Math.max(from.end, to.start - LANDS_EARLY_MS);
+    Math.max(
+      to.start - LANDS_EARLY_MS,
+      from.end + Math.min(MIN_DRAW_MS, Math.max(0, to.end - from.end)),
+    );
   // The latest line under way, counting the link drawing into it, and the
   // line before it keep their links.
   let current = -1;
@@ -519,10 +526,8 @@ function drawLinks(
       time >= finish
         ? 1
         : ease(Math.max(0, (time - begin) / Math.max(1, finish - begin)));
-    link.drawn =
-      target === 1
-        ? 1
-        : link.drawn + (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
+    link.drawn += (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
+    if (target === 1 && link.drawn > 0.995) link.drawn = 1;
     link.path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
   }
   for (const [key, link] of drawn) {

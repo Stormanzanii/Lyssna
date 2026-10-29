@@ -4947,16 +4947,23 @@ test("Space Gravity marker links leave each word once it is inked, at the Highli
       ),
     );
   // A link never leaves a word still being inked: "Quick" must finish
-  // first. Back to back, it then shows whole at once, so "quick" starts
-  // its ink from the line.
+  // first. Back to back, it still glides rather than snapping whole.
   await expect(links).toHaveCount(0);
   await at(100);
   await expect(links).toHaveCount(1);
-  await expect.poll(async () => (await offsets())[0]).toBe(0);
-  // The second link waits for "quick" to finish.
+  expect((await offsets())[0]).toBeGreaterThan(0.9);
   await at(150);
+  await expect
+    .poll(async () => (await offsets())[0])
+    .toBeGreaterThan(0.05);
+  expect((await offsets())[0]).toBeLessThan(0.95);
   await expect(links).toHaveCount(1);
+  // It lands as "quick" ends, when the second link sets off, so the two
+  // read as one line.
   await at(200);
+  await expect.poll(async () => (await offsets())[0]).toBe(0);
+  await expect(links).toHaveCount(2);
+  await at(450);
   await expect.poll(offsets).toEqual([0, 0]);
   // As broad as the Highlighter's band on the words.
   const width = await links

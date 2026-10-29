@@ -420,16 +420,23 @@ function drawLinks(
   const lead = entities.filter(
     (entity) => entity.index >= 0 && elements.has(entity.key),
   );
-  // A link sets off only once the word before is fully inked, and lands
-  // just before its word is sung, so that word's ink starts from the line.
-  // Words sung back to back still give it a short glide, ending by the
-  // time its word ends, when the next link sets off, so links never overlap.
-  const setsOff = (from: Entity) => from.end;
-  const lands = (from: Entity, to: Entity) =>
-    Math.max(
-      to.start - LANDS_EARLY_MS,
-      from.end + Math.min(MIN_DRAW_MS, Math.max(0, to.end - from.end)),
+  // A link reaches its word by the time that word is sung, so the word's
+  // ink starts from the line. Given a pause it sets off once the word
+  // before is fully inked and lands just early; words sung close together
+  // leave no pause, so it sets off while the word before is sung, never
+  // before that word starts, when the link into it has landed. Links so
+  // never overlap and read as one line.
+  const setsOff = (from: Entity, to: Entity) =>
+    Math.min(from.end, Math.max(from.start, to.start - MIN_DRAW_MS));
+  const lands = (from: Entity, to: Entity) => {
+    const begin = setsOff(from, to);
+    return Math.max(
+      begin,
+      to.start - begin >= MIN_DRAW_MS + LANDS_EARLY_MS
+        ? to.start - LANDS_EARLY_MS
+        : to.start,
     );
+  };
   // The latest line under way, counting the link drawing into it, and the
   // line before it keep their links.
   let current = -1;
@@ -437,7 +444,9 @@ function drawLinks(
     const before = lead[index - 1];
     if (
       entity.start <= time ||
-      (before && before.index + 1 === entity.index && setsOff(before) <= time)
+      (before &&
+        before.index + 1 === entity.index &&
+        setsOff(before, entity) <= time)
     )
       current = Math.max(current, entity.lead);
   });
@@ -449,7 +458,7 @@ function drawLinks(
     const from = lead[index - 1],
       to = lead[index];
     const finish = lands(from, to),
-      begin = setsOff(from);
+      begin = setsOff(from, to);
     // Links within the sung line and the one before, and the link from
     // that earlier line into the sung one.
     const within =
@@ -526,7 +535,7 @@ function drawLinks(
       time >= finish
         ? 1
         : ease(Math.max(0, (time - begin) / Math.max(1, finish - begin)));
-    link.drawn += (target - link.drawn) * (1 - Math.exp(-elapsed / 35));
+    link.drawn += (target - link.drawn) * (1 - Math.exp(-elapsed / 20));
     if (target === 1 && link.drawn > 0.995) link.drawn = 1;
     link.path.style.strokeDashoffset = `${(1 - link.drawn).toFixed(3)}`;
   }

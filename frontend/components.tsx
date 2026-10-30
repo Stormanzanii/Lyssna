@@ -31,25 +31,24 @@ import {
   ChevronUp,
   ChevronDown,
   X,
-  Heart,
   PanelLeftOpen,
   UnfoldVertical,
   FoldVertical,
-  Volume2,
-  VolumeX,
   Copy,
 } from "lucide-react";
 import { Toggle } from "./setting-row";
 import { VolumeControl } from "./volume-control";
-import { DJArtwork, DJ_COVER } from "./brand";
 import {
-  NextIcon,
-  PauseIcon,
-  PlayIcon,
-  PreviousIcon,
-  RepeatIcon,
-  ShuffleIcon,
-} from "./player-icons";
+  FullscreenHeartIcon,
+  FullscreenPauseIcon,
+  FullscreenPlayIcon,
+  FullscreenRepeatIcon,
+  FullscreenShuffleIcon,
+  FullscreenVolumeIcon,
+  SkipNextIcon,
+  SkipPreviousIcon,
+} from "./fullscreen-icons";
+import { DJArtwork, DJ_COVER } from "./brand";
 import type {
   Album,
   Artist,
@@ -1583,21 +1582,21 @@ function SongLyricsPage({
           title={saved ? "Remove from Liked Songs" : "Save to Liked Songs"}
           onClick={toggleSaved}
         >
-          <Heart size={26} fill={saved ? "currentColor" : "none"} />
+          <FullscreenHeartIcon />
         </button>
         <button
-          className={`icon-button ${state.playback.shuffle_state ? "active" : ""}`}
+          className={`icon-button lyrics-fullscreen-shuffle ${state.playback.shuffle_state ? "active" : ""}`}
           title="Shuffle"
           onClick={toggleShuffle}
         >
-          <ShuffleIcon size={20} />
+          <FullscreenShuffleIcon />
         </button>
         <button
-          className="icon-button"
+          className="icon-button lyrics-fullscreen-skip"
           title="Previous song"
           onClick={previousSong}
         >
-          <PreviousIcon size={24} />
+          <SkipPreviousIcon />
         </button>
         <button
           className="icon-button lyrics-fullscreen-play"
@@ -1605,20 +1604,24 @@ function SongLyricsPage({
           onClick={togglePlay}
         >
           {state.playback.is_playing ? (
-            <PauseIcon size={30} />
+            <FullscreenPauseIcon />
           ) : (
-            <PlayIcon size={30} />
+            <FullscreenPlayIcon />
           )}
         </button>
-        <button className="icon-button" title="Next song" onClick={nextSong}>
-          <NextIcon size={24} />
+        <button
+          className="icon-button lyrics-fullscreen-skip"
+          title="Next song"
+          onClick={nextSong}
+        >
+          <SkipNextIcon />
         </button>
         <button
-          className={`icon-button ${repeat !== "off" ? "active" : ""}`}
+          className={`icon-button lyrics-fullscreen-repeat ${repeat !== "off" ? "active" : ""}`}
           title="Repeat"
           onClick={cycleRepeat}
         >
-          <RepeatIcon size={20} one={repeat === "track"} />
+          <FullscreenRepeatIcon one={repeat === "track"} />
         </button>
       </div>
       {state.settings.fullscreen_volume &&
@@ -1909,32 +1912,68 @@ function FullscreenVolume({
   useEffect(() => {
     control.observe(device.volume_percent, device.id ?? device.name);
   }, [device.volume_percent, device.id, device.name, control]);
+  // The level a tap on the speaker brings back after muting.
+  const audible = useRef(volume || 50);
+  if (volume) audible.current = volume;
+  // The wheel nudges the volume 5% a notch; React's wheel listener is
+  // passive, so the page would scroll too.
+  const bar = useRef<HTMLDivElement>(null);
+  const level = useRef(volume);
+  level.current = volume;
+  useEffect(() => {
+    const node = bar.current;
+    if (!node) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const next = Math.max(
+        0,
+        Math.min(100, level.current + (event.deltaY < 0 ? 5 : -5)),
+      );
+      control.edit(next);
+      control.finish();
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => node.removeEventListener("wheel", wheel);
+  }, [control]);
+  // Like the fork's: a frosted pill filled white from the bottom (or the
+  // left, below the controls), its speaker inside the end of the fill,
+  // growing wider while used.
   return (
     <div className={`lyrics-fullscreen-volume ${side}`}>
-      <button
-        className="icon-button"
-        title={volume ? "Mute" : "Unmute"}
-        onClick={() => {
-          control.edit(volume ? 0 : 70);
-          control.finish();
-        }}
-      >
-        {volume ? <Volume2 size={20} /> : <VolumeX size={20} />}
-      </button>
-      <input
-        type="range"
-        aria-label="Full screen volume"
-        min="0"
-        max="100"
-        value={volume}
+      <div
+        ref={bar}
+        className="lyrics-volume-pill"
+        data-level={volume <= 0 ? "muted" : volume < 50 ? "low" : "high"}
         style={{ "--range": `${volume}%` } as CSSProperties}
-        onPointerDown={() => control.begin()}
-        onPointerUp={() => control.finish()}
-        onPointerCancel={() => control.finish()}
-        onKeyUp={() => control.finish()}
-        onBlur={() => control.finish()}
-        onChange={(event) => control.edit(Number(event.target.value))}
-      />
+      >
+        <span className="lyrics-volume-fill" />
+        <input
+          type="range"
+          aria-label="Full screen volume"
+          min="0"
+          max="100"
+          value={volume}
+          onPointerDown={() => control.begin()}
+          onPointerUp={(event) => {
+            control.finish();
+            event.currentTarget.blur();
+          }}
+          onPointerCancel={() => control.finish()}
+          onKeyUp={() => control.finish()}
+          onBlur={() => control.finish()}
+          onChange={(event) => control.edit(Number(event.target.value))}
+        />
+        <button
+          className="lyrics-volume-icon"
+          title={volume ? "Mute" : "Unmute"}
+          onClick={() => {
+            control.edit(volume ? 0 : audible.current);
+            control.finish();
+          }}
+        >
+          <FullscreenVolumeIcon />
+        </button>
+      </div>
     </div>
   );
 }

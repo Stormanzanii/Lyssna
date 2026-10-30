@@ -11180,6 +11180,52 @@ test("full screen volume slider sets the volume", async ({ page }) => {
     .toBe(40);
 });
 
+test("full screen volume is a pill beside the cover that widens in use", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Full screen volume slider", { exact: true })
+    .selectOption("right");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  for (const canvas of [false, true]) {
+    if (canvas) await emitCanvas(page);
+    await page.keyboard.press("F11");
+    await page.mouse.move(900, 300);
+    await page.mouse.move(901, 302);
+    const pill = page.locator(".lyrics-volume-pill");
+    await expect(pill).toBeVisible();
+    if (!canvas) {
+      // Beside the cover's right edge, about as tall as it.
+      const cover = (await page
+        .locator(".lyrics-media > .cover")
+        .boundingBox())!;
+      const box = (await pill.boundingBox())!;
+      expect(box.x).toBeGreaterThan(cover.x + cover.width);
+      expect(box.height).toBeGreaterThan(cover.height * 0.8);
+    }
+    const before = (await pill.boundingBox())!.width;
+    await pill.hover();
+    await expect
+      .poll(async () => (await pill.boundingBox())!.width)
+      .toBeGreaterThan(before + 4);
+    await page.screenshot({
+      path: `target/diagnostics/fullscreen-volume-${canvas ? "canvas" : "album"}.png`,
+    });
+    // Its speaker mutes.
+    await page.getByRole("button", { name: "Mute" }).click();
+    await expect(pill).toHaveAttribute("data-level", "muted");
+    await page.getByRole("button", { name: "Unmute" }).click();
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("closing full screen can slide the lyrics away first", async ({
   page,
 }) => {

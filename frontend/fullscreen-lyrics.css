@@ -125,33 +125,29 @@
   grid-column: 1 / -1;
   grid-row: 1;
   justify-content: space-between;
-  margin: 0 5% 8px;
+  margin: 0 6% 2.5cqw;
   gap: 10px;
-}
-.immersive .lyrics-media .lyrics-fullscreen-buttons .icon-button {
-  width: 8cqw;
-  height: 8cqw;
-  padding: 0;
-}
-.immersive .lyrics-media .lyrics-fullscreen-buttons svg {
-  width: 100%;
-  height: 100%;
-}
-.immersive .lyrics-media .lyrics-fullscreen-buttons .lyrics-fullscreen-play {
-  width: 9.5cqw;
-  height: 9.5cqw;
+  --transport: 6.4cqw;
 }
 .immersive .lyrics-media .lyrics-fullscreen-buttons .lyrics-fullscreen-like {
   position: absolute;
   left: 50%;
   /* Centred on the square cover: the controls sit 6% above its bottom
-     edge, so 29cqw more puts the 30cqw heart's middle at 50cqw. */
+     edge, so 29cqw more puts the heart's middle near 50cqw. */
   bottom: 29cqw;
   translate: -50% 0;
   width: 30cqw;
-  height: 30cqw;
+  height: auto;
   margin: 0;
   filter: drop-shadow(0 4px 18px #0000008c);
+}
+.immersive
+  .lyrics-media
+  .lyrics-fullscreen-buttons
+  .lyrics-fullscreen-like
+  svg {
+  width: 100%;
+  height: auto;
 }
 .immersive .lyrics-media .lyrics-glass-seek {
   grid-row: 2;
@@ -196,44 +192,31 @@
   width: min(38%, 780px);
   gap: 10px;
 }
-/* Full screen Canvas controls read from across the room, like Spotify's. */
-.immersive .canvas-lyrics .lyrics-glass-seek {
-  height: 12px;
-}
+/* Full screen Canvas controls read from across the room, like the fork's
+   Canvas dock: the heart at the left, the transport centred. */
 .immersive .canvas-lyrics .lyrics-fullscreen-times {
-  font-size: 17px;
+  font-size: 15px;
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-buttons {
   position: relative;
   justify-content: center;
-  padding-inline: 72px;
-  margin-top: 10px;
-  gap: clamp(24px, 3vw, 52px);
+  padding-inline: 64px;
+  margin-top: 14px;
+  gap: clamp(20px, 2.2vw, 44px);
+  --transport: clamp(30px, 2.5vw, 46px);
 }
-.immersive .canvas-lyrics .lyrics-fullscreen-buttons svg {
-  width: 30px;
-  height: 30px;
-}
-.immersive
-  .canvas-lyrics
-  .lyrics-fullscreen-buttons
-  .lyrics-fullscreen-play
-  svg {
-  width: 46px;
-  height: 46px;
+.immersive .canvas-lyrics .lyrics-fullscreen-like {
+  position: absolute;
+  left: 0;
+  margin: 0;
 }
 .immersive
   .canvas-lyrics
   .lyrics-fullscreen-buttons
   .lyrics-fullscreen-like
   svg {
-  width: 40px;
-  height: 40px;
-}
-.immersive .canvas-lyrics .lyrics-fullscreen-like {
-  position: absolute;
-  left: 0;
-  margin: 0;
+  width: auto;
+  height: calc(var(--transport) * 1.05);
 }
 .immersive .canvas-lyrics:not(.narrow) :is(.lyrics-title, .lyrics-artists) {
   left: var(--fullscreen-gutter);
@@ -316,118 +299,313 @@
 .immersive .lyrics-page[data-always-show] .lyrics-media::after {
   opacity: 1;
 }
-/* Full screen volume slider: a row under the controls, or an upright bar
-   beside them, fading with them. */
+/* Full screen volume, as the fork's: a frosted pill beside the cover,
+   filled white from the bottom with its speaker inside the end of the fill,
+   that grows wider while used. Below the controls it lies flat. */
 .immersive .lyrics-fullscreen-volume {
+  --pill: clamp(30px, 2.4vw, 44px);
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   grid-column: 1 / -1;
   grid-row: 3;
 }
-.immersive .lyrics-fullscreen-volume .icon-button {
-  width: auto;
-  height: auto;
-  padding: 4px;
-  color: #ffffffd9;
+.immersive .lyrics-media .lyrics-fullscreen-volume {
+  --pill: max(29px, 4.8cqw);
 }
-.immersive .lyrics-fullscreen-volume input {
-  appearance: none;
-  flex: 1;
-  min-width: 0;
-  height: 6px;
-  margin: 0;
+.immersive .lyrics-volume-pill {
+  position: relative;
+  overflow: hidden;
+  width: var(--pill);
+  height: 100%;
   border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    #fff var(--range, 50%),
-    #ffffff33 var(--range, 50%)
-  );
-  cursor: pointer;
+  background: #0000001a;
+  -webkit-backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  box-shadow:
+    0 8px 20px -8px #080a126b,
+    inset 0 1px 0 #ffffff5c,
+    inset 0 0 0 1px #ffffff29;
+  transition:
+    width 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    height 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.immersive .lyrics-fullscreen-volume input::-webkit-slider-thumb {
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px #0006;
+.immersive
+  .lyrics-volume-pill:is(:hover, :has(input:active), :has(:focus-visible)) {
+  width: calc(var(--pill) * 1.35);
 }
-.immersive .lyrics-fullscreen-volume.below {
-  justify-self: center;
-  width: min(70%, 340px);
-}
-.immersive .lyrics-fullscreen-volume:is(.left, .right) {
+.immersive .lyrics-volume-fill {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 32px;
-  flex-direction: column-reverse;
+  inset: auto 0 0;
+  height: var(--range, 50%);
+  border-radius: inherit;
+  background: #fff;
+  pointer-events: none;
+  transition:
+    height 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    width 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.immersive .lyrics-fullscreen-volume:is(.left, .right) input {
+.immersive .lyrics-volume-pill:has(input:active) .lyrics-volume-fill {
+  transition: none;
+}
+.immersive .lyrics-volume-pill input {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   writing-mode: vertical-lr;
   direction: rtl;
-  width: 6px;
-  height: auto;
-  background: linear-gradient(
-    to top,
-    #fff var(--range, 50%),
-    #ffffff33 var(--range, 50%)
-  );
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
 }
-/* Over the artwork, an upright bar runs beside the cover, as the fork
-   places it beside its media box; a row joins the controls on the cover. */
+/* The speaker inverts over the white fill, as the fork's does. */
+.immersive .lyrics-volume-icon {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: max(26px, calc(var(--pill) * 1.1));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  mix-blend-mode: difference;
+  cursor: pointer;
+}
+.immersive .lyrics-volume-icon svg {
+  width: auto;
+  height: min(22px, calc(var(--pill) * 0.6));
+  transition: scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.immersive .lyrics-volume-icon:active svg {
+  scale: 0.85;
+}
+.lyrics-volume-icon :is(.volume-wave-low, .volume-wave-high, .volume-mute) {
+  transition: opacity 180ms ease;
+}
+.lyrics-volume-icon .volume-mute,
+[data-level="low"] .lyrics-volume-icon .volume-wave-high,
+[data-level="muted"]
+  .lyrics-volume-icon
+  :is(.volume-wave-low, .volume-wave-high) {
+  opacity: 0;
+}
+[data-level="muted"] .lyrics-volume-icon .volume-mute {
+  opacity: 1;
+}
+/* Below the controls, or stacked with them: a flat pill filled from the
+   left, its speaker at the start. */
+.immersive .lyrics-fullscreen-volume.below {
+  justify-self: center;
+  width: min(82%, 42rem);
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-volume {
+  position: static;
+  justify-self: center;
+  width: min(70%, 340px);
+  height: auto;
+}
+.immersive
+  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  .lyrics-volume-pill,
+.immersive
+  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  .lyrics-volume-pill:is(:hover, :has(input:active), :has(:focus-visible)) {
+  width: 100%;
+  height: var(--pill);
+}
+.immersive
+  .lyrics-fullscreen-volume.below
+  .lyrics-volume-pill:is(:hover, :has(input:active), :has(:focus-visible)) {
+  height: calc(var(--pill) * 1.35);
+}
+.immersive
+  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  .lyrics-volume-fill {
+  inset: 0 auto 0 0;
+  width: var(--range, 50%);
+  height: auto;
+}
+.immersive
+  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  input {
+  writing-mode: horizontal-tb;
+  direction: ltr;
+}
+.immersive
+  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  .lyrics-volume-icon {
+  inset: 0 auto 0 0;
+  width: max(30px, calc(var(--pill) * 1.1));
+  height: auto;
+}
+.immersive
+  .lyrics-page:not(.narrow)
+  .lyrics-fullscreen-volume:is(.left, .right) {
+  position: absolute;
+  width: calc(var(--pill) * 1.35);
+}
+/* Over the artwork, an upright pill runs beside the cover, inset 14px at
+   both ends as the fork's sits beside its media box. */
 .immersive .lyrics-media .lyrics-fullscreen-volume:is(.left, .right) {
   top: auto;
   bottom: calc(14px - 6cqw);
   height: calc(100cqw - 28px);
 }
 .immersive .lyrics-media .lyrics-fullscreen-volume.left {
-  left: calc(-10cqw - 52px);
+  left: calc(-10cqw - 24px - var(--pill) * 1.35);
 }
 .immersive .lyrics-media .lyrics-fullscreen-volume.right {
-  right: calc(-10cqw - 52px);
+  right: calc(-10cqw - 24px - var(--pill) * 1.35);
 }
-/* Beside the Canvas, the controls make room for the bar inside their
-   corner, and a row below lifts the song details further. */
+/* Beside the Canvas, the pill stands past the controls' lyrics-side edge,
+   level with the song details above them. */
 .immersive
   .canvas-lyrics:not(.narrow)
-  .lyrics-fullscreen-controls:has(> .lyrics-fullscreen-volume.left) {
-  padding-left: 48px;
+  .lyrics-fullscreen-volume:is(.left, .right) {
+  top: auto;
+  bottom: calc(100% + 24px);
+  left: auto;
+  right: calc(-28px - var(--pill) * 1.35);
+  height: min(46vh, 520px);
 }
 .immersive
-  .canvas-lyrics:not(.narrow)
-  .lyrics-fullscreen-controls:has(> .lyrics-fullscreen-volume.right) {
-  padding-right: 48px;
-}
-.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume.left {
-  left: 0;
-}
-.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume.right {
-  right: 0;
+  .canvas-lyrics.artwork-right:not(.narrow)
+  .lyrics-fullscreen-volume:is(.left, .right) {
+  left: calc(-28px - var(--pill) * 1.35);
+  right: auto;
 }
 .immersive
   .canvas-lyrics:not(.narrow):has(.lyrics-fullscreen-volume.below)
   :is(.lyrics-title, .lyrics-artists) {
   translate: 0 calc(-1.4 * var(--lyrics-dock-lift));
 }
-/* Stacked layouts have no room beside the controls: the bar becomes a row. */
-.immersive .lyrics-page.narrow .lyrics-fullscreen-volume {
-  position: static;
-  flex-direction: row;
-  justify-self: center;
-  width: min(70%, 340px);
+/* Transport as the fork's: filled rounded glyphs, the skips double
+   triangles; the others dim while one is hovered, and a press shrinks. */
+.immersive .lyrics-fullscreen-buttons {
+  --transport: 28px;
 }
-.immersive .lyrics-page.narrow .lyrics-fullscreen-volume input {
-  writing-mode: horizontal-tb;
-  direction: ltr;
+.immersive .lyrics-fullscreen-buttons .icon-button {
   width: auto;
-  height: 6px;
-  background: linear-gradient(
-    to right,
-    #fff var(--range, 50%),
-    #ffffff33 var(--range, 50%)
-  );
+  height: auto;
+  padding: 0;
+  color: #fff;
+  background: none;
+  transition: opacity 175ms cubic-bezier(0.37, 0, 0.63, 1);
+}
+.immersive .lyrics-fullscreen-buttons .icon-button svg {
+  display: block;
+  width: auto;
+  height: calc(var(--transport) * 0.72);
+  transition: scale 175ms cubic-bezier(0.37, 0, 0.63, 1);
+}
+.immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-skip svg {
+  height: calc(var(--transport) * 0.78);
+}
+.immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-play svg {
+  height: calc(var(--transport) * 1.18);
+}
+.immersive
+  .lyrics-fullscreen-buttons:hover
+  .icon-button:not(:hover, .lyrics-fullscreen-like) {
+  opacity: 0.5;
+}
+.immersive .lyrics-fullscreen-buttons .icon-button:hover {
+  background: none;
+}
+.immersive .lyrics-fullscreen-buttons .icon-button:active svg {
+  scale: 0.9;
+}
+.immersive
+  .lyrics-fullscreen-buttons
+  :is(.lyrics-fullscreen-shuffle, .lyrics-fullscreen-repeat):not(.active) {
+  color: #ffffffd9;
+}
+.immersive .lyrics-fullscreen-buttons .icon-button.active {
+  filter: drop-shadow(0 0 2px #ffffff80) drop-shadow(0 0 6px #ffffff47);
+}
+/* The heart fills once liked, and hints at it while hovered. */
+.immersive .lyrics-fullscreen-like .heart-fill {
+  opacity: 0;
+  transition: opacity 250ms;
+}
+.immersive .lyrics-fullscreen-like.is-saved .heart-fill {
+  opacity: 1;
+}
+.immersive .lyrics-fullscreen-like:not(.is-saved):hover .heart-fill {
+  opacity: 0.25;
+}
+.immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-like svg {
+  transition: scale 850ms
+    linear(
+      0,
+      0.155 4.1%,
+      0.783 11.7%,
+      1.088 16.6%,
+      1.215 21.4%,
+      1.207 26%,
+      1.057 34.4%,
+      0.971 40.8%,
+      0.953 49.1%,
+      1.01 66.8%,
+      1
+    );
+}
+.immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-like:hover svg {
+  scale: 0.925;
+}
+.immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-like:active svg {
+  scale: 0.8;
+}
+/* Seek bar as the fork's glass capsule: a white fill, no thumb, swelling
+   while hovered or dragged. */
+.immersive .lyrics-page:not(.flat-seek) .lyrics-glass-seek {
+  overflow: hidden;
+  background: #0000001a;
+  -webkit-backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  box-shadow:
+    0 6px 18px -8px #080a1259,
+    inset 0 1px 0 #ffffff5c,
+    inset 0 0 0 1px #ffffff29,
+    inset 0 -1px 0 #ffffff2e;
+}
+.immersive .lyrics-page:not(.flat-seek) .lyrics-glass-fill {
+  background: #fff;
+  box-shadow: none;
+}
+.immersive .lyrics-glass-seek input {
+  inset: 0;
+}
+.immersive .lyrics-media .lyrics-glass-seek {
+  height: 2.2cqw;
+  transition: height 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.immersive .lyrics-media .lyrics-glass-seek:is(:hover, :has(input:active)) {
+  height: 3cqw;
+}
+.immersive .canvas-lyrics .lyrics-glass-seek {
+  height: clamp(10px, 0.8vw, 15px);
+  transition: height 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.immersive .canvas-lyrics .lyrics-glass-seek:is(:hover, :has(input:active)) {
+  height: clamp(16px, 1.3vw, 24px);
+}
+/* While the controls show, the cover dims as the fork's does, deeper with
+   the pointer on it. */
+.immersive .lyrics-media > .cover {
+  transition: filter 450ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.immersive
+  .lyrics-page:is([data-tools="awake"], [data-seeking="true"])
+  .lyrics-media:hover
+  > .cover {
+  filter: brightness(0.72);
 }
 /* Animate closing full screen: the lyrics slide down out of view before the
    window leaves full screen. */

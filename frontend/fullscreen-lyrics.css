@@ -132,11 +132,11 @@
 .immersive .lyrics-media .lyrics-fullscreen-buttons .lyrics-fullscreen-like {
   position: absolute;
   left: 50%;
-  /* Centred on the square cover: the controls sit 6% above its bottom
-     edge, so 29cqw more puts the heart's middle near 50cqw. */
-  bottom: 29cqw;
+  /* The fork's size, 45% of the cover, centred on it: the controls sit
+     6% above its bottom edge, so 21.5cqw more puts its middle at 50cqw. */
+  bottom: 21.5cqw;
   translate: -50% 0;
-  width: 30cqw;
+  width: 45cqw;
   height: auto;
   margin: 0;
   filter: drop-shadow(0 4px 18px #0000008c);
@@ -305,10 +305,6 @@
   > :is(.lyrics-fullscreen-buttons, .lyrics-fullscreen-volume) {
   opacity: 1;
   pointer-events: auto;
-}
-/* Over the artwork, the shade stays under controls that stay up. */
-.immersive .lyrics-page[data-always-show] .lyrics-media::after {
-  opacity: 1;
 }
 /* Full screen volume, as the fork's: a frosted pill beside the cover,
    filled white from the bottom with its speaker inside the end of the fill,
@@ -589,8 +585,7 @@
 .immersive .lyrics-fullscreen-buttons .lyrics-fullscreen-like:active svg {
   scale: 0.8;
 }
-/* Seek bar as the fork's glass capsule: a white fill, no thumb, swelling
-   while hovered or dragged. */
+/* Seek bar as the fork's glass capsule: a white fill and no thumb. */
 .immersive .lyrics-page:not(.flat-seek) .lyrics-glass-seek {
   overflow: hidden;
   background: #0000001a;
@@ -611,17 +606,9 @@
 }
 .immersive .lyrics-media .lyrics-glass-seek {
   height: 2.2cqw;
-  transition: height 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.immersive .lyrics-media .lyrics-glass-seek:is(:hover, :has(input:active)) {
-  height: 3cqw;
 }
 .immersive .canvas-lyrics .lyrics-glass-seek {
   height: clamp(10px, 0.8vw, 15px);
-  transition: height 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.immersive .canvas-lyrics .lyrics-glass-seek:is(:hover, :has(input:active)) {
-  height: clamp(16px, 1.3vw, 24px);
 }
 /* While the controls show, the cover dims as the fork's does, deeper with
    the pointer on it. */
@@ -651,4 +638,64 @@
 .flat-seek .lyrics-glass-fill {
   background: #fff;
   box-shadow: none;
+}
+/* Parts kept up by Always show in full screen, and every part when the
+   song has no lyrics, sit outside the cover as the fork's do: the seek bar
+   under the artwork and the transport under the song details. */
+.immersive .lyrics-outside-controls {
+  position: static;
+  width: var(--lyrics-art);
+  max-width: none;
+  margin: 0 auto;
+}
+.immersive .lyrics-outside-controls.outside-seek {
+  grid-template-columns:
+    calc((var(--time-chars, 4) + 0.5) * 1ch) minmax(0, 1fr)
+    calc((var(--time-chars, 4) + 0.5) * 1ch);
+  gap: 12px;
+  margin-top: 18px;
+}
+.immersive .lyrics-outside-controls .lyrics-glass-seek {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  height: 12px;
+}
+.immersive .lyrics-outside-controls .lyrics-fullscreen-times {
+  display: contents;
+}
+.immersive .lyrics-outside-controls .lyrics-fullscreen-times time {
+  grid-row: 1;
+  align-self: center;
+  color: #ffffffb3;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.immersive .lyrics-outside-controls .lyrics-fullscreen-times time:first-child {
+  grid-column: 1;
+  text-align: right;
+}
+.immersive .lyrics-outside-controls .lyrics-fullscreen-times time:last-child {
+  grid-column: 3;
+}
+.immersive .lyrics-outside-controls.outside-transport {
+  margin-top: 14px;
+}
+.immersive .lyrics-outside-controls .lyrics-fullscreen-buttons {
+  justify-content: center;
+  gap: clamp(22px, 2.4vw, 40px);
+  --transport: clamp(28px, 2.2vw, 38px);
+}
+/* No lyrics: the cover takes the middle of the screen, its details and
+   controls beneath it. */
+.immersive .lyrics-page.no-lyrics {
+  grid-template-columns: minmax(0, 1fr);
+}
+.immersive .lyrics-page.no-lyrics .lyrics-body {
+  display: none;
+}
+.immersive .lyrics-page.no-lyrics .lyrics-album {
+  --lyrics-art: min(100%, 58vh);
+  justify-self: center;
+  width: var(--lyrics-art);
 }

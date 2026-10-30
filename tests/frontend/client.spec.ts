@@ -11118,13 +11118,27 @@ test("full screen can keep the time or controls up while idle", async ({
   const section = page.locator(".lyrics-page");
   await expect(section).toHaveAttribute("data-always-show", "time");
   const seek = section.locator(".lyrics-glass-seek");
-  const buttons = section.locator(".lyrics-fullscreen-buttons");
+  let buttons = section.locator(".lyrics-media .lyrics-fullscreen-buttons");
   // Idle: the time stays, the buttons hide.
   await page.mouse.move(900, 300);
   await page.mouse.move(901, 301);
   await expect(buttons).toHaveCSS("opacity", "1");
   await expect(buttons).toHaveCSS("opacity", "0", { timeout: 5000 });
   await expect(seek).toHaveCSS("opacity", "1");
+  // Kept up, the time leaves the cover for the space under it, above the
+  // song's title, as the fork's does; it does not swell on hover.
+  const cover = (await section
+    .locator(".lyrics-media > .cover")
+    .boundingBox())!;
+  const seekBox = (await seek.boundingBox())!;
+  const title = (await section.locator(".lyrics-title").boundingBox())!;
+  expect(seekBox.y).toBeGreaterThan(cover.y + cover.height);
+  expect(seekBox.y + seekBox.height).toBeLessThan(title.y);
+  await seek.hover();
+  await page.waitForTimeout(400);
+  expect(
+    Math.abs((await seek.boundingBox())!.height - seekBox.height),
+  ).toBeLessThan(0.5);
   await page.keyboard.press("Escape");
   await openSettings(page, "Layout");
   await page
@@ -11133,8 +11147,62 @@ test("full screen can keep the time or controls up while idle", async ({
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.keyboard.press("F11");
   await expect(section).toHaveAttribute("data-always-show", "controls");
+  // The transport moves under the song details; the heart stays on the
+  // cover.
+  buttons = section.locator(".outside-transport .lyrics-fullscreen-buttons");
   await expect(seek).toHaveCSS("opacity", "0", { timeout: 5000 });
   await expect(buttons).toHaveCSS("opacity", "1");
+  const artists = (await section.locator(".lyrics-artists").boundingBox())!;
+  expect((await buttons.boundingBox())!.y).toBeGreaterThan(
+    artists.y + artists.height,
+  );
+  await expect(
+    section.locator(".lyrics-media .lyrics-fullscreen-like"),
+  ).toHaveCount(1);
+  await expect(
+    section.locator(".lyrics-media").getByRole("button", { name: "Pause" }),
+  ).toHaveCount(0);
+});
+
+test("a song without lyrics fills full screen with its cover and controls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(
+    (uri) =>
+      (window as any).__clientTest.emit({
+        type: "lyric_error",
+        uri,
+        message: "No lyrics found for this song",
+      }),
+    track.uri,
+  );
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  const section = page.locator(".lyrics-page");
+  await expect(section).toHaveClass(/no-lyrics/);
+  await expect(section.locator(".lyrics-message")).toBeHidden();
+  await page.mouse.move(800, 300);
+  await page.mouse.move(801, 301);
+  const cover = (await section
+    .locator(".lyrics-media > .cover")
+    .boundingBox())!;
+  // The cover sits in the middle, the seek bar under it, then the title,
+  // then the transport.
+  expect(Math.abs(cover.x + cover.width / 2 - 800)).toBeLessThan(4);
+  const seek = (await section.locator(".lyrics-glass-seek").boundingBox())!;
+  const title = (await section.locator(".lyrics-title").boundingBox())!;
+  const transport = (await section
+    .locator(".outside-transport")
+    .boundingBox())!;
+  expect(seek.y).toBeGreaterThan(cover.y + cover.height);
+  expect(title.y).toBeGreaterThan(seek.y);
+  expect(transport.y).toBeGreaterThan(title.y + title.height);
+  await page.screenshot({
+    path: "target/diagnostics/fullscreen-no-lyrics.png",
+  });
 });
 
 test("full screen volume slider sets the volume", async ({ page }) => {

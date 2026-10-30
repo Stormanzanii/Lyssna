@@ -1525,19 +1525,15 @@ function SongLyricsPage({
             )?.header_image ?? "",
           ].find(usableImage) || cover
         : undefined;
-  const fullscreenControls = track ? (
-    <div
-      className="lyrics-fullscreen-controls"
-      style={
-        {
-          // Both time labels reserve the duration's width, so the seek bar
-          // between them keeps its length as the elapsed time changes.
-          "--time-chars": formatTime(track.duration_ms).length,
-        } as CSSProperties
-      }
-    >
-      {/* A frosted glass track with a glowing fill; a transparent
-                  range on top handles dragging and the keyboard. */}
+  // Both time labels reserve the duration's width, so the seek bar between
+  // them keeps its length as the elapsed time changes.
+  const timeChars = {
+    "--time-chars": track ? formatTime(track.duration_ms).length : 4,
+  } as CSSProperties;
+  const seekPart = track ? (
+    <>
+      {/* A frosted glass track with a white fill; a transparent range
+          on top handles dragging and the keyboard. */}
       <div
         className="lyrics-glass-seek"
         style={
@@ -1576,54 +1572,62 @@ function SongLyricsPage({
         <time>{formatTime(seekShown)}</time>
         <time>{formatTime(track.duration_ms)}</time>
       </div>
-      <div className="lyrics-fullscreen-buttons">
-        <button
-          className={`icon-button lyrics-fullscreen-like ${saved ? "is-saved" : ""}`}
-          title={saved ? "Remove from Liked Songs" : "Save to Liked Songs"}
-          onClick={toggleSaved}
-        >
-          <FullscreenHeartIcon />
-        </button>
-        <button
-          className={`icon-button lyrics-fullscreen-shuffle ${state.playback.shuffle_state ? "active" : ""}`}
-          title="Shuffle"
-          onClick={toggleShuffle}
-        >
-          <FullscreenShuffleIcon />
-        </button>
-        <button
-          className="icon-button lyrics-fullscreen-skip"
-          title="Previous song"
-          onClick={previousSong}
-        >
-          <SkipPreviousIcon />
-        </button>
-        <button
-          className="icon-button lyrics-fullscreen-play"
-          aria-label={state.playback.is_playing ? "Pause" : "Play"}
-          onClick={togglePlay}
-        >
-          {state.playback.is_playing ? (
-            <FullscreenPauseIcon />
-          ) : (
-            <FullscreenPlayIcon />
-          )}
-        </button>
-        <button
-          className="icon-button lyrics-fullscreen-skip"
-          title="Next song"
-          onClick={nextSong}
-        >
-          <SkipNextIcon />
-        </button>
-        <button
-          className={`icon-button lyrics-fullscreen-repeat ${repeat !== "off" ? "active" : ""}`}
-          title="Repeat"
-          onClick={cycleRepeat}
-        >
-          <FullscreenRepeatIcon one={repeat === "track"} />
-        </button>
-      </div>
+    </>
+  ) : null;
+  const heartPart = track ? (
+    <button
+      className={`icon-button lyrics-fullscreen-like ${saved ? "is-saved" : ""}`}
+      title={saved ? "Remove from Liked Songs" : "Save to Liked Songs"}
+      onClick={toggleSaved}
+    >
+      <FullscreenHeartIcon />
+    </button>
+  ) : null;
+  const transportPart = track ? (
+    <>
+      <button
+        className={`icon-button lyrics-fullscreen-shuffle ${state.playback.shuffle_state ? "active" : ""}`}
+        title="Shuffle"
+        onClick={toggleShuffle}
+      >
+        <FullscreenShuffleIcon />
+      </button>
+      <button
+        className="icon-button lyrics-fullscreen-skip"
+        title="Previous song"
+        onClick={previousSong}
+      >
+        <SkipPreviousIcon />
+      </button>
+      <button
+        className="icon-button lyrics-fullscreen-play"
+        aria-label={state.playback.is_playing ? "Pause" : "Play"}
+        onClick={togglePlay}
+      >
+        {state.playback.is_playing ? (
+          <FullscreenPauseIcon />
+        ) : (
+          <FullscreenPlayIcon />
+        )}
+      </button>
+      <button
+        className="icon-button lyrics-fullscreen-skip"
+        title="Next song"
+        onClick={nextSong}
+      >
+        <SkipNextIcon />
+      </button>
+      <button
+        className={`icon-button lyrics-fullscreen-repeat ${repeat !== "off" ? "active" : ""}`}
+        title="Repeat"
+        onClick={cycleRepeat}
+      >
+        <FullscreenRepeatIcon one={repeat === "track"} />
+      </button>
+    </>
+  ) : null;
+  const volumePart = track ? (
+    <>
       {state.settings.fullscreen_volume &&
         state.settings.fullscreen_volume !== "off" && (
           <FullscreenVolume
@@ -1632,12 +1636,34 @@ function SongLyricsPage({
             side={state.settings.fullscreen_volume}
           />
         )}
+    </>
+  ) : null;
+  // Over the cover, parts kept up by Always show in full screen, and all of
+  // them when the song has no lyrics, sit outside the artwork as the fork's
+  // do: the seek bar under the cover, the transport under the song details.
+  const coverLayout =
+    immersive && !canvas && !narrow && !state.settings.lyrics_hide_artwork;
+  const noLyrics = !lyrics && !!state.lyric_error;
+  const alwaysShow = state.settings.fullscreen_always_show ?? "none";
+  const seekOutside =
+    coverLayout && (noLyrics || alwaysShow === "time" || alwaysShow === "both");
+  const transportOutside =
+    coverLayout &&
+    (noLyrics || alwaysShow === "controls" || alwaysShow === "both");
+  const fullscreenControls = track ? (
+    <div className="lyrics-fullscreen-controls" style={timeChars}>
+      {!seekOutside && seekPart}
+      <div className="lyrics-fullscreen-buttons">
+        {heartPart}
+        {!transportOutside && transportPart}
+      </div>
+      {volumePart}
     </div>
   ) : null;
   return (
     <section
       ref={page}
-      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""} ${state.settings.lyrics_toolbar_bottom ? "toolbar-bottom" : ""} ${state.settings.glass_seek === false ? "flat-seek" : ""}`}
+      className={`lyrics-page ${canvas ? "canvas-lyrics" : ""} ${narrow ? "narrow" : ""} ${state.settings.reduce_motion ? "reduce-motion" : ""} ${gravity ? "space-gravity" : ""} ${state.settings.lyrics_hide_artwork ? "no-artwork" : ""} ${state.settings.lyrics_artwork_right ? "artwork-right" : ""} ${state.settings.lyrics_background === "color" ? "colour-background" : ""} ${state.settings.lyrics_toolbar_bottom ? "toolbar-bottom" : ""} ${state.settings.glass_seek === false ? "flat-seek" : ""} ${coverLayout && noLyrics ? "no-lyrics" : ""}`}
       style={
         {
           // Shared by the lyric lines and, in Space Gravity, its countdown.
@@ -1725,6 +1751,14 @@ function SongLyricsPage({
                   fullscreenControls}
               </div>
             )}
+            {seekOutside && (
+              <div
+                className="lyrics-fullscreen-controls lyrics-outside-controls outside-seek"
+                style={timeChars}
+              >
+                {seekPart}
+              </div>
+            )}
             <div
               className="lyrics-details"
               data-context-route={track.id ? `track:${track.id}` : undefined}
@@ -1758,6 +1792,11 @@ function SongLyricsPage({
                 )}
               </div>
             </div>
+            {transportOutside && (
+              <div className="lyrics-fullscreen-controls lyrics-outside-controls outside-transport">
+                <div className="lyrics-fullscreen-buttons">{transportPart}</div>
+              </div>
+            )}
             {(canvas || narrow || state.settings.lyrics_hide_artwork) &&
               fullscreenControls}
           </div>

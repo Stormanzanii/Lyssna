@@ -120,7 +120,8 @@ export const FullScreenIcon = () => (
 );
 
 /** A tray with an arrow rising out of it: lyrics in a window of their
- *  own. The pixels-spicy-lyrics fork's External Cinema glyph (AGPL-3.0). */
+ *  own. The pixels-spicy-lyrics fork's `ExternalCinema` icon, as written
+ *  (`src/components/Styling/Icons.ts`, AGPL-3.0). */
 export const CinemaIcon = () => (
   <svg
     width="19"
@@ -128,7 +129,7 @@ export const CinemaIcon = () => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.6"
+    strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
@@ -139,21 +140,17 @@ export const CinemaIcon = () => (
   </svg>
 );
 
-/** A screen with a small window in its corner: the lyrics popout, drawn
- *  in thin outlines like the Cinema glyph beside it. */
+/** A screen with a filled window in its corner: the lyrics popout. The
+ *  fork's `PiPMode` icon, as written (AGPL-3.0). */
 export const PopoutIcon = () => (
   <svg
-    width="19"
-    height="19"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.6"
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="currentColor"
     aria-hidden="true"
   >
-    <rect x="3" y="5" width="18" height="14" rx="2.5" />
-    <rect x="12" y="12" width="6" height="4" rx="1" />
+    <path d="M16 2.45c0-.8-.65-1.45-1.45-1.45H1.45C.65 1 0 1.65 0 2.45v11.1C0 14.35.65 15 1.45 15h5.557v-1.5H1.5v-11h13V7H16z" />
+    <path d="M15.25 9.007a.75.75 0 0 1 .75.75v4.493a.75.75 0 0 1-.75.75H9.325a.75.75 0 0 1-.75-.75V9.757a.75.75 0 0 1 .75-.75z" />
   </svg>
 );

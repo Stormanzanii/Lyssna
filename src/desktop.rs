@@ -2510,7 +2510,9 @@ async fn jam(
         // Leaving stops this computer following the Jam's song changes at
         // once; joining lets them drive playback again.
         match action.as_str() {
-            "join" => controls.follow_jam(true),
+            // A Jam ended here earlier left this computer ignoring Jam
+            // transfers; a new one, hosted or joined, follows them again.
+            "join" | "start" => controls.follow_jam(true),
             "leave" => controls.follow_jam(false),
             _ => {}
         }

@@ -3089,6 +3089,8 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     ".profile-hero-identity>section dl>div{flex-direction:row-reverse!important;align-items:baseline;gap:.3rem!important}" +
     ".profile-hero-identity>section dl>div+div::after{content:'\\2022';margin-right:.3rem;color:var(--muted-foreground)}" +
     ".profile-hero-identity .profile-figure{font-size:1rem!important;letter-spacing:0!important}" +
+    // The counter reserves its widest figure; at this size it only leaves a gap.
+    ".profile-hero-identity .profile-figure .invisible{display:none!important}" +
     ".profile-stats-cta{padding:.375rem .875rem!important;font-size:.8125rem!important}" +
     ".profile-aura{left:7rem!important;top:50%!important}" +
     ".profile-spotlight{display:none!important}" +
@@ -3119,6 +3121,28 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   addEventListener("popstate", chromeless);
   chromeless();
 })();"#;
+/// Rounds a borderless window's corners wider than Windows' own 8 px.
+#[cfg(windows)]
+fn round_corners(
+    window: &tauri::WebviewWindow,
+    width: i32,
+    height: i32,
+    radius: i32,
+) -> Result<()> {
+    use windows::Win32::{
+        Foundation::HWND,
+        Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
+    };
+    let hwnd = HWND(window.hwnd()?.0 as _);
+    // The window owns the region once set.
+    unsafe {
+        let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+        if SetWindowRgn(hwnd, Some(region), true) == 0 {
+            anyhow::bail!("Could not round the window's corners");
+        }
+    }
+    Ok(())
+}
 /// The profile script with SpotiFlex's Metropolis in place of the site's
 /// typefaces. The page is remote, so the faces travel inside the script.
 fn profile_window_script() -> &'static str {
@@ -3298,6 +3322,8 @@ async fn open_creator_profile(
         let width = (f64::from(size.width) * 0.9).min(1080. * scale);
         let height = (f64::from(size.height) * 0.9).min(800. * scale);
         window.set_size(tauri::PhysicalSize::new(width, height))?;
+        #[cfg(windows)]
+        round_corners(&window, width as i32, height as i32, (18. * scale) as i32)?;
         window.set_position(tauri::PhysicalPosition::new(
             f64::from(origin.x) + (f64::from(size.width) - width) / 2.,
             f64::from(origin.y) + (f64::from(size.height) - height) / 2.,

@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 pub const REDIRECT_URI: &str = "http://127.0.0.1:43821/callback";
 pub const DASHBOARD_URL: &str = "https://developer.spotify.com/dashboard";
 /// Song sort choices a playlist, album or Liked Songs page can remember.
-pub const SONG_SORTS: [&str; 9] = [
+pub const SONG_SORTS: [&str; 10] = [
+    "random",
     "recent",
     "added_oldest",
     "newest",
@@ -744,12 +745,14 @@ mod tests {
     fn song_sorts_keep_only_known_choices_within_limits() {
         let mut sorts = std::collections::BTreeMap::from([
             ("playlist:abc".to_owned(), "recent".to_owned()),
+            ("album:abc".to_owned(), "random".to_owned()),
             ("liked".to_owned(), "bogus".to_owned()),
             ("x".repeat(200), "recent".to_owned()),
         ]);
         super::clean_song_sorts(&mut sorts);
-        assert_eq!(sorts.len(), 1);
+        assert_eq!(sorts.len(), 2);
         assert_eq!(sorts["playlist:abc"], "recent");
+        assert_eq!(sorts["album:abc"], "random");
         let mut many: std::collections::BTreeMap<_, _> = (0..900)
             .map(|index| (format!("playlist:{index}"), "popular".to_owned()))
             .collect();

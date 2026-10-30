@@ -181,8 +181,25 @@ function Install-Executable([string]$Staged) {
         }
         throw
     }
-    # Still held by a copy that hasn't exited: removed on the next install.
-    Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+    Remove-PreviousExecutable
+}
+
+# Delete the exe the install replaced. A copy still closing holds it for a
+# moment, so keep trying for a while.
+function Remove-PreviousExecutable {
+    $previous = "$installedExe.old"
+    $deadline = (Get-Date).AddSeconds(15)
+    while (Test-Path -LiteralPath $previous) {
+        Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $previous)) {
+            break
+        }
+        if ((Get-Date) -ge $deadline) {
+            Write-Warning "Could not delete $previous yet; the next build removes it."
+            break
+        }
+        Start-Sleep -Milliseconds 250
+    }
 }
 
 function Stop-InstalledSpotiFlex([string]$Directory = $installDirectory) {

@@ -21,7 +21,7 @@ use crate::{
         connect::{Cluster, ClusterUpdate, LogoutCommand, SetVolumeCommand},
         context::Context,
         explicit_content_pubsub::UserAttributesUpdate,
-        player::ProvidedTrack,
+        player::{PlayOrigin, ProvidedTrack},
         playlist4_external::PlaylistModificationInfo,
         social_connect_v2::{Session as JamSession, SessionUpdate, SessionUpdateReason},
         transfer_state::TransferState,
@@ -110,6 +110,8 @@ struct SpircTask {
 
     /// The Jam queue last lined up, so resends with the same queue skip it.
     jam_queue_hash: Option<u64>,
+    /// The Jam this device hosts, whose session its state carries.
+    jam_host: Option<String>,
 
     /// when set to true, it will update the volume after [VOLUME_UPDATE_DELAY],
     /// when no other future resolves, otherwise resets the delay
@@ -515,6 +517,7 @@ enum SpircCommand {
     RemoveFromQueue(String),
     ClearQueue,
     NextTo(String),
+    HostJam(Option<String>),
 }
 
 const CONTEXT_FETCH_THRESHOLD: usize = 2;
@@ -738,6 +741,7 @@ impl Spirc {
 
             transfer_state: None,
             jam_queue_hash: None,
+            jam_host: None,
             update_volume: false,
             update_state: false,
 
@@ -928,6 +932,11 @@ impl Spirc {
     /// Does nothing if we are not the active device.
     pub fn disconnect(&self, pause: bool) -> Result<(), Error> {
         Ok(self.commands.send(SpircCommand::Disconnect { pause })?)
+    }
+
+    /// Host the Jam with this session ID from this device, or stop with `None`.
+    pub fn host_jam(&self, session_id: Option<String>) -> Result<(), Error> {
+        Ok(self.commands.send(SpircCommand::HostJam(session_id))?)
     }
 
     /// Acquires the control as active connect device.
@@ -1254,6 +1263,21 @@ impl SpircTask {
                     .spclient()
                     .transfer(device_id, device_id, request.as_ref())
                     .await?;
+                return Ok(());
+            }
+            // Spotify's own host plays inside its Jam's session, which is
+            // how the Jam service knows what the host plays.
+            SpircCommand::HostJam(session_id) => {
+                if let Some(id) = session_id.as_deref()
+                    && self.session.session_id() != id
+                {
+                    self.session.set_session_id(id);
+                    self.connect_state.set_session_id(id.to_owned());
+                }
+                self.jam_host = session_id;
+                if self.connect_state.is_active() {
+                    return self.notify().await;
+                }
                 return Ok(());
             }
             SpircCommand::Activate if !self.connect_state.is_active() => {
@@ -1949,6 +1973,8 @@ impl SpircTask {
             context.url = Some(format!("context://{context_uri}"));
         }
         let has_queue = context.pages.iter().any(|page| !page.tracks.is_empty());
+        // Which context a Jam plays in, to compare with the host's.
+        log::warn!(target: "librespot_connect::jam", "Jam transfer context {context_uri}");
         let queue_hash = {
             use std::hash::{DefaultHasher, Hash, Hasher};
             let mut hash = DefaultHasher::new();
@@ -2167,6 +2193,13 @@ impl SpircTask {
         }
 
         self.connect_state.set_active_context(ContextType::Default);
+        // Songs the host starts are the Jam's, as Spotify's app marks them.
+        if self.jam_host.is_some() {
+            self.connect_state.set_origin(PlayOrigin {
+                feature_identifier: "jam".into(),
+                ..Default::default()
+            });
+        }
 
         // for play commands with skip by uid, the context of the command contains
         // tracks with uri and uid, so we merge the new context with the resolved/existing context
@@ -2966,6 +2999,7 @@ mod shuffle_tests {
             session,
             transfer_state: None,
             jam_queue_hash: None,
+            jam_host: None,
             update_volume: false,
             update_state: false,
             spirc_id: 0,

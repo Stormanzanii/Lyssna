@@ -509,6 +509,7 @@ impl Spotify {
             PlayerAction::RemoveFromQueue(_) | PlayerAction::ClearQueue => {
                 anyhow::bail!(QUEUE_EDIT_LOCAL)
             }
+            PlayerAction::HostJam(_) => anyhow::bail!("Only this computer's player hosts a Jam"),
             PlayerAction::Transfer(id) => {
                 self.request(
                     Method::PUT,
@@ -686,6 +687,8 @@ pub enum PlayerAction {
     /// Remove every song the listener queued.
     ClearQueue,
     Transfer(String),
+    /// This computer hosts the Jam with this session ID, or no Jam.
+    HostJam(Option<String>),
 }
 
 impl PlayerAction {

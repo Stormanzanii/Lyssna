@@ -243,6 +243,7 @@ fn command_body(action: &PlayerAction) -> Result<Value> {
         PlayerAction::RemoveFromQueue(_) | PlayerAction::ClearQueue => {
             anyhow::bail!(crate::api::QUEUE_EDIT_LOCAL)
         }
+        PlayerAction::HostJam(_) => anyhow::bail!("Only this computer's player hosts a Jam"),
         PlayerAction::Enqueue(uri) => {
             valid_track(uri)?;
             json!({"endpoint":"add_to_queue","track":{"uri":uri,"provider":"queue","metadata":{"is_queued":"true"}}})

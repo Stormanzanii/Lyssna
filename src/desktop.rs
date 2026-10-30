@@ -2551,6 +2551,20 @@ async fn jam(
         if action == "leave" && result.is_err() {
             controls.follow_jam(true);
         }
+        // The host's player plays inside the Jam's session, so the Jam
+        // service passes what it plays on to the guests.
+        let hosted = match (action.as_str(), &result) {
+            ("start" | "current", Ok(Some(jam))) if jam.is_owner => {
+                Some(Some(jam.session_id.clone()))
+            }
+            ("current", Ok(None)) | ("end", Ok(_)) => Some(None),
+            _ => None,
+        };
+        if let Some(session_id) = hosted {
+            let hosting = session_id.is_some();
+            let sent = controls.send(PlayerAction::HostJam(session_id)).is_ok();
+            crate::native::diagnostic(&format!("jam host: hosting={hosting} sent={sent}"));
+        }
         result
     })
     .await

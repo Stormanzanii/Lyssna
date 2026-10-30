@@ -534,6 +534,8 @@ const CONTEXT_FETCH_THRESHOLD: usize = 2;
 const VOLUME_UPDATE_DELAY: Duration = Duration::from_millis(500);
 // to reduce updates to remote, we group some request by waiting for a set amount of time
 const UPDATE_STATE_DELAY: Duration = Duration::from_millis(200);
+/// The context metadata entry naming the Jam a state belongs to.
+const JAM_SESSION_KEY: &str = "jam-session-id";
 fn requested_context_index(context: &Context, track: &PlayingTrack) -> Option<usize> {
     let mut tracks = context.pages.iter().flat_map(|page| &page.tracks);
     match track {
@@ -2977,6 +2979,21 @@ impl SpircTask {
         Ok(())
     }
 
+    /// Marks this device's state with its place in a Jam, as Spotify's app
+    /// does: the Jam mode, on while following a Jam or hosting one with
+    /// guests, and the hosted Jam named in the context's metadata from the
+    /// moment it starts. Guests keep the Jam name Spotify sends them.
+    fn mark_jam_state(&mut self) {
+        let following = self.devices.jam_phase() == JamPhase::Following;
+        let jam_on = following || (self.jam_host.is_some() && self.jam_has_guests);
+        self.connect_state
+            .set_mode("jam".into(), if jam_on { "on" } else { "off" }.into());
+        if self.jam_host.is_some() || !following {
+            self.connect_state
+                .set_context_metadata(JAM_SESSION_KEY, self.jam_host.clone());
+        }
+    }
+
     async fn notify(&mut self) -> Result<(), Error> {
         self.connect_state.set_status(&self.play_status);
 
@@ -2987,12 +3004,7 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
-        // Spotify's app always reports its Jam mode: on while following a
-        // Jam or hosting one with guests, off otherwise.
-        let jam_on = self.devices.jam_phase() == JamPhase::Following
-            || (self.jam_host.is_some() && self.jam_has_guests);
-        self.connect_state
-            .set_mode("jam".into(), if jam_on { "on" } else { "off" }.into());
+        self.mark_jam_state();
         if self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following {
             let summary =
                 jam_follow::state_summary(self.connect_state.player(), self.jam_host.as_deref());
@@ -3375,6 +3387,25 @@ mod shuffle_tests {
                 Some(mode)
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_hosted_jam_is_named_in_the_hosts_state() {
+        let mut task = task();
+        let jam = |task: &SpircTask| {
+            task.connect_state
+                .player()
+                .context_metadata
+                .get(JAM_SESSION_KEY)
+                .cloned()
+        };
+        task.jam_host = Some("jam-session".into());
+        task.mark_jam_state();
+        assert_eq!(jam(&task).as_deref(), Some("jam-session"));
+        task.jam_host = None;
+        task.mark_jam_state();
+        assert_eq!(jam(&task), None);
+        task.player.stop();
     }
 
     #[tokio::test]

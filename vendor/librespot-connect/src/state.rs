@@ -330,6 +330,20 @@ impl ConnectState {
         self.player_mut().playback_id = playback_id;
     }
 
+    /// Sets, or with `None` removes, one entry of the playing context's
+    /// metadata.
+    pub fn set_context_metadata(&mut self, key: &str, value: Option<String>) {
+        let metadata = &mut self.player_mut().context_metadata;
+        match value {
+            Some(value) => {
+                metadata.insert(key.to_owned(), value);
+            }
+            None => {
+                metadata.remove(key);
+            }
+        }
+    }
+
     pub(crate) fn set_status(&mut self, status: &SpircPlayStatus) {
         let player = self.player_mut();
         player.is_paused = matches!(

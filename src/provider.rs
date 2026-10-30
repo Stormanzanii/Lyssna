@@ -311,6 +311,9 @@ fn credit_name(username: &str, display: Option<&str>, supplied: &str) -> String 
         .to_owned()
 }
 
+/// Opens a spicylyrics.org profile without the site's header, as Spicy
+/// Lyrics opens it.
+pub const PROFILE_WITHOUT_HEADER: &str = r#"{"mp":true}"#;
 pub fn creator_profile(id: &str) -> Result<Url> {
     ensure!(
         !id.is_empty()
@@ -381,6 +384,8 @@ fn creator_redirect(location: &str) -> Result<Url> {
     );
     url.set_path(&format!("/{path}"));
     url.set_query(None);
+    url.query_pairs_mut()
+        .append_pair("_state", PROFILE_WITHOUT_HEADER);
     url.set_fragment(None);
     Ok(url)
 }
@@ -766,7 +771,7 @@ mod tests {
     fn creator_identity_uses_canonical_handle_and_rejects_other_origins() {
         assert_eq!(
             creator_redirect("/actual-handle").unwrap().as_str(),
-            "https://spicylyrics.org/actual-handle"
+            "https://spicylyrics.org/actual-handle?_state=%7B%22mp%22%3Atrue%7D"
         );
         for location in [
             "https://untrusted.example/person",

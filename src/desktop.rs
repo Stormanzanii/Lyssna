@@ -3058,7 +3058,10 @@ const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreen
 /// Runs in creator profile windows, which show the full `/{name}` profile
 /// page now that the site retires its `/embed/` pages. Hides scrollbars;
 /// wheel and touch scrolling still work. The page's banner would cover the
-/// top of the sheet, so it is hidden.
+/// top of the sheet, so it is hidden. The site drops its header for a
+/// profile opened with `_state={"mp":true}`, as Spicy Lyrics opens it; a
+/// profile reached without it, after the site's verification check or a
+/// `/uid/` link, is opened again with it.
 const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const style = document.createElement("style");
   style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
@@ -3067,6 +3070,25 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });
+  const routes = new Set(["app", "authcycle", "embed", "goog", "guides", "identity", "legal", "stats", "uid"]);
+  const chromeless = () => {
+    const name = location.pathname.match(/^\/([^/]+)\/?$/)?.[1];
+    const query = new URLSearchParams(location.search);
+    if (name && !routes.has(name.toLowerCase()) && query.get("_state") !== '{"mp":true}') {
+      query.set("_state", '{"mp":true}');
+      location.replace("/" + name + "?" + query);
+    }
+  };
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function (...args) {
+      const result = original.apply(this, args);
+      chromeless();
+      return result;
+    };
+  }
+  addEventListener("popstate", chromeless);
+  chromeless();
 })();"#;
 /// Cinema Lyrics, as the pixels-spicy-lyrics fork's: the full screen lyrics
 /// in a normal window of their own, framed so it moves, resizes and maximizes
@@ -3388,8 +3410,11 @@ fn creator_profile_url(username: &str) -> Result<url::Url> {
         .map_err(|_| anyhow::anyhow!("Invalid profile path"))?
         .pop_if_empty()
         .push(name);
+    url.query_pairs_mut()
+        .append_pair("_state", crate::provider::PROFILE_WITHOUT_HEADER);
     Ok(url)
 }
+
 /// Spotify and lyrics pages, plus the credited projects' repositories.
 fn allowed_link(url: &url::Url) -> bool {
     /// Profiles and repositories named in Settings > Credits and licences.
@@ -4151,12 +4176,12 @@ mod tests {
     fn creator_profiles_use_usernames_and_encode_path_characters() {
         assert_eq!(
             creator_profile_url("@Arashii").unwrap().as_str(),
-            "https://spicylyrics.org/Arashii"
+            "https://spicylyrics.org/Arashii?_state=%7B%22mp%22%3Atrue%7D"
         );
         assert!(creator_profile_url("../other").is_err());
         assert_eq!(
             creator_profile_url("Name#1234").unwrap().as_str(),
-            "https://spicylyrics.org/Name%231234"
+            "https://spicylyrics.org/Name%231234?_state=%7B%22mp%22%3Atrue%7D"
         );
     }
     #[test]

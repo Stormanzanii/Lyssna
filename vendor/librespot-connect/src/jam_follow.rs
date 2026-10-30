@@ -74,7 +74,8 @@ pub fn state_summary(state: &PlayerState, jam_session: Option<&str>) -> String {
     next_keys.sort_unstable();
     next_keys.dedup();
     format!(
-        "context={} origin={}/{} session={}{} playback_id={} queue_revision={} modes=[{}]          context_meta=[{}] page_meta=[{}] track_provider={} track_meta=[{}] next_meta=[{}]          signals={} command_id={} system={}",
+        "paused={} context={} origin={}/{} session={}{} playback_id={} queue_revision={} modes=[{}]          context_meta=[{}] page_meta=[{}] track_provider={} track_meta=[{}] next_meta=[{}]          signals={} command_id={} system={}",
+        state.is_paused,
         kind(&state.context_uri),
         origin.map_or("", |origin| origin.feature_identifier.as_str()),
         origin.map_or("", |origin| origin.referrer_identifier.as_str()),

@@ -116,6 +116,8 @@ struct SpircTask {
     jam_states_logged: (String, String),
     /// The Jam the last session update named.
     jam_session_seen: Option<String>,
+    /// Whether the Jam this device hosts has guests.
+    jam_has_guests: bool,
     /// The active device's capabilities as last logged.
     jam_device_logged: String,
 
@@ -750,6 +752,7 @@ impl Spirc {
             jam_host: None,
             jam_states_logged: Default::default(),
             jam_session_seen: None,
+            jam_has_guests: false,
             jam_device_logged: String::new(),
             update_volume: false,
             update_state: false,
@@ -2876,6 +2879,15 @@ impl SpircTask {
             if phase == JamPhase::Left {
                 self.jam_host = None;
             }
+            let guests = session_update
+                .session
+                .as_ref()
+                .is_some_and(|session| session.session_members.len() > 1)
+                && phase != JamPhase::Left;
+            if guests != self.jam_has_guests {
+                self.jam_has_guests = guests;
+                self.update_state = true;
+            }
             if self.devices.set_jam_phase(phase) {
                 info!("Jam: {phase:?} after {reason:?}");
             }
@@ -2975,6 +2987,12 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
+        // Spotify's app always reports its Jam mode: on while following a
+        // Jam or hosting one with guests, off otherwise.
+        let jam_on = self.devices.jam_phase() == JamPhase::Following
+            || (self.jam_host.is_some() && self.jam_has_guests);
+        self.connect_state
+            .set_mode("jam".into(), if jam_on { "on" } else { "off" }.into());
         if self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following {
             let summary =
                 jam_follow::state_summary(self.connect_state.player(), self.jam_host.as_deref());
@@ -3092,6 +3110,7 @@ mod shuffle_tests {
             jam_host: None,
             jam_states_logged: Default::default(),
             jam_session_seen: None,
+            jam_has_guests: false,
             jam_device_logged: String::new(),
             update_volume: false,
             update_state: false,
@@ -3255,6 +3274,9 @@ mod shuffle_tests {
         assert_eq!(task.devices.jam_phase(), JamPhase::Following);
         // The playback has its own ID, as in Spotify's apps.
         assert_eq!(task.connect_state.player().playback_id.len(), 32);
+        // Following, its state reports the Jam mode on, as Spotify's app does.
+        let modes = &task.connect_state.player().options.modes;
+        assert_eq!(modes.get("jam").map(String::as_str), Some("on"));
         task.player.stop();
     }
 

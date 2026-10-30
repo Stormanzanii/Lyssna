@@ -2284,6 +2284,9 @@ async fn run(
     let mut pending_repeat = None;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
+    // While following a Jam its host decides play and pause; songs it loads
+    // must not be resumed as if the listener had picked them.
+    let mut jam_following = false;
     let mut unavailable = crate::playback_intent::UnavailableWatch::default();
     let mut intent_tick = tokio::time::interval(Duration::from_millis(20));
     let mut dj_prewarm = tokio::time::interval(Duration::from_secs(300));
@@ -2368,15 +2371,15 @@ async fn run(
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);
                     },
-                    Some(PlayerEvent::Loading{track_id,..})=>{load_due=None;unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);intent.track_loading(track_id.to_uri(),std::time::Instant::now());},
+                    Some(PlayerEvent::Loading{track_id,..})=>{load_due=None;unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);if !jam_following{intent.track_loading(track_id.to_uri(),std::time::Instant::now());}},
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
-                    Some(PlayerEvent::JamChanged { following, session }) => {diagnostic(&format!("event jam following={following}"));emit(NativeEvent::Jam(following, session));},
+                    Some(PlayerEvent::JamChanged { following, session }) => {diagnostic(&format!("event jam following={following}"));if following&&!jam_following{intent.reset();}jam_following=following;emit(NativeEvent::Jam(following, session));},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;paused_position=None;loaded.store(false,Ordering::Release);},
                     Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;paused_position=None;intent.reset();emit(NativeEvent::Stopped);},
-                    Some(event @ PlayerEvent::TrackChanged { .. }) => {load_due=None;loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track_change(&event) {intent.track_loading(track.uri.clone(),std::time::Instant::now()); emit(NativeEvent::Track(Box::new(track))); } },
+                    Some(event @ PlayerEvent::TrackChanged { .. }) => {load_due=None;loaded.store(true,Ordering::Release);pending_seek=None;paused_position=None;if let Some(track)=public_track_change(&event) {if !jam_following{intent.track_loading(track.uri.clone(),std::time::Instant::now());} emit(NativeEvent::Track(Box::new(track))); } },
                     Some(PlayerEvent::Playing { track_id, position_ms, .. }) => {
                         let uri = track_id.to_uri();
                         unavailable.playing(&uri);

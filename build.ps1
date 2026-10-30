@@ -161,6 +161,30 @@ function Test-FileLocked([string]$Path) {
     }
 }
 
+# Swap the staged build in. Moving over an existing executable can fail
+# ("Cannot create a file when that file already exists"), so the old one is
+# renamed aside first, which Windows allows even while it runs, and put
+# back if the new one can't take its place.
+function Install-Executable([string]$Staged) {
+    $previous = "$installedExe.old"
+    Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+    $hadPrevious = Test-Path -LiteralPath $installedExe
+    if ($hadPrevious) {
+        Move-Item -LiteralPath $installedExe -Destination $previous -ErrorAction Stop
+    }
+    try {
+        Move-Item -LiteralPath $Staged -Destination $installedExe -ErrorAction Stop
+    }
+    catch {
+        if ($hadPrevious) {
+            Move-Item -LiteralPath $previous -Destination $installedExe -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+    # Still held by a copy that hasn't exited: removed on the next install.
+    Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+}
+
 function Stop-InstalledSpotiFlex([string]$Directory = $installDirectory) {
     $processes = Get-SpotiFlexProcesses $Directory
     if ($processes.Count -eq 0) {
@@ -319,7 +343,7 @@ try {
     try {
         Stop-InstalledSpotiFlex
         try {
-            Move-Item -LiteralPath $staged -Destination $installedExe -Force -ErrorAction Stop
+            Install-Executable $staged
         }
         catch {
             if (-not (Test-FileLocked $installedExe)) {
@@ -331,7 +355,7 @@ try {
             if (Test-FileLocked $installedExe) {
                 throw "Install failed: $installedExe is still in use. Close SpotiFlex (check the system tray) and run the build again."
             }
-            Move-Item -LiteralPath $staged -Destination $installedExe -Force -ErrorAction Stop
+            Install-Executable $staged
         }
     }
     finally {

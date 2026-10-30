@@ -820,6 +820,9 @@ function App() {
     // Home refreshes on entry and return, as Spotify's does; skipping songs
     // while it is open no longer reloads its shelves.
   }, [state.profile?.id, state.native_ready, center, state.route, refreshHome]);
+  // Custom animator tuning sits beside full screen lyrics; Settings and the
+  // Cinema window both open it.
+  const manageAnimator = useRef(() => {});
   // The Cinema window hands over what lives here: opening a page, importing
   // lyrics and settings. The main window comes forward to show it.
   useEffect(() => {
@@ -830,6 +833,8 @@ function App() {
       void window.unminimize().then(() => window.setFocus());
       if (payload.kind === "route") navigate(payload.route);
       else if (payload.kind === "import") setTtmlOpen("load");
+      else if (payload.kind === "database") setTtmlOpen("database");
+      else if (payload.kind === "animator") manageAnimator.current();
       else
         setSettingsTab(
           lastSettingsTab(
@@ -1574,6 +1579,12 @@ function App() {
       leaving?.classList.remove("fullscreen-exit");
       fullscreenBusy.current = false;
     }
+  };
+  manageAnimator.current = () => {
+    setAnimatorPanel(true);
+    animatorFullscreen.current = !immersive;
+    if (!immersive) void fullscreen(true);
+    else setCenter("lyrics");
   };
   useEffect(() => {
     void windowHandle()
@@ -5047,10 +5058,7 @@ function App() {
           onNotice={notify}
           onManageAnimator={() => {
             setSettingsTab(null);
-            setAnimatorPanel(true);
-            animatorFullscreen.current = !immersive;
-            if (!immersive) void fullscreen(true);
-            else setCenter("lyrics");
+            manageAnimator.current();
           }}
         />
       )}

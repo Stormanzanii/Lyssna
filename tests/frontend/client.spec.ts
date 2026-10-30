@@ -13119,6 +13119,26 @@ test("the Cinema window shows the full screen lyrics page and its toolbar", asyn
   await expect(cinema.locator(".lyrics-page.narrow")).toHaveCount(1);
 });
 
+test("Cinema opens Settings over itself and Escape closes only Settings", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.goto("/?view=cinema");
+  const cinema = page.locator(".application.immersive.cinema");
+  await expect(cinema.locator(".lyrics-page")).toBeVisible();
+  await page.mouse.move(400, 300);
+  await page.mouse.move(420, 320);
+  await cinema
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("SpotiFlex settings", { exact: true })
+    .click();
+  await expect(cinema.getByText("SpotiFlex settings").last()).toBeVisible();
+  await expect(cinema.locator(".lyrics-page")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(cinema.getByRole("tab", { name: "Appearance" })).toHaveCount(0);
+  await expect(cinema.locator(".lyrics-page")).toBeVisible();
+});
+
 test("the main window acts on the Cinema window's requests", async ({
   page,
 }) => {

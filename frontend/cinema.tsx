@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles.css";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Settings as SettingsIcon, X } from "lucide-react";
 import { rpc } from "./bridge";
 import { LyricsPage } from "./components";
+import { SettingsWindow, lastSettingsTab } from "./settings-window";
 import { useAppFonts } from "./custom-fonts";
 import { GlassRefractionFilter } from "./glass-refraction";
 import { IS_MAC } from "./platform";
@@ -28,7 +29,11 @@ export const CINEMA_VIEW = "cinema";
 /** What the Cinema window asks the main window to do: things that live
  *  there, such as opening a page, importing lyrics or showing settings. */
 export type CinemaRequest =
-  { kind: "route"; route: string } | { kind: "import" } | { kind: "settings" };
+  | { kind: "route"; route: string }
+  | { kind: "import" }
+  | { kind: "database" }
+  | { kind: "animator" }
+  | { kind: "settings" };
 
 const askMain = (request: CinemaRequest) =>
   void emitTo("main", "cinema-request", request).catch(() => {});
@@ -50,6 +55,35 @@ export function CinemaLyrics() {
   const [state, dispatch] = useDesktopState();
   const fonts = useAppFonts(state.settings);
   const track = state.playback.item;
+  // Settings open over Cinema, full screen or not, as Spicy Lyrics' do.
+  const [settingsTab, setSettingsTab] =
+    useState<ReturnType<typeof lastSettingsTab>>();
+  const settingsOpen = useRef(false);
+  settingsOpen.current = !!settingsTab;
+  const notify = useCallback(
+    (message: string, error = false) =>
+      dispatch({ type: "notice", message, error }),
+    [dispatch],
+  );
+  const call = useCallback(
+    async <T,>(
+      command: string,
+      args?: Record<string, unknown>,
+    ): Promise<T | undefined> => {
+      try {
+        return await rpc<T>(command, args);
+      } catch (error) {
+        notify(String(error), true);
+        return undefined;
+      }
+    },
+    [notify],
+  );
+  useEffect(() => {
+    if (!state.toast) return;
+    const timer = setTimeout(() => dispatch({ type: "toast_clear" }), 6000);
+    return () => clearTimeout(timer);
+  }, [state.toast, dispatch]);
   useEffect(() => {
     document.title = track
       ? `${track.name} · SpotiFlex Cinema`
@@ -65,7 +99,7 @@ export function CinemaLyrics() {
       if (event.key === "F11") {
         event.preventDefault();
         void fullscreen();
-      } else if (event.key === "Escape")
+      } else if (event.key === "Escape" && !settingsOpen.current)
         void getCurrentWindow()
           .isFullscreen()
           .then((on) => {
@@ -168,7 +202,13 @@ export function CinemaLyrics() {
                 className="icon-button"
                 title="SpotiFlex settings"
                 data-icon="settings"
-                onClick={() => askMain({ kind: "settings" })}
+                onClick={() =>
+                  setSettingsTab(
+                    lastSettingsTab(
+                      state.settings.settings_remember_place !== false,
+                    ),
+                  )
+                }
               >
                 <SettingsIcon size={18} />
               </button>
@@ -184,6 +224,44 @@ export function CinemaLyrics() {
           </LyricsPage>
         </main>
       </div>
+      {state.profile && settingsTab && (
+        <SettingsWindow
+          state={state}
+          initialTab={settingsTab}
+          onSettings={updateSettings}
+          onLoadTtml={() => {
+            setSettingsTab(undefined);
+            askMain({ kind: "import" });
+          }}
+          onDatabase={() => {
+            setSettingsTab(undefined);
+            askMain({ kind: "database" });
+          }}
+          onOpen={(url) => void call("open_link", { url })}
+          onClose={() => setSettingsTab(undefined)}
+          onCall={call}
+          onNotice={notify}
+          onManageAnimator={() => {
+            setSettingsTab(undefined);
+            askMain({ kind: "animator" });
+          }}
+        />
+      )}
+      {state.toast && (
+        <div
+          className={`toast ${state.toast.error ? "error" : ""}`}
+          role="status"
+        >
+          <span>{state.toast.message}</span>
+          <button
+            className="icon-button"
+            aria-label="Dismiss notification"
+            onClick={() => dispatch({ type: "toast_clear" })}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {state.settings.liquid_glass && <GlassRefractionFilter />}
     </div>
   );

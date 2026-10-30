@@ -119,7 +119,8 @@ export const FullScreenIcon = () => (
   </Icon>
 );
 
-/** A screen with an arrow rising out of it: lyrics in a window of their own. */
+/** A tray with an arrow rising out of it: lyrics in a window of their
+ *  own. The pixels-spicy-lyrics fork's External Cinema glyph (AGPL-3.0). */
 export const CinemaIcon = () => (
   <svg
     width="19"
@@ -127,12 +128,32 @@ export const CinemaIcon = () => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="1.6"
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
   >
-    <rect x="3" y="10" width="18" height="11" rx="2" />
-    <path d="M12 15V3M8 7l4-4 4 4" />
+    <path d="M8 10.5H6.75A1.75 1.75 0 0 0 5 12.25v7.5c0 .97.78 1.75 1.75 1.75h10.5c.97 0 1.75-.78 1.75-1.75v-7.5a1.75 1.75 0 0 0-1.75-1.75H16" />
+    <path d="M12 14V4" />
+    <path d="m8.5 7.5 3.5-3.5 3.5 3.5" />
+  </svg>
+);
+
+/** A screen with a small window in its corner: the lyrics popout, drawn
+ *  in thin outlines like the Cinema glyph beside it. */
+export const PopoutIcon = () => (
+  <svg
+    width="19"
+    height="19"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <rect x="12" y="12" width="6" height="4" rx="1" />
   </svg>
 );

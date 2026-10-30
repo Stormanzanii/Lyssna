@@ -186,17 +186,26 @@
 .immersive .canvas-lyrics.artwork-right:not(.narrow) {
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
 }
+/* The song details and controls run the full width of the Canvas. */
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
   bottom: 28px;
-  width: min(38%, 780px);
+  width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
+  max-width: none;
   gap: 10px;
+}
+.immersive
+  .canvas-lyrics.artwork-right:not(.narrow)
+  .lyrics-fullscreen-controls {
+  width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
+  max-width: none;
 }
 /* Full screen Canvas controls read from across the room: under the seek
    bar, the heart and transport run from the bottom-left corner and the
-   volume lies flat at the row's other end. */
+   volume lies flat at the row's other end, never over the transport. */
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(max-content, 1fr) auto;
+  column-gap: 24px;
   align-items: center;
 }
 .immersive
@@ -231,7 +240,7 @@
 }
 .immersive .canvas-lyrics:not(.narrow) :is(.lyrics-title, .lyrics-artists) {
   left: var(--fullscreen-gutter);
-  width: min(38%, 780px);
+  width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
   max-width: none;
   translate: 0 calc(-1 * var(--lyrics-dock-lift));
   transition: translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1) 200ms;

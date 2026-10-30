@@ -219,15 +219,22 @@ pub async fn current(session: &Session) -> Result<Option<Jam>> {
 }
 
 pub async fn start(session: &Session) -> Result<Jam> {
-    let jam = call(
+    let device = token(session.device_id()).context("Invalid device ID")?;
+    // Naming this computer makes it the Jam's host device, as joining does
+    // for guests, so what plays here is what the guests hear.
+    let started = call(
         session,
         Method::GET,
-        "/v2/sessions/current_or_new?activate=true",
+        &format!("/v2/sessions/current_or_new?activate=true&local_device_id={device}"),
     )
-    .await?
-    .as_ref()
-    .and_then(parse)
-    .context("Spotify could not start a Jam")?;
+    .await?;
+    let started = started.as_ref();
+    if let Some(host) = started.and_then(|jam| jam["host_active_device_id"].as_str()) {
+        crate::native::diagnostic(&format!("jam start: host device here={}", host == device));
+    }
+    let jam = started
+        .and_then(parse)
+        .context("Spotify could not start a Jam")?;
     Ok(with_short_link(session, jam).await)
 }
 

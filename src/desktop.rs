@@ -2509,6 +2509,24 @@ async fn jam(
             "leave" => controls.follow_jam(false),
             _ => {}
         }
+        // Spotify ties a new Jam to the host's active device. Started while
+        // SpotiFlex isn't the one playing, the Jam would follow another
+        // device and songs changed here would never reach the guests.
+        if action == "start" {
+            let local = controls
+                .session()
+                .map(|session| session.device_id().to_owned());
+            let active = controls.devices().ok().and_then(|devices| {
+                devices
+                    .into_iter()
+                    .find(|device| device.is_active)
+                    .and_then(|device| device.id)
+            });
+            if local.is_ok_and(|local| active.as_deref() != Some(local.as_str())) {
+                let moved = controls.transfer("native").is_ok();
+                crate::native::diagnostic(&format!("jam start: playback moved here={moved}"));
+            }
+        }
         let result = controls.run(async |session| match action.as_str() {
             "current" => crate::jam::current(session).await,
             "join" => crate::jam::join(session, join.as_deref().unwrap_or_default())

@@ -3304,7 +3304,9 @@ async fn open_creator_profile(
                 .decorations(false)
                 .resizable(false)
                 .skip_taskbar(true)
-                .shadow(true)
+                // Its rounded region hides the shadow; the shadow's frame
+                // would still draw a light edge.
+                .shadow(false)
                 .visible(false)
                 .parent(&main)?
                 .additional_browser_args(BROWSER_ARGS)

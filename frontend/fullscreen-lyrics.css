@@ -186,26 +186,40 @@
 .immersive .canvas-lyrics.artwork-right:not(.narrow) {
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
 }
-/* The song details and controls run the full width of the Canvas. */
+/* The song details and controls grow with the screen as one block, so on
+   a big screen they fill the Canvas side instead of sitting small in its
+   corner. Everything keys off the transport size. */
+.immersive .canvas-lyrics:not(.narrow) {
+  --canvas-transport: clamp(30px, 2.6vw, 60px);
+}
+.immersive
+  .canvas-lyrics.lyrics-page:not(.narrow):is(
+    [data-tools="awake"],
+    [data-seeking="true"],
+    :has(:focus-visible),
+    [data-always-show]
+  ) {
+  --lyrics-dock-lift: calc(64px + var(--canvas-transport) * 1.6);
+}
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
   bottom: 28px;
-  width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
-  max-width: none;
-  gap: 10px;
+  width: max-content;
+  max-width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
+  gap: calc(var(--canvas-transport) * 0.22);
 }
 .immersive
   .canvas-lyrics.artwork-right:not(.narrow)
   .lyrics-fullscreen-controls {
-  width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
-  max-width: none;
+  width: max-content;
+  max-width: calc(var(--canvas-width) - var(--fullscreen-gutter) * 2);
 }
 /* Full screen Canvas controls read from across the room: under the seek
    bar, the heart and transport run from the bottom-left corner and the
-   volume lies flat at the row's other end, never over the transport. */
+   volume lies flat right after them; the seek bar spans the row. */
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
-  grid-template-columns: minmax(max-content, 1fr) auto;
-  column-gap: 24px;
+  grid-template-columns: max-content auto;
+  column-gap: calc(var(--canvas-transport) * 0.6);
   align-items: center;
 }
 .immersive
@@ -217,6 +231,9 @@
 .immersive .canvas-lyrics .lyrics-fullscreen-times {
   font-size: 15px;
 }
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-times {
+  font-size: calc(var(--canvas-transport) * 0.36);
+}
 .immersive .canvas-lyrics .lyrics-fullscreen-buttons {
   justify-content: flex-start;
   margin-top: 14px;
@@ -226,6 +243,9 @@
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-buttons {
   grid-column: 1;
   grid-row: 3;
+  margin-top: calc(var(--canvas-transport) * 0.3);
+  gap: calc(var(--canvas-transport) * 0.6);
+  --transport: var(--canvas-transport);
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-like {
   margin: 0;
@@ -246,10 +266,14 @@
   transition: translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1) 200ms;
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-title {
-  bottom: 70px;
+  bottom: calc(30px + var(--canvas-transport) * 0.9);
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-title .song-title {
+  font-size: calc(var(--canvas-transport) * 1.25);
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-artists {
   bottom: 30px;
+  font-size: calc(var(--canvas-transport) * 0.45);
 }
 .immersive
   .canvas-lyrics.artwork-right:not(.narrow)
@@ -502,14 +526,14 @@
 /* Beside a Canvas, whichever side is chosen, the flat pill ends the
    controls row, right of the transport. */
 .immersive .lyrics-page.canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume {
-  --pill: clamp(22px, 1.6vw, 30px);
+  --pill: calc(var(--canvas-transport) * 0.65);
   position: static;
   grid-column: 2;
   grid-row: 3;
-  justify-self: end;
-  width: clamp(110px, 8vw, 170px);
+  justify-self: start;
+  width: calc(var(--canvas-transport) * 3.6);
   height: auto;
-  margin-top: 14px;
+  margin-top: calc(var(--canvas-transport) * 0.3);
 }
 .immersive
   .lyrics-page.canvas-lyrics:not(.narrow)
@@ -618,6 +642,9 @@
 }
 .immersive .canvas-lyrics .lyrics-glass-seek {
   height: clamp(10px, 0.8vw, 15px);
+}
+.immersive .canvas-lyrics:not(.narrow) .lyrics-glass-seek {
+  height: calc(var(--canvas-transport) * 0.3);
 }
 /* While the controls show, the cover dims as the fork's does, deeper with
    the pointer on it. */

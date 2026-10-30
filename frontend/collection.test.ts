@@ -51,6 +51,20 @@ it("queues every sorted and filtered row from the selected occurrence", () => {
     offset: 0,
   });
 });
+it("shuffles Random the same for one seed and anew for another", () => {
+  const many = Array.from({ length: 40 }, (_, index) => ({
+    ...tracks[0],
+    uri: `t${index}`,
+  }));
+  const order = (seed: number) =>
+    collectionTracks(many, {}, { ...filters, sort: "random", seed }).map(
+      (track) => track.uri,
+    );
+  expect(order(1)).toEqual(order(1));
+  expect(order(1)).not.toEqual(order(2));
+  expect(order(1)).not.toEqual(many.map((track) => track.uri));
+  expect([...order(1)].sort()).toEqual(many.map((track) => track.uri).sort());
+});
 it("skips unplayable rows without losing duplicate positions or long queues", () => {
   const visible = [
     tracks[0],

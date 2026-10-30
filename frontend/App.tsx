@@ -582,7 +582,12 @@ function App() {
     [songAge, setSongAge] = useState("");
   // Each page remembers its own sort across restarts, like Spotify.
   const songSort = state.settings.song_sorts?.[state.route] ?? "order";
+  // Random reshuffles every launch, every time a page opens, and when
+  // picked again.
+  const [shuffleSeed, setShuffleSeed] = useState(() => Math.random() * 2 ** 32);
+  useEffect(() => setShuffleSeed(Math.random() * 2 ** 32), [state.route]);
   const setSongSort = (sort: string) => {
+    if (sort === "random") setShuffleSeed(Math.random() * 2 ** 32);
     const song_sorts = { ...state.settings.song_sorts };
     if (sort === "order") delete song_sorts[state.route];
     else song_sorts[state.route] = sort;
@@ -1941,6 +1946,7 @@ function App() {
           genre: songGenre,
           age: songAge,
           sort: songSort,
+          seed: shuffleSeed,
         })
       : state.tracks;
   const playTrack = useCallback(

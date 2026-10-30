@@ -4,6 +4,17 @@ export interface SongFilters {
   genre: string;
   age: string;
   sort: string;
+  /** Orders the Random sort; a new one reshuffles. */
+  seed?: number;
+}
+/** A row's place in the Random sort: the same for one seed, so the list
+ * holds still while more of the playlist loads. */
+function shuffleKey(seed: number, uri: string, index: number) {
+  let hash = 2166136261 ^ seed;
+  for (const char of `${uri}:${index}`) {
+    hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  }
+  return hash >>> 0;
 }
 /** Keep displayed order and duplicate occurrences when starting a queue. */
 export function collectionQueue(
@@ -143,6 +154,13 @@ export function collectionTracks(
             ? Date.parse(track.added_at || "")
             : release(track);
       if (filters.sort === "order") return a.index - b.index;
+      if (filters.sort === "random") {
+        const seed = filters.seed ?? 0;
+        return (
+          shuffleKey(seed, a.track.uri, a.index) -
+            shuffleKey(seed, b.track.uri, b.index) || a.index - b.index
+        );
+      }
       const left = value(a.track),
         right = value(b.track),
         hasLeft = left != null && Number.isFinite(left),

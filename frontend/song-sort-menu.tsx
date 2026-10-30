@@ -10,6 +10,7 @@ const SORTS = [
   ["newest", "Newest releases"],
   ["oldest", "Oldest releases"],
   ["popular", "Most played"],
+  ["random", "Random"],
 ] as const;
 
 /**

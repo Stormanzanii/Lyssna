@@ -2521,6 +2521,31 @@ test("Now playing and each page's sort are saved for the next launch", async ({
   await expect.poll(() => saved("song_sorts")).toEqual({ liked: "popular" });
 });
 
+test("Random sort shuffles the playlist and reshuffles when picked again", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  const rows = page.locator(".track-row");
+  await expect(rows.first()).toBeVisible();
+  const names = () => rows.allInnerTexts();
+  const original = await names();
+  const sortButton = page.getByTitle("Sort and filter", { exact: true });
+  const random = page
+    .getByRole("dialog", { name: "Sort and filter" })
+    .getByRole("button", { name: "Random", exact: true });
+  await sortButton.click();
+  await random.click();
+  await expect(sortButton).toHaveText("Random");
+  await expect.poll(names).not.toEqual(original);
+  const shuffled = await names();
+  await random.click();
+  await expect.poll(names).not.toEqual(shuffled);
+});
+
 test("near-bottom scrolling automatically loads one page per offset", async ({
   page,
 }) => {

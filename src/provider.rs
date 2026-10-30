@@ -379,7 +379,7 @@ fn creator_redirect(location: &str) -> Result<Url> {
             && !path.contains('/'),
         "Invalid creator profile destination"
     );
-    url.set_path(&format!("/embed/{path}"));
+    url.set_path(&format!("/{path}"));
     url.set_query(None);
     url.set_fragment(None);
     Ok(url)
@@ -766,7 +766,7 @@ mod tests {
     fn creator_identity_uses_canonical_handle_and_rejects_other_origins() {
         assert_eq!(
             creator_redirect("/actual-handle").unwrap().as_str(),
-            "https://spicylyrics.org/embed/actual-handle"
+            "https://spicylyrics.org/actual-handle"
         );
         for location in [
             "https://untrusted.example/person",

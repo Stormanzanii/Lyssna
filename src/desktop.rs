@@ -3048,13 +3048,6 @@ fn create_playlist(
         .send(Command::CreatePlaylist { name, tracks })
         .map_err(error)
 }
-/// Hides scrollbars in the creator profile sheet; wheel and touch scrolling
-/// still work.
-/// Runs in creator profile windows. Hides scrollbars and keeps the profile
-/// in its embed layout: after the site's verification check, or a `/uid/`
-/// link, the site's router lands on the full `/{name}` page, whose banner
-/// covers the top of the sheet. That page is swapped for `/embed/{name}`,
-/// and the banner is hidden in case it shows anyway.
 /// WebView2 switches, the same for every window since they share one
 /// browser. wry's defaults, plus: after three GPU process crashes, as a
 /// driver reset during a game causes, Chromium falls back to software
@@ -3062,6 +3055,10 @@ fn create_playlist(
 /// second. Without the limit it brings hardware rendering back each time.
 const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-process-crash-limit";
 
+/// Runs in creator profile windows, which show the full `/{name}` profile
+/// page now that the site retires its `/embed/` pages. Hides scrollbars;
+/// wheel and touch scrolling still work. The page's banner would cover the
+/// top of the sheet, so it is hidden.
 const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const style = document.createElement("style");
   style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
@@ -3070,21 +3067,6 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });
-  const routes = new Set(["app", "authcycle", "embed", "goog", "guides", "identity", "legal", "stats", "uid"]);
-  const toEmbed = () => {
-    const name = location.pathname.match(/^\/([^/]+)\/?$/)?.[1];
-    if (name && !routes.has(name.toLowerCase())) location.replace("/embed/" + name);
-  };
-  for (const method of ["pushState", "replaceState"]) {
-    const original = history[method];
-    history[method] = function (...args) {
-      const result = original.apply(this, args);
-      toEmbed();
-      return result;
-    };
-  }
-  addEventListener("popstate", toEmbed);
-  toEmbed();
 })();"#;
 /// Cinema Lyrics, as the pixels-spicy-lyrics fork's: the full screen lyrics
 /// in a normal window of their own, framed so it moves, resizes and maximizes
@@ -3401,7 +3383,7 @@ fn creator_profile_url(username: &str) -> Result<url::Url> {
             && !matches!(name, "." | ".."),
         "Invalid creator username"
     );
-    let mut url = url::Url::parse("https://spicylyrics.org/embed/")?;
+    let mut url = url::Url::parse("https://spicylyrics.org/")?;
     url.path_segments_mut()
         .map_err(|_| anyhow::anyhow!("Invalid profile path"))?
         .pop_if_empty()
@@ -4169,12 +4151,12 @@ mod tests {
     fn creator_profiles_use_usernames_and_encode_path_characters() {
         assert_eq!(
             creator_profile_url("@Arashii").unwrap().as_str(),
-            "https://spicylyrics.org/embed/Arashii"
+            "https://spicylyrics.org/Arashii"
         );
         assert!(creator_profile_url("../other").is_err());
         assert_eq!(
             creator_profile_url("Name#1234").unwrap().as_str(),
-            "https://spicylyrics.org/embed/Name%231234"
+            "https://spicylyrics.org/Name%231234"
         );
     }
     #[test]

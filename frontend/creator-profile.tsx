@@ -16,7 +16,7 @@ export function creatorEmbed(username: string) {
     !/[\u0000-\u001f\u007f/\\]/u.test(name) &&
     name !== "." &&
     name !== ".."
-    ? `https://spicylyrics.org/embed/${encodeURIComponent(name)}`
+    ? `https://spicylyrics.org/${encodeURIComponent(name)}`
     : undefined;
 }
 export function CreatorProfiles({ children }: { children: ReactNode }) {

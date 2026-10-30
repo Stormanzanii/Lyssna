@@ -2714,7 +2714,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Made by @Maker");
-  await page.route("https://spicylyrics.org/embed/**", (route) =>
+  await page.route("https://spicylyrics.org/**", (route) =>
     route.fulfill({ contentType: "text/html", body: "<h1>Profile</h1>" }),
   );
   await page.getByRole("button", { name: "@Uploader", exact: true }).click();

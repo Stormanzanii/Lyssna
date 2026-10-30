@@ -310,6 +310,9 @@ export function reducer(state: AppState, action: Action): AppState {
         dj_pending: false,
         narrating: !!state.profile && state.native_ready && action.active,
       };
+    // Played by App; nothing to keep.
+    case "play_uri":
+      return state;
     case "creator_profile":
       return { ...state, creator_profile_open: action.open };
     case "dj_context":

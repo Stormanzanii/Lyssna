@@ -429,6 +429,7 @@ export type AppEvent =
   | { type: "jam_changed"; following: boolean; jam?: Jam | null }
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
+  | { type: "play_uri"; uri: string }
   | {
       /** A press on the taskbar buttons, media keys or the media flyout. */
       type: "media_control";

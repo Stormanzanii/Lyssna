@@ -13941,3 +13941,27 @@ test("Your Library and Now playing keep their dragged widths", async ({
   await expect(page.locator(".library-panel")).toHaveCSS("width", "400px");
   await expect(page.locator("aside.now-playing")).toHaveCSS("width", "450px");
 });
+
+test("Listen on a creator profile plays the song in SpotiFlex", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "play_uri",
+      uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+    }),
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "player")
+          .map((entry: any) => entry.args.request),
+      ),
+    )
+    .toContainEqual({
+      command: "play",
+      uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+    });
+});

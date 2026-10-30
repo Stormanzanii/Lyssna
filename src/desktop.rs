@@ -3298,6 +3298,7 @@ async fn open_creator_profile(
             .context("Main window missing")?;
         // A borderless sheet fixed over the main window, which dims behind
         // it; clicking anywhere else closes it.
+        let listens = app.clone();
         let window =
             tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
                 .title(title)
@@ -3311,7 +3312,12 @@ async fn open_creator_profile(
                 .parent(&main)?
                 .additional_browser_args(BROWSER_ARGS)
                 .initialization_script(profile_window_script())
-                .on_navigation(|url| {
+                .on_navigation(move |url| {
+                    // Listen plays the song here instead of leaving the page.
+                    if let Some(uri) = listen_uri(url) {
+                        let _ = listens.emit("spotiflex", json!({"type":"play_uri","uri":uri}));
+                        return false;
+                    }
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
                 })
                 .build()?;
@@ -3493,6 +3499,18 @@ async fn resolve_album(
         .await
         .map_err(error)?
         .map_err(|_| "Album metadata unavailable. Try again shortly.".to_owned())
+}
+/// The Spotify song a profile's Listen button opens, as a track URI.
+fn listen_uri(url: &url::Url) -> Option<String> {
+    let id = match url.scheme() {
+        "spotify" => url.path().strip_prefix("track:")?,
+        "https" if url.host_str() == Some("open.spotify.com") => {
+            url.path().strip_prefix("/track/")?.trim_end_matches('/')
+        }
+        _ => return None,
+    };
+    (id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+        .then(|| format!("spotify:track:{id}"))
 }
 fn creator_profile_url(username: &str) -> Result<url::Url> {
     let name = username.trim().trim_start_matches('@');
@@ -4282,6 +4300,22 @@ mod tests {
         assert_eq!(
             creator_profile_url("Name#1234").unwrap().as_str(),
             "https://spicylyrics.org/Name%231234?_state=%7B%22mp%22%3Atrue%7D"
+        );
+    }
+    #[test]
+    fn listen_plays_only_spotify_tracks() {
+        let uri = |link: &str| listen_uri(&url::Url::parse(link).unwrap());
+        let track = Some("spotify:track:4uLU6hMCjMI75M1A2tKUQC".to_owned());
+        assert_eq!(uri("spotify:track:4uLU6hMCjMI75M1A2tKUQC"), track);
+        assert_eq!(
+            uri("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?si=x"),
+            track
+        );
+        assert_eq!(uri("spotify:album:4uLU6hMCjMI75M1A2tKUQC"), None);
+        assert_eq!(uri("spotify:track:short"), None);
+        assert_eq!(
+            uri("https://example.com/track/4uLU6hMCjMI75M1A2tKUQC"),
+            None
         );
     }
     #[test]

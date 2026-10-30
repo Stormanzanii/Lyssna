@@ -701,6 +701,11 @@ function App() {
           setWindowPosition(event.x, event.y);
           return;
         }
+        // Listen on a creator's profile plays the song here.
+        if (event.type === "play_uri") {
+          playRef.current?.({ command: "play", uri: event.uri });
+          return;
+        }
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);
         // Upcoming artists' About photos, decoded before their songs start.
         if (event.type === "artist_about")
@@ -976,6 +981,8 @@ function App() {
     },
     [call, target, updateSettings],
   );
+  const playRef = useRef(play);
+  playRef.current = play;
   // A card already knows its name and picture: show them at once while
   // Spotify sends the rest of the page (about half a second for artists).
   const openCard = useCallback(

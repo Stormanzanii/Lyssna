@@ -3066,7 +3066,26 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   const style = document.createElement("style");
   style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
     "[data-profile-variant]{--profile-banner-h:5rem!important}" +
-    "[data-profile-variant]>[aria-hidden=true][class*=profile-banner-h]{display:none!important}";
+    "[data-profile-variant]>[aria-hidden=true][class*=profile-banner-h]{display:none!important}" +
+    // Spotify's profile header: avatar beside the name, the views one line under it.
+    ".profile-hero{min-height:0!important}" +
+    ".profile-hero-identity{grid-template-columns:auto minmax(0,1fr)!important;column-gap:1.75rem!important;row-gap:.875rem!important;align-items:end!important;padding-top:2.5rem!important;padding-bottom:2rem!important}" +
+    ".profile-hero-identity>header{display:contents!important}" +
+    ".profile-hero-identity .profile-avatar{grid-column:1;grid-row:1/span 2;align-self:center;width:clamp(6rem,17vw,11.5rem)!important;height:clamp(6rem,17vw,11.5rem)!important}" +
+    ".profile-hero-identity>header>div{grid-column:2;grid-row:1;gap:.5rem!important}" +
+    ".profile-hero-identity>header>div::before{content:'Profile';font-size:.875rem;font-weight:600}" +
+    ".profile-name{font-size:clamp(2rem,calc(var(--name-vw,9vw)*.7),5.5rem)!important;max-width:none!important}" +
+    ".profile-hero-identity>section{grid-column:2;grid-row:2;flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:.375rem .875rem!important}" +
+    ".profile-hero-identity>section .stats-label{font-size:.6875rem}" +
+    ".profile-hero-identity>section dl{display:flex!important;flex-wrap:wrap;align-items:baseline;gap:.625rem!important;text-align:left!important}" +
+    ".profile-hero-identity>section dl>div{flex-direction:row-reverse!important;align-items:baseline;gap:.3rem!important}" +
+    ".profile-hero-identity>section dl>div+div::after{content:'\\2022';margin-right:.3rem;color:var(--muted-foreground)}" +
+    ".profile-hero-identity .profile-figure{font-size:1rem!important;letter-spacing:0!important}" +
+    ".profile-stats-cta{padding:.375rem .875rem!important;font-size:.8125rem!important}" +
+    ".profile-aura{left:7rem!important;top:50%!important}" +
+    ".profile-spotlight ol{grid-template-columns:repeat(3,minmax(0,11.5rem))!important}" +
+    ".profile-spot{max-width:11.5rem!important}" +
+    ".profile-spot .text-5xl{font-size:2rem!important}";
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });

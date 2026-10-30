@@ -140,11 +140,29 @@ function Get-RequiredRust {
     return $version
 }
 
-function Stop-InstalledSpotiFlex {
-    $prefix = "$([IO.Path]::GetFullPath($installDirectory).TrimEnd('\'))\"
-    $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'spotiflex.exe'" | Where-Object {
+function Get-SpotiFlexProcesses([string]$Directory) {
+    $prefix = "$([IO.Path]::GetFullPath($Directory).TrimEnd('\'))\"
+    @(Get-CimInstance Win32_Process -Filter "Name = 'spotiflex.exe'" | Where-Object {
         $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
     })
+}
+
+# Whether something holds the file open, so it can't be replaced.
+function Test-FileLocked([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+    try {
+        [IO.File]::Open($Path, 'Open', 'ReadWrite', 'None').Dispose()
+        return $false
+    }
+    catch {
+        return $true
+    }
+}
+
+function Stop-InstalledSpotiFlex([string]$Directory = $installDirectory) {
+    $processes = Get-SpotiFlexProcesses $Directory
     if ($processes.Count -eq 0) {
         return
     }
@@ -263,14 +281,33 @@ try {
     # Marks the executable as a local build, so the updater never replaces
     # it with a release. Rebuild with this script to update.
     $env:SPOTIFLEX_LOCAL_BUILD = '1'
+    $builtExe = Join-Path $repoRoot 'target\release\spotiflex.exe'
+    $targetDirectory = Join-Path $repoRoot 'target'
     try {
-        Invoke-Checked cargo build --release --locked --bin spotiflex
+        # A SpotiFlex started from target\ locks the executable Cargo
+        # replaces. Close it first; if the build still fails on a locked
+        # file, say so and try once more.
+        Stop-InstalledSpotiFlex $targetDirectory
+        try {
+            Invoke-Checked cargo build --release --locked --bin spotiflex
+        }
+        catch {
+            $holders = Get-SpotiFlexProcesses $targetDirectory
+            if ($holders.Count -eq 0 -and -not (Test-FileLocked $builtExe)) {
+                throw
+            }
+            Write-Warning "Build failed because SpotiFlex is open from $targetDirectory (PID $(@($holders.ProcessId) -join ', ')). Closing it and building again."
+            Stop-InstalledSpotiFlex $targetDirectory
+            if (Test-FileLocked $builtExe) {
+                throw "Build failed: $builtExe is still in use. Close SpotiFlex (check the system tray) and run the build again."
+            }
+            Invoke-Checked cargo build --release --locked --bin spotiflex
+        }
     }
     finally {
         Remove-Item Env:SPOTIFLEX_LOCAL_BUILD -ErrorAction SilentlyContinue
     }
 
-    $builtExe = Join-Path $repoRoot 'target\release\spotiflex.exe'
     if (-not (Test-Path -LiteralPath $builtExe)) {
         throw "Build finished without $builtExe."
     }
@@ -281,7 +318,21 @@ try {
     Copy-Item -LiteralPath $builtExe -Destination $staged
     try {
         Stop-InstalledSpotiFlex
-        Move-Item -LiteralPath $staged -Destination $installedExe -Force
+        try {
+            Move-Item -LiteralPath $staged -Destination $installedExe -Force -ErrorAction Stop
+        }
+        catch {
+            if (-not (Test-FileLocked $installedExe)) {
+                throw
+            }
+            # Still open: a copy that ignored the close, or one just started.
+            Write-Warning 'Install failed because SpotiFlex is still open. Closing it and installing again.'
+            Stop-InstalledSpotiFlex
+            if (Test-FileLocked $installedExe) {
+                throw "Install failed: $installedExe is still in use. Close SpotiFlex (check the system tray) and run the build again."
+            }
+            Move-Item -LiteralPath $staged -Destination $installedExe -Force -ErrorAction Stop
+        }
     }
     finally {
         if (Test-Path -LiteralPath $staged) {

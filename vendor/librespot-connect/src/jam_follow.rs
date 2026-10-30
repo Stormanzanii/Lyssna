@@ -6,7 +6,13 @@
 //! it, so each one is compared with local playback first. Kept free of player
 //! and network types so the decision is testable on its own.
 
-use crate::protocol::{player::PlayerState, social_connect_v2::SessionUpdateReason};
+use crate::{
+    core::{SpotifyId, SpotifyUri},
+    protocol::{
+        context_page::ContextPage, context_track::ContextTrack, player::PlayerState,
+        social_connect_v2::SessionUpdateReason,
+    },
+};
 
 /// Spotify's Jam service sends guests their transfers from this device ID prefix.
 pub const SOCIAL_CONNECT_DEVICE_PREFIX: &str = "social-connect";
@@ -89,6 +95,57 @@ pub fn state_summary(state: &PlayerState, jam_session: Option<&str>) -> String {
         !state.session_command_id.is_empty(),
         state.is_system_initiated,
     )
+}
+
+/// The host's song in a Jam transfer, with its URI. Transfers built from the
+/// Jam's shared queue (`jam-list`) name the song only by its queue entry
+/// UID, so the URI comes from that entry in the queue, or else its GID.
+pub fn host_track(
+    current: Option<ContextTrack>,
+    current_uid: Option<&str>,
+    pages: &[ContextPage],
+) -> Option<ContextTrack> {
+    let mut track = current.unwrap_or_default();
+    if track.uri.as_deref().is_some_and(|uri| !uri.is_empty()) {
+        return Some(track);
+    }
+    let uid = track
+        .uid
+        .clone()
+        .filter(|uid| !uid.is_empty())
+        .or_else(|| current_uid.filter(|uid| !uid.is_empty()).map(str::to_owned));
+    let entry = uid.as_deref().and_then(|uid| {
+        pages
+            .iter()
+            .flat_map(|page| &page.tracks)
+            .find(|entry| entry.uid.as_deref() == Some(uid))
+    });
+    if let Some(entry) = entry {
+        track.uri = entry.uri.clone().filter(|uri| !uri.is_empty());
+        if track.gid.as_ref().is_none_or(Vec::is_empty) {
+            track.gid = entry.gid.clone();
+        }
+        track.uid = entry.uid.clone();
+        for (key, value) in &entry.metadata {
+            track
+                .metadata
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+    }
+    if track.uri.as_deref().is_none_or(str::is_empty) {
+        track.uri = track
+            .gid
+            .as_deref()
+            .filter(|gid| !gid.is_empty())
+            .and_then(|gid| SpotifyId::from_raw(gid).ok())
+            .map(|id| SpotifyUri::Track { id }.to_uri());
+    }
+    track
+        .uri
+        .as_deref()
+        .is_some_and(|uri| !uri.is_empty())
+        .then_some(track)
 }
 
 /// What this device is playing.
@@ -234,6 +291,54 @@ impl JamPhase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_jam_list_transfer_finds_the_hosts_song_by_its_queue_entry() {
+        let entry = |uri: &str, uid: &str| ContextTrack {
+            uri: Some(uri.into()),
+            uid: Some(uid.into()),
+            ..Default::default()
+        };
+        let pages = vec![ContextPage {
+            tracks: vec![
+                entry("spotify:track:aaaaaaaaaaaaaaaaaaaaaa", "u1"),
+                entry("spotify:track:bbbbbbbbbbbbbbbbbbbbbb", "u2"),
+            ],
+            ..Default::default()
+        }];
+        // Only the UID in the current track.
+        let current = ContextTrack {
+            uid: Some("u2".into()),
+            ..Default::default()
+        };
+        let found = host_track(Some(current), None, &pages).unwrap();
+        assert_eq!(
+            found.uri.as_deref(),
+            Some("spotify:track:bbbbbbbbbbbbbbbbbbbbbb")
+        );
+        // No current track, only the session's current UID.
+        let found = host_track(None, Some("u1"), &pages).unwrap();
+        assert_eq!(
+            found.uri.as_deref(),
+            Some("spotify:track:aaaaaaaaaaaaaaaaaaaaaa")
+        );
+        // A URI given is kept; nothing to find is nothing to follow.
+        let given = entry("spotify:track:cccccccccccccccccccccc", "u9");
+        assert_eq!(host_track(Some(given.clone()), None, &pages), Some(given));
+        assert_eq!(host_track(None, Some("missing"), &pages), None);
+        // Only a GID: the URI comes from it.
+        let gid = ContextTrack {
+            gid: Some(vec![0; 16]),
+            ..Default::default()
+        };
+        assert!(
+            host_track(Some(gid), None, &[])
+                .unwrap()
+                .uri
+                .unwrap()
+                .starts_with("spotify:track:")
+        );
+    }
 
     #[test]
     fn a_state_summary_names_kinds_and_keys_but_no_ids() {

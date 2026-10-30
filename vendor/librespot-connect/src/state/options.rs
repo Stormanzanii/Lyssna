@@ -52,16 +52,6 @@ impl ConnectState {
         }
     }
 
-    /// Marks this device's state as part of a Jam, as Spotify's app does
-    /// while it hosts or follows one, or clears the mark.
-    pub fn set_jam_mode(&mut self, on: bool) {
-        if on {
-            self.set_mode("jam".into(), "on".into());
-        } else if let Some(options) = self.player_mut().options.as_mut() {
-            options.modes.remove("jam");
-        }
-    }
-
     pub fn reset_options(&mut self) {
         self.set_shuffle(false);
         self.set_repeat_track(false);

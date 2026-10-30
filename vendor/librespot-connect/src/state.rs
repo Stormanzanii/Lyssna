@@ -325,8 +325,9 @@ impl ConnectState {
         self.player_mut().play_origin = MessageField::some(origin)
     }
 
-    pub fn set_session_id(&mut self, session_id: String) {
-        self.player_mut().session_id = session_id;
+    /// Names one playback of the current song, as Spotify's apps do.
+    pub fn set_playback_id(&mut self, playback_id: String) {
+        self.player_mut().playback_id = playback_id;
     }
 
     pub(crate) fn set_status(&mut self, status: &SpircPlayStatus) {

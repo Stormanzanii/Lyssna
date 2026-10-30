@@ -114,8 +114,8 @@ struct SpircTask {
     jam_host: Option<String>,
     /// The Jam diagnostics last logged: the active device's state, then this one's.
     jam_states_logged: (String, String),
-    /// The Jam the last session update named, and whether its Jam list was probed.
-    jam_session_seen: Option<(String, bool)>,
+    /// The Jam the last session update named.
+    jam_session_seen: Option<String>,
     /// The active device's capabilities as last logged.
     jam_device_logged: String,
 
@@ -1279,12 +1279,6 @@ impl SpircTask {
             // The app repeats it with every Jam check: only a change counts.
             SpircCommand::HostJam(session_id) if session_id == self.jam_host => return Ok(()),
             SpircCommand::HostJam(session_id) => {
-                if let Some(id) = session_id.as_deref()
-                    && self.session.session_id() != id
-                {
-                    self.session.set_session_id(id);
-                    self.connect_state.set_session_id(id.to_owned());
-                }
                 self.jam_host = session_id;
                 if self.connect_state.is_active() {
                     return self.notify().await;
@@ -1974,7 +1968,14 @@ impl SpircTask {
             return Ok(());
         }
 
-        let host_track = transfer.playback.current_track.clone().into_option();
+        let session = transfer.current_session.mut_or_insert_default();
+        let current_uid = session.current_uid.clone();
+        let mut context = session.context.take().unwrap_or_default();
+        let host_track = jam_follow::host_track(
+            transfer.playback.current_track.clone().into_option(),
+            current_uid.as_deref(),
+            &context.pages,
+        );
         let host_uri = host_track.as_ref().and_then(|t| t.uri.clone());
         let host_uid = host_track.as_ref().and_then(|t| t.uid.clone());
         let host = HostPlayback {
@@ -2002,7 +2003,7 @@ impl SpircTask {
             ),
         };
         let plan = jam_follow::plan(local, host, self.server_now_ms());
-        debug!("Jam transfer: {plan:?}");
+        log::warn!(target: "librespot_connect::jam", "Jam transfer plan: {plan:?}");
 
         self.set_jam_phase(JamPhase::Following);
         if !self.connect_state.is_active() {
@@ -2011,8 +2012,6 @@ impl SpircTask {
         // A Connect transfer still resolving would replace the Jam's queue.
         self.transfer_state = None;
 
-        let session = transfer.current_session.mut_or_insert_default();
-        let mut context = session.context.take().unwrap_or_default();
         let context_uri = context
             .uri
             .clone()
@@ -2029,7 +2028,7 @@ impl SpircTask {
             "Jam transfer context {context_uri}, Jam list of the joined session={}",
             self.jam_session_seen
                 .as_ref()
-                .map_or("unknown".to_owned(), |(id, _)| context_uri
+                .map_or("unknown".to_owned(), |id| context_uri
                     .strip_prefix(jam_follow::JAM_LIST_PREFIX)
                     .is_some_and(|list| list == id)
                     .to_string())
@@ -2887,49 +2886,13 @@ impl SpircTask {
                 .emit_jam_changed_event(phase == JamPhase::Following, jam);
         }
 
-        // Whether the host can play its Jam's shared queue, `jam-list:<session>`,
-        // as Spotify's app may: asked once per Jam, playback untouched.
-        if let Some(session) = session_update.session.as_ref() {
-            let first = self
+        if let Some(session) = session_update.session.as_ref()
+            && self
                 .jam_session_seen
                 .as_ref()
-                .is_none_or(|(id, _)| id != &session.session_id);
-            if first {
-                self.jam_session_seen = Some((session.session_id.clone(), false));
-            }
-            let host_here =
-                session.host_active_device_id.as_deref() == Some(self.session.device_id());
-            if host_here && let Some((id, probed @ false)) = self.jam_session_seen.as_mut() {
-                *probed = true;
-                let uri = format!("{}{id}", jam_follow::JAM_LIST_PREFIX);
-                let spotify = self.session.clone();
-                let current = self.connect_state.current_track(|t| t.uri.clone());
-                tokio::spawn(async move {
-                    match spotify.spclient().get_context(&uri).await {
-                        Ok(context) => {
-                            let tracks: Vec<_> =
-                                context.pages.iter().flat_map(|page| &page.tracks).collect();
-                            let mut keys: Vec<&str> =
-                                context.metadata.keys().map(String::as_str).collect();
-                            keys.sort_unstable();
-                            log::warn!(
-                                target: "librespot_connect::jam",
-                                "Jam list resolves: pages={} tracks={} first_is_current={} has_current={} meta=[{}]",
-                                context.pages.len(),
-                                tracks.len(),
-                                tracks.first().and_then(|t| t.uri.as_ref()) == Some(&current),
-                                tracks.iter().any(|t| t.uri.as_ref() == Some(&current)),
-                                keys.join(","),
-                            );
-                        }
-                        Err(error) => log::warn!(
-                            target: "librespot_connect::jam",
-                            "Jam list does not resolve: {:?}",
-                            error.kind
-                        ),
-                    }
-                });
-            }
+                .is_none_or(|id| id != &session.session_id)
+        {
+            self.jam_session_seen = Some(session.session_id.clone());
         }
 
         let mut session = match session_update.session.take() {
@@ -2939,17 +2902,10 @@ impl SpircTask {
 
         let active_device = session.host_active_device_id.take();
         if matches!(active_device, Some(ref device) if device == self.session.device_id()) {
-            info!(
-                "session update: <{:?}> for self, current session_id {}, new session_id {}",
-                reason,
-                self.session.session_id(),
-                session.session_id
-            );
-
-            if self.session.session_id() != session.session_id {
-                self.session.set_session_id(&session.session_id);
-                self.connect_state.set_session_id(session.session_id);
-            }
+            // Spotify's own host keeps its playback session ID in a Jam;
+            // taking the Jam's in its place hid the host's playback from
+            // the Jam service, so guests never followed it.
+            info!("session update: <{reason:?}> for self");
         } else {
             debug!("session update: <{reason:?}> from active session host: <{active_device:?}>");
         }
@@ -2992,6 +2948,10 @@ impl SpircTask {
         self.narrated.spoken(current_uri, narration.as_ref());
         self.player.set_narration(id.clone(), narration);
         self.player.load(id, start_playing, position_ms);
+        // Each playback of a song has its own ID in Spotify's apps; Jam
+        // guests follow the host by it.
+        self.connect_state
+            .set_playback_id(uuid::Uuid::new_v4().simple().to_string());
 
         self.connect_state
             .update_position(position_ms, self.now_ms());
@@ -3015,10 +2975,7 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
-        // Spotify's Jam service only takes up states marked as in its Jam.
-        let in_jam = self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following;
-        self.connect_state.set_jam_mode(in_jam);
-        if in_jam {
+        if self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following {
             let summary =
                 jam_follow::state_summary(self.connect_state.player(), self.jam_host.as_deref());
             if summary != self.jam_states_logged.1 {
@@ -3296,9 +3253,8 @@ mod shuffle_tests {
             ref other => panic!("not loading to play: {other:?}"),
         }
         assert_eq!(task.devices.jam_phase(), JamPhase::Following);
-        // Its state is marked as part of the Jam, as Spotify's app marks it.
-        let modes = &task.connect_state.player().options.modes;
-        assert_eq!(modes.get("jam").map(String::as_str), Some("on"));
+        // The playback has its own ID, as in Spotify's apps.
+        assert_eq!(task.connect_state.player().playback_id.len(), 32);
         task.player.stop();
     }
 
@@ -3357,15 +3313,6 @@ mod shuffle_tests {
             .await
             .unwrap();
         task.devices.leave_jam();
-        task.notify().await.unwrap();
-        assert!(
-            !task
-                .connect_state
-                .player()
-                .options
-                .modes
-                .contains_key("jam")
-        );
         task.handle_request(jam_transfer(7, 0, false, now))
             .await
             .unwrap();

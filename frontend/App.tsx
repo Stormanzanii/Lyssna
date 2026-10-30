@@ -281,6 +281,16 @@ const longDuration = (ms: number) => {
 /** Exact [song count, length] per list, kept so revisits show it at once. */
 const listDurations = new Map<string, [number, number]>();
 
+/** The Jam to show: `next`, unless it is an older view of the same Jam,
+ * as a reply sent before Spotify's latest change report can be. */
+const newerJam = (shown: Jam | null, next: Jam | null) =>
+  shown &&
+  next &&
+  shown.session_id === next.session_id &&
+  next.timestamp < shown.timestamp
+    ? shown
+    : next;
+
 function App() {
   const [djRequest, setDJRequest] = useState(false);
   const [entityMenu, setEntityMenu] = useState<EntityMenu | null>(null);
@@ -388,7 +398,7 @@ function App() {
     let live = true;
     const check = () =>
       rpc<Jam | null>("jam", { action: "current" })
-        .then((current) => live && setJam(current))
+        .then((current) => live && setJam((shown) => newerJam(shown, current)))
         .catch(() => {});
     if (!jamOn) {
       void check();
@@ -407,9 +417,24 @@ function App() {
   const jamRevision = state.jam_revision ?? 0;
   useEffect(() => {
     if (!jamRevision || !state.profile || !state.native_ready) return;
+    // The report names who is in the Jam now, as Spotify's app shows it;
+    // asking again fills in the rest.
+    const report = state.jam_report;
+    if (report)
+      setJam((shown) =>
+        shown && shown.session_id === report.session_id
+          ? newerJam(shown, {
+              ...shown,
+              owner_id: report.owner_id || shown.owner_id,
+              is_owner: report.is_owner,
+              members: report.members,
+              timestamp: report.timestamp,
+            })
+          : shown,
+      );
     let live = true;
     rpc<Jam | null>("jam", { action: "current" })
-      .then((current) => live && setJam(current))
+      .then((current) => live && setJam((shown) => newerJam(shown, current)))
       .catch(() => {});
     return () => {
       live = false;

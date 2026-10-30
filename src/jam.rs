@@ -37,6 +37,9 @@ pub struct Jam {
     pub qr_svg: String,
     /// Guests may only add to the queue, not change what's playing.
     pub queue_only: bool,
+    /// When Spotify last changed the Jam, so an older reply can't undo a
+    /// newer report.
+    pub timestamp: i64,
 }
 
 /// Session IDs and join tokens go into request paths and the invite link.
@@ -102,6 +105,10 @@ pub fn parse(session: &Value) -> Option<Jam> {
             })
             .map_or_else(|| format!("spotify:socialsession:{join}"), str::to_owned),
         queue_only: session["queue_only_mode"].as_bool().unwrap_or_default(),
+        timestamp: session["timestamp"]
+            .as_i64()
+            .or_else(|| session["timestamp"].as_str()?.parse().ok())
+            .unwrap_or_default(),
     })
 }
 

@@ -426,7 +426,7 @@ export type AppEvent =
   | { type: "narration"; active: boolean }
   | { type: "dj_context"; active: boolean }
   /** Spotify changed the Jam this account is in. */
-  | { type: "jam_changed"; following: boolean }
+  | { type: "jam_changed"; following: boolean; jam?: Jam | null }
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
   | {
@@ -520,4 +520,6 @@ export type Jam = {
   invite_url: string;
   qr_svg: string;
   queue_only: boolean;
+  /** When Spotify last changed the Jam. */
+  timestamp: number;
 };

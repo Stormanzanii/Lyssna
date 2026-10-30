@@ -9995,6 +9995,72 @@ test("A Jam that ends for this computer leaves the queue when Spotify reports it
   await expect(jam).toHaveCount(0, { timeout: 2000 });
 });
 
+test("a guest leaving drops off the Jam at once, even if a reply lags", async ({
+  page,
+}) => {
+  await startClient(page);
+  const member = (id: string, name: string) => ({
+    id,
+    username: id,
+    display_name: name,
+    image_url: null,
+  });
+  const started = {
+    session_id: "jamsession2",
+    owner_id: "me",
+    is_owner: true,
+    members: [member("me", "Me"), member("friend", "Friend")],
+    invite_url: "https://open.spotify.com/socialsession/jamtoken2",
+    qr_svg:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0h1v1H0z"/></svg>',
+    queue_only: false,
+    timestamp: 1000,
+  };
+  await page.evaluate(
+    ({ started, track, playback }) => {
+      const host = (window as any).__clientTest;
+      host.jam = started;
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+    },
+    { started, track, playback: emptyState.playback },
+  );
+  // A Jam this computer hosts, found when Spotify reports a change.
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "jam_changed",
+      following: false,
+    }),
+  );
+  await page
+    .locator(".player-bar")
+    .getByRole("button", { name: "Queue", exact: true })
+    .click();
+  const members = page.locator(".queue-panel .jam-card .jam-members");
+  await expect(members).toHaveAttribute("title", "2 in this Jam");
+  // Spotify reports the friend left; the Jam service still answers with
+  // its older view of the Jam.
+  await page.evaluate(
+    ({ started, me }) => {
+      const host = (window as any).__clientTest;
+      host.jam = started;
+      host.emit({
+        type: "jam_changed",
+        following: false,
+        jam: { ...started, members: [me], timestamp: 2000 },
+      });
+    },
+    { started, me: member("me", "Me") },
+  );
+  await expect(members).toHaveAttribute("title", "1 in this Jam");
+  await page.waitForTimeout(500);
+  await expect(members).toHaveAttribute("title", "1 in this Jam");
+});
+
 test("a reshuffled queue never slides rows in from far away", async ({
   page,
 }) => {

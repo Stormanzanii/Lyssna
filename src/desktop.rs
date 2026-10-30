@@ -1155,8 +1155,13 @@ impl Desktop {
                         }
                         // Guests joining or leaving, or this computer's
                         // place in the Jam: the app asks for the Jam again.
-                        NativeEvent::Jam(following) => {
-                            emit(json!({"type": "jam_changed", "following": following}));
+                        NativeEvent::Jam(following, session) => {
+                            let jam = session
+                                .and_then(|session| serde_json::from_str(&session).ok())
+                                .and_then(|session: serde_json::Value| crate::jam::parse(&session));
+                            emit(
+                                json!({"type": "jam_changed", "following": following, "jam": jam}),
+                            );
                         }
                         // Only this computer's player loads queues, so its
                         // context is the one playing; the track may follow.

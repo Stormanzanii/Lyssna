@@ -23,7 +23,7 @@ use crate::{
         explicit_content_pubsub::UserAttributesUpdate,
         player::ProvidedTrack,
         playlist4_external::PlaylistModificationInfo,
-        social_connect_v2::{SessionUpdate, SessionUpdateReason},
+        social_connect_v2::{Session as JamSession, SessionUpdate, SessionUpdateReason},
         transfer_state::TransferState,
         user_attributes::UserAttributesMutation,
     },
@@ -557,6 +557,29 @@ fn requested_track_unloaded(context: &Context, track: &PlayingTrack, offset: usi
 }
 /// Pages fetched at most to find a requested track: 10,000 tracks.
 const MAX_REQUESTED_TRACK_PAGES: usize = 100;
+/// A Jam session in the JSON shape of Spotify's social-connect REST replies.
+fn jam_session_json(session: &JamSession) -> String {
+    serde_json::json!({
+        "timestamp": session.timestamp,
+        "session_id": session.session_id,
+        "join_session_token": session.join_session_token,
+        "join_session_uri": session.join_session_uri,
+        "session_owner_id": session.session_owner_id,
+        "is_session_owner": session.is_session_owner,
+        "session_members": session
+            .session_members
+            .iter()
+            .map(|member| serde_json::json!({
+                "id": member.id,
+                "username": member.username,
+                "display_name": member.display_name,
+                "image_url": member.image_url,
+            }))
+            .collect::<Vec<_>>(),
+    })
+    .to_string()
+}
+
 fn automatic_restore_allowed(enabled: bool, cluster: &Cluster, session_id: &str) -> bool {
     enabled
         && cluster.active_device_id.is_empty()
@@ -1863,7 +1886,7 @@ impl SpircTask {
         if self.devices.set_jam_phase(phase) {
             info!("Jam: {phase:?}");
             self.player
-                .emit_jam_changed_event(phase == JamPhase::Following);
+                .emit_jam_changed_event(phase == JamPhase::Following, None);
         }
     }
 
@@ -2747,9 +2770,11 @@ impl SpircTask {
             if self.devices.set_jam_phase(phase) {
                 info!("Jam: {phase:?} after {reason:?}");
             }
-            // Members, hosts and the Jam itself change: the app shows them.
+            // Members, hosts and the Jam itself change: the app shows them,
+            // from the session in the report as Spotify's own app does.
+            let jam = session_update.session.as_ref().map(jam_session_json);
             self.player
-                .emit_jam_changed_event(phase == JamPhase::Following);
+                .emit_jam_changed_event(phase == JamPhase::Following, jam);
         }
 
         let mut session = match session_update.session.take() {

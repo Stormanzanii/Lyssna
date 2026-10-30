@@ -3,6 +3,7 @@ import type {
   ArtistAbout,
   BrowseInfo,
   Device,
+  Jam,
   Snapshot,
   PlayingDetails,
   Track,
@@ -104,6 +105,8 @@ export interface AppState extends Snapshot {
   dj_context?: boolean;
   /** Counts Spotify's Jam changes, so the Jam panel asks for it again. */
   jam_revision?: number;
+  /** The Jam as Spotify's last change report gave it, members included. */
+  jam_report?: Jam | null;
   /** Spotify folders, so empty ones still show in the sidebar. */
   library_folders?: LibraryFolder[];
   /** A creator profile sheet is open over the app, which dims behind it. */
@@ -312,7 +315,11 @@ export function reducer(state: AppState, action: Action): AppState {
     case "dj_context":
       return { ...state, dj_context: action.active };
     case "jam_changed":
-      return { ...state, jam_revision: (state.jam_revision ?? 0) + 1 };
+      return {
+        ...state,
+        jam_revision: (state.jam_revision ?? 0) + 1,
+        jam_report: action.jam ?? null,
+      };
     case "dj_requested":
       return state.profile
         ? { ...state, narrating: true, dj_pending: true }

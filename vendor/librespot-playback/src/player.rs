@@ -149,7 +149,10 @@ enum PlayerCommand {
         track: bool,
     },
     EmitAutoPlayChangedEvent(bool),
-    EmitJamChangedEvent(bool),
+    EmitJamChangedEvent {
+        following: bool,
+        session: Option<String>,
+    },
     EmitSetQueueEvent {
         context_uri: String,
         session_url: Option<String>,
@@ -276,8 +279,11 @@ pub enum PlayerEvent {
     },
     /// Spotify reported a change to the Jam this account is in; `following`
     /// is whether this device still plays along with it.
+    /// `session` is the Jam as Spotify reported it, as JSON, when the
+    /// report carried one.
     JamChanged {
         following: bool,
+        session: Option<String>,
     },
     FilterExplicitContentChanged {
         filter: bool,
@@ -724,8 +730,8 @@ impl Player {
         self.command(PlayerCommand::EmitAutoPlayChangedEvent(auto_play));
     }
 
-    pub fn emit_jam_changed_event(&self, following: bool) {
-        self.command(PlayerCommand::EmitJamChangedEvent(following));
+    pub fn emit_jam_changed_event(&self, following: bool, session: Option<String>) {
+        self.command(PlayerCommand::EmitJamChangedEvent { following, session });
     }
 
     pub fn emit_set_queue_event(
@@ -2552,8 +2558,8 @@ impl PlayerInternal {
                 self.send_event(PlayerEvent::AutoPlayChanged { auto_play })
             }
 
-            PlayerCommand::EmitJamChangedEvent(following) => {
-                self.send_event(PlayerEvent::JamChanged { following })
+            PlayerCommand::EmitJamChangedEvent { following, session } => {
+                self.send_event(PlayerEvent::JamChanged { following, session })
             }
 
             PlayerCommand::EmitSessionClientChangedEvent {
@@ -2890,7 +2896,7 @@ impl fmt::Debug for PlayerCommand {
                 .debug_tuple("EmitAutoPlayChangedEvent")
                 .field(&auto_play)
                 .finish(),
-            PlayerCommand::EmitJamChangedEvent(following) => f
+            PlayerCommand::EmitJamChangedEvent { following, .. } => f
                 .debug_tuple("EmitJamChangedEvent")
                 .field(&following)
                 .finish(),

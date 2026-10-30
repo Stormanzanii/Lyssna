@@ -112,6 +112,8 @@ struct SpircTask {
     jam_queue_hash: Option<u64>,
     /// The Jam this device hosts, whose session its state carries.
     jam_host: Option<String>,
+    /// The Jam diagnostics last logged: the active device's state, then this one's.
+    jam_states_logged: (String, String),
 
     /// when set to true, it will update the volume after [VOLUME_UPDATE_DELAY],
     /// when no other future resolves, otherwise resets the delay
@@ -742,6 +744,7 @@ impl Spirc {
             transfer_state: None,
             jam_queue_hash: None,
             jam_host: None,
+            jam_states_logged: Default::default(),
             update_volume: false,
             update_state: false,
 
@@ -1582,6 +1585,17 @@ impl SpircTask {
 
         if let Some(cluster) = cluster_update.cluster.take() {
             self.devices.update(&cluster);
+            // Another device playing, such as Spotify's app hosting a Jam:
+            // what its state tells the Jam service, to compare with ours.
+            if cluster.active_device_id != self.session.device_id()
+                && let Some(state) = cluster.player_state.as_ref()
+            {
+                let summary = jam_follow::state_summary(state, self.jam_host.as_deref());
+                if summary != self.jam_states_logged.0 {
+                    log::warn!(target: "librespot_connect::jam", "Active device state: {summary}");
+                    self.jam_states_logged.0 = summary;
+                }
+            }
             let became_inactive = self.connect_state.is_active()
                 && cluster.active_device_id != self.session.device_id();
             if became_inactive {
@@ -1611,6 +1625,12 @@ impl SpircTask {
             "handling: '{}' from {}",
             request.command, request.sent_by_device_id
         );
+        if request
+            .sent_by_device_id
+            .starts_with(jam_follow::SOCIAL_CONNECT_DEVICE_PREFIX)
+        {
+            log::warn!(target: "librespot_connect::jam", "Jam request {}", request.command);
+        }
 
         let response = match self.handle_request(request).await {
             Ok(_) => Reply::Success,
@@ -1922,7 +1942,7 @@ impl SpircTask {
     /// it; resolving the jam-list URI again isn't needed.
     async fn handle_jam_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
         if !self.devices.jam_phase().follows_transfers() {
-            debug!("ignoring transfer from a Jam this device left");
+            log::warn!(target: "librespot_connect::jam", "Ignoring a transfer from a Jam this device left");
             return Ok(());
         }
 
@@ -2795,6 +2815,21 @@ impl SpircTask {
         };
 
         let reason = session_update.reason.enum_value();
+        if let Some(session) = session_update.session.as_ref() {
+            log::warn!(
+                target: "librespot_connect::jam",
+                "Jam update {reason:?}: host device here={}, hosted session={}",
+                session
+                    .host_active_device_id
+                    .as_deref()
+                    .map_or("unnamed".to_owned(), |device| {
+                        (device == self.session.device_id()).to_string()
+                    }),
+                self.jam_host
+                    .as_deref()
+                    .map_or("none".to_owned(), |id| (id == session.session_id).to_string()),
+            );
+        }
 
         // Leaving, removal and a Jam's end stop this device following it;
         // the song playing keeps going, as in Spotify's own app.
@@ -2895,6 +2930,14 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
+        if self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following {
+            let summary =
+                jam_follow::state_summary(self.connect_state.player(), self.jam_host.as_deref());
+            if summary != self.jam_states_logged.1 {
+                log::warn!(target: "librespot_connect::jam", "This device's Jam state: {summary}");
+                self.jam_states_logged.1 = summary;
+            }
+        }
         let update = self.connect_state.send_state(&self.session);
         self.state_updates
             .push(async move { update.await.map(|_| ()) });
@@ -3002,6 +3045,7 @@ mod shuffle_tests {
             transfer_state: None,
             jam_queue_hash: None,
             jam_host: None,
+            jam_states_logged: Default::default(),
             update_volume: false,
             update_state: false,
             spirc_id: 0,

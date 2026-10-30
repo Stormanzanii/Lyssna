@@ -6,7 +6,7 @@
 //! it, so each one is compared with local playback first. Kept free of player
 //! and network types so the decision is testable on its own.
 
-use crate::protocol::social_connect_v2::SessionUpdateReason;
+use crate::protocol::{player::PlayerState, social_connect_v2::SessionUpdateReason};
 
 /// Spotify's Jam service sends guests their transfers from this device ID prefix.
 pub const SOCIAL_CONNECT_DEVICE_PREFIX: &str = "social-connect";
@@ -23,6 +23,72 @@ pub const MAX_DRIFT_MS: i64 = 2_000;
 pub fn is_jam_transfer(sent_by_device_id: &str, context_uri: Option<&str>) -> bool {
     sent_by_device_id.starts_with(SOCIAL_CONNECT_DEVICE_PREFIX)
         || context_uri.is_some_and(|uri| uri.starts_with(JAM_LIST_PREFIX))
+}
+
+/// What a player state tells Spotify's Jam service, for comparing this
+/// device's host state with the official app's: the kind of context, the
+/// origin, modes and the names of metadata keys. IDs and values are left
+/// out, apart from the origin's feature names and the modes.
+pub fn state_summary(state: &PlayerState, jam_session: Option<&str>) -> String {
+    let kind = |uri: &str| -> String {
+        uri.split(':')
+            .skip(1)
+            .filter(|part| {
+                !part.is_empty()
+                    && part.len() <= 16
+                    && part
+                        .bytes()
+                        .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+            })
+            .collect::<Vec<_>>()
+            .join(":")
+    };
+    let keys = |map: &std::collections::HashMap<String, String>| {
+        let mut keys: Vec<&str> = map.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        keys.join(",")
+    };
+    let origin = state.play_origin.as_ref();
+    let modes = state.options.as_ref().map(|options| {
+        let mut modes: Vec<String> = options
+            .modes
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect();
+        modes.sort_unstable();
+        modes.join(",")
+    });
+    let track = state.track.as_ref();
+    let mut next_keys: Vec<&str> = state
+        .next_tracks
+        .iter()
+        .take(3)
+        .flat_map(|track| track.metadata.keys().map(String::as_str))
+        .collect();
+    next_keys.sort_unstable();
+    next_keys.dedup();
+    format!(
+        "context={} origin={}/{} session={}{} playback_id={} queue_revision={} modes=[{}]          context_meta=[{}] page_meta=[{}] track_provider={} track_meta=[{}] next_meta=[{}]          signals={} command_id={} system={}",
+        kind(&state.context_uri),
+        origin.map_or("", |origin| origin.feature_identifier.as_str()),
+        origin.map_or("", |origin| origin.referrer_identifier.as_str()),
+        state.session_id.len(),
+        jam_session.map_or(String::new(), |jam| format!(
+            " is_jam_session={}",
+            state.session_id == jam
+        )),
+        !state.playback_id.is_empty(),
+        !state.queue_revision.is_empty(),
+        modes.unwrap_or_default(),
+        keys(&state.context_metadata),
+        keys(&state.page_metadata),
+        track.map_or("", |track| track.provider.as_str()),
+        track.map_or(String::new(), |track| keys(&track.metadata)),
+        next_keys.join(","),
+        state.signals.len(),
+        !state.session_command_id.is_empty(),
+        state.is_system_initiated,
+    )
 }
 
 /// What this device is playing.
@@ -168,6 +234,23 @@ impl JamPhase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_state_summary_names_kinds_and_keys_but_no_ids() {
+        let mut state = PlayerState {
+            context_uri: "spotify:user:abc123xyz:collection".into(),
+            session_id: "jam0123".into(),
+            ..Default::default()
+        };
+        state
+            .context_metadata
+            .insert("is_jam_queue".into(), "secret-value".into());
+        let summary = state_summary(&state, Some("jam0123"));
+        assert!(summary.contains("context=user:collection"), "{summary}");
+        assert!(summary.contains("is_jam_session=true"), "{summary}");
+        assert!(summary.contains("context_meta=[is_jam_queue]"), "{summary}");
+        assert!(!summary.contains("abc123xyz") && !summary.contains("secret-value"));
+    }
 
     const SONG: &str = "spotify:track:0000000000000000000001";
     const OTHER: &str = "spotify:track:0000000000000000000002";

@@ -3080,7 +3080,7 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     ".profile-hero-identity .profile-avatar{grid-column:1;grid-row:1/span 2;align-self:center;width:clamp(6rem,17vw,11.5rem)!important;height:clamp(6rem,17vw,11.5rem)!important}" +
     ".profile-hero-identity>header>div{grid-column:2;grid-row:1;gap:.5rem!important}" +
     ".profile-hero-identity>header>div::before{content:'Profile';font-size:.875rem;font-weight:600}" +
-    ".profile-name{font-size:clamp(2rem,calc(var(--name-vw,9vw)*.7),5.5rem)!important;max-width:none!important}" +
+    ".profile-name{font-size:clamp(2rem,calc(var(--name-vw,9vw)*.7),5.5rem)!important;max-width:none!important;font-weight:800!important;letter-spacing:-.02em!important}" +
     ".profile-hero-identity>section{grid-column:2;grid-row:2;flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:.375rem .875rem!important}" +
     ".profile-hero-identity>section>*{margin:0!important;line-height:1!important}" +
     ".profile-hero-identity>section dd,.profile-hero-identity>section dt{line-height:1!important}" +
@@ -3091,7 +3091,11 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     ".profile-hero-identity .profile-figure{font-size:1rem!important;letter-spacing:0!important}" +
     ".profile-stats-cta{padding:.375rem .875rem!important;font-size:.8125rem!important}" +
     ".profile-aura{left:7rem!important;top:50%!important}" +
-    ".profile-spotlight{display:none!important}";
+    ".profile-spotlight{display:none!important}" +
+    // The track list's number column hugs the edge.
+    ".profile-setlist>.grid:first-child,.profile-track{padding-left:.25rem!important;column-gap:.75rem!important}" +
+    ".profile-setlist>.grid:first-child>:first-child,.profile-track>:first-child{text-align:center!important}" +
+    "@media (min-width:640px){.profile-variant{margin-left:4.25rem!important}}";
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });
@@ -3120,7 +3124,7 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
 fn profile_window_script() -> &'static str {
     static SCRIPT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
         use base64::{Engine, engine::general_purpose::STANDARD};
-        let faces: [(u16, &[u8]); 4] = [
+        let faces: [(u16, &[u8]); 5] = [
             (
                 400,
                 include_bytes!("../assets/fonts/metropolis-latin-400-normal.woff2"),
@@ -3136,6 +3140,10 @@ fn profile_window_script() -> &'static str {
             (
                 700,
                 include_bytes!("../assets/fonts/metropolis-latin-700-normal.woff2"),
+            ),
+            (
+                800,
+                include_bytes!("../assets/fonts/metropolis-latin-800-normal.woff2"),
             ),
         ];
         let mut css = String::new();
@@ -4252,7 +4260,7 @@ mod tests {
     fn creator_profiles_carry_the_app_typeface() {
         let script = profile_window_script();
         assert!(!script.contains("PROFILE_FONTS"));
-        assert_eq!(script.matches("@font-face").count(), 4);
+        assert_eq!(script.matches("@font-face").count(), 5);
         assert!(script.contains("font-family:SpotiFlexMetropolis"));
     }
     #[test]

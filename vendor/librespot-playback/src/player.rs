@@ -149,6 +149,7 @@ enum PlayerCommand {
         track: bool,
     },
     EmitAutoPlayChangedEvent(bool),
+    EmitJamChangedEvent(bool),
     EmitSetQueueEvent {
         context_uri: String,
         session_url: Option<String>,
@@ -272,6 +273,11 @@ pub enum PlayerEvent {
     },
     AutoPlayChanged {
         auto_play: bool,
+    },
+    /// Spotify reported a change to the Jam this account is in; `following`
+    /// is whether this device still plays along with it.
+    JamChanged {
+        following: bool,
     },
     FilterExplicitContentChanged {
         filter: bool,
@@ -716,6 +722,10 @@ impl Player {
 
     pub fn emit_auto_play_changed_event(&self, auto_play: bool) {
         self.command(PlayerCommand::EmitAutoPlayChangedEvent(auto_play));
+    }
+
+    pub fn emit_jam_changed_event(&self, following: bool) {
+        self.command(PlayerCommand::EmitJamChangedEvent(following));
     }
 
     pub fn emit_set_queue_event(
@@ -2542,6 +2552,10 @@ impl PlayerInternal {
                 self.send_event(PlayerEvent::AutoPlayChanged { auto_play })
             }
 
+            PlayerCommand::EmitJamChangedEvent(following) => {
+                self.send_event(PlayerEvent::JamChanged { following })
+            }
+
             PlayerCommand::EmitSessionClientChangedEvent {
                 client_id,
                 client_name,
@@ -2875,6 +2889,10 @@ impl fmt::Debug for PlayerCommand {
             PlayerCommand::EmitAutoPlayChangedEvent(auto_play) => f
                 .debug_tuple("EmitAutoPlayChangedEvent")
                 .field(&auto_play)
+                .finish(),
+            PlayerCommand::EmitJamChangedEvent(following) => f
+                .debug_tuple("EmitJamChangedEvent")
+                .field(&following)
                 .finish(),
             PlayerCommand::EmitSetQueueEvent {
                 context_uri,

@@ -402,6 +402,20 @@ function App() {
       window.clearInterval(timer);
     };
   }, [state.profile?.id, state.native_ready, jamOn]);
+  // Spotify reports guests joining and leaving and the Jam ending at once,
+  // without waiting for the next check.
+  const jamRevision = state.jam_revision ?? 0;
+  useEffect(() => {
+    if (!jamRevision || !state.profile || !state.native_ready) return;
+    let live = true;
+    rpc<Jam | null>("jam", { action: "current" })
+      .then((current) => live && setJam(current))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+    // Only a new report asks again; sign-in changes are covered above.
+  }, [jamRevision]);
   const toggleQueue = () => {
     if (sidebar && panel === "queue") setPanel("now");
     else {

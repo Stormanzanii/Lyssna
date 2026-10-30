@@ -435,6 +435,18 @@ impl ConnectState {
         Ok(())
     }
 
+    /// Keeps a current track that isn't part of the active context and
+    /// lines the context up after it from its first track.
+    pub fn reset_next_tracks_to_context_start(&mut self) -> Result<(), Error> {
+        self.update_context_index(self.active_context, 0)?;
+        self.fill_up_context = self.active_context;
+        self.clear_prev_track();
+        self.clear_next_tracks();
+        self.fill_up_next_tracks()?;
+        self.update_restrictions();
+        Ok(())
+    }
+
     fn mark_as_unavailable_for_match(track: &mut ProvidedTrack, uri: &str) {
         if track.uri == uri {
             debug!("Marked <{}:{}> as unavailable", track.provider, track.uri);

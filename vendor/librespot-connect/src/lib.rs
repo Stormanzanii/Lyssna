@@ -10,6 +10,7 @@ use librespot_protocol as protocol;
 
 mod context_resolver;
 mod dj_cache;
+mod jam_follow;
 mod model;
 mod narrated;
 mod shuffle_vec;
@@ -17,6 +18,7 @@ mod spirc;
 mod state;
 mod state_updates;
 
+pub use jam_follow::JamPhase;
 pub use model::*;
 pub use spirc::*;
 pub use state::*;

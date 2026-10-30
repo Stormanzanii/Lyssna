@@ -1153,6 +1153,11 @@ impl Desktop {
                         NativeEvent::DJContext(active) => {
                             emit(json!({"type": "dj_context", "active": active}));
                         }
+                        // Guests joining or leaving, or this computer's
+                        // place in the Jam: the app asks for the Jam again.
+                        NativeEvent::Jam(following) => {
+                            emit(json!({"type": "jam_changed", "following": following}));
+                        }
                         // Only this computer's player loads queues, so its
                         // context is the one playing; the track may follow.
                         NativeEvent::Context(uri) => {
@@ -2497,7 +2502,14 @@ async fn jam(
             }),
             _ => None,
         };
-        controls.run(async |session| match action.as_str() {
+        // Leaving stops this computer following the Jam's song changes at
+        // once; joining lets them drive playback again.
+        match action.as_str() {
+            "join" => controls.follow_jam(true),
+            "leave" => controls.follow_jam(false),
+            _ => {}
+        }
+        let result = controls.run(async |session| match action.as_str() {
             "current" => crate::jam::current(session).await,
             "join" => crate::jam::join(session, join.as_deref().unwrap_or_default())
                 .await
@@ -2511,7 +2523,12 @@ async fn jam(
                 .map(|()| None),
             "control" => crate::jam::let_others_control(session, allowed.unwrap_or(true)).await,
             _ => anyhow::bail!("Unknown Jam action"),
-        })
+        });
+        // Still in the Jam if leaving failed.
+        if action == "leave" && result.is_err() {
+            controls.follow_jam(true);
+        }
+        result
     })
     .await
     .map_err(|_| "Jam worker unavailable".to_owned())?

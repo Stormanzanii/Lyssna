@@ -425,6 +425,8 @@ export type AppEvent =
   | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }
   | { type: "narration"; active: boolean }
   | { type: "dj_context"; active: boolean }
+  /** Spotify changed the Jam this account is in. */
+  | { type: "jam_changed"; following: boolean }
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
   | {

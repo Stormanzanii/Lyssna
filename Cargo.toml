@@ -9,7 +9,7 @@ publish = false
 default-run = "spotiflex"
 
 [workspace]
-members = ["vendor/librespot-playback", "vendor/librespot-connect"]
+members = ["vendor/librespot-core", "vendor/librespot-playback", "vendor/librespot-connect"]
 default-members = ["."]
 
 [features]

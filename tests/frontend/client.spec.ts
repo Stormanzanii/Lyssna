@@ -9940,6 +9940,61 @@ test("Start a Jam from a song copies the invite and shows the Jam above the queu
   ).toBeVisible();
 });
 
+test("A Jam that ends for this computer leaves the queue when Spotify reports it", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const host = (window as any).__clientTest;
+      host.jamToStart = {
+        session_id: "jamsession1",
+        owner_id: "friend",
+        is_owner: false,
+        members: [
+          {
+            id: "friend",
+            username: "friend",
+            display_name: "Friend",
+            image_url: null,
+          },
+        ],
+        invite_url: "https://open.spotify.com/socialsession/jamtoken1",
+        qr_svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0h1v1H0z"/></svg>',
+        queue_only: false,
+      };
+      host.emit({
+        type: "playback",
+        playback: { ...playback, item: track, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData(
+      "text/plain",
+      "https://open.spotify.com/socialsession/jamtoken1",
+    );
+    document.body.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true }),
+    );
+  });
+  const jam = page.locator(".queue-panel .jam-card");
+  await expect(jam.getByRole("heading")).toHaveText("Friend’s Jam");
+  // The host ends the Jam: Spotify says so, and the card goes well before
+  // the next periodic check.
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.jam = null;
+    host.emit({ type: "jam_changed", following: false });
+  });
+  await expect(jam).toHaveCount(0, { timeout: 2000 });
+});
+
 test("a reshuffled queue never slides rows in from far away", async ({
   page,
 }) => {

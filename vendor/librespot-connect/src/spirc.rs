@@ -6,11 +6,12 @@ use crate::{
         authentication::Credentials,
         dealer::{
             manager::{BoxedStream, BoxedStreamResult, Reply, RequestReply},
-            protocol::{Command, FallbackWrapper, Message, Request},
+            protocol::{Command, FallbackWrapper, Message, Request, describe_unknown},
         },
         session::UserAttributes,
         spclient::TransferRequest,
     },
+    jam_follow::{self, HostPlayback, JamPhase, LocalPlayback, Plan},
     model::{LoadRequest, PlayingTrack, SpircPlayStatus},
     playback::{
         mixer::Mixer,
@@ -22,7 +23,7 @@ use crate::{
         explicit_content_pubsub::UserAttributesUpdate,
         player::ProvidedTrack,
         playlist4_external::PlaylistModificationInfo,
-        social_connect_v2::SessionUpdate,
+        social_connect_v2::{SessionUpdate, SessionUpdateReason},
         transfer_state::TransferState,
         user_attributes::UserAttributesMutation,
     },
@@ -37,7 +38,7 @@ use librespot_protocol::context_page::ContextPage;
 use protobuf::MessageField;
 use std::{
     future::Future,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicU8, AtomicUsize, Ordering},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -54,8 +55,8 @@ enum SpircError {
     InvalidUri(String),
     #[error("failed to put connect state for new device")]
     FailedDealerSetup,
-    #[error("unknown endpoint: {0:#?}")]
-    UnknownEndpoint(serde_json::Value),
+    #[error("unknown endpoint: {0}")]
+    UnknownEndpoint(String),
 }
 
 impl From<SpircError> for Error {
@@ -106,6 +107,9 @@ struct SpircTask {
 
     /// is set when transferring, and used after resolving the contexts to finish the transfer
     pub transfer_state: Option<TransferState>,
+
+    /// The Jam queue last lined up, so resends with the same queue skip it.
+    jam_queue_hash: Option<u64>,
 
     /// when set to true, it will update the volume after [VOLUME_UPDATE_DELAY],
     /// when no other future resolves, otherwise resets the delay
@@ -247,6 +251,7 @@ pub struct ConnectedDevices(
     Arc<Mutex<Vec<ConnectedDevice>>>,
     Arc<Mutex<Option<Cluster>>>,
     Arc<Mutex<Option<i64>>>,
+    Arc<AtomicU8>,
 );
 
 impl ConnectedDevices {
@@ -268,6 +273,28 @@ impl ConnectedDevices {
     /// shows progress running ahead while playing and jumping back on pause.
     pub fn server_clock_offset_ms(&self) -> Option<i64> {
         self.2.lock().ok().and_then(|offset| *offset)
+    }
+
+    /// Whether this device follows the Jam it is in.
+    pub fn jam_phase(&self) -> JamPhase {
+        JamPhase::from_u8(self.3.load(Ordering::Acquire))
+    }
+
+    /// Stop following a Jam this device left, keeping the current song.
+    pub fn leave_jam(&self) {
+        self.set_jam_phase(JamPhase::Left);
+    }
+
+    /// Follow the next Jam this device joins.
+    pub fn join_jam(&self) {
+        if self.jam_phase() == JamPhase::Left {
+            self.set_jam_phase(JamPhase::Idle);
+        }
+    }
+
+    /// Returns whether the phase changed.
+    fn set_jam_phase(&self, phase: JamPhase) -> bool {
+        self.3.swap(phase.to_u8(), Ordering::AcqRel) != phase.to_u8()
     }
 
     fn update(&self, cluster: &Cluster) {
@@ -687,6 +714,7 @@ impl Spirc {
             session,
 
             transfer_state: None,
+            jam_queue_hash: None,
             update_volume: false,
             update_state: false,
 
@@ -1549,13 +1577,14 @@ impl SpircTask {
     async fn handle_request(&mut self, request: Request) -> Result<(), Error> {
         use Command::*;
 
+        let sent_by = request.sent_by_device_id;
         match request.command {
             // errors and unknown commands
             Transfer(transfer) if transfer.data.is_none() => {
                 warn!("transfer endpoint didn't contain any data to transfer");
                 Err(SpircError::NoData)?
             }
-            Unknown(unknown) => Err(SpircError::UnknownEndpoint(unknown))?,
+            Unknown(unknown) => Err(SpircError::UnknownEndpoint(describe_unknown(&unknown)))?,
             // implicit update of the connect_state
             UpdateContext(update_context) => {
                 if matches!(update_context.context.uri, Some(ref uri) if uri != self.connect_state.context_uri())
@@ -1576,7 +1605,14 @@ impl SpircTask {
             }
             // modification and update of the connect_state
             Transfer(transfer) => {
-                self.handle_transfer(transfer.data.expect("by condition checked"))?;
+                let transfer = transfer.data.expect("by condition checked");
+                if jam_follow::is_jam_transfer(
+                    &sent_by,
+                    transfer.current_session.context.uri.as_deref(),
+                ) {
+                    return self.handle_jam_transfer(transfer).await;
+                }
+                self.handle_transfer(transfer)?;
                 return self.notify().await;
             }
             Play(mut play) => {
@@ -1665,6 +1701,16 @@ impl SpircTask {
                 let shuffle = set_options.shuffling_context;
                 if let Some(shuffle) = shuffle {
                     self.handle_shuffle(shuffle)?;
+                }
+
+                // Spotify's Jam service switches the jam mode on for guests
+                // as they join and off as the Jam ends for them.
+                for (mode, value) in set_options.modes.unwrap_or_default() {
+                    if mode == "jam" {
+                        let phase = self.devices.jam_phase().after_jam_mode(value == "on");
+                        self.set_jam_phase(phase);
+                    }
+                    self.connect_state.set_mode(mode, value);
                 }
             }
             SkipNext(skip_next) => self.handle_next(skip_next.track.map(|t| t.uri))?,
@@ -1799,6 +1845,185 @@ impl SpircTask {
         }
 
         self.load_track(is_playing, position.try_into()?)
+    }
+
+    /// Spotify's clock now, by the offset measured from the latest cluster,
+    /// else the access point's time delta.
+    fn server_now_ms(&self) -> i64 {
+        match self.devices.server_clock_offset_ms() {
+            Some(offset) => SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |now| now.as_millis().min(i64::MAX as u128) as i64)
+                .saturating_sub(offset),
+            None => self.now_ms(),
+        }
+    }
+
+    fn set_jam_phase(&mut self, phase: JamPhase) {
+        if self.devices.set_jam_phase(phase) {
+            info!("Jam: {phase:?}");
+            self.player
+                .emit_jam_changed_event(phase == JamPhase::Following);
+        }
+    }
+
+    /// Follows one transfer from Spotify's Jam service. It is resent whenever
+    /// the host skips, seeks, pauses or resumes, so a resend for the song
+    /// already playing keeps it going. The Jam's queue arrives whole with
+    /// it; resolving the jam-list URI again isn't needed.
+    async fn handle_jam_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
+        if !self.devices.jam_phase().follows_transfers() {
+            debug!("ignoring transfer from a Jam this device left");
+            return Ok(());
+        }
+
+        let host_track = transfer.playback.current_track.clone().into_option();
+        let host_uri = host_track.as_ref().and_then(|t| t.uri.clone());
+        let host_uid = host_track.as_ref().and_then(|t| t.uid.clone());
+        let host = HostPlayback {
+            uri: host_uri.as_deref(),
+            uid: host_uid.as_deref(),
+            timestamp_ms: transfer.playback.timestamp.unwrap_or_default(),
+            position_ms: transfer
+                .playback
+                .position_as_of_timestamp
+                .unwrap_or_default()
+                .max(0) as u32,
+            paused: transfer.playback.is_paused.unwrap_or_default(),
+        };
+
+        let stopped = matches!(self.play_status, SpircPlayStatus::Stopped);
+        let local_uri = self.connect_state.current_track(|t| t.uri.clone());
+        let local_uid = self.connect_state.current_track(|t| t.uid.clone());
+        let local = LocalPlayback {
+            uri: (!stopped).then_some(local_uri.as_str()),
+            uid: (!stopped).then_some(local_uid.as_str()),
+            position_ms: self.position(),
+            playing: matches!(
+                self.play_status,
+                SpircPlayStatus::Playing { .. } | SpircPlayStatus::LoadingPlay { .. }
+            ),
+        };
+        let plan = jam_follow::plan(local, host, self.server_now_ms());
+        debug!("Jam transfer: {plan:?}");
+
+        self.set_jam_phase(JamPhase::Following);
+        if !self.connect_state.is_active() {
+            self.handle_activate();
+        }
+        // A Connect transfer still resolving would replace the Jam's queue.
+        self.transfer_state = None;
+
+        let session = transfer.current_session.mut_or_insert_default();
+        let mut context = session.context.take().unwrap_or_default();
+        let context_uri = context
+            .uri
+            .clone()
+            .filter(|uri| !uri.is_empty() && uri != "-")
+            .unwrap_or_else(|| self.connect_state.context_uri().clone());
+        context.uri = Some(context_uri.clone());
+        if context.url.as_deref().is_none_or(str::is_empty) {
+            context.url = Some(format!("context://{context_uri}"));
+        }
+        let has_queue = context.pages.iter().any(|page| !page.tracks.is_empty());
+        let queue_hash = {
+            use std::hash::{DefaultHasher, Hash, Hasher};
+            let mut hash = DefaultHasher::new();
+            context_uri.hash(&mut hash);
+            for track in context.pages.iter().flat_map(|page| &page.tracks) {
+                track.uri.hash(&mut hash);
+                track.uid.hash(&mut hash);
+            }
+            hash.finish()
+        };
+
+        let loads = matches!(plan, Plan::Load { .. });
+        let new_track = match host_track.as_ref() {
+            Some(track) if loads => Some(self.connect_state.context_to_provided_track(
+                track,
+                Some(&context_uri),
+                None,
+                None,
+                None,
+            )?),
+            _ => None,
+        };
+
+        // A playlist started here since replaced the Jam's queue too.
+        let queue_changed = has_queue
+            && (self.jam_queue_hash != Some(queue_hash)
+                || self.connect_state.context_uri() != &context_uri);
+        if queue_changed || (loads && !has_queue) {
+            self.context_resolver.clear();
+            if !has_queue {
+                // Only the song: play it as the context until the queue arrives.
+                context.pages = vec![ContextPage {
+                    tracks: host_track.clone().into_iter().collect(),
+                    ..Default::default()
+                }];
+            }
+            self.jam_queue_hash = has_queue.then_some(queue_hash);
+            self.connect_state
+                .reset_context(ResetContext::WhenDifferent(&context_uri));
+            if let Some(next_pages) = self
+                .connect_state
+                .update_context(context, ContextType::Default)?
+            {
+                self.context_resolver.add_list(
+                    next_pages
+                        .into_iter()
+                        .map(ResolveContext::append_context)
+                        .collect(),
+                );
+            }
+            self.connect_state.set_active_context(ContextType::Default);
+        }
+
+        if let Some(track) = new_track {
+            self.connect_state.set_track(track);
+        }
+        if queue_changed || loads {
+            self.line_up_jam_queue()?;
+            self.emit_set_queue_event();
+        }
+
+        match plan {
+            Plan::Ignore => {}
+            Plan::Continue { seek_ms, pause } => {
+                if let Some(position_ms) = seek_ms {
+                    self.handle_seek(position_ms);
+                }
+                match pause {
+                    Some(true) => self.handle_pause(),
+                    Some(false) => self.handle_play(),
+                    None => {}
+                }
+                if queue_changed {
+                    self.refresh_preload();
+                }
+            }
+            Plan::Load {
+                position_ms, play, ..
+            } => self.load_track(play, position_ms)?,
+        }
+
+        self.notify().await
+    }
+
+    /// Lines the Jam's queue up after the current song, wherever it sits in it.
+    fn line_up_jam_queue(&mut self) -> Result<(), Error> {
+        let (uri, uid) = self
+            .connect_state
+            .current_track(|t| (t.uri.clone(), t.uid.clone()));
+        let Ok(context) = self.connect_state.get_context(ContextType::Default) else {
+            return Ok(());
+        };
+        let index = ConnectState::find_index_in_context(context, |t| t.uid == uid)
+            .or_else(|_| ConnectState::find_index_in_context(context, |t| t.uri == uri));
+        match index {
+            Ok(index) => self.connect_state.reset_playback_to_position(Some(index)),
+            Err(_) => self.connect_state.reset_next_tracks_to_context_start(),
+        }
     }
 
     async fn handle_disconnect(&mut self) -> Result<(), Error> {
@@ -2513,6 +2738,20 @@ impl SpircTask {
 
         let reason = session_update.reason.enum_value();
 
+        // Leaving, removal and a Jam's end stop this device following it;
+        // the song playing keeps going, as in Spotify's own app.
+        if let Ok(reason) = reason
+            && reason != SessionUpdateReason::UNKNOWN_UPDATE_TYPE
+        {
+            let phase = self.devices.jam_phase().after_session_update(reason);
+            if self.devices.set_jam_phase(phase) {
+                info!("Jam: {phase:?} after {reason:?}");
+            }
+            // Members, hosts and the Jam itself change: the app shows them.
+            self.player
+                .emit_jam_changed_event(phase == JamPhase::Following);
+        }
+
         let mut session = match session_update.session.take() {
             None => return,
             Some(session) => session,
@@ -2701,6 +2940,7 @@ mod shuffle_tests {
             shutdown: false,
             session,
             transfer_state: None,
+            jam_queue_hash: None,
             update_volume: false,
             update_state: false,
             spirc_id: 0,
@@ -2789,6 +3029,176 @@ mod shuffle_tests {
             .collect();
         assert_eq!(upcoming, tracks()[4..]);
         task.player.stop();
+    }
+
+    const JAM: &str = "spotify:list:jam-list:0123abcd";
+
+    /// A synthetic transfer shaped like those Spotify's Jam service sends:
+    /// the whole Jam queue, the host's song and where the host is in it.
+    fn jam_transfer(current: usize, position_ms: i32, paused: bool, timestamp: i64) -> Request {
+        use crate::protocol::{context_page::ContextPage, context_track::ContextTrack};
+        let track = |index: usize| ContextTrack {
+            uri: Some(tracks()[index].clone()),
+            uid: Some(format!("u{index}")),
+            ..Default::default()
+        };
+        let mut state = TransferState::new();
+        let playback = state.playback.mut_or_insert_default();
+        playback.timestamp = Some(timestamp);
+        playback.position_as_of_timestamp = Some(position_ms);
+        playback.is_paused = Some(paused);
+        playback.current_track = MessageField::some(track(current));
+        state.current_session.mut_or_insert_default().context = MessageField::some(Context {
+            uri: Some(JAM.into()),
+            pages: vec![ContextPage {
+                tracks: (0..tracks().len()).map(track).collect(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        Request {
+            message_id: 1,
+            sent_by_device_id: "social-connect-0123abcd".into(),
+            command: Command::Transfer(crate::core::dealer::protocol::TransferCommand {
+                data: Some(state),
+                options: Default::default(),
+                from_device_identifier: String::new(),
+                logging_params: Default::default(),
+            }),
+        }
+    }
+
+    fn upcoming(task: &SpircTask) -> Vec<String> {
+        task.connect_state
+            .player()
+            .next_tracks
+            .iter()
+            .map(|track| track.uri.clone())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_jam_transfer_plays_the_hosts_song_from_the_included_queue() {
+        let mut task = task();
+        let now = task.server_now_ms();
+        task.handle_request(jam_transfer(3, 40_000, false, now))
+            .await
+            .unwrap();
+        assert_eq!(task.connect_state.context_uri(), JAM);
+        assert_eq!(
+            task.connect_state.current_track(|track| track.uri.clone()),
+            tracks()[3]
+        );
+        assert_eq!(upcoming(&task), tracks()[4..]);
+        assert!(
+            task.transfer_state.is_none(),
+            "the queue isn't resolved again"
+        );
+        match task.play_status {
+            SpircPlayStatus::LoadingPlay { position_ms } => {
+                assert!((40_000..42_000).contains(&position_ms), "{position_ms}")
+            }
+            ref other => panic!("not loading to play: {other:?}"),
+        }
+        assert_eq!(task.devices.jam_phase(), JamPhase::Following);
+        task.player.stop();
+    }
+
+    #[tokio::test]
+    async fn a_jam_resend_for_the_playing_song_keeps_it_going() {
+        let mut task = task();
+        let now = task.server_now_ms();
+        task.handle_request(jam_transfer(3, 40_000, false, now))
+            .await
+            .unwrap();
+        let started = task.now_ms() - 40_000;
+        task.play_status = SpircPlayStatus::Playing {
+            nominal_start_time: started,
+            preloading_of_next_track_triggered: false,
+        };
+        let now = task.server_now_ms();
+        task.handle_request(jam_transfer(3, 40_300, false, now))
+            .await
+            .unwrap();
+        assert!(
+            matches!(
+                task.play_status,
+                SpircPlayStatus::Playing { nominal_start_time, .. } if nominal_start_time == started
+            ),
+            "a resend restarted or moved the song: {:?}",
+            task.play_status
+        );
+
+        // The host pauses: the guest pauses where it is.
+        task.handle_request(jam_transfer(3, 40_400, true, now))
+            .await
+            .unwrap();
+        assert!(matches!(task.play_status, SpircPlayStatus::Paused { .. }));
+
+        // The host skips: the guest loads the next song.
+        task.handle_request(jam_transfer(4, 0, false, now))
+            .await
+            .unwrap();
+        assert_eq!(
+            task.connect_state.current_track(|track| track.uri.clone()),
+            tracks()[4]
+        );
+        assert!(matches!(
+            task.play_status,
+            SpircPlayStatus::LoadingPlay { .. }
+        ));
+        assert_eq!(upcoming(&task), tracks()[5..]);
+        task.player.stop();
+    }
+
+    #[tokio::test]
+    async fn a_left_jam_no_longer_drives_playback() {
+        let mut task = task();
+        let now = task.server_now_ms();
+        task.handle_request(jam_transfer(3, 0, false, now))
+            .await
+            .unwrap();
+        task.devices.leave_jam();
+        task.handle_request(jam_transfer(7, 0, false, now))
+            .await
+            .unwrap();
+        assert_eq!(
+            task.connect_state.current_track(|track| track.uri.clone()),
+            tracks()[3]
+        );
+        task.devices.join_jam();
+        task.handle_request(jam_transfer(7, 0, false, now))
+            .await
+            .unwrap();
+        assert_eq!(
+            task.connect_state.current_track(|track| track.uri.clone()),
+            tracks()[7]
+        );
+        task.player.stop();
+    }
+
+    #[tokio::test]
+    async fn jam_mode_options_are_accepted_and_switch_following() {
+        let mut task = task();
+        for (mode, phase) in [("on", JamPhase::Following), ("off", JamPhase::Left)] {
+            let request: Request = serde_json::from_value(serde_json::json!({
+                "message_id": 2,
+                "sent_by_device_id": "social-connect-0123abcd",
+                "command": {"endpoint": "set_options", "modes": {"jam": mode}},
+            }))
+            .unwrap();
+            task.handle_request(request).await.unwrap();
+            assert_eq!(task.devices.jam_phase(), phase);
+            assert_eq!(
+                task.connect_state
+                    .player()
+                    .options
+                    .modes
+                    .get("jam")
+                    .map(String::as_str),
+                Some(mode)
+            );
+        }
     }
 
     #[tokio::test]

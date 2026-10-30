@@ -44,6 +44,14 @@ impl ConnectState {
         }
     }
 
+    /// Records a session mode Spotify set, such as `jam`, in the shared state.
+    pub fn set_mode(&mut self, mode: String, value: String) {
+        self.add_options_if_empty();
+        if let Some(options) = self.player_mut().options.as_mut() {
+            options.modes.insert(mode, value);
+        }
+    }
+
     pub fn reset_options(&mut self) {
         self.set_shuffle(false);
         self.set_repeat_track(false);

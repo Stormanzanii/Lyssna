@@ -107,6 +107,9 @@ pub enum NativeEvent {
     Ready(String),
     Stopped,
     QueueChanged,
+    /// Spotify changed the Jam this account is in; whether this computer
+    /// still plays along with it.
+    Jam(bool),
     /// Whether the current context is a DJ session.
     DJContext(bool),
     /// The playlist, album, artist or collection URI now playing.
@@ -587,6 +590,25 @@ impl NativeControls {
         Ok(cluster)
     }
     /// How far this computer's clock runs ahead of Spotify's, if measured.
+    /// Whether this computer's player follows Jam transfers: off after
+    /// leaving a Jam, so late ones from it can't change the song; on before
+    /// joining one.
+    pub(crate) fn follow_jam(&self, follow: bool) {
+        let Ok(connection) = self.0.lock() else {
+            return;
+        };
+        let Some(devices) = connection
+            .as_ref()
+            .and_then(|connection| connection.devices.lock().ok())
+        else {
+            return;
+        };
+        if follow {
+            devices.join_jam();
+        } else {
+            devices.leave_jam();
+        }
+    }
     pub(crate) fn server_clock_offset_ms(&self) -> Option<i64> {
         let connection = self.0.lock().ok()?;
         connection
@@ -2349,6 +2371,7 @@ async fn run(
                     Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
                     Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
+                    Some(PlayerEvent::JamChanged { following }) => {diagnostic(&format!("event jam following={following}"));emit(NativeEvent::Jam(following));},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
                     Some(PlayerEvent::SessionDisconnected { .. }) => {active=false;paused_position=None;loaded.store(false,Ordering::Release);},
                     Some(PlayerEvent::Stopped{..})=>{loaded.store(false,Ordering::Release);audio_playing=false;paused_position=None;intent.reset();emit(NativeEvent::Stopped);},

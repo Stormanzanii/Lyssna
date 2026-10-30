@@ -584,6 +584,7 @@ impl SpotiFlex {
                 NativeEvent::Track(_)
                 | NativeEvent::Narration(_)
                 | NativeEvent::DJContext(_)
+                | NativeEvent::Jam(_)
                 | NativeEvent::Context(_) => {}
                 NativeEvent::QueueChanged => {
                     if let Some(track) = self.playback.item.clone() {

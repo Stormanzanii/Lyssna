@@ -2563,7 +2563,9 @@ async fn jam(
         if let Some(session_id) = hosted {
             let hosting = session_id.is_some();
             let sent = controls.send(PlayerAction::HostJam(session_id)).is_ok();
-            crate::native::diagnostic(&format!("jam host: hosting={hosting} sent={sent}"));
+            if action != "current" {
+                crate::native::diagnostic(&format!("jam host: hosting={hosting} sent={sent}"));
+            }
         }
         result
     })

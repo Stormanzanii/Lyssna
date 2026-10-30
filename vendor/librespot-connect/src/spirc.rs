@@ -1267,6 +1267,8 @@ impl SpircTask {
             }
             // Spotify's own host plays inside its Jam's session, which is
             // how the Jam service knows what the host plays.
+            // The app repeats it with every Jam check: only a change counts.
+            SpircCommand::HostJam(session_id) if session_id == self.jam_host => return Ok(()),
             SpircCommand::HostJam(session_id) => {
                 if let Some(id) = session_id.as_deref()
                     && self.session.session_id() != id

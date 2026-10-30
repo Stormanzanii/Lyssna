@@ -114,6 +114,10 @@ struct SpircTask {
     jam_host: Option<String>,
     /// The Jam diagnostics last logged: the active device's state, then this one's.
     jam_states_logged: (String, String),
+    /// The Jam the last session update named, and whether its Jam list was probed.
+    jam_session_seen: Option<(String, bool)>,
+    /// The active device's capabilities as last logged.
+    jam_device_logged: String,
 
     /// when set to true, it will update the volume after [VOLUME_UPDATE_DELAY],
     /// when no other future resolves, otherwise resets the delay
@@ -745,6 +749,8 @@ impl Spirc {
             jam_queue_hash: None,
             jam_host: None,
             jam_states_logged: Default::default(),
+            jam_session_seen: None,
+            jam_device_logged: String::new(),
             update_volume: false,
             update_state: false,
 
@@ -1588,6 +1594,28 @@ impl SpircTask {
             // Another device playing, such as Spotify's app hosting a Jam:
             // what its state tells the Jam service, to compare with ours.
             if cluster.active_device_id != self.session.device_id()
+                && let Some(device) = cluster.device.get(&cluster.active_device_id)
+            {
+                let summary = format!(
+                    "type={:?} software={} caps={}",
+                    device.device_type,
+                    device
+                        .device_software_version
+                        .split([' ', '('])
+                        .next()
+                        .unwrap_or_default(),
+                    device
+                        .capabilities
+                        .as_ref()
+                        .map(|caps| protobuf::text_format::print_to_string(caps))
+                        .unwrap_or_default()
+                );
+                if summary != self.jam_device_logged {
+                    log::warn!(target: "librespot_connect::jam", "Active device: {summary}");
+                    self.jam_device_logged = summary;
+                }
+            }
+            if cluster.active_device_id != self.session.device_id()
                 && let Some(state) = cluster.player_state.as_ref()
             {
                 let summary = jam_follow::state_summary(state, self.jam_host.as_deref());
@@ -1996,7 +2024,16 @@ impl SpircTask {
         }
         let has_queue = context.pages.iter().any(|page| !page.tracks.is_empty());
         // Which context a Jam plays in, to compare with the host's.
-        log::warn!(target: "librespot_connect::jam", "Jam transfer context {context_uri}");
+        log::warn!(
+            target: "librespot_connect::jam",
+            "Jam transfer context {context_uri}, Jam list of the joined session={}",
+            self.jam_session_seen
+                .as_ref()
+                .map_or("unknown".to_owned(), |(id, _)| context_uri
+                    .strip_prefix(jam_follow::JAM_LIST_PREFIX)
+                    .is_some_and(|list| list == id)
+                    .to_string())
+        );
         let queue_hash = {
             use std::hash::{DefaultHasher, Hash, Hasher};
             let mut hash = DefaultHasher::new();
@@ -2837,6 +2874,9 @@ impl SpircTask {
             && reason != SessionUpdateReason::UNKNOWN_UPDATE_TYPE
         {
             let phase = self.devices.jam_phase().after_session_update(reason);
+            if phase == JamPhase::Left {
+                self.jam_host = None;
+            }
             if self.devices.set_jam_phase(phase) {
                 info!("Jam: {phase:?} after {reason:?}");
             }
@@ -2845,6 +2885,51 @@ impl SpircTask {
             let jam = session_update.session.as_ref().map(jam_session_json);
             self.player
                 .emit_jam_changed_event(phase == JamPhase::Following, jam);
+        }
+
+        // Whether the host can play its Jam's shared queue, `jam-list:<session>`,
+        // as Spotify's app may: asked once per Jam, playback untouched.
+        if let Some(session) = session_update.session.as_ref() {
+            let first = self
+                .jam_session_seen
+                .as_ref()
+                .is_none_or(|(id, _)| id != &session.session_id);
+            if first {
+                self.jam_session_seen = Some((session.session_id.clone(), false));
+            }
+            let host_here =
+                session.host_active_device_id.as_deref() == Some(self.session.device_id());
+            if host_here && let Some((id, probed @ false)) = self.jam_session_seen.as_mut() {
+                *probed = true;
+                let uri = format!("{}{id}", jam_follow::JAM_LIST_PREFIX);
+                let spotify = self.session.clone();
+                let current = self.connect_state.current_track(|t| t.uri.clone());
+                tokio::spawn(async move {
+                    match spotify.spclient().get_context(&uri).await {
+                        Ok(context) => {
+                            let tracks: Vec<_> =
+                                context.pages.iter().flat_map(|page| &page.tracks).collect();
+                            let mut keys: Vec<&str> =
+                                context.metadata.keys().map(String::as_str).collect();
+                            keys.sort_unstable();
+                            log::warn!(
+                                target: "librespot_connect::jam",
+                                "Jam list resolves: pages={} tracks={} first_is_current={} has_current={} meta=[{}]",
+                                context.pages.len(),
+                                tracks.len(),
+                                tracks.first().and_then(|t| t.uri.as_ref()) == Some(&current),
+                                tracks.iter().any(|t| t.uri.as_ref() == Some(&current)),
+                                keys.join(","),
+                            );
+                        }
+                        Err(error) => log::warn!(
+                            target: "librespot_connect::jam",
+                            "Jam list does not resolve: {:?}",
+                            error.kind
+                        ),
+                    }
+                });
+            }
         }
 
         let mut session = match session_update.session.take() {
@@ -2930,7 +3015,10 @@ impl SpircTask {
 
         self.connect_state.set_now(self.now_ms() as u64);
 
-        if self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following {
+        // Spotify's Jam service only takes up states marked as in its Jam.
+        let in_jam = self.jam_host.is_some() || self.devices.jam_phase() == JamPhase::Following;
+        self.connect_state.set_jam_mode(in_jam);
+        if in_jam {
             let summary =
                 jam_follow::state_summary(self.connect_state.player(), self.jam_host.as_deref());
             if summary != self.jam_states_logged.1 {
@@ -3046,6 +3134,8 @@ mod shuffle_tests {
             jam_queue_hash: None,
             jam_host: None,
             jam_states_logged: Default::default(),
+            jam_session_seen: None,
+            jam_device_logged: String::new(),
             update_volume: false,
             update_state: false,
             spirc_id: 0,
@@ -3206,6 +3296,9 @@ mod shuffle_tests {
             ref other => panic!("not loading to play: {other:?}"),
         }
         assert_eq!(task.devices.jam_phase(), JamPhase::Following);
+        // Its state is marked as part of the Jam, as Spotify's app marks it.
+        let modes = &task.connect_state.player().options.modes;
+        assert_eq!(modes.get("jam").map(String::as_str), Some("on"));
         task.player.stop();
     }
 
@@ -3264,6 +3357,15 @@ mod shuffle_tests {
             .await
             .unwrap();
         task.devices.leave_jam();
+        task.notify().await.unwrap();
+        assert!(
+            !task
+                .connect_state
+                .player()
+                .options
+                .modes
+                .contains_key("jam")
+        );
         task.handle_request(jam_transfer(7, 0, false, now))
             .await
             .unwrap();

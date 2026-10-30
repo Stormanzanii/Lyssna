@@ -85,6 +85,77 @@ impl Display for Command {
 
 /// Names a command that didn't parse: its endpoint and top-level keys. The
 /// values are left out, they can carry playback state and account data.
+/// Reads a field Spotify may send as null or in another shape than the
+/// desktop client's (as social-connect does for Jam guests): anything that
+/// does not fit falls back to the default, so the command still parses.
+fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    let value = Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// A transfer option as text, whether sent as a string, a boolean or a
+/// number.
+fn lenient_text<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match Value::deserialize(deserializer)? {
+        Value::String(text) => Some(text),
+        Value::Bool(flag) => Some(flag.to_string()),
+        Value::Number(number) => Some(number.to_string()),
+        _ => None,
+    })
+}
+
+/// A parse error with anything in quotes or backticks replaced, so no
+/// value from the command reaches a log.
+fn redact_quotes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut quote = None;
+    for character in text.chars() {
+        match quote {
+            Some(open) if character == open => {
+                out.push('…');
+                out.push(character);
+                quote = None;
+            }
+            Some(_) => {}
+            None if character == '"' || character == '`' => {
+                out.push(character);
+                quote = Some(character);
+            }
+            None => out.push(character),
+        }
+    }
+    out
+}
+
+/// The JSON shape of a value without its contents, for logs.
+fn shape(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_owned(),
+        Value::Bool(_) => "bool".to_owned(),
+        Value::Number(_) => "number".to_owned(),
+        Value::String(_) => "string".to_owned(),
+        Value::Array(_) => "array".to_owned(),
+        Value::Object(map) => {
+            let mut keys: Vec<String> = map
+                .iter()
+                .map(|(key, value)| match value {
+                    Value::Object(_) => format!("{key}: object"),
+                    other => format!("{key}: {}", shape(other)),
+                })
+                .collect();
+            keys.sort_unstable();
+            format!("{{{}}}", keys.join(", "))
+        }
+    }
+}
+
 pub fn describe_unknown(command: &Value) -> String {
     let Some(object) = command.as_object() else {
         return "non-object command".to_owned();
@@ -93,13 +164,27 @@ pub fn describe_unknown(command: &Value) -> String {
         .get("endpoint")
         .and_then(Value::as_str)
         .unwrap_or("???");
-    let mut keys: Vec<&str> = object
-        .keys()
-        .map(String::as_str)
-        .filter(|key| *key != "endpoint")
+    let mut keys: Vec<String> = object
+        .iter()
+        .filter(|(key, _)| *key != "endpoint")
+        .map(|(key, value)| match (key.as_str(), value) {
+            // Only the shape of data's contents, never the contents.
+            ("data", Value::String(_)) => "data: string".to_owned(),
+            (key, value) => format!("{key}: {}", shape(value)),
+        })
         .collect();
     keys.sort_unstable();
-    format!("endpoint '{endpoint}' with keys [{}]", keys.join(", "))
+    // Why a known endpoint did not parse, with any quoted values removed.
+    let reason = match endpoint {
+        "transfer" => serde_json::from_value::<TransferCommand>(command.clone()).err(),
+        _ => None,
+    }
+    .map(|error| format!(": {}", redact_quotes(&error.to_string())))
+    .unwrap_or_default();
+    format!(
+        "endpoint '{endpoint}' with keys [{}]{reason}",
+        keys.join(", ")
+    )
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -108,11 +193,11 @@ pub struct TransferCommand {
     pub data: Option<TransferState>,
     // Spotify's Jam service (social-connect) leaves these out of the
     // transfers it sends to guests.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub options: TransferOptions,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub from_device_identifier: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -123,14 +208,14 @@ pub struct PlayCommand {
     #[serde(deserialize_with = "json_proto")]
     pub play_origin: PlayOrigin,
     pub options: PlayOptions,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct PauseCommand {
     // does send options with it, but seems to be empty, investigate which options are send here
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -139,7 +224,7 @@ pub struct SeekToCommand {
     pub value: u32,
     #[serde(default)]
     pub position: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -147,14 +232,14 @@ pub struct SeekToCommand {
 pub struct SkipNextCommand {
     #[serde(default, deserialize_with = "option_json_proto")]
     pub track: Option<ProvidedTrack>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SetValueCommand {
     pub value: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -162,7 +247,7 @@ pub struct SetValueCommand {
 pub struct AddToQueueCommand {
     #[serde(deserialize_with = "json_proto")]
     pub track: ProvidedTrack,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -175,7 +260,7 @@ pub struct SetQueueCommand {
     // this queue revision is actually the last revision, so using it will not update the web ui
     // might be that internally they use the last revision to create the next revision
     pub queue_revision: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -186,9 +271,9 @@ pub struct SetOptionsCommand {
     pub repeating_track: Option<bool>,
     pub options: Option<OptionsOptions>,
     /// Session modes, such as `{"jam": "on"}` sent by Spotify's Jam service.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub modes: Option<HashMap<String, String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
@@ -201,19 +286,35 @@ pub struct UpdateContextCommand {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenericCommand {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient")]
     pub logging_params: LoggingParams,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct TransferOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_text",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub restore_paused: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_text",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub restore_position: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_text",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub restore_track: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_text",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub retain_session: Option<String>,
 }
 
@@ -368,8 +469,56 @@ mod tests {
         let described = describe_unknown(value);
         assert_eq!(
             described,
-            "endpoint 'something_new' with keys [data, secret_looking]"
+            "endpoint 'something_new' with keys [data: string, secret_looking: string]"
         );
         assert!(!described.contains("do-not-print"));
+    }
+
+    #[test]
+    fn a_transfer_that_fails_says_why_without_its_values() {
+        let value = json!({"endpoint": "transfer", "data": "not base64 secret!"});
+        let described = describe_unknown(&value);
+        assert!(described.starts_with("endpoint 'transfer' with keys [data: string]: "));
+        assert!(!described.contains("secret"));
+    }
+
+    #[test]
+    fn a_jam_transfer_with_null_or_odd_fields_still_parses() {
+        // Every key present, as social-connect sent it to a SpotiFlex guest,
+        // but in shapes the desktop client never uses.
+        for (options, from, logging) in [
+            (Value::Null, Value::Null, Value::Null),
+            (
+                json!({"retain_session": "retain_original", "restore_paused": true}),
+                json!(""),
+                json!({"command_initiated_time": "1793322390275", "interaction_ids": null}),
+            ),
+            (json!([]), json!(7), json!("none")),
+        ] {
+            let parsed = command(json!({
+                "endpoint": "transfer",
+                "data": "",
+                "options": options,
+                "from_device_identifier": from,
+                "logging_params": logging,
+            }));
+            assert!(
+                matches!(parsed, Command::Transfer(_)),
+                "should be a transfer: {parsed}"
+            );
+        }
+        let Command::Transfer(transfer) = command(json!({
+            "endpoint": "transfer",
+            "options": {"retain_session": "retain_original", "restore_paused": true},
+            "from_device_identifier": null,
+            "logging_params": null,
+        })) else {
+            panic!("should be a transfer");
+        };
+        assert_eq!(
+            transfer.options.retain_session.as_deref(),
+            Some("retain_original")
+        );
+        assert_eq!(transfer.options.restore_paused.as_deref(), Some("true"));
     }
 }

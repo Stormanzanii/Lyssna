@@ -11209,11 +11209,28 @@ test("full screen volume is a pill beside the cover that widens in use", async (
       const box = (await pill.boundingBox())!;
       expect(box.x).toBeGreaterThan(cover.x + cover.width);
       expect(box.height).toBeGreaterThan(cover.height * 0.8);
+    } else {
+      // Beside a Canvas it lies flat under the seek bar, right of the
+      // transport, which starts at the bottom-left.
+      const seek = (await page.locator(".lyrics-glass-seek").boundingBox())!;
+      const buttons = (await page
+        .locator(".lyrics-fullscreen-buttons > button")
+        .last()
+        .boundingBox())!;
+      const like = (await page
+        .locator(".lyrics-fullscreen-like")
+        .boundingBox())!;
+      const box = (await pill.boundingBox())!;
+      expect(box.width).toBeGreaterThan(box.height * 3);
+      expect(box.y).toBeGreaterThan(seek.y + seek.height);
+      expect(box.x).toBeGreaterThan(buttons.x + buttons.width);
+      expect(Math.abs(like.x - seek.x)).toBeLessThan(4);
     }
-    const before = (await pill.boundingBox())!.width;
+    const axis = canvas ? "height" : "width";
+    const before = (await pill.boundingBox())![axis];
     await pill.hover();
     await expect
-      .poll(async () => (await pill.boundingBox())!.width)
+      .poll(async () => (await pill.boundingBox())![axis])
       .toBeGreaterThan(before + 4);
     await page.screenshot({
       path: `target/diagnostics/fullscreen-volume-${canvas ? "canvas" : "album"}.png`,

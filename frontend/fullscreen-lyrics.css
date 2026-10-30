@@ -192,22 +192,33 @@
   width: min(38%, 780px);
   gap: 10px;
 }
-/* Full screen Canvas controls read from across the room, like the fork's
-   Canvas dock: the heart at the left, the transport centred. */
+/* Full screen Canvas controls read from across the room: under the seek
+   bar, the heart and transport run from the bottom-left corner and the
+   volume lies flat at the row's other end. */
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.immersive
+  .canvas-lyrics:not(.narrow)
+  .lyrics-fullscreen-controls
+  > :is(.lyrics-glass-seek, .lyrics-fullscreen-times) {
+  grid-column: 1 / -1;
+}
 .immersive .canvas-lyrics .lyrics-fullscreen-times {
   font-size: 15px;
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-buttons {
-  position: relative;
-  justify-content: center;
-  padding-inline: 64px;
+  justify-content: flex-start;
   margin-top: 14px;
-  gap: clamp(20px, 2.2vw, 44px);
+  gap: clamp(14px, 1.4vw, 28px);
   --transport: clamp(30px, 2.5vw, 46px);
 }
+.immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-buttons {
+  grid-column: 1;
+  grid-row: 3;
+}
 .immersive .canvas-lyrics .lyrics-fullscreen-like {
-  position: absolute;
-  left: 0;
   margin: 0;
 }
 .immersive
@@ -411,10 +422,18 @@
   height: auto;
 }
 .immersive
-  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  :is(
+    .lyrics-fullscreen-volume.below,
+    .narrow .lyrics-fullscreen-volume,
+    .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume
+  )
   .lyrics-volume-pill,
 .immersive
-  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  :is(
+    .lyrics-fullscreen-volume.below,
+    .narrow .lyrics-fullscreen-volume,
+    .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume
+  )
   .lyrics-volume-pill:is(:hover, :has(input:active), :has(:focus-visible)) {
   width: 100%;
   height: var(--pill);
@@ -425,20 +444,32 @@
   height: calc(var(--pill) * 1.35);
 }
 .immersive
-  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  :is(
+    .lyrics-fullscreen-volume.below,
+    .narrow .lyrics-fullscreen-volume,
+    .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume
+  )
   .lyrics-volume-fill {
   inset: 0 auto 0 0;
   width: var(--range, 50%);
   height: auto;
 }
 .immersive
-  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  :is(
+    .lyrics-fullscreen-volume.below,
+    .narrow .lyrics-fullscreen-volume,
+    .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume
+  )
   input {
   writing-mode: horizontal-tb;
   direction: ltr;
 }
 .immersive
-  :is(.lyrics-fullscreen-volume.below, .narrow .lyrics-fullscreen-volume)
+  :is(
+    .lyrics-fullscreen-volume.below,
+    .narrow .lyrics-fullscreen-volume,
+    .canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume
+  )
   .lyrics-volume-icon {
   inset: 0 auto 0 0;
   width: max(30px, calc(var(--pill) * 1.1));
@@ -463,27 +494,23 @@
 .immersive .lyrics-media .lyrics-fullscreen-volume.right {
   right: calc(-10cqw - 24px - var(--pill) * 1.35);
 }
-/* Beside the Canvas, the pill stands past the controls' lyrics-side edge,
-   level with the song details above them. */
-.immersive
-  .canvas-lyrics:not(.narrow)
-  .lyrics-fullscreen-volume:is(.left, .right) {
-  top: auto;
-  bottom: calc(100% + 24px);
-  left: auto;
-  right: calc(-28px - var(--pill) * 1.35);
-  height: min(46vh, 520px);
+/* Beside a Canvas, whichever side is chosen, the flat pill ends the
+   controls row, right of the transport. */
+.immersive .lyrics-page.canvas-lyrics:not(.narrow) .lyrics-fullscreen-volume {
+  --pill: clamp(22px, 1.6vw, 30px);
+  position: static;
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: end;
+  width: clamp(110px, 8vw, 170px);
+  height: auto;
+  margin-top: 14px;
 }
 .immersive
-  .canvas-lyrics.artwork-right:not(.narrow)
-  .lyrics-fullscreen-volume:is(.left, .right) {
-  left: calc(-28px - var(--pill) * 1.35);
-  right: auto;
-}
-.immersive
-  .canvas-lyrics:not(.narrow):has(.lyrics-fullscreen-volume.below)
-  :is(.lyrics-title, .lyrics-artists) {
-  translate: 0 calc(-1.4 * var(--lyrics-dock-lift));
+  .lyrics-page.canvas-lyrics:not(.narrow)
+  .lyrics-fullscreen-volume
+  .lyrics-volume-pill:is(:hover, :has(input:active), :has(:focus-visible)) {
+  height: calc(var(--pill) * 1.35);
 }
 /* Transport as the fork's: filled rounded glyphs, the skips double
    triangles; the others dim while one is hovered, and a press shrinks. */

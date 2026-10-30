@@ -123,10 +123,12 @@ export const FullScreenIcon = () => (
  *  own. The pixels-spicy-lyrics fork's `ExternalCinema` icon, as written
  *  (`src/components/Styling/Icons.ts`, AGPL-3.0). */
 export const CinemaIcon = () => (
+  // The glyph runs from y 4 to 21.5; the box is moved down 0.75 so it
+  // sits centred like its neighbours.
   <svg
     width="22"
     height="22"
-    viewBox="0 0 24 24"
+    viewBox="0 0.75 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"

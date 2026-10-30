@@ -199,7 +199,7 @@
     :has(:focus-visible),
     [data-always-show]
   ) {
-  --lyrics-dock-lift: calc(64px + var(--canvas-transport) * 1.6);
+  --lyrics-dock-lift: calc(var(--canvas-transport) * 3.1);
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
@@ -269,7 +269,7 @@
   bottom: calc(30px + var(--canvas-transport) * 0.9);
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-title .song-title {
-  font-size: calc(var(--canvas-transport) * 1.25);
+  font-size: calc(var(--canvas-transport) * 0.75);
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-artists {
   bottom: 30px;

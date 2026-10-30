@@ -40,6 +40,19 @@ pub struct Jam {
     /// When Spotify last changed the Jam, so an older reply can't undo a
     /// newer report.
     pub timestamp: i64,
+    /// Whether Spotify asks this computer to send playback commands to the
+    /// Jam rather than play them itself; `None` when the session doesn't say.
+    #[serde(skip)]
+    pub redirect_commands: Option<bool>,
+}
+
+impl Jam {
+    /// Whether this computer's playback commands go to the Jam, which passes
+    /// them on to everyone in it. When Spotify doesn't say, guests send
+    /// theirs and the host plays its own.
+    pub fn redirects_commands(&self) -> bool {
+        self.redirect_commands.unwrap_or(!self.is_owner)
+    }
 }
 
 /// Session IDs and join tokens go into request paths and the invite link.
@@ -109,7 +122,53 @@ pub fn parse(session: &Value) -> Option<Jam> {
             .as_i64()
             .or_else(|| session["timestamp"].as_str()?.parse().ok())
             .unwrap_or_default(),
+        // Spotify's web player reads `redirectCommands`; protobuf JSON names
+        // it `redirect_commands`.
+        redirect_commands: session["redirectCommands"]
+            .as_bool()
+            .or_else(|| session["redirect_commands"].as_bool()),
     })
+}
+
+/// Fills in whether the Jam wants this computer's playback commands from
+/// the account's current session, where Spotify's apps read it, when the
+/// reply at hand didn't say.
+async fn with_redirect_flag(session: &Session, mut jam: Jam) -> Jam {
+    if jam.redirect_commands.is_none()
+        && let Ok(Some(current)) = call(session, Method::GET, "/v2/sessions/current").await
+        && let Some(current) = parse(&current)
+        && current.session_id == jam.session_id
+    {
+        jam.redirect_commands = current.redirect_commands;
+    }
+    jam
+}
+
+/// Sends a playback command to the Jam, as Spotify's apps do when the Jam
+/// asks for it: the Jam passes it on to everyone in it, this computer
+/// included. `false` when the Jam has ended.
+pub async fn redirect(session: &Session, session_id: &str, command: &Value) -> Result<bool> {
+    let id = token(session_id).context("Invalid Jam")?;
+    let device = token(session.device_id()).context("Invalid device ID")?;
+    let body = serde_json::to_vec(&serde_json::json!({ "command": command }))?;
+    let mut headers = header::HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "application/json".parse()?);
+    let response = tokio::time::timeout(
+        Duration::from_secs(10),
+        session.spclient().request(
+            &Method::POST,
+            &format!("/social-connect/v2/sessions/{id}/commands/from/{device}"),
+            Some(headers),
+            Some(&body),
+        ),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Spotify Jam timed out"))?;
+    match response {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind == ErrorKind::NotFound => Ok(false),
+        Err(error) => anyhow::bail!("Spotify Jam refused the command ({:?})", error.kind),
+    }
 }
 
 /// Spotify's own short invite link, as its share sheet makes it.
@@ -219,7 +278,10 @@ pub async fn current(session: &Session) -> Result<Option<Jam>> {
         .await?
         .and_then(|status| parse(&status["session"]))
         {
-            Some(jam) => Some(with_short_link(session, jam).await),
+            Some(jam) => {
+                let jam = with_redirect_flag(session, jam).await;
+                Some(with_short_link(session, jam).await)
+            }
             None => None,
         },
     )
@@ -242,6 +304,7 @@ pub async fn start(session: &Session) -> Result<Jam> {
     let jam = started
         .and_then(parse)
         .context("Spotify could not start a Jam")?;
+    let jam = with_redirect_flag(session, jam).await;
     Ok(with_short_link(session, jam).await)
 }
 
@@ -359,6 +422,7 @@ pub async fn join(session: &Session, join_token: &str) -> Result<Jam> {
     .as_ref()
     .and_then(parse)
     .context("That Jam has ended")?;
+    let jam = with_redirect_flag(session, jam).await;
     Ok(with_short_link(session, jam).await)
 }
 
@@ -418,8 +482,32 @@ mod tests {
         );
         assert!(jam.qr_svg.starts_with("<?xml") && jam.qr_svg.contains("<svg"));
         assert!(jam.is_owner && !jam.queue_only);
+        // Spotify didn't say: the host plays its own commands.
+        assert_eq!(jam.redirect_commands, None);
+        assert!(!jam.redirects_commands());
         assert_eq!(jam.members.len(), 2);
         assert_eq!(jam.members[1].image_url, None);
+    }
+
+    #[test]
+    fn the_jam_decides_whose_commands_it_takes() {
+        let session = |extra: Value| {
+            let mut session = json!({
+                "session_id": "abc123",
+                "join_session_token": "token",
+                "is_session_owner": false,
+            });
+            if let (Some(session), Some(extra)) = (session.as_object_mut(), extra.as_object()) {
+                session.extend(extra.clone());
+            }
+            parse(&session).unwrap()
+        };
+        // A guest sends its commands to the Jam unless told otherwise.
+        assert!(session(json!({})).redirects_commands());
+        assert!(!session(json!({"redirectCommands": false})).redirects_commands());
+        // Spotify's word wins, in either spelling, for hosts too.
+        let host = session(json!({"is_session_owner": true, "redirect_commands": true}));
+        assert!(host.redirects_commands());
     }
 
     #[test]

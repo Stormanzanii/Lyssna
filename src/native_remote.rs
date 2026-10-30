@@ -170,11 +170,7 @@ impl NativeControls {
                         session.device_id()
                     );
                     let command = command_body(&action)?;
-                    let mut nonce = [0u8; 16];
-                    getrandom::fill(&mut nonce)
-                        .map_err(|_| anyhow::anyhow!("Cannot prepare Spotify playback command"))?;
-                    let intent_id: String =
-                        nonce.iter().map(|byte| format!("{byte:02x}")).collect();
+                    let intent_id = random_hex()?;
                     let body = encode_command(&command, &intent_id)?;
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
@@ -208,6 +204,40 @@ impl NativeControls {
 /// Spotify Connect volume runs from 0 to 65535.
 fn remote_volume(percent: u8) -> i32 {
     i32::from(percent.min(100)) * 65535 / 100
+}
+
+fn random_hex() -> Result<String> {
+    let mut nonce = [0u8; 16];
+    getrandom::fill(&mut nonce)
+        .map_err(|_| anyhow::anyhow!("Cannot prepare Spotify playback command"))?;
+    Ok(nonce.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+/// A playback command as a Jam's members send it to the Jam, which passes it
+/// on to everyone in it, as Spotify's apps do. Volume and moving playback
+/// between devices stay with each device; `None` for those.
+pub(crate) fn jam_command(action: &PlayerAction) -> Option<Value> {
+    let mut command = match action {
+        // Songs from a playlist or album start in it, so the Jam plays on
+        // through it.
+        PlayerAction::PlayUris {
+            uris,
+            offset,
+            context: Some(context),
+        } => {
+            let track = uris.get(*offset)?;
+            valid_track(track).ok()?;
+            command_body(&PlayerAction::PlayContext {
+                context: context.clone(),
+                offset: Some(track.clone()),
+            })
+            .ok()?
+        }
+        PlayerAction::Volume(_) => return None,
+        action => command_body(action).ok()?,
+    };
+    command["logging_params"] = json!({ "command_id": random_hex().ok()? });
+    Some(command)
 }
 
 fn encode_command(command: &Value, intent_id: &str) -> Result<Vec<u8>> {
@@ -399,6 +429,33 @@ mod tests {
             uri
         );
     }
+    #[test]
+    fn jam_commands_carry_an_id_and_keep_volume_here() {
+        let pause = jam_command(&PlayerAction::Pause).unwrap();
+        assert_eq!(pause["endpoint"], "pause");
+        assert_eq!(
+            pause["logging_params"]["command_id"]
+                .as_str()
+                .unwrap()
+                .len(),
+            32
+        );
+        assert!(jam_command(&PlayerAction::Volume(40)).is_none());
+        assert!(jam_command(&PlayerAction::Transfer("device".into())).is_none());
+        assert!(jam_command(&PlayerAction::ClearQueue).is_none());
+
+        let track = "spotify:track:0000000000000000000001";
+        let play = jam_command(&PlayerAction::PlayUris {
+            uris: vec!["spotify:track:0000000000000000000000".into(), track.into()],
+            offset: 1,
+            context: Some("spotify:playlist:abc".into()),
+        })
+        .unwrap();
+        assert_eq!(play["endpoint"], "play");
+        assert_eq!(play["context"]["uri"], "spotify:playlist:abc");
+        assert_eq!(play["options"]["skip_to"]["track_uri"], track);
+    }
+
     #[test]
     fn context_play_carries_the_url_alexa_speakers_require() {
         // Live: Spotify answered 403 `command_not_allowed` for an Echo until

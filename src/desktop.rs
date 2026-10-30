@@ -91,6 +91,9 @@ struct Inner {
     generation: Mutex<u64>,
     last_native: Mutex<Option<Instant>>,
     pending_track: Mutex<Option<(String, Instant)>>,
+    /// The Jam this computer sends its playback commands to, when the Jam
+    /// asks for them.
+    jam_commands: Mutex<Option<String>>,
     /// Click-to-audio timing for the last local selection, by page kind.
     start_timing: Mutex<Option<(String, Instant, &'static str)>>,
     /// Local playback requested before native audio connected.
@@ -341,6 +344,7 @@ impl Desktop {
             generation: Mutex::new(0),
             last_native: Mutex::new(None),
             pending_track: Mutex::new(None),
+            jam_commands: Mutex::new(None),
             start_timing: Mutex::new(None),
             queued_native: Mutex::new(None),
             login_cancelled: Mutex::new(Arc::new(AtomicBool::new(false))),
@@ -1953,6 +1957,20 @@ fn player(
         if local && let Some(profile) = snapshot.profile.as_ref() {
             action = liked_from_collection(action, request.context.as_deref(), &profile.id);
         }
+        // In a Jam that asks for them, commands go to the Jam, which passes
+        // them on to everyone in it, this computer included, as Spotify's
+        // apps do. Played here alone, no one else would hear them.
+        if request.command != "dj"
+            && let Some(jam) = lock(&state.0.jam_commands)?.clone()
+            && let Some(command) = crate::native_remote::jam_command(&action)
+        {
+            drop(snapshot);
+            let inner = state.0.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                send_to_jam(&app, &inner, &jam, &command, action);
+            });
+            return Ok(());
+        }
         if local
             && matches!(action, PlayerAction::Play(None))
             && !state.0.controls.has_track()
@@ -2201,6 +2219,46 @@ fn player(
         Ok(())
     };
     result().map_err(error)
+}
+/// Sends a playback command to the Jam. Refused, or with the Jam gone, it
+/// plays on this computer instead.
+fn send_to_jam(
+    app: &tauri::AppHandle,
+    inner: &Inner,
+    jam: &str,
+    command: &serde_json::Value,
+    action: PlayerAction,
+) {
+    let endpoint = command["endpoint"].as_str().unwrap_or_default();
+    let sent = inner
+        .controls
+        .run(async |session| crate::jam::redirect(session, jam, command).await);
+    crate::native::diagnostic(&format!(
+        "jam command {endpoint}: {}",
+        match &sent {
+            Ok(true) => "sent".to_owned(),
+            Ok(false) => "the Jam has ended".to_owned(),
+            Err(error) => format!("{error}"),
+        }
+    ));
+    if matches!(sent, Ok(true)) {
+        return;
+    }
+    if matches!(sent, Ok(false))
+        && let Ok(mut current) = inner.jam_commands.lock()
+        && current.as_deref() == Some(jam)
+    {
+        *current = None;
+    }
+    let message = if inner.controls.send(action).is_ok() {
+        "The Jam didn't take that, so it played only here."
+    } else {
+        "The Jam didn't take that. Try again."
+    };
+    let _ = app.emit(
+        "spotiflex",
+        json!({"type":"notice","message":message,"error":true}),
+    );
 }
 #[tauri::command]
 fn retry_audio(state: State<'_, Desktop>) -> std::result::Result<(), String> {
@@ -2498,6 +2556,7 @@ async fn jam(
 ) -> std::result::Result<Option<crate::jam::Jam>, String> {
     let account = signed_in_account(&state).map_err(error)?;
     let controls = state.0.controls.scoped(&account).map_err(error)?;
+    let inner = state.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // A Jam link from Spotify or SpotiFlex, short or long.
         let join = match (action.as_str(), link.as_deref()) {
@@ -2567,6 +2626,31 @@ async fn jam(
             let sent = controls.send(PlayerAction::HostJam(session_id)).is_ok();
             if action != "current" {
                 crate::native::diagnostic(&format!("jam host: hosting={hosting} sent={sent}"));
+            }
+        }
+        // Where play, pause, skips and song picks go while in the Jam.
+        let route = match (action.as_str(), &result) {
+            ("start" | "join" | "current" | "control", Ok(Some(jam))) => {
+                Some((jam.redirects_commands(), Some(jam)))
+            }
+            ("current", Ok(None)) | ("end" | "leave", Ok(_)) => Some((false, None)),
+            _ => None,
+        };
+        if let Some((redirect, jam)) = route
+            && let Ok(mut current) = inner.jam_commands.lock()
+        {
+            let next = jam.filter(|_| redirect).map(|jam| jam.session_id.clone());
+            if *current != next {
+                let said = match jam.and_then(|jam| jam.redirect_commands) {
+                    Some(true) => "yes",
+                    Some(false) => "no",
+                    None => "nothing",
+                };
+                crate::native::diagnostic(&format!(
+                    "jam commands: through the Jam={} (Spotify said {said})",
+                    next.is_some()
+                ));
+                *current = next;
             }
         }
         result

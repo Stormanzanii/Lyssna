@@ -3659,13 +3659,20 @@ fn trim_memory(window: tauri::WebviewWindow) {
         }
     });
 }
+/// Asks a running SpotiFlex to exit instead of hiding to the tray.
+pub const QUIT_ARG: &str = "--quit";
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_window_state::StateFlags;
     let app = tauri::Builder::default()
         // Opening SpotiFlex again, as from the Start menu while it sits in
         // the tray, shows the running window instead of a second copy.
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            // `--quit` from the build script closes the running copy fully,
+            // tray included, so the new build can take its place.
+            if args.iter().any(|argument| argument == QUIT_ARG) {
+                app.exit(0);
+            } else if let Some(window) = app.get_webview_window("main") {
                 set_window_shown(&window, true);
             }
         }))
@@ -3675,6 +3682,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .setup(|app| {
+            // Nothing was running to quit: this copy has nothing to do.
+            if std::env::args().any(|argument| argument == QUIT_ARG) {
+                std::process::exit(0);
+            }
             #[cfg(target_os = "macos")]
             app.set_menu(tauri::menu::Menu::default(app.handle())?)?;
             if let Some(window) = app.get_webview_window("main") {

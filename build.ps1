@@ -149,11 +149,30 @@ function Stop-InstalledSpotiFlex {
         return
     }
 
-    # Ask the window to close first so SpotiFlex can save its state.
+    # Ask SpotiFlex to quit first so it can save its state. Closing the
+    # window alone only hides it to the tray when music keeps playing, so
+    # `--quit` reaches the running copy and exits it fully; builds without it
+    # still get the window close.
     foreach ($process in $processes) {
         $running = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
         if ($running) {
             Write-Host "Closing installed SpotiFlex (PID $($process.ProcessId))."
+        }
+    }
+    $quitter = Start-Process -FilePath $processes[0].ExecutablePath -ArgumentList '--quit' -PassThru -ErrorAction SilentlyContinue
+    if ($quitter) {
+        [void]$quitter.WaitForExit(5000)
+    }
+    $deadline = (Get-Date).AddSeconds(3)
+    do {
+        if (-not @($processes | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })) {
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    } while ((Get-Date) -lt $deadline)
+    foreach ($process in $processes) {
+        $running = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+        if ($running) {
             [void]$running.CloseMainWindow()
         }
     }

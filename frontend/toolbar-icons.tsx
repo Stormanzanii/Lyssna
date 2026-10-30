@@ -124,8 +124,8 @@ export const FullScreenIcon = () => (
  *  (`src/components/Styling/Icons.ts`, AGPL-3.0). */
 export const CinemaIcon = () => (
   <svg
-    width="19"
-    height="19"
+    width="22"
+    height="22"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -144,8 +144,8 @@ export const CinemaIcon = () => (
  *  fork's `PiPMode` icon, as written (AGPL-3.0). */
 export const PopoutIcon = () => (
   <svg
-    width="16"
-    height="16"
+    width="17"
+    height="17"
     viewBox="0 0 16 16"
     fill="currentColor"
     aria-hidden="true"

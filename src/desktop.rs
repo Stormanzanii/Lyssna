@@ -3068,7 +3068,8 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     "[data-profile-variant]{--profile-banner-h:5rem!important}" +
     "[data-profile-variant]>[aria-hidden=true][class*=profile-banner-h]{display:none!important}" +
     // Spotify's profile header: avatar beside the name, the views one line under it.
-    ".profile-hero{min-height:0!important}" +
+    ".profile-hero{min-height:0!important;overflow:visible!important}" +
+    ".profile-hero-identity>header>div>div:empty{display:none}" +
     ".profile-hero-identity{grid-template-columns:auto minmax(0,1fr)!important;column-gap:1.75rem!important;row-gap:.875rem!important;align-items:end!important;padding-top:2.5rem!important;padding-bottom:2rem!important}" +
     ".profile-hero-identity>header{display:contents!important}" +
     ".profile-hero-identity .profile-avatar{grid-column:1;grid-row:1/span 2;align-self:center;width:clamp(6rem,17vw,11.5rem)!important;height:clamp(6rem,17vw,11.5rem)!important}" +
@@ -3083,9 +3084,7 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     ".profile-hero-identity .profile-figure{font-size:1rem!important;letter-spacing:0!important}" +
     ".profile-stats-cta{padding:.375rem .875rem!important;font-size:.8125rem!important}" +
     ".profile-aura{left:7rem!important;top:50%!important}" +
-    ".profile-spotlight ol{grid-template-columns:repeat(3,minmax(0,11.5rem))!important}" +
-    ".profile-spot{max-width:11.5rem!important}" +
-    ".profile-spot .text-5xl{font-size:2rem!important}";
+    ".profile-spotlight{display:none!important}";
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });

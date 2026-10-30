@@ -166,7 +166,7 @@ THE SOFTWARE.
 
 ## Metropolis
 
-The interface typeface is [Metropolis](https://github.com/chrismsimpson/Metropolis) by Chris Simpson, bundled from the `@fontsource/metropolis` package. It is released into the public domain under the [Unlicense](https://unlicense.org/).
+The interface typeface is [Metropolis](https://github.com/chrismsimpson/Metropolis) by Chris Simpson, bundled from the `@fontsource/metropolis` package. Four of its Latin weights are also copied into `assets/fonts/` for the creator profile window. It is released into the public domain under the [Unlicense](https://unlicense.org/).
 
 ## Inter
 

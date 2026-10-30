@@ -3063,6 +3063,11 @@ const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreen
 /// profile reached without it, after the site's verification check or a
 /// `/uid/` link, is opened again with it.
 const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
+  const fonts = document.createElement("style");
+  fonts.textContent = PROFILE_FONTS;
+  const addFonts = () => (document.head || document.documentElement).appendChild(fonts);
+  if (document.documentElement) addFonts();
+  else document.addEventListener("DOMContentLoaded", addFonts, { once: true });
   const style = document.createElement("style");
   style.textContent = "*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}" +
     "[data-profile-variant]{--profile-banner-h:5rem!important}" +
@@ -3077,6 +3082,8 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     ".profile-hero-identity>header>div::before{content:'Profile';font-size:.875rem;font-weight:600}" +
     ".profile-name{font-size:clamp(2rem,calc(var(--name-vw,9vw)*.7),5.5rem)!important;max-width:none!important}" +
     ".profile-hero-identity>section{grid-column:2;grid-row:2;flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:.375rem .875rem!important}" +
+    ".profile-hero-identity>section>*{margin:0!important;line-height:1!important}" +
+    ".profile-hero-identity>section dd,.profile-hero-identity>section dt{line-height:1!important}" +
     ".profile-hero-identity>section .stats-label{font-size:.6875rem}" +
     ".profile-hero-identity>section dl{display:flex!important;flex-wrap:wrap;align-items:baseline;gap:.625rem!important;text-align:left!important}" +
     ".profile-hero-identity>section dl>div{flex-direction:row-reverse!important;align-items:baseline;gap:.3rem!important}" +
@@ -3108,6 +3115,45 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
   addEventListener("popstate", chromeless);
   chromeless();
 })();"#;
+/// The profile script with SpotiFlex's Metropolis in place of the site's
+/// typefaces. The page is remote, so the faces travel inside the script.
+fn profile_window_script() -> &'static str {
+    static SCRIPT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let faces: [(u16, &[u8]); 4] = [
+            (
+                400,
+                include_bytes!("../assets/fonts/metropolis-latin-400-normal.woff2"),
+            ),
+            (
+                500,
+                include_bytes!("../assets/fonts/metropolis-latin-500-normal.woff2"),
+            ),
+            (
+                600,
+                include_bytes!("../assets/fonts/metropolis-latin-600-normal.woff2"),
+            ),
+            (
+                700,
+                include_bytes!("../assets/fonts/metropolis-latin-700-normal.woff2"),
+            ),
+        ];
+        let mut css = String::new();
+        for (weight, font) in faces {
+            css += &format!(
+                "@font-face{{font-family:SpotiFlexMetropolis;font-weight:{weight};font-display:block;src:url(data:font/woff2;base64,{}) format('woff2')}}",
+                STANDARD.encode(font)
+            );
+        }
+        css += "body,body *:not(svg):not(svg *){font-family:SpotiFlexMetropolis,\"Segoe UI\",sans-serif!important}";
+        PROFILE_WINDOW_SCRIPT.replacen(
+            "PROFILE_FONTS",
+            &serde_json::Value::String(css).to_string(),
+            1,
+        )
+    });
+    &SCRIPT
+}
 /// Cinema Lyrics, as the pixels-spicy-lyrics fork's: the full screen lyrics
 /// in a normal window of their own, framed so it moves, resizes and maximizes
 /// like any other, and remembered where it was last left. The button toggles
@@ -3230,7 +3276,7 @@ async fn open_creator_profile(
                 .visible(false)
                 .parent(&main)?
                 .additional_browser_args(BROWSER_ARGS)
-                .initialization_script(PROFILE_WINDOW_SCRIPT)
+                .initialization_script(profile_window_script())
                 .on_navigation(|url| {
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
                 })
@@ -4201,6 +4247,13 @@ mod tests {
             creator_profile_url("Name#1234").unwrap().as_str(),
             "https://spicylyrics.org/Name%231234?_state=%7B%22mp%22%3Atrue%7D"
         );
+    }
+    #[test]
+    fn creator_profiles_carry_the_app_typeface() {
+        let script = profile_window_script();
+        assert!(!script.contains("PROFILE_FONTS"));
+        assert_eq!(script.matches("@font-face").count(), 4);
+        assert!(script.contains("font-family:SpotiFlexMetropolis"));
     }
     #[test]
     fn local_playlist_selection_uses_the_chosen_loaded_track() {

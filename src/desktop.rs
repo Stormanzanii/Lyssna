@@ -114,6 +114,8 @@ fn restore_playback(snapshot: &mut Snapshot, value: crate::resume::LastPlayed) {
     snapshot.playback.item = Some(value.track);
     snapshot.playback.progress_ms = Some(value.position_ms);
     snapshot.playback.is_playing = false;
+    snapshot.playback.shuffle_state = snapshot.settings.shuffle;
+    snapshot.playback.repeat_state = snapshot.settings.repeat.clone();
     snapshot.playback.device = Device {
         name: native::device_name(),
         volume_percent: Some(snapshot.settings.volume_percent.min(100)),
@@ -309,6 +311,8 @@ impl Desktop {
                         volume_percent: Some(settings.volume_percent.min(100)),
                         ..Device::default()
                     },
+                    shuffle_state: settings.shuffle,
+                    repeat_state: settings.repeat.clone(),
                     ..Playback::default()
                 },
                 settings: settings.clone(),
@@ -1194,6 +1198,23 @@ impl Desktop {
                         }
                         // Only this computer's player loads queues, so its
                         // context is the one playing; the track may follow.
+                        // Kept for other playlists and the next launch.
+                        NativeEvent::Modes(modes) => {
+                            snapshot.settings.shuffle = modes.shuffle;
+                            snapshot.settings.repeat = modes.repeat.clone();
+                            if let Err(error) = snapshot.settings.save() {
+                                log::warn!("Cannot save shuffle and repeat: {error:#}");
+                            }
+                            // Before this computer plays, Spirc reports nothing.
+                            let device = &snapshot.playback.device.name;
+                            if device.is_empty() || *device == native::device_name() {
+                                snapshot.playback.shuffle_state = modes.shuffle;
+                                snapshot.playback.repeat_state = modes.repeat;
+                                emit(
+                                    json!({"type":"playback","playback":snapshot.playback,"observed_at":snapshot.observed_at,"changed":false}),
+                                );
+                            }
+                        }
                         NativeEvent::Context(uri) => {
                             snapshot.playback.context = (!uri.is_empty()).then_some(uri);
                             emit(
@@ -2385,6 +2406,9 @@ fn save_settings(
         settings.client_id = snapshot.settings.client_id.clone();
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
+        // The player keeps these; the settings window may hold old ones.
+        settings.shuffle = snapshot.settings.shuffle;
+        settings.repeat = snapshot.settings.repeat.clone();
         settings.lyric_size = settings.lyric_size.clamp(18.0, 72.0);
         // 0 came from the earlier slider, where it meant off.
         settings.crossfade_seconds = match settings.crossfade_seconds {

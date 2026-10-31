@@ -114,6 +114,8 @@ pub enum NativeEvent {
     DJContext(bool),
     /// The playlist, album, artist or collection URI now playing.
     Context(String),
+    /// Shuffle or repeat changed outside DJ, to keep for later.
+    Modes(PlayModes),
     Track(Box<crate::model::Track>),
     Transport {
         shuffle: Option<bool>,
@@ -1118,15 +1120,14 @@ fn remember_player_queue(account: &str, event: PlayerEvent) {
 mod dj_queue_tests {
     use super::*;
     #[test]
-    fn repeat_chosen_before_playback_waits_for_the_next_load() {
-        let mut pending = None;
-        // Not playing yet: Spirc would drop it, so it is held.
-        assert!(!send_repeat_now("track", false, &mut pending));
-        assert_eq!(pending.as_deref(), Some("track"));
-        // Once playing it goes at once and nothing stays held, so a change
-        // from another Spotify client is not overwritten later.
-        assert!(send_repeat_now("context", true, &mut pending));
-        assert!(pending.is_none());
+    fn skipping_a_song_on_repeat_one_repeats_the_playlist() {
+        let mut modes = PlayModes::new(true, "track");
+        assert!(modes.skipped());
+        assert_eq!(modes, PlayModes::new(true, "context"));
+        assert!(!modes.skipped());
+        let mut off = PlayModes::new(false, "off");
+        assert!(!off.skipped());
+        assert_eq!(PlayModes::new(false, "loop").repeat, "off");
     }
     #[test]
     fn shuffled_playlist_queue_is_saved_in_its_live_order() {
@@ -1247,18 +1248,26 @@ fn listed_context(uri: &str, uris: &[String]) -> librespot_protocol::context::Co
     }
 }
 
-fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
-    // DJ narration and music must retain their supplied order when a normal
-    // playlist was previously shuffled. Other loads inherit Connect options.
-    let ordered_dj = matches!(
+/// DJ narration and music keep their supplied order.
+fn is_ordered(action: &PlayerAction) -> bool {
+    matches!(
         action,
         PlayerAction::PreparedDJ { .. } | PlayerAction::RestoreDJ { .. }
-    ) || matches!(action, PlayerAction::PlayContext { context, .. } if is_dj_context(context));
+    ) || matches!(action, PlayerAction::PlayContext { context, .. } if is_dj_context(context))
+}
+
+fn load_request(action: &PlayerAction, modes: &PlayModes) -> Option<LoadRequest> {
+    // DJ starts in order with repeat off; everything else with the chosen
+    // shuffle and repeat.
+    let context_options = Some(if is_ordered(action) {
+        librespot_connect::LoadContextOptions::Options(Default::default())
+    } else {
+        modes.options()
+    });
     let options = |playing_track| LoadRequestOptions {
         start_playing: true,
         playing_track,
-        context_options: ordered_dj
-            .then(|| librespot_connect::LoadContextOptions::Options(Default::default())),
+        context_options: context_options.clone(),
         ..LoadRequestOptions::default()
     };
     Some(match action {
@@ -1405,24 +1414,65 @@ async fn prepare_resume(
     })
 }
 
-/// Whether a repeat choice can go to Spirc now. Spirc ignores commands
-/// until this computer plays, and the next load would start with repeat
-/// off while the controls still show it on; so until then the choice is
-/// held for that load.
-fn send_repeat_now(state: &str, active: bool, pending: &mut Option<String>) -> bool {
-    *pending = (!active).then(|| state.to_owned());
-    active
+/// Shuffle and repeat as the listener last chose them. Every playlist,
+/// album or song list starts with them, as in Spotify, and they outlast a
+/// restart; DJ keeps its own order and doesn't change them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayModes {
+    pub shuffle: bool,
+    /// "off", "context" or "track".
+    pub repeat: String,
+}
+
+impl PlayModes {
+    pub fn new(shuffle: bool, repeat: &str) -> Self {
+        let repeat = if ["context", "track"].contains(&repeat) {
+            repeat
+        } else {
+            "off"
+        };
+        Self {
+            shuffle,
+            repeat: repeat.into(),
+        }
+    }
+
+    fn saved() -> Self {
+        crate::config::Settings::load()
+            .map(|settings| Self::new(settings.shuffle, &settings.repeat))
+            .unwrap_or_else(|_| Self::new(false, "off"))
+    }
+
+    fn options(&self) -> librespot_connect::LoadContextOptions {
+        librespot_connect::LoadContextOptions::Options(librespot_connect::Options {
+            shuffle: self.shuffle,
+            repeat: self.repeat == "context",
+            repeat_track: self.repeat == "track",
+        })
+    }
+
+    /// Skipping a song on repeat one moves on to repeating the playlist,
+    /// as Spotify does. Whether it changed.
+    fn skipped(&mut self) -> bool {
+        let changed = self.repeat == "track";
+        if changed {
+            self.repeat = "context".into();
+        }
+        changed
+    }
 }
 
 fn apply_control(
     spirc: &Spirc,
     action: PlayerAction,
     active: &mut bool,
-    pending_repeat: &mut Option<String>,
+    modes: &mut PlayModes,
+    ordered: &mut bool,
 ) -> Result<()> {
-    if let Some(request) = load_request(&action) {
+    if let Some(request) = load_request(&action, modes) {
         spirc.activate()?;
         *active = true;
+        *ordered = is_ordered(&action);
         spirc.load(request)?;
         // Spirc handles commands in order, so the restored queue follows the
         // loaded song.
@@ -1433,10 +1483,6 @@ fn apply_control(
                 }
             }
         }
-        if let Some(state) = pending_repeat.take() {
-            spirc.repeat(state == "context")?;
-            spirc.repeat_track(state == "track")?;
-        }
         return Ok(());
     }
     if !*active && matches!(action, PlayerAction::Play(None)) {
@@ -1446,8 +1492,16 @@ fn apply_control(
     match action {
         PlayerAction::Play(None) => spirc.play()?,
         PlayerAction::Pause => spirc.pause()?,
-        PlayerAction::Next => spirc.next()?,
-        PlayerAction::SkipTo(uri) => spirc.next_to(uri)?,
+        PlayerAction::Next | PlayerAction::SkipTo(_) => {
+            if *active && !*ordered && modes.skipped() {
+                spirc.repeat_track(false)?;
+                spirc.repeat(true)?;
+            }
+            match action {
+                PlayerAction::SkipTo(uri) => spirc.next_to(uri)?,
+                _ => spirc.next()?,
+            }
+        }
         PlayerAction::Previous => spirc.prev()?,
         PlayerAction::Seek(position) => {
             spirc.set_position_ms(position.min(u32::MAX as u64) as u32)?
@@ -1455,11 +1509,19 @@ fn apply_control(
         PlayerAction::Volume(volume) => {
             spirc.set_volume((u32::from(volume.min(100)) * u32::from(u16::MAX) / 100) as u16)?
         }
-        PlayerAction::Shuffle(enabled) => spirc.shuffle(enabled)?,
+        // Spirc ignores these until this computer plays; the next load
+        // starts with them either way.
+        PlayerAction::Shuffle(enabled) => {
+            modes.shuffle = enabled;
+            if *active {
+                spirc.shuffle(enabled)?;
+            }
+        }
         PlayerAction::Repeat(state) => {
-            if send_repeat_now(&state, *active, pending_repeat) {
-                spirc.repeat(state == "context")?;
-                spirc.repeat_track(state == "track")?;
+            *modes = PlayModes::new(modes.shuffle, &state);
+            if *active {
+                spirc.repeat(modes.repeat == "context")?;
+                spirc.repeat_track(modes.repeat == "track")?;
             }
         }
         PlayerAction::Enqueue(uri) => spirc.add_to_queue(queue_uri(&uri)?)?,
@@ -2296,7 +2358,8 @@ async fn run(
     emit(NativeEvent::Ready(session.device_id().to_owned()));
     let _ = spirc.prewarm_dj();
     let mut active = false;
-    let mut pending_repeat = None;
+    let mut modes = PlayModes::saved();
+    let mut ordered = false;
     let mut audio_playing = false;
     let mut intent = crate::playback_intent::PlaybackIntent::default();
     // While following a Jam its host decides play and pause; songs it loads
@@ -2366,7 +2429,9 @@ async fn run(
                 }else{
                 if matches!(action,PlayerAction::Play(Some(_))|PlayerAction::PreparedDJ{..}|PlayerAction::PlayUris{..}|PlayerAction::Resume{..}|PlayerAction::PlayContext{..}|PlayerAction::RestoreDJ{..}){paused_position=None;intent.loading_track(selected_track(&action),std::time::Instant::now());load_due=Some(std::time::Instant::now()+LOAD_TIMEOUT);}
                 if let PlayerAction::Volume(volume)=&action{mixer.set_volume((u32::from((*volume).min(100))*u32::from(u16::MAX)/100)as u16);emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some((*volume).min(100))});}
-                if apply_control(&spirc, action, &mut active, &mut pending_repeat).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }}
+                let before=modes.clone();
+                if apply_control(&spirc, action, &mut active, &mut modes, &mut ordered).is_err() {loaded.store(false,Ordering::Release);intent.reset(); emit(NativeEvent::ControlError("Native playback command failed. Reconnect native audio in Settings.".into())); }
+                if modes!=before{emit(NativeEvent::Modes(modes.clone()));}}
             }
             event = player_events.recv() => {
                 if let Some((kind, uri)) = event.as_ref().and_then(event_summary) {
@@ -2380,15 +2445,24 @@ async fn run(
                             *queue = Some(next_tracks.iter().take(50).map(|track| QueueEntry { uri: track.uri.clone(), added: track.provider == "queue" }).collect());
                         }
                         if let PlayerEvent::SetQueue { context_uri, .. } = &event {
-                            emit(NativeEvent::DJContext(is_dj_context(context_uri)));
+                            ordered = is_dj_context(context_uri);
+                            emit(NativeEvent::DJContext(ordered));
                             emit(NativeEvent::Context(context_uri.clone()));
                         }
                         remember_player_queue(account,event);
                         emit(NativeEvent::QueueChanged);
                     },
                     Some(PlayerEvent::Loading{track_id,..})=>{load_due=None;unavailable.track(&track_id.to_uri());loaded.store(true,Ordering::Release);if !jam_following{intent.track_loading(track_id.to_uri(),std::time::Instant::now());}},
-                    Some(PlayerEvent::ShuffleChanged{shuffle})=>emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None}),
-                    Some(PlayerEvent::RepeatChanged{context,track})=>emit(NativeEvent::Transport{shuffle:None,repeat:Some(if track{"track"}else if context{"context"}else{"off"}.into()),volume:None}),
+                    Some(PlayerEvent::ShuffleChanged{shuffle})=>{
+                        emit(NativeEvent::Transport{shuffle:Some(shuffle),repeat:None,volume:None});
+                        // Another Spotify app changed it, or a load applied it.
+                        if !ordered&&modes.shuffle!=shuffle{modes.shuffle=shuffle;emit(NativeEvent::Modes(modes.clone()));}
+                    },
+                    Some(PlayerEvent::RepeatChanged{context,track})=>{
+                        let repeat=if track{"track"}else if context{"context"}else{"off"};
+                        emit(NativeEvent::Transport{shuffle:None,repeat:Some(repeat.into()),volume:None});
+                        if !ordered&&modes.repeat!=repeat{modes.repeat=repeat.into();emit(NativeEvent::Modes(modes.clone()));}
+                    },
                     Some(PlayerEvent::VolumeChanged{volume})=>{let value=((u32::from(volume)*100+u32::from(u16::MAX)/2)/u32::from(u16::MAX))as u8;if let Some((wanted,until))=volume_guard&&std::time::Instant::now()<until&&wanted!=value{mixer.set_volume((u32::from(wanted)*u32::from(u16::MAX)/100)as u16);}else{emit(NativeEvent::Transport{shuffle:None,repeat:None,volume:Some(value)});}},
                     Some(PlayerEvent::JamChanged { following, session }) => {diagnostic(&format!("event jam following={following}"));if following&&!jam_following{intent.reset();}jam_following=following;emit(NativeEvent::Jam(following, session));},
                     Some(PlayerEvent::SessionConnected { .. }) => active = true,
@@ -2681,8 +2755,13 @@ mod tests {
     }
     use super::*;
     use std::cell::Cell;
+    /// Loads with shuffle and repeat off.
+    fn load_request(action: &PlayerAction) -> Option<LoadRequest> {
+        super::load_request(action, &PlayModes::new(false, "off"))
+    }
     #[test]
-    fn normal_loads_inherit_shuffle_but_dj_keeps_narration_order() {
+    fn normal_loads_use_the_chosen_modes_but_dj_keeps_narration_order() {
+        let modes = PlayModes::new(true, "track");
         for action in [
             PlayerAction::PlayUris {
                 uris: vec!["spotify:track:song".into()],
@@ -2694,7 +2773,11 @@ mod tests {
                 offset: None,
             },
         ] {
-            assert!(load_request(&action).unwrap().context_options.is_none());
+            assert!(
+                matches!(super::load_request(&action, &modes).unwrap().context_options,
+                Some(librespot_connect::LoadContextOptions::Options(ref options))
+                    if options.shuffle && options.repeat_track && !options.repeat)
+            );
         }
         for action in [
             PlayerAction::PlayContext {
@@ -2710,8 +2793,11 @@ mod tests {
                 relative_offset: 0,
             },
         ] {
-            assert!(matches!(load_request(&action).unwrap().context_options,
-                Some(librespot_connect::LoadContextOptions::Options(ref options)) if !options.shuffle));
+            assert!(
+                matches!(super::load_request(&action, &modes).unwrap().context_options,
+                Some(librespot_connect::LoadContextOptions::Options(ref options))
+                    if !options.shuffle && !options.repeat_track)
+            );
         }
     }
     #[test]

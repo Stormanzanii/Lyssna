@@ -309,6 +309,10 @@ pub struct Settings {
     /// songs: off by default, 1 to 12 seconds, 5 unless chosen.
     pub crossfade: bool,
     pub crossfade_seconds: u8,
+    /// Shuffle and repeat ("off", "context" or "track") as last chosen, so
+    /// they carry over to other playlists and the next launch.
+    pub shuffle: bool,
+    pub repeat: String,
     /// Community lyrics credit people by Discord username, not display name.
     pub lyrics_discord_usernames: bool,
     /// Community credit links open spicylyrics.org instead of the in-app
@@ -423,6 +427,8 @@ impl Default for Settings {
             cinema_lyrics: false,
             crossfade: false,
             crossfade_seconds: 5,
+            shuffle: false,
+            repeat: "off".into(),
             lyrics_discord_usernames: true,
             lyrics_profiles_in_browser: false,
             folders: Vec::new(),

@@ -5,13 +5,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().any(|argument| argument == "--version") {
         match lyssna::nightly::COMMIT {
             Some(commit) => println!(
-                // "formerly SpotiFlex": copies from before the rename look
-                // for that name before installing a build.
-                "Lyssna {} Nightly {} (formerly SpotiFlex)",
+                "Lyssna {} Nightly {}",
                 env!("CARGO_PKG_VERSION"),
                 &commit[..7.min(commit.len())]
             ),
-            None => println!("Lyssna {} (formerly SpotiFlex)", env!("CARGO_PKG_VERSION")),
+            None => println!("Lyssna {}", env!("CARGO_PKG_VERSION")),
         }
         return Ok(());
     }

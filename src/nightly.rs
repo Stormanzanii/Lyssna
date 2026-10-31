@@ -1067,12 +1067,19 @@ impl<F: Fn(&Report)> Run<F> {
             Box::new(cargo_progress(units)),
             1,
         ) {
-            // Files left by a different Rust are cleared once; any other
-            // failure is the source's and is reported as it is.
+            // Files left by a different Rust, or by a build folder since
+            // moved (as SpotiFlex's was to Lyssna's: build scripts keep
+            // absolute paths), are cleared once; any other failure is the
+            // source's and is reported as it is.
             let stale = format!("{error:#}");
-            if !["E0514", "E0460", "incompatible version of rustc"]
-                .iter()
-                .any(|sign| stale.contains(sign))
+            if ![
+                "E0514",
+                "E0460",
+                "incompatible version of rustc",
+                "failed to read plugin permissions",
+            ]
+            .iter()
+            .any(|sign| stale.contains(sign))
             {
                 return Err(error);
             }

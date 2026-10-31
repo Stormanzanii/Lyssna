@@ -1391,7 +1391,14 @@ fn change_lines(comparison: &serde_json::Value) -> String {
         .rev()
         .filter_map(|commit| {
             let sha = commit["sha"].as_str().filter(|sha| is_commit(sha))?;
-            let subject = commit["commit"]["message"].as_str()?.lines().next()?.trim();
+            let message = commit["commit"]["message"].as_str()?;
+            // A commit's "Nightly:" line says what changed for listeners;
+            // older commits only have their subject.
+            let subject = message
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("Nightly:"))
+                .or_else(|| message.lines().next())?
+                .trim();
             let subject: String = subject
                 .chars()
                 .filter(|c| !c.is_control())
@@ -1892,11 +1899,11 @@ mod tests {
         let commit = |sha: char, message: &str| serde_json::json!({"sha": sha.to_string().repeat(40), "commit": {"message": message}});
         let comparison = serde_json::json!({
             "total_commits": 40,
-            "commits": [commit('a', "fix: first\n\nbody"), commit('b', "feat: second"), {"sha": "bad"}],
+            "commits": [commit('a', "fix: first\n\nbody"), commit('b', "feat(x): second\n\nNightly: Second is nicer."), {"sha": "bad"}],
         });
         assert_eq!(
             change_lines(&comparison),
-            "bbbbbbb feat: second\naaaaaaa fix: first\nand 38 more"
+            "bbbbbbb Second is nicer.\naaaaaaa fix: first\nand 38 more"
         );
         assert_eq!(change_lines(&serde_json::json!({})), "");
     }

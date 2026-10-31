@@ -78,7 +78,9 @@ mod system {
     pub const LIBCLANG: &str = "libclang.so";
     pub const CPP_TOOLS: &str = "C++ build tools";
 }
+#[cfg(windows)]
 const VS_BOOTSTRAPPER: &str = "https://aka.ms/vs/17/release/vs_BuildTools.exe";
+#[cfg(windows)]
 const VS_ARGUMENTS: &str = "--wait --passive --norestart --nocache \
     --add Microsoft.VisualStudio.Workload.VCTools \
     --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
@@ -87,6 +89,7 @@ const GB: u64 = 1_000_000_000;
 /// Tools, source and the build's intermediate files.
 const BUILD_SPACE: u64 = 10 * GB;
 /// Visual Studio's C++ tools, on the system drive.
+#[cfg(windows)]
 const VS_SPACE: u64 = 8 * GB;
 /// Variables the build tools may see; everything else is left out.
 const KEPT_VARIABLES: &[&str] = &[
@@ -224,6 +227,12 @@ struct Hooks {
     report: ReportHook,
 }
 
+/// Where Nightly can build itself: 64-bit Windows and macOS.
+const SUPPORTED: bool = cfg!(any(
+    all(windows, target_arch = "x86_64"),
+    target_os = "macos"
+));
+
 static HOOKS: std::sync::OnceLock<Hooks> = std::sync::OnceLock::new();
 /// A finished background build: its commit and executable.
 static READY: Mutex<Option<(String, PathBuf)>> = Mutex::new(None);
@@ -241,8 +250,8 @@ pub fn start(
     done: impl FnOnce(Result<Outcome, String>) + Send + 'static,
 ) -> Result<()> {
     ensure!(
-        cfg!(all(windows, target_arch = "x86_64")),
-        "Nightly builds are made on 64-bit Windows for now."
+        SUPPORTED,
+        "Nightly builds are made on 64-bit Windows and macOS for now."
     );
     ensure!(
         !RUNNING.swap(true, Ordering::SeqCst),

@@ -3084,12 +3084,16 @@ small {
   ) {
   transform-origin: right 75%;
 }
-.lyric-line.active .lyric-syllable,
-.lyric-line.active .lyric-letter {
+/* Lines still springing after they end keep their layers too: dropped
+   mid-spring, the text is redrawn and its words jump. */
+.lyric-line:is(.active, [data-settling]) .lyric-syllable,
+.lyric-line:is(.active, [data-settling]) .lyric-letter {
   will-change: transform;
 }
 /* Avoid retaining one compositing layer per animated glyph over live video. */
-.application.macos .lyric-line.active :is(.lyric-syllable, .lyric-letter) {
+.application.macos
+  .lyric-line:is(.active, [data-settling])
+  :is(.lyric-syllable, .lyric-letter) {
   will-change: auto;
 }
 /* Filtered, moving text over video can retain stale WebKit tiles. Keep word

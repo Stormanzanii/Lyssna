@@ -90,6 +90,7 @@ export class LyricAnimator {
     this.frame = this.step(seconds) ? requestAnimationFrame(this.run) : 0;
   };
   private release(index: number, syllables: Syllable[]) {
+    this.line(index)?.removeAttribute("data-settling");
     for (const syllable of syllables) {
       clear(syllable);
       syllable.letters.forEach(clear);
@@ -165,9 +166,14 @@ export class LyricAnimator {
         this.release(index, syllables);
         return;
       }
-      syllables ??= this.build(index);
-      if (!syllables) return;
-      this.live.set(index, syllables);
+      if (!syllables) {
+        syllables = this.build(index);
+        if (!syllables) return;
+        this.live.set(index, syllables);
+        // Its text keeps its own layer until it rests, as a line ending
+        // otherwise redraws mid-spring and its words jump.
+        this.line(index)?.setAttribute("data-settling", "");
+      }
       let awake = false;
       for (const syllable of syllables) {
         const goal = wordGoal(syllable.start, syllable.end, ahead);

@@ -96,6 +96,38 @@ pub fn cover(name: &str) -> Option<(Vec<u8>, &'static str)> {
     Some((bytes, mime))
 }
 
+/// A local cover as a small JPEG data URL, for apps that cannot load
+/// SpotiFlex's cover protocol, such as the Stream Deck plugin.
+pub fn inline_cover(url: &str) -> Option<String> {
+    static INLINE: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
+    let name = url.rsplit('/').next()?;
+    if let Some(known) = INLINE.lock().ok()?.get(name) {
+        return Some(known.clone());
+    }
+    let data = small_jpeg(&cover(name)?.0)?;
+    if let Ok(mut inline) = INLINE.lock() {
+        // Recent songs only; covers are re-made when needed.
+        if inline.len() > 30 {
+            inline.clear();
+        }
+        inline.insert(name.to_owned(), data.clone());
+    }
+    Some(data)
+}
+
+/// A picture shrunk to fit a 144 px key, as a JPEG data URL.
+fn small_jpeg(bytes: &[u8]) -> Option<String> {
+    let small = image::load_from_memory(bytes).ok()?.thumbnail(144, 144);
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 85)
+        .encode_image(&small.to_rgb8())
+        .ok()?;
+    Some(format!(
+        "data:image/jpeg;base64,{}",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, jpeg)
+    ))
+}
+
 /// Read the enabled folders again on a background thread.
 pub fn rescan(settings: &crate::config::Settings) {
     let folders: Vec<PathBuf> = if settings.show_local_files {
@@ -438,6 +470,19 @@ mod tests {
         assert!(cover("../index.json").is_none());
         assert!(cover(&format!("{}.exe", "a".repeat(64))).is_none());
         assert!(cover("short.jpg").is_none());
+    }
+
+    #[test]
+    fn stream_deck_covers_are_small_jpegs() {
+        let mut png = Vec::new();
+        image::RgbImage::from_pixel(1200, 1200, image::Rgb([30, 215, 96]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let data = small_jpeg(&png).unwrap();
+        assert!(data.starts_with("data:image/jpeg;base64,"));
+        // Well inside the plugin's 64 KB line limit.
+        assert!(data.len() < 20_000);
+        assert!(small_jpeg(b"not a picture").is_none());
     }
 
     #[test]

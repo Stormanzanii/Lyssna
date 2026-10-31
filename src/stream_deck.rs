@@ -196,8 +196,15 @@ fn read_state(snapshot: &super::Snapshot) -> DeckState {
     }
 }
 
-/// The smallest Spotify cover at least 300 px wide, or the largest.
+/// The smallest Spotify cover at least 300 px wide, or the largest. A
+/// local song's own cover goes inline, as the plugin cannot reach it.
 fn cover(images: &[crate::model::Artwork]) -> Option<String> {
+    if let Some(local) = images
+        .iter()
+        .find_map(|image| crate::local_files::inline_cover(&image.url))
+    {
+        return Some(local);
+    }
     let secure = images
         .iter()
         .filter(|image| image.url.starts_with("https://"));

@@ -111,6 +111,32 @@ it("retains authored group timing for matching supplied words", async () => {
   ]);
 });
 
+it("keeps each syllable's timing for per-syllable provider readings", async () => {
+  // As the provider sends them: one reading per syllable, joined by single
+  // spaces, empty where it gave none.
+  const source = sample("誰も読めない", "dare mo  karute");
+  source.lines[0].words = [
+    { text: "誰", start_ms: 1000, end_ms: 1200 },
+    { text: "も", start_ms: 1200, end_ms: 1500 },
+    { text: "読", start_ms: 1500, end_ms: 1700 },
+    { text: "カルテ", start_ms: 2000, end_ms: 3000 },
+  ];
+  const display = await shown(source);
+  const words = display.lines[0].words;
+  expect(display.estimated_words).toBeFalsy();
+  expect(words.map((word) => [word.start_ms, word.end_ms])).toEqual([
+    [1000, 1200],
+    [1200, 1500],
+    [1500, 1700],
+    [2000, 3000],
+  ]);
+  expect(words[0].text).toBe("dare");
+  expect(words[1].text).toBe(" mo");
+  expect(words[3].text).toBe(" karute");
+  expect(words[2].text.trim()).not.toBe("");
+  expect(display.lines[0].text).toBe(words.map((word) => word.text).join(""));
+});
+
 it("romanizes line-synced text before estimating words for Space Gravity", async () => {
   const source = sample("안녕하세요", "annyeonghaseyo");
   source.lines[0].words = [];

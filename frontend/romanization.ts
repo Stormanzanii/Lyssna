@@ -208,6 +208,15 @@ async function romanizeItem(
   return before + out + after;
 }
 
+/** The provider reads each syllable separately and joins the readings with
+ *  single spaces, empty for syllables it left unread. When the pieces match
+ *  the syllables one to one, each reading keeps its syllable's own timing. */
+function perSyllable(line: Line): string[] | undefined {
+  if (line.words.length < 2) return undefined;
+  const parts = line.romanization.split(" ");
+  return parts.length === line.words.length ? parts : undefined;
+}
+
 /** Prefer authored word spans. Otherwise mark a line-wide allocation estimated. */
 function suppliedWords(line: Line, text: string): Word[] {
   if (!line.words.length) return [];
@@ -261,6 +270,36 @@ export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
   const lines = await Promise.all(
     lyrics.lines.map(async (line) => {
       const authored = line.romanization.trim();
+      const syllables = authored ? perSyllable(line) : undefined;
+      if (syllables) {
+        const texts = await Promise.all(
+          line.words.map((word, index) =>
+            romanizeItem(
+              syllables[index].trim() || word.text.trim(),
+              scripts,
+              convert,
+            ),
+          ),
+        );
+        const words = line.words.map((word, index) => {
+          const text = texts[index].trim();
+          // Readings stand apart as the provider's line did; untouched
+          // syllables keep their own joins ("beau" + "ti" + "ful").
+          const spaced =
+            index > 0 &&
+            (/^\s/u.test(word.text) ||
+              text !== word.text.trim() ||
+              texts[index - 1].trim() !== line.words[index - 1].text.trim());
+          return { ...word, text: spaced ? ` ${text}` : text };
+        });
+        changed = true;
+        return {
+          ...line,
+          text: words.map((word) => word.text).join(""),
+          words,
+          romanization: "",
+        };
+      }
       if (authored) {
         const supplied = await romanizeItem(authored, scripts, convert);
         const words = suppliedWords(line, supplied);

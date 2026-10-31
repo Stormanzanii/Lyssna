@@ -14166,6 +14166,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
       type: "update",
       status: "Update available",
       version: "Nightly 1234567",
+      notes: "1234567 feat: newest\nabcdef0 fix: older\nand 3 more",
     });
   });
   const prompt = page.getByRole("dialog", {
@@ -14179,4 +14180,46 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
     // Built in the background, as updates build automatically.
     prompt.getByRole("button", { name: "Building…", exact: true }),
   ).toBeDisabled();
+  // Each new commit, and how far the build has got.
+  await expect(prompt.getByText("You're using Nightly 9dac40a")).toBeVisible();
+  await expect(
+    prompt.getByRole("heading", { name: "5 new changes" }),
+  ).toBeVisible();
+  await expect(prompt.getByRole("listitem")).toHaveText([
+    "1234567feat: newest",
+    "abcdef0fix: older",
+  ]);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "nightly",
+      report: {
+        running: true,
+        finished: false,
+        error: null,
+        note: null,
+        log: null,
+        steps: [
+          {
+            id: "crates",
+            label: "Rust packages",
+            state: "done",
+            progress: null,
+            detail: null,
+          },
+          {
+            id: "app",
+            label: "Building SpotiFlex",
+            state: "running",
+            progress: 0.5,
+            detail: "Compiling librespot",
+          },
+        ],
+      },
+    }),
+  );
+  await expect(prompt.getByText("Building SpotiFlex")).toBeVisible();
+  await expect(prompt.getByText("Compiling librespot")).toBeVisible();
+  await expect(
+    prompt.getByRole("progressbar", { name: "Building update" }),
+  ).toHaveAttribute("aria-valuenow", /^[1-9]/);
 });

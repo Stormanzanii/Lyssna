@@ -2860,6 +2860,15 @@ fn nightly_build(
     .map(|()| true)
     .map_err(error)
 }
+/// The commits a new Nightly brings, one per line.
+fn nightly_notes() -> String {
+    let changes = crate::nightly::changes();
+    if changes.is_empty() {
+        "New changes on main.".into()
+    } else {
+        changes
+    }
+}
 /// Show what the Nightly watcher found as the update status, so the
 /// update prompt opens for a new Nightly.
 fn nightly_update_status(inner: &Inner, app: &tauri::AppHandle, status: crate::nightly::Status) {
@@ -2877,12 +2886,13 @@ fn nightly_update_status(inner: &Inner, app: &tauri::AppHandle, status: crate::n
         Status::Available(commit) => {
             snapshot.update_status = "Update available".into();
             snapshot.update_version = Some(name(&commit));
-            snapshot.update_notes = "New changes on main.".into();
+            snapshot.update_notes = nightly_notes();
         }
         Status::Building => snapshot.update_status = "Building update…".into(),
         Status::Ready(commit) => {
             snapshot.update_status = "Ready to install".into();
             snapshot.update_version = Some(name(&commit));
+            snapshot.update_notes = nightly_notes();
         }
         Status::Message(message) => {
             snapshot.update_status = message;

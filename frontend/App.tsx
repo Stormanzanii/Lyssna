@@ -5498,6 +5498,7 @@ function App() {
       <UpdatePrompt
         state={state}
         enabled={sessionScreen(state) !== "restoring"}
+        current={nightlyCommit}
       />
       {state.toast && (
         <div

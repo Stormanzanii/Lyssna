@@ -272,11 +272,13 @@ pub fn check(build: bool) -> Result<Status> {
     if RUNNING.load(Ordering::SeqCst) {
         return Ok(Status::Building);
     }
-    let latest = latest_commit(&client()?)?;
+    let client = client()?;
+    let latest = latest_commit(&client)?;
     if latest == current {
         status(Status::Current);
         return Ok(Status::Current);
     }
+    remember_changes(&client, current, &latest);
     if ready().as_deref() == Some(latest.as_str()) {
         status(Status::Ready(latest.clone()));
         return Ok(Status::Ready(latest));
@@ -1342,6 +1344,72 @@ fn latest_commit(client: &reqwest::blocking::Client) -> Result<String> {
     Ok(commit)
 }
 
+/// The commits since this copy for the latest Nightly, and that commit.
+static CHANGES: Mutex<(String, String)> = Mutex::new((String::new(), String::new()));
+/// At most this many commits are listed.
+const CHANGES_SHOWN: usize = 30;
+
+/// What the latest Nightly changes since this copy, newest first: one
+/// "abc1234 Subject" line per commit. Empty when GitHub couldn't say.
+pub fn changes() -> String {
+    CHANGES
+        .lock()
+        .map(|changes| changes.1.clone())
+        .unwrap_or_default()
+}
+
+fn remember_changes(client: &reqwest::blocking::Client, current: &str, latest: &str) {
+    if CHANGES.lock().is_ok_and(|changes| changes.0 == latest) {
+        return;
+    }
+    let url = format!("https://api.github.com/repos/{REPOSITORY}/compare/{current}...{latest}");
+    let lines = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .timeout(Duration::from_secs(30))
+        .send()
+        .and_then(|response| response.error_for_status())
+        .and_then(|response| response.json::<serde_json::Value>())
+        .map(|comparison| change_lines(&comparison))
+        .unwrap_or_else(|error| {
+            log::warn!("Cannot list Nightly changes: {error}");
+            String::new()
+        });
+    if let Ok(mut changes) = CHANGES.lock() {
+        *changes = (latest.to_owned(), lines);
+    }
+}
+
+/// GitHub's comparison as change lines, newest first.
+fn change_lines(comparison: &serde_json::Value) -> String {
+    let commits = comparison["commits"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut lines: Vec<String> = commits
+        .iter()
+        .rev()
+        .filter_map(|commit| {
+            let sha = commit["sha"].as_str().filter(|sha| is_commit(sha))?;
+            let subject = commit["commit"]["message"].as_str()?.lines().next()?.trim();
+            let subject: String = subject
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(120)
+                .collect();
+            Some(format!("{} {subject}", &sha[..7]))
+        })
+        .take(CHANGES_SHOWN)
+        .collect();
+    let total = comparison["total_commits"]
+        .as_u64()
+        .map_or(commits.len(), |total| total as usize);
+    if total > lines.len() && !lines.is_empty() {
+        lines.push(format!("and {} more", total - lines.len()));
+    }
+    lines.join("\n")
+}
+
 fn is_commit(text: &str) -> bool {
     text.len() == 40 && text.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -1819,6 +1887,19 @@ mod tests {
         result.unwrap();
     }
 
+    #[test]
+    fn changes_list_newest_first_and_count_the_rest() {
+        let commit = |sha: char, message: &str| serde_json::json!({"sha": sha.to_string().repeat(40), "commit": {"message": message}});
+        let comparison = serde_json::json!({
+            "total_commits": 40,
+            "commits": [commit('a', "fix: first\n\nbody"), commit('b', "feat: second"), {"sha": "bad"}],
+        });
+        assert_eq!(
+            change_lines(&comparison),
+            "bbbbbbb feat: second\naaaaaaa fix: first\nand 38 more"
+        );
+        assert_eq!(change_lines(&serde_json::json!({})), "");
+    }
     #[test]
     fn commits_are_full_hashes() {
         assert!(is_commit("0adf971c0ffee0adf971c0ffee0adf971c0ffee0"));

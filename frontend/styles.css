@@ -4473,6 +4473,46 @@ input[type="range"]:hover {
   overflow-wrap: anywhere;
   color: var(--muted);
 }
+.update-commits {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.update-commits li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  color: var(--muted);
+}
+.update-commits code {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.update-commits span {
+  overflow-wrap: anywhere;
+}
+.update-progress {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.update-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.update-progress-detail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 /* First-run sign-in, laid out like Spotify's own login page: a plain
    column on the app background, centred in the window, not the area under
    the title bar. */

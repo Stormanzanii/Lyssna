@@ -6580,7 +6580,11 @@ input[type="range"]:hover {
 .discography-loading {
   flex: 1;
   display: grid;
-  place-items: center;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 14px;
   min-height: 240px;
   padding-bottom: 60px;
 }

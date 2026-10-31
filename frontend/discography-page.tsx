@@ -99,7 +99,8 @@ export function DiscographyPage({
           role="status"
           aria-label="Loading releases"
         >
-          <MicLoader />
+          <MicLoader size={88} />
+          <span>Loading releases…</span>
         </div>
       ) : (
         shown.map((release, index) => (

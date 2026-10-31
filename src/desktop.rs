@@ -3362,10 +3362,46 @@ const PROFILE_WINDOW_SCRIPT: &str = r#"(() => {
     // The track list's number column hugs the edge.
     ".profile-setlist>.grid:first-child,.profile-track{padding-left:.25rem!important;column-gap:.75rem!important}" +
     ".profile-setlist>.grid:first-child>:first-child,.profile-track>:first-child{text-align:center!important}" +
-    "@media (min-width:640px){.profile-variant{margin-left:4.25rem!important}}";
+    "@media (min-width:640px){.profile-variant{margin-left:4.25rem!important}}" +
+    // The tabs and search bar stick a little below the sheet's edge.
+    ".profile-dock{top:.75rem!important}";
   const add = () => (document.head || document.documentElement).appendChild(style);
   if (document.documentElement) add();
   else document.addEventListener("DOMContentLoaded", add, { once: true });
+  // The site eases wheel scrolling (Lenis) only for a mouse; reporting none
+  // keeps the window's own direct scrolling.
+  const matchMedia = window.matchMedia.bind(window);
+  window.matchMedia = (query) =>
+    query.replace(/\s+/g, "") === "(hover:hover)and(pointer:fine)"
+      ? matchMedia("not all")
+      : matchMedia(query);
+  // Listen starts the song on press rather than release. The song comes
+  // from the row's React props, as the button's own click handler reads it.
+  const listenTrack = (target) => {
+    const button = target instanceof Element && target.closest("button");
+    if (!button || !/^\s*listen\s*$/i.test(button.getAttribute("aria-label") || button.textContent || "")) return null;
+    const key = Object.keys(button).find((name) => name.startsWith("__reactFiber$"));
+    for (let fiber = key && button[key], depth = 0; fiber && depth < 12; fiber = fiber.return, depth++) {
+      const id = fiber.memoizedProps?.trackId;
+      if (typeof id === "string" && /^[A-Za-z0-9]{22}$/.test(id)) return { button, id };
+    }
+    return null;
+  };
+  let pressed = null;
+  addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const listen = listenTrack(event.target);
+    if (!listen) return;
+    pressed = { button: listen.button, at: performance.now() };
+    location.href = "spotify:track:" + listen.id;
+  }, true);
+  addEventListener("click", (event) => {
+    const listen = pressed;
+    pressed = null;
+    if (!listen || performance.now() - listen.at > 2000 || !listen.button.contains(event.target)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
   const routes = new Set(["app", "authcycle", "embed", "goog", "guides", "identity", "legal", "stats", "uid"]);
   const chromeless = () => {
     const name = location.pathname.match(/^\/([^/]+)\/?$/)?.[1];

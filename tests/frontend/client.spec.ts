@@ -14257,7 +14257,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   const prompt = page.getByRole("dialog", {
     name: "SpotiFlex Nightly 1234567 is available",
   });
-  await prompt.getByRole("button", { name: "Not now", exact: true }).click();
+  await prompt.getByRole("button", { name: "Minimise", exact: true }).click();
   await expect(prompt).toBeHidden();
   await refresh.click();
   await expect(prompt).toBeVisible();
@@ -14311,4 +14311,17 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   await expect(
     prompt.getByRole("progressbar", { name: "Building update" }),
   ).toHaveAttribute("aria-valuenow", /^[1-9]/);
+  // Minimised while it builds, it opens again once the build is ready.
+  await prompt.getByRole("button", { name: "Minimise", exact: true }).click();
+  await expect(prompt).toBeHidden();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "update",
+      status: "Ready to install",
+      version: "Nightly 1234567",
+    }),
+  );
+  await expect(
+    prompt.getByRole("button", { name: "Install and restart" }),
+  ).toBeVisible();
 });

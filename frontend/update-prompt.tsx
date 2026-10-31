@@ -3,6 +3,10 @@ import { rpc } from "./bridge";
 import { nightlyProgress } from "./nightly-dialog";
 import type { AppState } from "./state";
 
+/** What a dismissal hides: one version, before or after it is ready. */
+const key = (version: string, ready: boolean) =>
+  `${version}${ready ? " ready" : ""}`;
+
 /** Updates belong to the app, independently of the Spotify account. */
 export function UpdatePrompt({
   state,
@@ -35,7 +39,10 @@ export function UpdatePrompt({
   const step = report?.steps.find((item) => item.state === "running");
   const percent = report ? Math.round(nightlyProgress(report) * 100) : 0;
   const open =
-    enabled && !!version && version !== dismissed && status !== "Up to date";
+    enabled &&
+    !!version &&
+    key(version, ready) !== dismissed &&
+    status !== "Up to date";
   // Checking for a Nightly by hand shows what was found again.
   useEffect(() => {
     const show = () => setDismissed(undefined);
@@ -64,7 +71,8 @@ export function UpdatePrompt({
   };
   const dismiss = () => {
     if (requested === "install") return;
-    setDismissed(version);
+    // Hidden while it downloads or builds, it opens again once ready.
+    if (version) setDismissed(key(version, ready));
     dialog.current?.close();
   };
   return (
@@ -153,7 +161,7 @@ export function UpdatePrompt({
           disabled={requested === "install"}
           onClick={dismiss}
         >
-          Not now
+          {downloading || requested === "download" ? "Minimise" : "Not now"}
         </button>
         <button
           className="pill primary"

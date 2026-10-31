@@ -1438,7 +1438,7 @@ impl PlayerTrackLoader {
 
         let entry = self.local_file_lookup.get(&track_uri);
 
-        let Some(path) = entry else {
+        let Some(path) = entry.as_deref() else {
             error!("Unable to find file path for local file <{track_uri}>");
             return None;
         };
@@ -1483,7 +1483,7 @@ impl PlayerTrackLoader {
         };
 
         let file_size = fs::metadata(path).ok()?.len();
-        let bytes_per_second = (file_size / duration.as_secs()) as usize;
+        let bytes_per_second = (file_size / duration.as_secs().max(1)) as usize;
 
         let stream_loader_controller = StreamLoaderController::from_local_file(file_size);
 

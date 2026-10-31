@@ -6,6 +6,7 @@ use std::{
     fs::File,
     io,
     path::{Path, PathBuf},
+    sync::{LazyLock, RwLock},
     time::Duration,
 };
 use symphonia::core::{
@@ -26,8 +27,23 @@ const SUPPORTED_FILE_EXTENSIONS: &[&str; 4] = &["mp3", "mp4", "m4p", "flac"];
 pub struct LocalFileLookup(HashMap<SpotifyUri, PathBuf>);
 
 impl LocalFileLookup {
-    pub fn get(&self, uri: &SpotifyUri) -> Option<&Path> {
-        self.0.get(uri).map(PathBuf::as_path)
+    /// The file for a local URI, from the player's directories or from the
+    /// files the application named last with [`set_local_files`].
+    pub fn get(&self, uri: &SpotifyUri) -> Option<PathBuf> {
+        self.0
+            .get(uri)
+            .cloned()
+            .or_else(|| SHARED.read().ok().and_then(|files| files.get(uri).cloned()))
+    }
+}
+
+static SHARED: LazyLock<RwLock<HashMap<SpotifyUri, PathBuf>>> = LazyLock::new(Default::default);
+
+/// Replace the local files every player can load, so folders chosen while
+/// running play without a new player.
+pub fn set_local_files(files: HashMap<SpotifyUri, PathBuf>) {
+    if let Ok(mut shared) = SHARED.write() {
+        *shared = files;
     }
 }
 

@@ -12,6 +12,7 @@ pub mod decoder;
 pub mod dither;
 mod load_cache;
 mod local_file;
+pub use local_file::set_local_files;
 pub mod mixer;
 pub mod narration;
 mod narration_cache;

@@ -28,6 +28,8 @@ pub mod links;
 pub mod local_files;
 pub mod lyric_sources;
 pub mod lyrics;
+#[cfg(target_os = "macos")]
+pub mod mac_bundle;
 #[cfg(feature = "desktop")]
 pub mod media;
 pub mod model;

@@ -1893,20 +1893,16 @@ fn replace_running(staged: &Path) -> Result<()> {
     self_replace::self_replace(staged)
         .context("Cannot install. Run SpotiFlex from a folder your account can write to.")?;
     let _ = fs::remove_file(staged);
-    // The app's signature covers the executable it replaced; sign it again
-    // for this computer so macOS opens it.
+    // The app's signature covers the executable it replaced: bring its
+    // Info.plist up to date, sign it again as the build script did, and
+    // register it so macOS opens it and its links.
     #[cfg(target_os = "macos")]
     if let Some(bundle) = executable
         .ancestors()
         .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+        && let Err(error) = crate::mac_bundle::after_replace(bundle)
     {
-        let signed = Command::new("codesign")
-            .args(["--force", "--deep", "--sign", "-"])
-            .arg(bundle)
-            .status();
-        if !signed.is_ok_and(|status| status.success()) {
-            log::warn!("Cannot sign {} again", bundle.display());
-        }
+        log::warn!("Cannot sign {} again: {error:#}", bundle.display());
     }
     Ok(())
 }

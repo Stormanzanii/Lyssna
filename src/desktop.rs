@@ -4377,6 +4377,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             #[cfg(target_os = "macos")]
             app.set_menu(tauri::menu::Menu::default(app.handle())?)?;
+            // In-app updates replace only the executable; bring the bundle's
+            // Info.plist (and so `spotiflex://` links) up to date with it.
+            #[cfg(target_os = "macos")]
+            crate::mac_bundle::refresh();
             if let Some(window) = app.get_webview_window("main") {
                 window.set_icon(tauri::image::Image::new_owned(
                     crate::app_icon::icon_rgba(64),

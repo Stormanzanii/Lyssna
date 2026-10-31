@@ -54,6 +54,62 @@ pub fn refresh() {
     });
 }
 
+/// Lyssna was SpotiFlex. An app updated in place still runs from
+/// `SpotiFlex.app`, and macOS names the menu bar, Dock and Finder entry from
+/// the bundle as it was when the app started. Bring the bundle's Info.plist
+/// up to date, move it to `Lyssna.app` and start it from there. True when
+/// this copy should exit now.
+pub fn relocate() -> bool {
+    let Some(bundle) = bundle() else {
+        return false;
+    };
+    if bundle
+        .file_name()
+        .is_none_or(|name| name != "SpotiFlex.app")
+    {
+        return false;
+    }
+    let target = bundle.with_file_name("Lyssna.app");
+    // A Lyssna installed by the build script is already there: keep it.
+    if target.exists() {
+        return false;
+    }
+    if let Err(error) = refresh_bundle(&bundle, false) {
+        log::warn!("Cannot update {}: {error:#}", bundle.display());
+        return false;
+    }
+    if fs::rename(&bundle, &target).is_err() {
+        return false;
+    }
+    let started = Command::new("/usr/bin/open")
+        .arg("-n")
+        .arg(&target)
+        .arg("--args")
+        .arg(crate::updater::AFTER_EXIT_ARG)
+        .arg(std::process::id().to_string())
+        .args(std::env::args().skip(1).filter(|argument| {
+            // The previous copy's own wait is already over.
+            argument != crate::updater::AFTER_EXIT_ARG && argument.parse::<u32>().is_err()
+        }))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    if !started {
+        let _ = fs::rename(&target, &bundle);
+        return false;
+    }
+    for (flag, path) in [("-u", &bundle), ("-f", &target)] {
+        let _ = Command::new(LSREGISTER)
+            .arg(flag)
+            .arg(path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    true
+}
+
 /// After an executable was swapped in: merge, sign and register even if the
 /// plist already matched, since the old signature no longer covers it.
 pub fn after_replace(bundle: &Path) -> Result<()> {

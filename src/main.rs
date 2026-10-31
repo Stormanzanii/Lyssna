@@ -24,6 +24,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Ok(());
     }
+    #[cfg(target_os = "macos")]
+    if !std::env::args().any(|argument| matches!(argument.as_str(), "--quit" | "--set-lyrics-host"))
+        && lyssna::mac_bundle::relocate()
+    {
+        return Ok(());
+    }
     lyssna::rename::migrate();
     #[cfg(windows)]
     lyssna::rename::remove_former_install();

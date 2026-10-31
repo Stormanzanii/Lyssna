@@ -77,7 +77,8 @@ fn folders() -> Vec<(PathBuf, PathBuf)> {
 
 /// Move a folder to Lyssna's name. When Lyssna already has one (a build
 /// can create it first), what it lacks moves in and nothing of its own is
-/// replaced. A parent left empty is removed.
+/// replaced. Whatever is left of SpotiFlex's then goes: Lyssna never reads
+/// it. A parent left empty is removed.
 fn move_folder(from: &Path, to: &Path) -> io::Result<()> {
     if !from.is_dir() {
         return Ok(());
@@ -88,10 +89,7 @@ fn move_folder(from: &Path, to: &Path) -> io::Result<()> {
         if let Some(parent) = to.parent() {
             fs::create_dir_all(parent)?;
         }
-        if fs::rename(from, to).is_err() {
-            // Another volume, or a file held open: copy, keeping the original.
-            return copy_folder(from, to);
-        }
+        move_entry(from, to)?;
     }
     if let Some(parent) = from.parent()
         && parent.file_name().is_some_and(|name| name == FORMER_NAME)
@@ -106,19 +104,34 @@ fn merge_folder(from: &Path, to: &Path) -> io::Result<()> {
         let entry = entry?;
         let target = to.join(entry.file_name());
         if !target.exists() {
-            if fs::rename(entry.path(), &target).is_err() {
-                if entry.file_type()?.is_dir() {
-                    copy_folder(&entry.path(), &target)?;
-                } else {
-                    fs::copy(entry.path(), &target)?;
-                }
-            }
+            move_entry(&entry.path(), &target)?;
         } else if entry.file_type()?.is_dir() && target.is_dir() {
             merge_folder(&entry.path(), &target)?;
+        } else {
+            // Lyssna's own copy wins.
+            remove_entry(&entry.path());
         }
     }
-    // Emptied by the merge: nothing of SpotiFlex's is left to keep.
     let _ = fs::remove_dir(from);
+    Ok(())
+}
+
+/// Rename, retrying briefly: a scanner or indexer can hold a file for a
+/// moment just after SpotiFlex closed. Otherwise copy (another volume, or a
+/// file held open) and remove what copied.
+fn move_entry(from: &Path, to: &Path) -> io::Result<()> {
+    for wait in [0, 100, 250, 500] {
+        std::thread::sleep(std::time::Duration::from_millis(wait));
+        if fs::rename(from, to).is_ok() {
+            return Ok(());
+        }
+    }
+    if from.is_dir() {
+        copy_folder(from, to)?;
+    } else {
+        fs::copy(from, to)?;
+    }
+    remove_entry(from);
     Ok(())
 }
 
@@ -134,6 +147,14 @@ fn copy_folder(from: &Path, to: &Path) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+fn remove_entry(path: &Path) {
+    let _ = if path.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
 }
 
 /// Where `build.ps1` installs Lyssna, and where it installed SpotiFlex.
@@ -235,6 +256,11 @@ mod tests {
         assert_eq!(
             fs::read_to_string(to.join("build-signing/identity.json")).unwrap(),
             "id"
+        );
+        // A copy left by an earlier start is cleared, not walked again.
+        assert!(
+            !root.join(FORMER_NAME).exists(),
+            "old duplicates are removed"
         );
         fs::remove_dir_all(&root).unwrap();
     }

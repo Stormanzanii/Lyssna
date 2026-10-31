@@ -637,8 +637,8 @@ export function SettingsWindow({
             className="pill outline"
             disabled={
               IS_MAC ||
-              nightly ||
-              state.update_status.startsWith("Downloading update")
+              state.update_status.startsWith("Downloading update") ||
+              state.update_status.startsWith("Building update")
             }
             onClick={() =>
               void onCall("app_update", {
@@ -658,15 +658,27 @@ export function SettingsWindow({
                 : "Check for updates"}
           </button>
         </SettingRow>,
-        !IS_MAC && !nightly ? (
+        !IS_MAC ? (
           <SettingRow
             key="auto-update"
-            label="Download updates automatically"
-            help="New versions are verified before they install."
-            keywords="updates auto"
+            label={
+              nightly
+                ? "Build Nightly updates automatically"
+                : "Download updates automatically"
+            }
+            help={
+              nightly
+                ? "New code is built in the background; you choose when to restart."
+                : "New versions are verified before they install."
+            }
+            keywords="updates auto nightly build"
           >
             <Toggle
-              label="Download updates automatically"
+              label={
+                nightly
+                  ? "Build Nightly updates automatically"
+                  : "Download updates automatically"
+              }
               checked={settings.auto_download_updates}
               onChange={(auto_download_updates) =>
                 onSettings({ auto_download_updates })

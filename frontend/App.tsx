@@ -26,6 +26,7 @@ import {
   Heart,
   Code,
   Bell,
+  RefreshCw,
   Home,
   ImagePlus,
   Pencil,
@@ -657,6 +658,23 @@ function App() {
     },
     [notify],
   );
+  // A Nightly copy gets a button that looks for newer Nightly code.
+  const [nightlyCommit, setNightlyCommit] = useState<string | null>(null);
+  const [checkingNightly, setCheckingNightly] = useState(false);
+  useEffect(() => {
+    void rpc<{ commit: string | null }>("nightly_status")
+      .then((status) => setNightlyCommit(status?.commit ?? null))
+      .catch(() => setNightlyCommit(null));
+  }, []);
+  const checkNightly = useCallback(async () => {
+    setCheckingNightly(true);
+    const found = await call<string>("nightly_check");
+    setCheckingNightly(false);
+    if (found === "current") notify("You're on the latest Nightly.");
+    else if (found === "available" || found === "building" || found === "ready")
+      window.dispatchEvent(new Event("spotiflex:show-update"));
+    else if (found) notify(found);
+  }, [call, notify]);
   const navigate = useCallback(
     (key: string, push = true) => {
       if (!stateRef.current.profile) return;
@@ -2782,6 +2800,17 @@ function App() {
           </div>
         </div>
         <div className="top-actions">
+          {nightlyCommit && state.settings.update_channel === "nightly" && (
+            <button
+              className={`icon-button nightly-refresh${checkingNightly ? " checking" : ""}`}
+              title="Check for a newer Nightly"
+              aria-label="Check for a newer Nightly"
+              disabled={checkingNightly}
+              onClick={() => void checkNightly()}
+            >
+              <RefreshCw size={18} />
+            </button>
+          )}
           <button
             className={`icon-button whats-new-button ${state.route === "whats-new" && center === "browse" ? "active" : ""}`}
             title="What's New"

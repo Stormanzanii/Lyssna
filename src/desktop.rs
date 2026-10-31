@@ -363,6 +363,25 @@ impl Desktop {
             restoring: true,
             cancelled: lock(&inner.login_cancelled)?.clone(),
         })?;
+        // A Nightly copy looks for newer code and builds it.
+        let watched = inner.clone();
+        let updated = inner.clone();
+        let statuses = app.clone();
+        let reports = app.clone();
+        crate::nightly::watch(
+            move || {
+                watched.snapshot.lock().map_or((false, false), |snapshot| {
+                    (
+                        snapshot.settings.update_channel == "nightly",
+                        snapshot.settings.auto_download_updates,
+                    )
+                })
+            },
+            move |status| nightly_update_status(&updated, &statuses, status),
+            move |report| {
+                let _ = reports.emit("spotiflex", json!({"type":"nightly","report":report}));
+            },
+        );
         let pump = inner.clone();
         thread::spawn(move || {
             let emit = |value: Value| {
@@ -1247,11 +1266,8 @@ impl Desktop {
                             snapshot.update_version = None;
                             snapshot.update_notes.clear();
                         }
+                        // Nightly's own watcher reports its updates.
                         updater::Event::Nightly => {
-                            snapshot.update_status =
-                                "Nightly builds update when you build them".into();
-                            snapshot.update_version = None;
-                            snapshot.update_notes.clear();
                             if let Ok(mut available) = pump.available.lock() {
                                 *available = None;
                             }
@@ -2794,11 +2810,12 @@ fn nightly_build(
     let events = app.clone();
     let inner = state.0.clone();
     crate::nightly::start(
+        crate::nightly::Mode::Install,
         move |report| {
             let _ = events.emit("spotiflex", json!({"type":"nightly","report":report}));
         },
         move |outcome| {
-            if !matches!(outcome, crate::nightly::Outcome::Installed) {
+            if !matches!(outcome, Ok(crate::nightly::Outcome::Installed)) {
                 return;
             }
             // The new copy follows Nightly from its first start.
@@ -2818,6 +2835,57 @@ fn nightly_build(
     )
     .map(|()| true)
     .map_err(error)
+}
+/// Show what the Nightly watcher found as the update status, so the
+/// update prompt opens for a new Nightly.
+fn nightly_update_status(inner: &Inner, app: &tauri::AppHandle, status: crate::nightly::Status) {
+    use crate::nightly::Status;
+    let Ok(mut snapshot) = inner.snapshot.lock() else {
+        return;
+    };
+    let name = |commit: &str| format!("Nightly {}", &commit[..7.min(commit.len())]);
+    match status {
+        Status::Current => {
+            snapshot.update_status = "Up to date".into();
+            snapshot.update_version = None;
+            snapshot.update_notes.clear();
+        }
+        Status::Available(commit) => {
+            snapshot.update_status = "Update available".into();
+            snapshot.update_version = Some(name(&commit));
+            snapshot.update_notes = "New changes on main.".into();
+        }
+        Status::Building => snapshot.update_status = "Building update…".into(),
+        Status::Ready(commit) => {
+            snapshot.update_status = "Ready to install".into();
+            snapshot.update_version = Some(name(&commit));
+        }
+        Status::Message(message) => {
+            snapshot.update_status = message;
+            snapshot.update_version = None;
+        }
+    }
+    let _ = app.emit(
+        "spotiflex",
+        json!({"type":"update","status":snapshot.update_status,"version":snapshot.update_version,"notes":snapshot.update_notes}),
+    );
+}
+/// Look for a newer Nightly now: "current", "available", "building" or
+/// "ready", or why it couldn't look.
+#[tauri::command]
+async fn nightly_check() -> std::result::Result<String, String> {
+    use crate::nightly::Status;
+    let status = tauri::async_runtime::spawn_blocking(|| crate::nightly::check(false))
+        .await
+        .map_err(error)?
+        .map_err(error)?;
+    Ok(match status {
+        Status::Current => "current".into(),
+        Status::Available(_) => "available".into(),
+        Status::Building => "building".into(),
+        Status::Ready(_) => "ready".into(),
+        Status::Message(message) => message,
+    })
 }
 #[tauri::command]
 fn nightly_cancel() {
@@ -3911,7 +3979,33 @@ mod fullscreen_placement {
 }
 
 #[tauri::command]
-fn app_update(action: String, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+fn app_update(
+    action: String,
+    state: State<'_, Desktop>,
+    app: tauri::AppHandle,
+) -> std::result::Result<(), String> {
+    let nightly = lock(&state.0.snapshot)
+        .map(|snapshot| snapshot.settings.update_channel == "nightly")
+        .map_err(error)?;
+    // Nightly updates are built here rather than downloaded.
+    if nightly {
+        return match action.as_str() {
+            "check" | "download" => {
+                let build = action == "download";
+                thread::spawn(move || {
+                    if let Err(error) = crate::nightly::check(build) {
+                        log::warn!("Cannot check for Nightly updates: {error:#}");
+                    }
+                });
+                Ok(())
+            }
+            "install" => crate::nightly::install_ready()
+                .and_then(|()| updater::relaunch())
+                .map(|()| app.exit(0))
+                .map_err(error),
+            _ => Err("Unknown update action".into()),
+        };
+    }
     let result = || -> Result<()> {
         if let Some(message) = updater::DISABLED {
             anyhow::bail!(message);
@@ -4287,6 +4381,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             local_files_count,
             pick_local_folder,
             nightly_build,
+            nightly_check,
             nightly_cancel,
             nightly_status,
             nightly_log,

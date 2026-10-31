@@ -137,9 +137,47 @@ pub struct Report {
 pub enum Outcome {
     /// Installed; SpotiFlex restarts into it.
     Installed,
+    /// Built in the background and waiting to be installed.
+    Staged(String),
     /// This copy already is the latest Nightly.
     Current,
 }
+
+/// Whether a build replaces this copy at once, as when switching to
+/// Nightly, or waits until the user chooses to restart.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Mode {
+    Install,
+    Stage,
+}
+
+/// What looking for newer Nightly code found, for the update status.
+pub enum Status {
+    Current,
+    Available(String),
+    Building,
+    Ready(String),
+    Message(String),
+}
+
+/// How often a Nightly copy looks for newer code.
+const CHECK_EVERY: Duration = Duration::from_secs(10 * 60);
+
+type SettingsHook = Box<dyn Fn() -> (bool, bool) + Send + Sync>;
+type StatusHook = Box<dyn Fn(Status) + Send + Sync>;
+type ReportHook = Arc<dyn Fn(&Report) + Send + Sync>;
+
+/// How the watcher reads the settings and tells the interface.
+struct Hooks {
+    /// Whether this copy follows Nightly, and builds updates by itself.
+    settings: SettingsHook,
+    status: StatusHook,
+    report: ReportHook,
+}
+
+static HOOKS: std::sync::OnceLock<Hooks> = std::sync::OnceLock::new();
+/// A finished background build: its commit and executable.
+static READY: Mutex<Option<(String, PathBuf)>> = Mutex::new(None);
 
 /// The latest report, if a build ran since SpotiFlex started.
 pub fn last() -> Option<Report> {
@@ -149,8 +187,9 @@ pub fn last() -> Option<Report> {
 /// Build the latest Nightly on a background thread, reporting each change.
 /// `done` is called when the new build is installed and should restart.
 pub fn start(
+    mode: Mode,
     report: impl Fn(&Report) + Send + 'static,
-    done: impl FnOnce(Outcome) + Send + 'static,
+    done: impl FnOnce(Result<Outcome, String>) + Send + 'static,
 ) -> Result<()> {
     ensure!(
         cfg!(all(windows, target_arch = "x86_64")),
@@ -163,6 +202,7 @@ pub fn start(
     CANCEL.store(false, Ordering::SeqCst);
     thread::spawn(move || {
         let mut run = Run::new(report);
+        run.mode = mode;
         let result = run.build();
         if let Err(error) = &result {
             let message = if CANCEL.load(Ordering::SeqCst) {
@@ -183,11 +223,107 @@ pub fn start(
         run.finished = result.is_ok();
         run.send(true);
         RUNNING.store(false, Ordering::SeqCst);
-        if let Ok(outcome) = result {
-            done(outcome);
-        }
+        done(result.map_err(|_| run.error.clone().unwrap_or_default()));
     });
     Ok(())
+}
+
+/// Look for newer Nightly code every ten minutes, starting shortly after
+/// launch, and build it in the background when that is on.
+pub fn watch(
+    settings: impl Fn() -> (bool, bool) + Send + Sync + 'static,
+    status: impl Fn(Status) + Send + Sync + 'static,
+    report: impl Fn(&Report) + Send + Sync + 'static,
+) {
+    let hooks = Hooks {
+        settings: Box::new(settings),
+        status: Box::new(status),
+        report: Arc::new(report),
+    };
+    if HOOKS.set(hooks).is_err() {
+        return;
+    }
+    thread::spawn(|| {
+        thread::sleep(Duration::from_secs(20));
+        loop {
+            if let Err(error) = check(false) {
+                log::warn!("Cannot check for Nightly updates: {error:#}");
+            }
+            thread::sleep(CHECK_EVERY);
+        }
+    });
+}
+
+/// Look for newer Nightly code now, building it when `build` or when
+/// updates build automatically. What was found also goes to the update
+/// status, so the update prompt opens for a new version.
+pub fn check(build: bool) -> Result<Status> {
+    let hooks = HOOKS.get().context("Nightly updates aren't ready yet")?;
+    let (nightly, automatic) = (hooks.settings)();
+    let status = |status: Status| (hooks.status)(status);
+    if !nightly {
+        return Ok(Status::Message("Not following Nightly".into()));
+    }
+    let Some(current) = COMMIT else {
+        let message = "Use Build latest in Settings to start Nightly";
+        status(Status::Message(message.into()));
+        return Ok(Status::Message(message.into()));
+    };
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(Status::Building);
+    }
+    let latest = latest_commit(&client()?)?;
+    if latest == current {
+        status(Status::Current);
+        return Ok(Status::Current);
+    }
+    if ready().as_deref() == Some(latest.as_str()) {
+        status(Status::Ready(latest.clone()));
+        return Ok(Status::Ready(latest));
+    }
+    status(Status::Available(latest.clone()));
+    if !(build || automatic) {
+        return Ok(Status::Available(latest));
+    }
+    let report = hooks.report.clone();
+    start(
+        Mode::Stage,
+        move |progress| report(progress),
+        |result| {
+            let Some(hooks) = HOOKS.get() else { return };
+            (hooks.status)(match result {
+                Ok(Outcome::Staged(commit)) => Status::Ready(commit),
+                Ok(_) => Status::Current,
+                Err(error) => Status::Message(format!(
+                    "Nightly update failed: {}",
+                    error.lines().next().unwrap_or("unknown error")
+                )),
+            });
+        },
+    )?;
+    status(Status::Building);
+    Ok(Status::Building)
+}
+
+/// The commit of a Nightly built in the background, waiting to install.
+pub fn ready() -> Option<String> {
+    READY
+        .lock()
+        .ok()?
+        .as_ref()
+        .map(|(commit, _)| commit.clone())
+}
+
+/// Replace this copy with the Nightly built in the background; the
+/// caller restarts SpotiFlex.
+pub fn install_ready() -> Result<()> {
+    let (_, staged) = READY
+        .lock()
+        .ok()
+        .and_then(|mut ready| ready.take())
+        .context("No Nightly update is ready")?;
+    ensure!(staged.is_file(), "The Nightly update is gone; check again");
+    replace_running(&staged)
 }
 
 /// Stop the running build and every process it started.
@@ -236,6 +372,7 @@ struct Run<F: Fn(&Report)> {
     log_file: Option<fs::File>,
     last_sent: Instant,
     tools: Tools,
+    mode: Mode,
     /// Build and check without installing, for the end-to-end test.
     dry_run: bool,
 }
@@ -276,6 +413,7 @@ impl<F: Fn(&Report)> Run<F> {
             log_file: None,
             last_sent: Instant::now(),
             tools: Tools::default(),
+            mode: Mode::Install,
             dry_run: false,
         }
     }
@@ -395,6 +533,10 @@ impl<F: Fn(&Report)> Run<F> {
                 self.set("cpp", State::Skipped);
                 found
             }
+            // Never ask for Windows' permission unprompted.
+            None if self.mode == Mode::Stage => bail!(
+                "Visual Studio's C++ tools are missing. Use Build latest in Settings to set them up again."
+            ),
             None => {
                 self.set("cpp", State::Running);
                 let installer = downloads.join("vs_BuildTools.exe");
@@ -467,29 +609,32 @@ impl<F: Fn(&Report)> Run<F> {
             self.tools.cmake = Some(cmake);
         }
 
-        // libclang, which whisper's bindings are generated with.
+        // libclang, which whisper's bindings are generated with. Where the
+        // wheel keeps it differs between releases, so it is looked for.
         let libclang = tools_dir.join(format!("libclang-{LIBCLANG_VERSION}"));
-        let native = libclang.join("clang").join("native");
-        if native.join("libclang.dll").is_file() {
-            self.set("libclang", State::Skipped);
-        } else {
-            self.set("libclang", State::Running);
-            let release: serde_json::Value = serde_json::from_str(&get_text(
-                &client,
-                &format!("https://pypi.org/pypi/libclang/{LIBCLANG_VERSION}/json"),
-            )?)?;
-            let (url, hash) =
-                windows_wheel(&release).context("libclang has no Windows download")?;
-            let archive = downloads.join("libclang.whl");
-            self.download(&client, "libclang", &url, &archive, Some(&hash))?;
-            self.extract("libclang", &archive, &libclang, false)?;
-            ensure!(
-                native.join("libclang.dll").is_file(),
-                "libclang's download has no libclang.dll"
-            );
-            self.set("libclang", State::Done);
-        }
-        self.tools.libclang = Some(native);
+        let native = match find_file(&libclang, "libclang.dll", 6) {
+            Some(dll) => {
+                self.set("libclang", State::Skipped);
+                dll
+            }
+            None => {
+                self.set("libclang", State::Running);
+                let release: serde_json::Value = serde_json::from_str(&get_text(
+                    &client,
+                    &format!("https://pypi.org/pypi/libclang/{LIBCLANG_VERSION}/json"),
+                )?)?;
+                let (url, hash) =
+                    windows_wheel(&release).context("libclang has no Windows download")?;
+                let archive = downloads.join("libclang.whl");
+                self.download(&client, "libclang", &url, &archive, Some(&hash))?;
+                self.extract("libclang", &archive, &libclang, false)?;
+                let dll = find_file(&libclang, "libclang.dll", 6)
+                    .context("libclang's download has no libclang.dll")?;
+                self.set("libclang", State::Done);
+                dll
+            }
+        };
+        self.tools.libclang = native.parent().map(Path::to_path_buf);
 
         // Node.js 24, the newest release of that line.
         self.set("node", State::Running);
@@ -767,8 +912,16 @@ impl<F: Fn(&Report)> Run<F> {
             return Ok(Outcome::Current);
         }
         self.set("install", State::Running);
-        install(&built, &commit)?;
+        let staged = stage(&built, &commit)?;
         let _ = fs::remove_dir_all(&downloads);
+        if self.mode == Mode::Stage {
+            if let Ok(mut ready) = READY.lock() {
+                *ready = Some((commit.clone(), staged));
+            }
+            self.set("install", State::Done);
+            return Ok(Outcome::Staged(commit));
+        }
+        replace_running(&staged)?;
         self.set("install", State::Done);
         Ok(Outcome::Installed)
     }
@@ -1217,6 +1370,26 @@ fn windows_wheel(release: &serde_json::Value) -> Option<(String, String)> {
     })
 }
 
+/// A file named `name` in `dir` or its folders, `depth` levels down.
+fn find_file(dir: &Path, name: &str, depth: usize) -> Option<PathBuf> {
+    let mut folders = Vec::new();
+    for entry in fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            folders.push(path);
+        } else if entry.file_name().eq_ignore_ascii_case(name) {
+            return Some(path);
+        }
+    }
+    if depth == 0 {
+        return None;
+    }
+    folders.sort();
+    folders
+        .iter()
+        .find_map(|folder| find_file(folder, name, depth - 1))
+}
+
 /// The newest folder in `dir` starting with `prefix`.
 fn newest_dir(dir: &Path, prefix: &str) -> Option<PathBuf> {
     let mut found: Vec<PathBuf> = fs::read_dir(dir)
@@ -1326,19 +1499,25 @@ fn rust_version(source: &Path) -> Result<String> {
     })
 }
 
-/// Replace the running executable with the build, keeping a copy of it.
-fn install(built: &Path, commit: &str) -> Result<()> {
+/// A copy of the build beside the updates, so the build folder stays
+/// free to change while it waits to be installed.
+fn stage(built: &Path, commit: &str) -> Result<PathBuf> {
     let updates = crate::config::data_dir()?.join("updates");
     fs::create_dir_all(&updates)?;
-    // A copy beside the updates, so the build folder stays free to change.
     let staged = updates.join(format!("spotiflex-nightly-{}.exe", &commit[..7]));
     fs::copy(built, &staged)?;
+    Ok(staged)
+}
+
+/// Replace the running executable, keeping a copy of it.
+fn replace_running(staged: &Path) -> Result<()> {
+    let updates = crate::config::data_dir()?.join("updates");
     let executable = std::env::current_exe()?;
     fs::copy(&executable, updates.join("previous-spotiflex.exe"))
         .context("Cannot back up the current executable")?;
-    self_replace::self_replace(&staged)
+    self_replace::self_replace(staged)
         .context("Cannot install. Run SpotiFlex from a folder your account can write to.")?;
-    let _ = fs::remove_file(&staged);
+    let _ = fs::remove_file(staged);
     Ok(())
 }
 
@@ -1673,6 +1852,10 @@ mod tests {
             .extract("source", &good, &dir.join("good"), true)
             .unwrap();
         assert!(is_commit(&comment));
+        assert_eq!(
+            find_file(&dir.join("good"), "MAIN.RS", 2),
+            Some(dir.join("good").join("src").join("main.rs"))
+        );
         assert!(dir.join("good/Cargo.toml").is_file());
         assert!(dir.join("good/src/main.rs").is_file());
         let evil = write("evil.zip", &["top/../../escaped.txt"]);

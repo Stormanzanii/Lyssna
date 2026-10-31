@@ -1275,3 +1275,13 @@
 .whats-new-button.active:after {
   content: none;
 }
+
+/* Nightly's check for newer code, beside What's New. */
+.nightly-refresh.checking svg {
+  animation: nightly-refresh-spin 0.9s linear infinite;
+}
+@keyframes nightly-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

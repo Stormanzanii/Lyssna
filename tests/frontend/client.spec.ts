@@ -705,7 +705,12 @@ async function startClient(
           }
           if (command === "test_audio_output") return true;
           if (command === "nightly_status")
-            return { commit: null, report: null };
+            return {
+              commit: (window as any).__nightlyCommit ?? null,
+              report: null,
+            };
+          if (command === "nightly_check")
+            return host.__clientTest.nightlyCheck ?? "current";
           if (command === "nightly_build") return true;
           if (command === "musixmatch_token_saved")
             return !!host.__clientTest.musixmatchToken;
@@ -14130,4 +14135,48 @@ test("Nightly sets itself up and shows each step's progress", async ({
   await expect.poll(() => calls("nightly_log")).toBe(1);
   await stopped.getByRole("button", { name: "Try again", exact: true }).click();
   await expect.poll(() => calls("nightly_build")).toBe(2);
+});
+
+test("a Nightly copy checks for newer Nightly code from the top bar", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__nightlyCommit = "9dac40a".padEnd(40, "0");
+  });
+  await startClient(page);
+  const refresh = page.getByRole("button", {
+    name: "Check for a newer Nightly",
+  });
+  // Only while following Nightly.
+  await expect(refresh).toHaveCount(0);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, update_channel: "nightly" },
+      }),
+    emptyState.settings,
+  );
+  await refresh.click();
+  await expect(page.getByText("You're on the latest Nightly.")).toBeVisible();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.nightlyCheck = "available";
+    host.emit({
+      type: "update",
+      status: "Update available",
+      version: "Nightly 1234567",
+    });
+  });
+  const prompt = page.getByRole("dialog", {
+    name: "SpotiFlex Nightly 1234567 is available",
+  });
+  await prompt.getByRole("button", { name: "Not now", exact: true }).click();
+  await expect(prompt).toBeHidden();
+  await refresh.click();
+  await expect(prompt).toBeVisible();
+  await expect(
+    // Built in the background, as updates build automatically.
+    prompt.getByRole("button", { name: "Building…", exact: true }),
+  ).toBeDisabled();
 });

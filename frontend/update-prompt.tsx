@@ -20,11 +20,20 @@ export function UpdatePrompt({
   const version = state.update_version;
   const status = state.update_status;
   const ready = status === "Ready to install";
+  // Nightly updates are built on this computer rather than downloaded.
+  const nightly = !!version?.startsWith("Nightly");
   const downloading =
     status.startsWith("Downloading update") ||
+    status.startsWith("Building update") ||
     (status === "Update available" && state.settings.auto_download_updates);
   const open =
     enabled && !!version && version !== dismissed && status !== "Up to date";
+  // Checking for a Nightly by hand shows what was found again.
+  useEffect(() => {
+    const show = () => setDismissed(undefined);
+    window.addEventListener("spotiflex:show-update", show);
+    return () => window.removeEventListener("spotiflex:show-update", show);
+  }, []);
   useEffect(() => {
     setRequested(undefined);
     setError("");
@@ -91,7 +100,12 @@ export function UpdatePrompt({
       <p role="status" aria-live="polite">
         {requested === "install"
           ? "Installing update…"
-          : error || (ready ? "Download verified. Ready to install." : status)}
+          : error ||
+            (ready
+              ? nightly
+                ? "Built and checked. Ready to install."
+                : "Download verified. Ready to install."
+              : status)}
       </p>
       <div className="inline-actions">
         <button
@@ -111,8 +125,12 @@ export function UpdatePrompt({
             : ready
               ? "Install and restart"
               : downloading || requested === "download"
-                ? "Downloading…"
-                : "Download update"}
+                ? nightly
+                  ? "Building…"
+                  : "Downloading…"
+                : nightly
+                  ? "Build update"
+                  : "Download update"}
         </button>
       </div>
     </dialog>

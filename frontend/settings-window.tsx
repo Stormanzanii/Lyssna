@@ -1833,7 +1833,11 @@ export function SettingsWindow({
               </span>
             </button>
             <span className="lyrics-settings-build">
-              {import.meta.env.DEV ? "Development build" : "Release build"}
+              {import.meta.env.DEV
+                ? "Development build"
+                : nightlyStatus?.commit
+                  ? `Nightly build · ${nightlyStatus.commit.slice(0, 7)}`
+                  : "Release build"}
             </span>
           </footer>
         </div>

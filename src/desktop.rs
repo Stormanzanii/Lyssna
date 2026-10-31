@@ -2955,6 +2955,15 @@ async fn nightly_check() -> std::result::Result<String, String> {
         Status::Message(message) => message,
     })
 }
+/// Free the space Nightly's builds take. Off the main thread: a build
+/// folder holds many thousands of files.
+#[tauri::command]
+async fn nightly_clear_cache() -> std::result::Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(crate::nightly::clear_cache)
+        .await
+        .map_err(error)?
+        .map_err(|error| format!("{error:#}"))
+}
 #[tauri::command]
 fn nightly_cancel() {
     crate::nightly::cancel();
@@ -4542,6 +4551,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             nightly_build,
             nightly_check,
             nightly_cancel,
+            nightly_clear_cache,
             nightly_status,
             nightly_log,
             delete_saved_lyrics,

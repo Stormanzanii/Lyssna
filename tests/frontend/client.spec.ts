@@ -714,6 +714,7 @@ async function startClient(
           if (command === "nightly_check")
             return host.__clientTest.nightlyCheck ?? "current";
           if (command === "nightly_build") return true;
+          if (command === "nightly_clear_cache") return 3 * 1_048_576 * 1024;
           if (command === "take_link") {
             const link = host.__clientTest.link ?? null;
             host.__clientTest.link = null;
@@ -14227,6 +14228,34 @@ test("switching to Nightly shows the build on the top bar at once", async ({
   await dialog.getByRole("button", { name: "Hide" }).click();
   await expect(dialog).toBeHidden();
   await expect(ring).toBeVisible();
+});
+
+test("Nightly's build cache can be cleared from Settings", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Advanced");
+  // Only on Nightly.
+  await expect(page.getByText("Nightly build cache")).toHaveCount(0);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, update_channel: "nightly" },
+      }),
+    emptyState.settings,
+  );
+  const row = page.locator(".setting-row", { hasText: "Nightly build cache" });
+  await row.getByRole("button", { name: "Clear cache", exact: true }).click();
+  await expect(
+    page.getByText("Cleared 3,072 MB of Nightly build files."),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "nightly_clear_cache",
+        ).length,
+    ),
+  ).toBe(1);
 });
 
 test("the Nightly button shows a building update, then restarts into it", async ({

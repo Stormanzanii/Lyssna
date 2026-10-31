@@ -400,6 +400,45 @@ pub fn cancel() {
     }
 }
 
+/// Delete Nightly's build output, downloaded source and downloads, keeping
+/// its tools so the next build need not install Rust again. Returns the
+/// bytes freed. Refused while a build runs, and no build starts until it
+/// is done.
+pub fn clear_cache() -> Result<u64> {
+    ensure!(
+        !RUNNING.swap(true, Ordering::SeqCst),
+        "Wait for the Nightly build to finish first."
+    );
+    let result = root().map(|root| {
+        ["target", "source", "downloads"]
+            .into_iter()
+            .map(|name| {
+                let dir = root.join(name);
+                let size = folder_size(&dir);
+                // What could not go, such as a file held open, still counts
+                // as not freed.
+                let _ = fs::remove_dir_all(&dir);
+                size.saturating_sub(folder_size(&dir))
+            })
+            .sum()
+    });
+    RUNNING.store(false, Ordering::SeqCst);
+    result
+}
+
+fn folder_size(dir: &Path) -> u64 {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => folder_size(&entry.path()),
+            Ok(kind) if kind.is_file() => entry.metadata().map_or(0, |data| data.len()),
+            _ => 0,
+        })
+        .sum()
+}
+
 fn cancelled() -> Result<()> {
     ensure!(!CANCEL.load(Ordering::SeqCst), "Cancelled");
     Ok(())

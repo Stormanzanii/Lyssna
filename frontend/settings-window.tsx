@@ -258,6 +258,7 @@ export function SettingsWindow({
     };
   }, [onCall]);
   const [clearingCache, setClearingCache] = useState(false);
+  const [clearingNightly, setClearingNightly] = useState(false);
   useEffect(() => {
     let active = true;
     void onCall<number>("audio_cache_size").then((bytes) => {
@@ -1568,6 +1569,32 @@ export function SettingsWindow({
               }
             >
               {nightlyBuilding ? "Show progress" : "Build latest"}
+            </button>
+          </SettingRow>
+        ) : null,
+        nightly ? (
+          <SettingRow
+            key="nightly-cache"
+            label="Nightly build cache"
+            help="Files kept so the next build is quicker. Clear them if a build keeps failing; the next build starts from scratch and takes longer. Rust and the other build tools are kept."
+            keywords="nightly build cache clear target source disk space failing"
+          >
+            <button
+              className="pill outline"
+              disabled={clearingNightly || nightlyBuilding}
+              onClick={() => {
+                setClearingNightly(true);
+                void onCall<number>("nightly_clear_cache")
+                  .then((freed) => {
+                    if (freed !== undefined)
+                      onNotice(
+                        `Cleared ${Math.round(freed / 1_048_576).toLocaleString()} MB of Nightly build files.`,
+                      );
+                  })
+                  .finally(() => setClearingNightly(false));
+              }}
+            >
+              Clear cache
             </button>
           </SettingRow>
         ) : null,

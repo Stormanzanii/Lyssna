@@ -28,6 +28,9 @@ const EXTENSIONS: [&str; 6] = ["mp3", "m4a", "mp4", "flac", "wav", "ogg"];
 const FOLDER_COVERS: [&str; 4] = ["cover", "folder", "front", "album"];
 /// Covers above this are left out rather than copied.
 const COVER_LIMIT: usize = 16 * 1024 * 1024;
+/// Saved scan results; renamed when what a scan keeps changes, so every
+/// file is read again once.
+const INDEX_FILE: &str = "index-2.json";
 /// The custom protocol that serves saved covers to the interface.
 pub const COVER_SCHEME: &str = "localcover";
 
@@ -308,6 +311,11 @@ fn read(path: &Path) -> Result<(Track, Option<String>)> {
             .format
             .default_track()
             .context("The file has no audio")?;
+        // Songs that cannot be decoded, such as Opus in .ogg, are left out
+        // rather than listed and never starting.
+        symphonia::default::get_codecs()
+            .make(&track.codec_params, &Default::default())
+            .with_context(|| format!("{} uses an unsupported codec", path.display()))?;
         let id = track.id;
         match (track.codec_params.time_base, track.codec_params.n_frames) {
             (Some(base), Some(frames)) => {
@@ -438,7 +446,7 @@ fn covers_dir() -> Result<PathBuf> {
 fn load_saved() -> Vec<Saved> {
     root()
         .ok()
-        .and_then(|root| fs::read(root.join("index.json")).ok())
+        .and_then(|root| fs::read(root.join(INDEX_FILE)).ok())
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .unwrap_or_default()
 }
@@ -446,7 +454,8 @@ fn load_saved() -> Vec<Saved> {
 fn store_saved(items: &[Saved]) -> Result<()> {
     let root = root()?;
     fs::create_dir_all(&root)?;
-    fs::write(root.join("index.json"), serde_json::to_vec(items)?)?;
+    fs::write(root.join(INDEX_FILE), serde_json::to_vec(items)?)?;
+    let _ = fs::remove_file(root.join("index.json"));
     Ok(())
 }
 

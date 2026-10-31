@@ -3,8 +3,6 @@ import { nightlyProgress } from "./nightly-dialog";
 import type { NightlyReport } from "./types";
 
 const RING = 2 * Math.PI * 14;
-/** The arc stops short of a full circle so its rounded ends never meet. */
-const ARC = 0.88;
 
 /**
  * The top bar's Nightly button: checks for newer code, becomes a progress
@@ -53,11 +51,11 @@ export function NightlyButton({
             cy="16"
             r="14"
             strokeDasharray={RING}
-            strokeDashoffset={RING * (1 - (ARC * percent) / 100)}
+            strokeDashoffset={RING * (1 - percent / 100)}
           />
         </svg>
       )}
-      <RefreshCw className="nightly-icon" size={building ? 13 : 18} />
+      <RefreshCw className="nightly-icon" size={building ? 11 : 18} />
       <span className="nightly-restart-label">Restart to update</span>
     </button>
   );

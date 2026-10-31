@@ -1374,6 +1374,8 @@ pub async fn read_range(
     limit: usize,
 ) -> Result<Vec<Track>> {
     ensure!((1..=READ_LIMIT).contains(&limit), "Invalid page size");
+    let started = Instant::now();
+    let mut fetched_pages = 0;
     let identity = session.username();
     let cache_key = (identity.clone(), key.to_owned());
     let wanted = offset.checked_add(limit).context("Invalid page offset")?;
@@ -1459,6 +1461,7 @@ pub async fn read_range(
                     url.starts_with("hm://") || url.starts_with('/'),
                     "Rejected unexpected Spotify page URL"
                 );
+                fetched_pages += 1;
                 let bytes = session.spclient().get_next_page(url).await?;
                 ensure!(bytes.len() <= 4_000_000, "Spotify page is too large");
                 listing.pages.push_front(serde_json::from_slice(&bytes)?);
@@ -1519,6 +1522,7 @@ pub async fn read_range(
         (uris, added, rest)
     };
     let (uris, added, rest) = uris;
+    let listed = started.elapsed();
     if !rest.is_empty() {
         let session = session.clone();
         tokio::spawn(async move { warm_tracks(&session, &rest).await });
@@ -1526,6 +1530,20 @@ pub async fn read_range(
     let mut tracks = resolve_tracks(session, &uris).await?;
     for (track, added) in tracks.iter_mut().zip(added) {
         track.added_at = added_date(added);
+    }
+    // Whole-list reads only: how long the list and its songs took.
+    if limit > 50 {
+        let kind = key
+            .split(':')
+            .next()
+            .filter(|kind| kind.len() != 22)
+            .unwrap_or("playlist");
+        crate::native::diagnostic(&format!(
+            "browse {kind} {} songs: list {}ms ({fetched_pages} extra pages), songs {}ms",
+            tracks.len(),
+            listed.as_millis(),
+            (started.elapsed() - listed).as_millis()
+        ));
     }
     Ok(tracks)
 }
@@ -1565,12 +1583,15 @@ pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result
         warm_tracks(session, &missing).await;
     }
     let mut result = Vec::with_capacity(uris.len());
+    let mut singles = 0;
+    let singles_started = Instant::now();
     for uri in uris {
         if let Some(track) = cached(uri) {
             result.push(track);
             continue;
         }
         // Batch misses (rare) and non-song items fall back to one request each.
+        singles += 1;
         let track = match SpotifyUri::from_uri(uri) {
             Ok(id) => tokio::time::timeout(
                 Duration::from_secs(6),
@@ -1595,6 +1616,12 @@ pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result
                 ..Track::default()
             })),
         }
+    }
+    if singles > 0 {
+        crate::native::diagnostic(&format!(
+            "browse {singles} songs looked up one at a time: {}ms",
+            singles_started.elapsed().as_millis()
+        ));
     }
     Ok(result)
 }

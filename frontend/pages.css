@@ -1385,8 +1385,7 @@
     transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 /* Shown for a moment when a build starts, then only on hover. */
-.nightly-tag.shown,
-.nightly-wrap:has(:focus-visible) .nightly-tag {
+.nightly-tag.shown {
   transform: translateX(-50%);
   opacity: 1;
   pointer-events: auto;

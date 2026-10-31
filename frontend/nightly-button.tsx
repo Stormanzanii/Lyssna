@@ -1,5 +1,5 @@
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { nightlyProgress } from "./nightly-dialog";
 import type { NightlyReport } from "./types";
 
@@ -53,9 +53,26 @@ export function NightlyButton({
   }, [building]);
   // Hover is tracked rather than left to CSS: a popup opened from the
   // button covers it, and WebKit keeps it hovered until the pointer comes
-  // back. Focus shows the tag only from the keyboard, since closing a popup
-  // hands focus back to the button.
+  // back. Focus shows the tag only when the keyboard brought it: closing a
+  // popup hands focus back to the button, which WebKit counts as
+  // :focus-visible even after a click.
   const [hovered, setHovered] = useState(false);
+  const [keyboardFocus, setKeyboardFocus] = useState(false);
+  const usingKeys = useRef(false);
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === "Tab") usingKeys.current = true;
+    };
+    const pointer = () => {
+      usingKeys.current = false;
+    };
+    window.addEventListener("keydown", keys, true);
+    window.addEventListener("pointerdown", pointer, true);
+    return () => {
+      window.removeEventListener("keydown", keys, true);
+      window.removeEventListener("pointerdown", pointer, true);
+    };
+  }, []);
   const label = ready
     ? "Restart to update"
     : building
@@ -68,6 +85,8 @@ export function NightlyButton({
       className="nightly-wrap"
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
+      onFocus={() => setKeyboardFocus(usingKeys.current)}
+      onBlur={() => setKeyboardFocus(false)}
     >
       <button
         className={`icon-button nightly-refresh${checking || building ? " checking" : ""}${building ? " building" : ""}${ready ? " ready" : ""}${available ? " available" : ""}`}
@@ -96,7 +115,7 @@ export function NightlyButton({
       </button>
       {tag && (
         <button
-          className={`nightly-tag${announcing || hovered ? " shown" : ""}`}
+          className={`nightly-tag${announcing || hovered || keyboardFocus ? " shown" : ""}`}
           onClick={() => {
             setHovered(false);
             onShow();

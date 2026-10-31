@@ -14235,6 +14235,14 @@ test("switching to Nightly shows the build on the top bar at once", async ({
   await expect(
     page.getByRole("button", { name: /^Building Nightly update/ }),
   ).not.toHaveAttribute("title");
+  // Focus handed back by code after a click, as WebKit does when a popup
+  // closes, leaves the tag hidden; only the keyboard shows it.
+  await page.mouse.click(4, 400);
+  await page
+    .getByRole("button", { name: /^Building Nightly update/ })
+    .evaluate((button: HTMLElement) => button.focus());
+  await page.waitForTimeout(400);
+  await expect(tag).toHaveCSS("opacity", "0");
 });
 
 test("Nightly's build cache can be cleared from Settings", async ({ page }) => {

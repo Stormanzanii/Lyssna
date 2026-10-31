@@ -712,6 +712,11 @@ async function startClient(
           if (command === "nightly_check")
             return host.__clientTest.nightlyCheck ?? "current";
           if (command === "nightly_build") return true;
+          if (command === "take_link") {
+            const link = host.__clientTest.link ?? null;
+            host.__clientTest.link = null;
+            return link;
+          }
           if (command === "musixmatch_token_saved")
             return !!host.__clientTest.musixmatchToken;
           if (command === "save_musixmatch_token") {
@@ -14322,6 +14327,42 @@ test("with automatic builds off, a new Nightly turns the button blue instead of 
   await expect(
     prompt.getByRole("button", { name: "Build update", exact: true }),
   ).toBeEnabled();
+});
+
+test("spotiflex:// links play songs and open pages", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.link = { kind: "play", value: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" };
+    host.emit({ type: "link" });
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "player" &&
+            call.args?.request?.uri === "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+        ),
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.link = { kind: "open", value: "album:4uLU6hMCjMI75M1A2tKUQC" };
+    host.emit({ type: "link" });
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "browse" &&
+            JSON.stringify(call.args).includes("album:4uLU6hMCjMI75M1A2tKUQC"),
+        ),
+      ),
+    )
+    .toBe(true);
 });
 
 test("a Nightly copy checks for newer Nightly code from the top bar", async ({

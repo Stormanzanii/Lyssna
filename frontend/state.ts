@@ -315,6 +315,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     // Played by App; nothing to keep.
     case "play_uri":
+    case "link":
     case "local_files":
       return state;
     case "creator_profile":

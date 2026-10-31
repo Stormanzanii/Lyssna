@@ -4,5 +4,16 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>SpotiFlex uses the microphone for local DJ voice recognition. Microphone audio is never uploaded.</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>xyz.clypdat.spotiflex</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>spotiflex</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

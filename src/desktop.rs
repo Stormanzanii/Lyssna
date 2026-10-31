@@ -4175,6 +4175,23 @@ fn memory_target(window: &tauri::WebviewWindow, low: bool) {
 fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
 /// Hidden windows stop compositing like minimized ones; audio is native and
 /// keeps playing.
+/// Act on a `spotiflex://` link: show SpotiFlex, and let the interface play
+/// or open what it names once signed in and ready.
+fn follow_link(app: &tauri::AppHandle, link: crate::links::Link) {
+    if let Some(window) = app.get_webview_window("main") {
+        set_window_shown(&window, true);
+        let _ = window.set_focus();
+    }
+    if link != crate::links::Link::Show {
+        crate::links::keep(link);
+        let _ = app.emit("spotiflex", json!({"type":"link"}));
+    }
+}
+/// The `spotiflex://` link waiting to be acted on, taken once.
+#[tauri::command]
+fn take_link() -> Option<crate::links::Link> {
+    crate::links::take().filter(|link| *link != crate::links::Link::Show)
+}
 fn set_window_shown(window: &tauri::WebviewWindow, shown: bool) {
     #[cfg(windows)]
     let _ = window.with_webview(move |webview| unsafe {
@@ -4301,6 +4318,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             // tray included, so the new build can take its place.
             if args.iter().any(|argument| argument == QUIT_ARG) {
                 app.exit(0);
+                return;
+            }
+            // A `spotiflex://` link opened while SpotiFlex runs.
+            if let Some(link) = crate::links::from_args(&args) {
+                follow_link(app, link);
             } else if let Some(window) = app.get_webview_window("main") {
                 set_window_shown(&window, true);
             }
@@ -4336,6 +4358,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             // Nothing was running to quit: this copy has nothing to do.
             if std::env::args().any(|argument| argument == QUIT_ARG) {
                 std::process::exit(0);
+            }
+            // SpotiFlex opened by a `spotiflex://` link: acted on once ready.
+            if let Some(link) = crate::links::from_args(std::env::args()) {
+                crate::links::keep(link);
+            }
+            // Installed copies open `spotiflex://` links; a debug build from
+            // `target` would take them from the installed one.
+            #[cfg(windows)]
+            if !cfg!(debug_assertions)
+                && let Err(error) = crate::links::register()
+            {
+                log::warn!("{error:#}");
             }
             #[cfg(target_os = "macos")]
             app.set_menu(tauri::menu::Menu::default(app.handle())?)?;
@@ -4443,6 +4477,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             resume_after_restart,
+            take_link,
             window_fullscreen,
             open_lyrics_popout,
             toggle_cinema_lyrics,
@@ -4527,6 +4562,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .build(tauri::generate_context!())?;
     app.run(|app, event| {
+        // macOS hands `spotiflex://` links to the running app.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = &event
+            && let Some(link) = urls.iter().find_map(|url| crate::links::parse(url.as_str()))
+        {
+            follow_link(app, link);
+        }
         if matches!(&event,tauri::RunEvent::WindowEvent{label,event:tauri::WindowEvent::Destroyed,..}if label=="main"){app.exit(0);}
         if matches!(event, tauri::RunEvent::Exit)
             && let Some(state) = app.try_state::<Desktop>()

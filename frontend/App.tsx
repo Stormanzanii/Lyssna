@@ -661,6 +661,7 @@ function App() {
   );
   // A Nightly copy gets a button that looks for newer Nightly code.
   const [nightlyCommit, setNightlyCommit] = useState<string | null>(null);
+  const [linkSignal, setLinkSignal] = useState(0);
   // The first Nightly build, started from Settings, shows on the top bar
   // from the moment it is confirmed; clicking it shows its progress.
   const switchingToNightly = !nightlyCommit && !!state.nightly?.running;
@@ -750,6 +751,11 @@ function App() {
         // Listen on a creator's profile plays the song here.
         if (event.type === "play_uri") {
           playRef.current?.({ command: "play", uri: event.uri });
+          return;
+        }
+        // A `spotiflex://` link: taken below once signed in and ready.
+        if (event.type === "link") {
+          setLinkSignal((count) => count + 1);
           return;
         }
         // A folder scan finished: count the row and refresh the open page.
@@ -1943,6 +1949,27 @@ function App() {
       saveRecentSearches(account, next);
       return next;
     });
+  // `spotiflex://` links play a song or open a page, as Spotify's own do;
+  // one that opened SpotiFlex waits until it is signed in and ready.
+  useEffect(() => {
+    if (!state.profile || !state.native_ready) return;
+    rpc<{ kind: "play" | "open"; value: string } | null>("take_link")
+      .then((link) => {
+        if (!link) return;
+        if (link.kind === "play") {
+          playRef.current({ command: "play", uri: link.value });
+        } else if (link.value.startsWith("user:")) {
+          const user = link.value.slice(5);
+          profileTrail.current = [];
+          setProfileView({ user, hint: { id: user } });
+          setCenter("profile");
+        } else {
+          setCenter("browse");
+          navigateRef.current(link.value);
+        }
+      })
+      .catch(() => {});
+  }, [state.profile?.id, state.native_ready, linkSignal]);
   const openRecentSearch = (item: RecentSearch) => {
     setSearchFocused(false);
     searchInput.current?.blur();

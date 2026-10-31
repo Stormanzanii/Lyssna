@@ -283,6 +283,53 @@ describe("asynchronous playback and browsing", () => {
       }).pages,
     ).toEqual({});
   });
+  it("shows whole lists only complete, never a first page", () => {
+    let state = reducer(
+      { ...emptyState, profile: { id: "account" } },
+      { type: "page_prefetch", key: "playlist:a", tracks: [track], more: true },
+    );
+    state = reducer(state, {
+      type: "navigate",
+      key: "playlist:a",
+      generation: 1,
+    });
+    expect(state.tracks).toEqual([]);
+    expect(state.loading).toBe(true);
+    // A first page arriving while it is open waits for the rest.
+    state = reducer(state, {
+      type: "page_prefetch",
+      key: "playlist:a",
+      tracks: [track],
+      more: true,
+    });
+    expect(state.tracks).toEqual([]);
+    state = reducer(state, {
+      type: "tracks",
+      key: "playlist:a",
+      generation: 1,
+      offset: 0,
+      tracks: [track, { ...track, uri: "spotify:track:b" }],
+      more: false,
+    });
+    expect(state.tracks).toHaveLength(2);
+    // Opened again, the complete copy shows at once.
+    state = reducer(state, { type: "navigate", key: "home", generation: 2 });
+    state = reducer(state, {
+      type: "navigate",
+      key: "playlist:a",
+      generation: 3,
+    });
+    expect(state.tracks).toHaveLength(2);
+    // Other pages still show what they have.
+    state = reducer(state, {
+      type: "page_prefetch",
+      key: "recent",
+      tracks: [track],
+      more: true,
+    });
+    state = reducer(state, { type: "navigate", key: "recent", generation: 4 });
+    expect(state.tracks).toHaveLength(1);
+  });
   it("alternates rapid play and pause before native acknowledgments arrive", () => {
     let previous: ToggleIntent | undefined;
     const choices = [];

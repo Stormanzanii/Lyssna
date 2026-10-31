@@ -28,6 +28,8 @@ export interface CachedPage {
   info?: BrowseInfo;
 }
 const PAGE_LIMIT = 40;
+/** The longest list a cached page keeps. */
+const KEPT_SONGS = 1000;
 function rememberCanvas(
   previous: AppState["canvases"],
   uri: string,
@@ -55,6 +57,18 @@ function mergeInfo(
       }
     : incoming;
 }
+/** Lists that show every song at once, like Spotify: a playlist, Liked
+ * Songs, an artist's liked songs or an album. A part of one is never shown,
+ * so the list doesn't grow or reshuffle as the rest arrives. */
+export function loadsWhole(key: string) {
+  return (
+    key === "liked" ||
+    ["playlist:", "liked-artist:", "album:"].some((prefix) =>
+      key.startsWith(prefix),
+    )
+  );
+}
+
 export function rememberPage(
   pages: Record<string, CachedPage>,
   key: string,
@@ -368,7 +382,9 @@ export function reducer(state: AppState, action: Action): AppState {
         more: action.more,
       });
       // Arrived while the page is open and still empty: show it now.
-      return action.key === state.route && !state.tracks.length
+      return action.key === state.route &&
+        !state.tracks.length &&
+        !(action.more && loadsWhole(action.key))
         ? { ...state, pages, tracks: action.tracks, more: action.more }
         : { ...state, pages };
     }
@@ -566,6 +582,8 @@ export function reducer(state: AppState, action: Action): AppState {
     case "navigate": {
       // Show the cached copy at once; fresh data replaces it when it lands.
       const cached = state.pages[action.key];
+      const cachedTracks =
+        cached?.more && loadsWhole(action.key) ? [] : cached?.tracks;
       const item =
         state.home?.account === state.profile?.id
           ? state.home?.sections
@@ -590,7 +608,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         route: action.key,
         generation: action.generation,
-        tracks: cached?.tracks ?? [],
+        tracks: cachedTracks ?? [],
         search_playlists: cached?.search_playlists ?? [],
         search_artists: cached?.search_artists ?? [],
         search_albums: cached?.search_albums ?? [],
@@ -621,8 +639,9 @@ export function reducer(state: AppState, action: Action): AppState {
         loading: false,
         more: action.more,
         pageError: "",
+        // Long lists aren't kept in memory once left; they reload quickly.
         pages:
-          action.offset === 0
+          action.offset === 0 && action.tracks.length <= KEPT_SONGS
             ? rememberPage(state.pages, action.key, {
                 tracks: action.tracks,
                 more: action.more,

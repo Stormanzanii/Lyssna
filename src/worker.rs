@@ -1106,14 +1106,9 @@ impl Backend {
                     return Ok(());
                 }
                 // A playlist, Liked Songs or an album shows every song at once,
-                // like Spotify. After the first page, the rest load together on
-                // a background thread instead of one round trip per page.
-                if offset > 0
-                    && (key == "liked"
-                        || ["playlist:", "liked-artist:", "album:"]
-                            .iter()
-                            .any(|prefix| key.starts_with(prefix)))
-                {
+                // like Spotify: the whole list loads in one read on a
+                // background thread, so it never arrives a page at a time.
+                if loads_whole(&key) {
                     let spotify = self.api()?;
                     let _ = spotify.refresh_credentials();
                     let mut spotify = spotify.background();
@@ -1127,7 +1122,26 @@ impl Backend {
                         let mut tracks = Vec::new();
                         let mut more = true;
                         let mut failure = None;
-                        while tracks.len() < REST_BATCH {
+                        let read_natively = match read_all(&native, &key, offset) {
+                            Some(Ok(batch)) => {
+                                more = batch.len() == crate::native_browse::READ_LIMIT;
+                                if let Some(account) = spotify.account() {
+                                    for (page, chunk) in batch.chunks(50).enumerate() {
+                                        crate::library_cache::save_tracks(
+                                            account,
+                                            &key,
+                                            offset + page * 50,
+                                            chunk,
+                                        );
+                                    }
+                                }
+                                tracks = batch;
+                                true
+                            }
+                            _ => false,
+                        };
+                        // Page by page when the native read is unavailable.
+                        while !read_natively && tracks.len() < REST_BATCH {
                             match fetch_tracks(&mut spotify, &native, &key, offset + tracks.len()) {
                                 Ok(page) => {
                                     let last = page.len() < 50;
@@ -1842,8 +1856,23 @@ impl Backend {
         fetch_tracks(self.api()?, &native, key, offset)
     }
 }
-/// Most songs one background batch loads after a collection's first page.
+/// Most songs one background batch loads page by page, when the native
+/// read is unavailable.
 const REST_BATCH: usize = 2_000;
+/// A playlist, Liked Songs, an artist's liked songs or an album: lists
+/// that show every song at once.
+fn loads_whole(key: &str) -> bool {
+    key == "liked"
+        || ["playlist:", "liked-artist:", "album:"]
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+}
+/// Such a list in one native read; None for anything else.
+fn read_all(native: &NativeControls, key: &str, offset: usize) -> Option<Result<Vec<Track>>> {
+    let id = key.strip_prefix("playlist:").unwrap_or(key);
+    loads_whole(key)
+        .then(|| native.playlist_tracks_range(id, offset, crate::native_browse::READ_LIMIT))
+}
 struct PrefetchRequest {
     spotify: Spotify,
     native: NativeControls,

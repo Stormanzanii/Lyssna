@@ -157,6 +157,7 @@ struct MetadataRead {
 struct PlaylistRead {
     id: String,
     offset: usize,
+    limit: usize,
     reply: mpsc::Sender<std::result::Result<Vec<crate::model::Track>, String>>,
 }
 struct PlaybackServices<'a> {
@@ -815,6 +816,15 @@ impl NativeControls {
             .map_err(anyhow::Error::msg)
     }
     pub fn playlist_tracks(&self, id: &str, offset: usize) -> Result<Vec<crate::model::Track>> {
+        self.playlist_tracks_range(id, offset, 50)
+    }
+    /// Up to `limit` songs from `offset`, in one read.
+    pub fn playlist_tracks_range(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<crate::model::Track>> {
         anyhow::ensure!(
             (id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric()))
                 || id == "liked"
@@ -845,6 +855,7 @@ impl NativeControls {
                 .send(PlaylistRead {
                     id: id.into(),
                     offset,
+                    limit,
                     reply,
                 })
                 .map_err(|_| anyhow::anyhow!("Native Spotify connection unavailable"))?;
@@ -2402,7 +2413,7 @@ async fn run(
             Some(request)=playlists.recv()=>{
                 let session=session.clone();
                 tokio::spawn(async move{
-                    let result=tokio::time::timeout(Duration::from_secs(22),crate::native_browse::read(&session,&request.id,request.offset)).await.map_err(|_|"Spotify browsing request timed out".to_owned()).and_then(|result|result.map_err(|error|error.to_string()));
+                    let result=tokio::time::timeout(Duration::from_secs(22),crate::native_browse::read_range(&session,&request.id,request.offset,request.limit)).await.map_err(|_|"Spotify browsing request timed out".to_owned()).and_then(|result|result.map_err(|error|error.to_string()));
                     let _=request.reply.send(result);
                 });
             }

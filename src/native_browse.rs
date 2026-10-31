@@ -1358,9 +1358,25 @@ fn list_images(
 }
 
 pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Track>> {
+    read_range(session, key, offset, 50).await
+}
+
+/// Most songs one read returns; a whole playlist, Liked Songs or album is
+/// read this way so it opens at once instead of a page at a time.
+pub const READ_LIMIT: usize = 2_000;
+
+/// Up to `limit` songs from `offset`. A first page (`offset` 0, `limit` 50)
+/// also fetches the rest of the list's songs in the background.
+pub async fn read_range(
+    session: &Session,
+    key: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<Vec<Track>> {
+    ensure!((1..=READ_LIMIT).contains(&limit), "Invalid page size");
     let identity = session.username();
     let cache_key = (identity.clone(), key.to_owned());
-    let wanted = offset.checked_add(50).context("Invalid page offset")?;
+    let wanted = offset.checked_add(limit).context("Invalid page offset")?;
     ensure!(wanted <= 100_000, "Playlist exceeds browsing limit");
     let uris = {
         let mut cache = LISTINGS.get_or_init(Default::default).lock().await;
@@ -1476,13 +1492,19 @@ pub async fn read(session: &Session, key: &str, offset: usize) -> Result<Vec<Tra
                 listing.pages.push_back(json!({"page_url":next}));
             }
         }
-        let uris: Vec<_> = listing.uris.iter().skip(offset).take(50).cloned().collect();
+        let uris: Vec<_> = listing
+            .uris
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
         let added: Vec<_> = (offset..offset + uris.len())
             .map(|index| listing.added.get(index).copied().unwrap_or_default())
             .collect();
         // The rest of the list loads right after the first page; fetch its
         // songs in the background so those pages come from the cache.
-        let rest: Vec<String> = if offset == 0 {
+        let rest: Vec<String> = if offset == 0 && limit == 50 {
             listing
                 .uris
                 .iter()
@@ -1589,10 +1611,18 @@ fn remember_track(identity: &str, uri: &str, track: &Track) {
 /// Fetch song metadata in batches of up to 500 into the track cache.
 async fn warm_tracks(session: &Session, uris: &[String]) {
     let identity = session.username();
+    // The batches go out together, so a long list costs about one round
+    // trip rather than one per batch.
+    let mut batches = tokio::task::JoinSet::new();
     for chunk in uris.chunks(500) {
-        let Ok(Ok(tracks)) =
-            tokio::time::timeout(Duration::from_secs(10), tracks_batched(session, chunk)).await
-        else {
+        let session = session.clone();
+        let chunk = chunk.to_vec();
+        batches.spawn(async move {
+            tokio::time::timeout(Duration::from_secs(10), tracks_batched(&session, &chunk)).await
+        });
+    }
+    while let Some(batch) = batches.join_next().await {
+        let Ok(Ok(Ok(tracks))) = batch else {
             continue;
         };
         for (uri, track) in tracks {

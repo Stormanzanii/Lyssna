@@ -14137,6 +14137,90 @@ test("Nightly sets itself up and shows each step's progress", async ({
   await expect.poll(() => calls("nightly_build")).toBe(2);
 });
 
+test("the Nightly button shows a building update, then restarts into it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__nightlyCommit = "9dac40a".padEnd(40, "0");
+  });
+  await startClient(page);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, update_channel: "nightly" },
+      }),
+    emptyState.settings,
+  );
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "nightly",
+      report: {
+        running: true,
+        finished: false,
+        error: null,
+        note: null,
+        log: null,
+        steps: [
+          {
+            id: "crates",
+            label: "Rust packages",
+            state: "done",
+            progress: null,
+            detail: null,
+          },
+          {
+            id: "app",
+            label: "Building SpotiFlex",
+            state: "running",
+            progress: 0.5,
+            detail: null,
+          },
+        ],
+      },
+    }),
+  );
+  const building = page.getByRole("button", {
+    name: "Building Nightly update, 55%",
+  });
+  await expect(building).toBeVisible();
+  await expect(building.locator(".nightly-ring")).toBeVisible();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "nightly",
+      report: {
+        running: false,
+        finished: true,
+        error: null,
+        note: null,
+        log: null,
+        steps: [],
+      },
+    });
+    host.emit({
+      type: "update",
+      status: "Ready to install",
+      version: "Nightly 1234567",
+    });
+  });
+  const prompt = page.getByRole("dialog", {
+    name: "SpotiFlex Nightly 1234567 is available",
+  });
+  await prompt.getByRole("button", { name: "Not now", exact: true }).click();
+  await page.getByRole("button", { name: "Restart to update" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "app_update" && call.args?.action === "install",
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   page,
 }) => {

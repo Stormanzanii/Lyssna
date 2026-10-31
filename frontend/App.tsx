@@ -26,7 +26,6 @@ import {
   Heart,
   Code,
   Bell,
-  RefreshCw,
   Home,
   ImagePlus,
   Pencil,
@@ -155,6 +154,7 @@ import {
 } from "./library-order";
 import { useAppFonts } from "./custom-fonts";
 import { UpdatePrompt } from "./update-prompt";
+import { NightlyButton } from "./nightly-button";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
@@ -2801,15 +2801,16 @@ function App() {
         </div>
         <div className="top-actions">
           {nightlyCommit && state.settings.update_channel === "nightly" && (
-            <button
-              className={`icon-button nightly-refresh${checkingNightly ? " checking" : ""}`}
-              title="Check for a newer Nightly"
-              aria-label="Check for a newer Nightly"
-              disabled={checkingNightly}
-              onClick={() => void checkNightly()}
-            >
-              <RefreshCw size={18} />
-            </button>
+            <NightlyButton
+              status={state.update_status}
+              report={state.nightly}
+              checking={checkingNightly}
+              onCheck={() => void checkNightly()}
+              onShow={() =>
+                window.dispatchEvent(new Event("spotiflex:show-update"))
+              }
+              onRestart={() => void call("app_update", { action: "install" })}
+            />
           )}
           <button
             className={`icon-button whats-new-button ${state.route === "whats-new" && center === "browse" ? "active" : ""}`}

@@ -715,6 +715,7 @@ function App() {
             albums: [],
           },
         });
+      openedAt.current = { key, at: performance.now() };
       dispatch({ type: "navigate", key, generation: next });
       mainScroll.current?.scrollTo({ top: 0 });
       void call("browse", { key, generation: next, offset: 0 });
@@ -722,6 +723,25 @@ function App() {
     [call],
   );
   const navigateRef = useRef(navigate);
+  /** When the open page was clicked, for the diagnostics log. */
+  const openedAt = useRef<{ key: string; at: number } | null>(null);
+  useEffect(() => {
+    const opened = openedAt.current;
+    if (!opened || opened.key !== state.route || !state.tracks.length) return;
+    openedAt.current = null;
+    const songs = state.tracks.length;
+    // After the list is painted.
+    requestAnimationFrame(() =>
+      setTimeout(
+        () =>
+          void rpc("page_shown", {
+            kind: opened.key,
+            songs,
+            ms: Math.round(performance.now() - opened.at),
+          }).catch(() => {}),
+      ),
+    );
+  }, [state.route, state.tracks]);
   /** A song a `lyssna://` link named, to select once its album lists it. */
   const linkedSong = useRef<string | null>(null);
   navigateRef.current = navigate;

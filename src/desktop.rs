@@ -837,6 +837,20 @@ impl Desktop {
                             }
                             snapshot.loading = false;
                             snapshot.more = more;
+                            if offset == 0
+                                && let Some((_, asked)) = ASKED
+                                    .lock()
+                                    .ok()
+                                    .and_then(|mut asked| asked.take())
+                                    .filter(|(asked, _)| *asked == generation)
+                            {
+                                crate::native::diagnostic(&format!(
+                                    "browse sent {} {} songs {}ms after asking",
+                                    page_kind(&key),
+                                    tracks.len(),
+                                    asked.elapsed().as_millis()
+                                ));
+                            }
                             if offset == 0 {
                                 snapshot.tracks = tracks.clone();
                             } else if snapshot.tracks.len() == offset {
@@ -1708,6 +1722,9 @@ fn browse(
             return Ok(());
         }
         if offset == 0 {
+            if let Ok(mut asked) = ASKED.lock() {
+                *asked = Some((generation, Instant::now()));
+            }
             snapshot.route = key.clone();
             snapshot.generation = generation;
             snapshot.tracks.clear();
@@ -1798,6 +1815,19 @@ fn browse(
     };
     result().map_err(error)
 }
+/// The interface's click-to-screen time for a list, for the local
+/// diagnostics log. Only the kind of page is written.
+#[tauri::command]
+fn page_shown(kind: String, songs: usize, ms: u64) {
+    crate::native::diagnostic(&format!(
+        "browse shown {} {songs} songs {ms}ms after clicking",
+        page_kind(&kind)
+    ));
+}
+/// When the open page asked for its songs, by generation, to log how long
+/// they took to come back.
+static ASKED: Mutex<Option<(u64, Instant)>> = Mutex::new(None);
+
 /// Page kinds for start timing; never the page's ID or search text.
 fn page_kind(route: &str) -> &'static str {
     match route.split_once(':').map_or(route, |(kind, _)| kind) {
@@ -4582,6 +4612,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             nightly_check,
             nightly_cancel,
             nightly_clear_cache,
+            page_shown,
             nightly_status,
             nightly_log,
             delete_saved_lyrics,

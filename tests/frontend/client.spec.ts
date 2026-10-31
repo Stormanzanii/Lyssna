@@ -14207,7 +14207,10 @@ test("the Nightly button shows a building update, then restarts into it", async 
   const prompt = page.getByRole("dialog", {
     name: "SpotiFlex Nightly 1234567 is available",
   });
-  await prompt.getByRole("button", { name: "Not now", exact: true }).click();
+  await expect(prompt).toBeVisible();
+  // Clicking outside the prompt hides it.
+  await page.mouse.click(4, 4);
+  await expect(prompt).toBeHidden();
   await page.getByRole("button", { name: "Restart to update" }).click();
   await expect
     .poll(() =>

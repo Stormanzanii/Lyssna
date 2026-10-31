@@ -81,6 +81,18 @@ export function UpdatePrompt({
       className="dialog update-dialog"
       aria-labelledby="update-title"
       aria-describedby="update-description"
+      // Clicking outside it hides it, as Settings and creator profiles do.
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        if (
+          event.clientX < box.left ||
+          event.clientX > box.right ||
+          event.clientY < box.top ||
+          event.clientY > box.bottom
+        )
+          dismiss();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         dismiss();

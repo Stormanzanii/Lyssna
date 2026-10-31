@@ -1122,7 +1122,13 @@ impl Backend {
                         let mut tracks = Vec::new();
                         let mut more = true;
                         let mut failure = None;
-                        let read_natively = match read_all(&native, &key, offset) {
+                        let whole = read_all(&native, &key, offset);
+                        if let Some(Err(error)) = &whole {
+                            crate::native::diagnostic(&format!(
+                                "browse whole read failed, paging instead: {error:#}"
+                            ));
+                        }
+                        let read_natively = match whole {
                             Some(Ok(batch)) => {
                                 more = batch.len() == crate::native_browse::READ_LIMIT;
                                 if let Some(account) = spotify.account() {

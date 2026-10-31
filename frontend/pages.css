@@ -1315,6 +1315,20 @@
 .nightly-refresh.building {
   color: #fff;
 }
+/* A newer Nightly found while automatic builds are off. */
+.nightly-refresh.available {
+  color: #4d9bff;
+  /* Fades to blue rather than snapping when an update is found. */
+  transition:
+    max-width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    gap 0.45s,
+    background-color 0.3s,
+    color 0.9s ease;
+}
+.nightly-refresh.available:hover {
+  color: #7ab4ff;
+}
 .nightly-restart-label {
   max-width: 0;
   opacity: 0;

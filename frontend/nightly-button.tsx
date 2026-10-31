@@ -17,6 +17,7 @@ export function NightlyButton({
   status,
   report,
   checking,
+  automatic,
   onCheck,
   onShow,
   onRestart,
@@ -24,6 +25,8 @@ export function NightlyButton({
   status: string;
   report?: NightlyReport;
   checking: boolean;
+  /** Whether new Nightlies build by themselves. */
+  automatic: boolean;
   onCheck: () => void;
   onShow: () => void;
   onRestart: () => void;
@@ -31,6 +34,10 @@ export function NightlyButton({
   const ready = status === "Ready to install";
   const building =
     !ready && (!!report?.running || status.startsWith("Building update"));
+  // Found while automatic builds are off: the button turns blue, and
+  // clicking it shows what's new.
+  const available =
+    !automatic && !ready && !building && status === "Update available";
   const percent = report?.running
     ? Math.round(nightlyProgress(report) * 100)
     : 0;
@@ -48,15 +55,17 @@ export function NightlyButton({
     ? "Restart to update"
     : building
       ? `Building Nightly update, ${percent}%`
-      : "Check for a newer Nightly";
+      : available
+        ? "A newer Nightly is available"
+        : "Check for a newer Nightly";
   return (
     <span className="nightly-wrap">
       <button
-        className={`icon-button nightly-refresh${checking || building ? " checking" : ""}${building ? " building" : ""}${ready ? " ready" : ""}`}
+        className={`icon-button nightly-refresh${checking || building ? " checking" : ""}${building ? " building" : ""}${ready ? " ready" : ""}${available ? " available" : ""}`}
         title={label}
         aria-label={label}
         disabled={checking && !building && !ready}
-        onClick={ready ? onRestart : building ? onShow : onCheck}
+        onClick={ready ? onRestart : building || available ? onShow : onCheck}
       >
         {building && (
           <svg className="nightly-ring" viewBox="0 0 32 32" aria-hidden="true">

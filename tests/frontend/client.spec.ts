@@ -14281,6 +14281,49 @@ test("the Nightly button shows a building update, then restarts into it", async 
     .toBe(true);
 });
 
+test("with automatic builds off, a new Nightly turns the button blue instead of popping up", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__nightlyCommit = "9dac40a".padEnd(40, "0");
+  });
+  await startClient(page);
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: {
+          ...settings,
+          update_channel: "nightly",
+          auto_download_updates: false,
+        },
+      }),
+    emptyState.settings,
+  );
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "update",
+      status: "Update available",
+      version: "Nightly 1234567",
+    }),
+  );
+  const button = page.getByRole("button", {
+    name: "A newer Nightly is available",
+  });
+  await expect(button).toBeVisible();
+  // Fades from its usual colour to blue.
+  await expect(button).toHaveCSS("color", "rgb(77, 155, 255)");
+  const prompt = page.getByRole("dialog", {
+    name: "SpotiFlex Nightly 1234567 is available",
+  });
+  await expect(prompt).toBeHidden();
+  await button.click();
+  await expect(prompt).toBeVisible();
+  await expect(
+    prompt.getByRole("button", { name: "Build update", exact: true }),
+  ).toBeEnabled();
+});
+
 test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   page,
 }) => {

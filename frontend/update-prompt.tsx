@@ -23,9 +23,9 @@ export function UpdatePrompt({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [dismissed, setDismissed] = useState<string>();
-  // Nightly updates that build by themselves show on the top bar's button
-  // (a progress ring and tag, then Restart to update); this opens only when
-  // that is clicked.
+  // Nightly updates show on the top bar's button (blue when found, a
+  // progress ring while building, then Restart to update); this opens only
+  // when that is clicked.
   const [asked, setAsked] = useState(false);
   const [requested, setRequested] = useState<"download" | "install">();
   const [error, setError] = useState("");
@@ -46,7 +46,7 @@ export function UpdatePrompt({
     enabled &&
     !!version &&
     key(version, ready) !== dismissed &&
-    (!(nightly && state.settings.auto_download_updates) || asked) &&
+    (!nightly || asked) &&
     status !== "Up to date";
   // Checking for a Nightly by hand shows what was found again.
   useEffect(() => {

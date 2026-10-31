@@ -2821,6 +2821,7 @@ function App() {
               status={state.update_status}
               report={state.nightly}
               checking={checkingNightly}
+              automatic={state.settings.auto_download_updates}
               onCheck={() => void checkNightly()}
               onShow={() =>
                 switchingToNightly

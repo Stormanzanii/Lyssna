@@ -1563,7 +1563,8 @@ fn added_date(ms: i64) -> String {
 }
 
 pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result<Vec<Track>> {
-    ensure!(uris.len() <= 50, "Too many queued tracks");
+    // A whole list in one read, or a page of one.
+    ensure!(uris.len() <= READ_LIMIT, "Too many songs at once");
     let identity = session.username();
     let cached = |uri: &String| {
         TRACKS

@@ -1,5 +1,5 @@
 use crate::{
-    core::{Error, Session},
+    core::{Error, Session, error::ErrorKind},
     protocol::{
         autoplay_context_request::AutoplayContextRequest, context::Context,
         transfer_state::TransferState,
@@ -146,6 +146,7 @@ pub struct ContextResolver {
     dj: crate::dj_cache::DjCache,
     session: Session,
     queue: VecDeque<ResolveContext>,
+    /// Contexts that failed to resolve, with when they may be tried again.
     unavailable_contexts: HashMap<ResolveContext, Instant>,
 }
 
@@ -154,6 +155,9 @@ pub(crate) const LEXICON_CONTEXT_URL: &str = "lexicon_context_url";
 
 // time after which an unavailable context is retried
 const RETRY_UNAVAILABLE: Duration = Duration::from_secs(3600);
+// a context that failed on the network, such as autoplay at the end of a
+// playlist, is retried soon so playback doesn't stop
+const RETRY_NETWORK_FAILURE: Duration = Duration::from_secs(20);
 
 impl ContextResolver {
     pub fn new(session: Session) -> Self {
@@ -167,23 +171,17 @@ impl ContextResolver {
     }
 
     pub fn add(&mut self, resolve: ResolveContext) {
-        let last_try = self
-            .unavailable_contexts
-            .get(&resolve)
-            .map(Instant::elapsed);
+        let retry_at = self.unavailable_contexts.get(&resolve).copied();
 
-        let last_try = if matches!(last_try, Some(last_try) if last_try > RETRY_UNAVAILABLE) {
+        let retry_at = if matches!(retry_at, Some(retry_at) if Instant::now() >= retry_at) {
             let _ = self.unavailable_contexts.remove(&resolve);
-            debug!(
-                "context was requested {}s ago, trying again to resolve the requested context",
-                last_try.expect("checked by condition").as_secs()
-            );
+            debug!("trying again to resolve the requested context");
             None
         } else {
-            last_try
+            retry_at
         };
 
-        if last_try.is_some() {
+        if retry_at.is_some() {
             debug!("tried loading unavailable context: {resolve}");
             return;
         } else if self.queue.contains(&resolve) {
@@ -353,10 +351,19 @@ impl ContextResolver {
         }
     }
 
-    pub fn mark_next_unavailable(&mut self) {
+    /// Remember the next context failed; a network failure is retried
+    /// soon, anything else after an hour.
+    pub fn mark_next_unavailable(&mut self, why: &Error) {
+        let wait = match why.kind {
+            ErrorKind::Unavailable
+            | ErrorKind::DeadlineExceeded
+            | ErrorKind::Aborted
+            | ErrorKind::Unknown => RETRY_NETWORK_FAILURE,
+            _ => RETRY_UNAVAILABLE,
+        };
         if let Some((next, _, _)) = self.find_next() {
             self.unavailable_contexts
-                .insert(next.clone(), Instant::now());
+                .insert(next.clone(), Instant::now() + wait);
         }
     }
 

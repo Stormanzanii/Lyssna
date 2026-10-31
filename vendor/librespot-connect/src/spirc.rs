@@ -1149,7 +1149,7 @@ impl SpircTask {
     fn handle_next_context(&mut self, next_context: Result<Context, Error>) -> bool {
         let next_context = match next_context {
             Err(why) => {
-                self.context_resolver.mark_next_unavailable();
+                self.context_resolver.mark_next_unavailable(&why);
                 self.context_resolver.remove_used_and_invalid();
                 error!("{why}");
                 return false;
@@ -2690,6 +2690,10 @@ impl SpircTask {
             let narration = self.narrated.unheard(&track_id.to_uri(), narration);
             self.player.set_narration(track_id.clone(), narration);
             self.player.preload(track_id);
+        } else {
+            // Nothing follows yet, for example when fetching autoplay failed
+            // earlier; ask again before the song ends rather than stopping.
+            self.add_autoplay_resolving_when_required();
         }
     }
 

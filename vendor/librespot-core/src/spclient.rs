@@ -543,6 +543,9 @@ impl SpClient {
                             self.flush_accesspoint().await
                         }
                     }
+                    // Sending failed, such as on a pooled connection the
+                    // server already closed; a fresh connection usually works.
+                    ErrorKind::Unknown if tries < 3 => {}
                     _ => break, // if we can't build the request now, then we won't ever
                 }
             }

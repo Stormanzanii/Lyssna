@@ -14166,7 +14166,8 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
       type: "update",
       status: "Update available",
       version: "Nightly 1234567",
-      notes: "1234567 feat: newest\nabcdef0 fix: older\nand 3 more",
+      notes:
+        "1234567 new Shuffle is remembered.\nabcdef0 fixed Songs no longer pause.\nand 3 more",
     });
   });
   const prompt = page.getByRole("dialog", {
@@ -14183,12 +14184,16 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   // Each new commit, and how far the build has got.
   await expect(prompt.getByText("You're using Nightly 9dac40a")).toBeVisible();
   await expect(
-    prompt.getByRole("heading", { name: "5 new changes" }),
+    prompt.getByRole("heading", { name: "5 commits since your Nightly" }),
   ).toBeVisible();
-  await expect(prompt.getByRole("listitem")).toHaveText([
-    "1234567feat: newest",
-    "abcdef0fix: older",
-  ]);
+  await expect(prompt.getByText("9dac40a→1234567")).toBeVisible();
+  await expect(
+    prompt.getByRole("region", { name: "New" }).getByRole("listitem"),
+  ).toHaveText(["Shuffle is remembered.1234567"]);
+  await expect(
+    prompt.getByRole("region", { name: "Fixed" }).getByRole("listitem"),
+  ).toHaveText(["Songs no longer pause.abcdef0"]);
+  await expect(prompt.getByText("and 3 older commits")).toBeVisible();
   await page.evaluate(() =>
     (window as any).__clientTest.emit({
       type: "nightly",

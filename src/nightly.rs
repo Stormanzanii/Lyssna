@@ -1392,19 +1392,8 @@ fn change_lines(comparison: &serde_json::Value) -> String {
         .filter_map(|commit| {
             let sha = commit["sha"].as_str().filter(|sha| is_commit(sha))?;
             let message = commit["commit"]["message"].as_str()?;
-            // A commit's "Nightly:" line says what changed for listeners;
-            // older commits only have their subject.
-            let subject = message
-                .lines()
-                .find_map(|line| line.trim().strip_prefix("Nightly:"))
-                .or_else(|| message.lines().next())?
-                .trim();
-            let subject: String = subject
-                .chars()
-                .filter(|c| !c.is_control())
-                .take(120)
-                .collect();
-            Some(format!("{} {subject}", &sha[..7]))
+            let (kind, text) = change(message)?;
+            Some(format!("{} {kind} {text}", &sha[..7]))
         })
         .take(CHANGES_SHOWN)
         .collect();
@@ -1415,6 +1404,39 @@ fn change_lines(comparison: &serde_json::Value) -> String {
         lines.push(format!("and {} more", total - lines.len()));
     }
     lines.join("\n")
+}
+
+/// What one commit changed for listeners, and whether it is "new",
+/// "fixed" or "other". Its "Nightly:" line says it in plain words; older
+/// commits only have their subject, shown without its type.
+fn change(message: &str) -> Option<(&'static str, String)> {
+    let subject = message.lines().next()?.trim();
+    let (kind, rest) = match subject.split_once(": ") {
+        Some((prefix, rest)) if !prefix.contains(' ') => {
+            let kind = prefix.split('(').next().unwrap_or_default();
+            let kind = match kind.trim_end_matches('!') {
+                "feat" => "new",
+                "fix" => "fixed",
+                _ => "other",
+            };
+            (kind, rest)
+        }
+        _ => ("other", subject),
+    };
+    let text = message
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("Nightly:"))
+        .unwrap_or(rest)
+        .trim();
+    let mut text: String = text
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(160)
+        .collect();
+    if let Some(first) = text.chars().next() {
+        text.replace_range(..first.len_utf8(), &first.to_uppercase().to_string());
+    }
+    (!text.is_empty()).then_some((kind, text))
 }
 
 fn is_commit(text: &str) -> bool {
@@ -1903,9 +1925,17 @@ mod tests {
         });
         assert_eq!(
             change_lines(&comparison),
-            "bbbbbbb Second is nicer.\naaaaaaa fix: first\nand 38 more"
+            "bbbbbbb new Second is nicer.\naaaaaaa fixed First\nand 38 more"
         );
         assert_eq!(change_lines(&serde_json::json!({})), "");
+        assert_eq!(
+            change("perf!: faster lyrics"),
+            Some(("other", "Faster lyrics".into()))
+        );
+        assert_eq!(
+            change("Merge pull request #3 from fork: main"),
+            Some(("other", "Merge pull request #3 from fork: main".into()))
+        );
     }
     #[test]
     fn commits_are_full_hashes() {

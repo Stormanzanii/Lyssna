@@ -105,7 +105,11 @@ export function UpdatePrompt({
       </p>
       {state.update_notes &&
         (nightly ? (
-          <NightlyChanges notes={state.update_notes} />
+          <NightlyChanges
+            notes={state.update_notes}
+            current={current}
+            latest={version?.replace(/^Nightly /, "")}
+          />
         ) : (
           <section aria-label="Release notes">
             <h3>What changed</h3>
@@ -173,10 +177,32 @@ export function UpdatePrompt({
   );
 }
 
-/** Each commit a Nightly brings: its short hash and subject. */
-function NightlyChanges({ notes }: { notes: string }) {
-  const lines = notes.split("\n").filter(Boolean);
-  const commits = lines.filter((line) => /^[0-9a-f]{7} /.test(line));
+const KINDS = [
+  ["new", "New"],
+  ["fixed", "Fixed"],
+  ["other", "Improved"],
+] as const;
+
+/**
+ * The commits a Nightly brings, grouped into new, fixed and improved, each
+ * with its short hash, and how many there are since this copy.
+ */
+function NightlyChanges({
+  notes,
+  current,
+  latest,
+}: {
+  notes: string;
+  current?: string | null;
+  latest?: string;
+}) {
+  const lines = notes.split(NEWLINE).filter(Boolean);
+  const commits = lines.flatMap((line) => {
+    const match = /^([0-9a-f]{7}) (?:(new|fixed|other) )?(.+)$/.exec(line);
+    return match
+      ? [{ sha: match[1], kind: match[2] ?? "other", text: match[3] }]
+      : [];
+  });
   if (!commits.length)
     return (
       <section aria-label="Release notes">
@@ -184,23 +210,49 @@ function NightlyChanges({ notes }: { notes: string }) {
         <p className="update-notes">{notes}</p>
       </section>
     );
-  const more = lines.find((line) => line.startsWith("and "));
+  const more = Number(/^and (\d+) more$/.exec(lines.at(-1) ?? "")?.[1] ?? 0);
+  const total = commits.length + more;
   return (
-    <section aria-label="Release notes">
+    <section aria-label="Release notes" className="update-changes">
       <h3>
-        {commits.length === 1 && !more
-          ? "1 new change"
-          : `${commits.length + (more ? Number(more.split(" ")[1]) || 0 : 0)} new changes`}
+        {total === 1 ? "1 commit" : `${total} commits`} since your Nightly
       </h3>
-      <ul className="update-commits">
-        {commits.map((line) => (
-          <li key={line}>
-            <code>{line.slice(0, 7)}</code>
-            <span>{line.slice(8)}</span>
-          </li>
-        ))}
-      </ul>
-      {more && <p className="update-notes">{more}</p>}
+      {current && latest && (
+        <p className="update-range">
+          <code>{current.slice(0, 7)}</code>
+          <span aria-label="to">→</span>
+          <code>{latest}</code>
+        </p>
+      )}
+      <div className="update-commits">
+        {KINDS.map(([kind, label]) => {
+          const group = commits.filter((commit) => commit.kind === kind);
+          if (!group.length) return null;
+          return (
+            <section key={kind} aria-label={label}>
+              <h4>
+                {label}
+                <span>{group.length}</span>
+              </h4>
+              <ul>
+                {group.map((commit) => (
+                  <li key={commit.sha}>
+                    <span>{commit.text}</span>
+                    <code>{commit.sha}</code>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+      {more > 0 && (
+        <p className="update-notes">
+          {more === 1 ? "and 1 older commit" : `and ${more} older commits`}
+        </p>
+      )}
     </section>
   );
 }
+
+const NEWLINE = String.fromCharCode(10);

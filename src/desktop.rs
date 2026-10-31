@@ -1362,8 +1362,7 @@ impl Desktop {
                 .ok()
                 .is_some_and(|last| last.is_some())
         {
-            let _ =
-                crate::resume::save(&profile.id, &snapshot.playback, snapshot.observed_at, true);
+            let _ = crate::resume::save(&profile.id, &playback_now(&snapshot), now_ms(), true);
         }
         self.0.stopped.store(true, Ordering::Relaxed);
         if let Ok(cancelled) = self.0.login_cancelled.lock() {
@@ -2870,27 +2869,32 @@ fn hand_over_playback(inner: &Inner) {
     let Some(profile) = snapshot.profile.as_ref() else {
         return;
     };
-    let mut playback = snapshot.playback.clone();
+    let playback = playback_now(&snapshot);
     let playing = playback.is_playing
         && playback.device.name == native::device_name()
         && playback.item.as_ref().is_some_and(|track| !track.is_local);
-    if playing {
-        playback.progress_ms = Some(
-            playback.progress_ms.unwrap_or_default()
-                + now_ms().saturating_sub(snapshot.observed_at),
-        );
-    }
     if let Err(error) = crate::resume::save(&profile.id, &playback, now_ms(), true) {
         log::warn!("Cannot save the song before restarting: {error:#}");
     }
     updater::keep_playing(playing);
 }
+/// Playback with its position brought up to now: this computer's player
+/// reports its position on changes, not continuously.
+fn playback_now(snapshot: &Snapshot) -> crate::model::Playback {
+    let mut playback = snapshot.playback.clone();
+    if playback.is_playing && playback.device.name == native::device_name() {
+        playback.progress_ms = Some(
+            playback.progress_ms.unwrap_or_default()
+                + now_ms().saturating_sub(snapshot.observed_at),
+        );
+    }
+    playback
+}
 /// Whether this copy was restarted by an update mid-song and should play on,
 /// once the song is restored; answers true only once.
 #[tauri::command]
 fn resume_after_restart(state: State<'_, Desktop>) -> bool {
-    lock(&state.0.snapshot)
-        .is_ok_and(|snapshot| snapshot.native_ready && snapshot.playback.item.is_some())
+    lock(&state.0.snapshot).is_ok_and(|snapshot| snapshot.playback.item.is_some())
         && updater::resumes_playing()
 }
 /// The commits a new Nightly brings, one per line.

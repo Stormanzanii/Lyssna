@@ -1041,16 +1041,18 @@ function App() {
   );
   const playRef = useRef(play);
   playRef.current = play;
-  // Restarted by an update mid-song: carry on from where it stopped.
+  // Restarted by an update mid-song: carry on from where it stopped. Asked
+  // as soon as the song is restored; the player starts it the moment it
+  // connects rather than waiting for the app to say it is ready.
   const restoredUri = state.playback.item?.uri;
   useEffect(() => {
-    if (!state.profile || !state.native_ready || !restoredUri) return;
+    if (!state.profile || !restoredUri) return;
     rpc<boolean>("resume_after_restart")
       .then((resume) => {
         if (resume) playRef.current({ command: "play" });
       })
       .catch(() => {});
-  }, [state.profile?.id, state.native_ready, restoredUri]);
+  }, [state.profile?.id, restoredUri]);
   // A card already knows its name and picture: show them at once while
   // Spotify sends the rest of the page (about half a second for artists).
   const openCard = useCallback(

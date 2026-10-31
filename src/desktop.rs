@@ -4311,21 +4311,27 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         // Local Files covers, saved from the songs' own pictures.
-        .register_uri_scheme_protocol(crate::local_files::COVER_SCHEME, |_, request| {
-            let name = request.uri().path().trim_start_matches('/').to_owned();
-            match crate::local_files::cover(&name) {
-                Some((bytes, mime)) => tauri::http::Response::builder()
-                    .header("Content-Type", mime)
-                    .header("Access-Control-Allow-Origin", "*")
-                    .header("Cache-Control", "max-age=31536000, immutable")
-                    .body(bytes)
-                    .unwrap_or_default(),
-                None => tauri::http::Response::builder()
-                    .status(404)
-                    .body(Vec::new())
-                    .unwrap_or_default(),
-            }
-        })
+        // Read off the interface's thread, so scrolling never waits on disk.
+        .register_asynchronous_uri_scheme_protocol(
+            crate::local_files::COVER_SCHEME,
+            |_, request, responder| {
+                let name = request.uri().path().trim_start_matches('/').to_owned();
+                tauri::async_runtime::spawn_blocking(move || {
+                    responder.respond(match crate::local_files::cover(&name) {
+                        Some((bytes, mime)) => tauri::http::Response::builder()
+                            .header("Content-Type", mime)
+                            .header("Access-Control-Allow-Origin", "*")
+                            .header("Cache-Control", "max-age=31536000, immutable")
+                            .body(bytes)
+                            .unwrap_or_default(),
+                        None => tauri::http::Response::builder()
+                            .status(404)
+                            .body(Vec::new())
+                            .unwrap_or_default(),
+                    });
+                });
+            },
+        )
         .setup(|app| {
             // Nothing was running to quit: this copy has nothing to do.
             if std::env::args().any(|argument| argument == QUIT_ARG) {

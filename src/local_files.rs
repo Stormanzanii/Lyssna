@@ -105,8 +105,49 @@ pub fn cover(name: &str) -> Option<(Vec<u8>, &'static str)> {
         "png" => "image/png",
         _ => return None,
     };
-    let bytes = fs::read(covers_dir().ok()?.join(name)).ok()?;
+    let file = covers_dir().ok()?.join(name);
+    let bytes = fs::read(&file).ok()?;
+    // Covers saved before they were shrunk are shrunk on first use, so lists
+    // never decode a full-size picture per row.
+    if bytes.len() > SHRUNK_LIMIT
+        && let Some(small) = shrink(&bytes)
+    {
+        let _ = fs::write(&file, &small);
+        return Some((small, mime));
+    }
     Some((bytes, mime))
+}
+
+/// Saved covers are at most this wide and tall, as Spotify's largest.
+const COVER_SIZE: u32 = 640;
+/// A cover this small is already shrunk.
+const SHRUNK_LIMIT: usize = 200 * 1024;
+
+/// A picture larger than `COVER_SIZE`, scaled down in its own format.
+fn shrink(bytes: &[u8]) -> Option<Vec<u8>> {
+    let format = image::guess_format(bytes).ok()?;
+    let picture = image::load_from_memory_with_format(bytes, format).ok()?;
+    if picture.width() <= COVER_SIZE && picture.height() <= COVER_SIZE {
+        return None;
+    }
+    let small = picture.resize(
+        COVER_SIZE,
+        COVER_SIZE,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let mut out = Vec::new();
+    match format {
+        image::ImageFormat::Jpeg => {
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+                .encode_image(&small.to_rgb8())
+                .ok()?
+        }
+        image::ImageFormat::Png => small
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .ok()?,
+        _ => return None,
+    }
+    Some(out)
 }
 
 /// A local cover as a small JPEG data URL, for apps that cannot load
@@ -156,23 +197,70 @@ pub fn rescan(settings: &crate::config::Settings) {
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::spawn(move || {
         let scanning = SCAN.lock();
+        // The first time, the songs saved last run show at once while the
+        // folders are walked, which can take a while on large or slow drives.
+        if generation == 1 && !folders.is_empty() {
+            let saved: Vec<Saved> = load_saved()
+                .into_iter()
+                .filter(|item| folders.iter().any(|folder| item.path.starts_with(folder)))
+                .collect();
+            if !saved.is_empty() {
+                publish(index_of(&saved));
+            }
+        }
         let (index, kept) = scan(&folders);
-        let count = index.tracks.len();
-        let playable = index
-            .paths
-            .iter()
-            .filter_map(|(uri, path)| Some((SpotifyUri::from_uri(uri).ok()?, path.clone())))
-            .collect();
-        librespot_playback::set_local_files(playable);
-        if let Ok(mut shared) = INDEX.write() {
-            *shared = index;
-        }
-        if let Some(listener) = LISTENER.get() {
-            listener(count);
-        }
+        publish(index);
         drop(scanning);
         measure(kept, generation);
     });
+}
+
+/// Make an index the one songs are listed and played from.
+fn publish(index: Index) {
+    let count = index.tracks.len();
+    let playable = index
+        .paths
+        .iter()
+        .filter_map(|(uri, path)| Some((SpotifyUri::from_uri(uri).ok()?, path.clone())))
+        .collect();
+    librespot_playback::set_local_files(playable);
+    if let Ok(mut shared) = INDEX.write() {
+        *shared = index;
+    }
+    if let Some(listener) = LISTENER.get() {
+        listener(count);
+    }
+}
+
+/// Songs as saved, listed without opening their files.
+fn index_of(items: &[Saved]) -> Index {
+    let mut index = Index::default();
+    for item in items {
+        if index.paths.contains_key(&item.track.uri) {
+            continue;
+        }
+        index
+            .paths
+            .insert(item.track.uri.clone(), item.path.clone());
+        index.tracks.push(listed(item));
+    }
+    index
+}
+
+/// A saved song as listed, with its cover's address; its loudness is
+/// applied to playback.
+fn listed(item: &Saved) -> Track {
+    let mut track = item.track.clone();
+    if let Some(name) = &item.cover {
+        track.album.images = vec![Artwork {
+            url: cover_url(name),
+            width: None,
+        }];
+    }
+    if let Some(loudness) = item.loudness {
+        librespot_playback::set_local_gain(item.path.clone(), boost(loudness));
+    }
+    track
 }
 
 /// Measure the loudness of songs not measured yet, one by one in the
@@ -294,18 +382,8 @@ fn scan(folders: &[PathBuf]) -> (Index, Vec<Saved>) {
         if index.paths.contains_key(&item.track.uri) {
             continue;
         }
-        let mut track = item.track.clone();
-        if let Some(name) = &item.cover {
-            track.album.images = vec![Artwork {
-                url: cover_url(name),
-                width: None,
-            }];
-        }
-        if let Some(loudness) = item.loudness {
-            librespot_playback::set_local_gain(file.clone(), boost(loudness));
-        }
-        index.paths.insert(track.uri.clone(), file);
-        index.tracks.push(track);
+        index.paths.insert(item.track.uri.clone(), file);
+        index.tracks.push(listed(&item));
         kept.push(item);
     }
     let _ = store_saved(&kept);
@@ -505,7 +583,7 @@ fn save_cover(bytes: &[u8]) -> Option<String> {
     let file = dir.join(&name);
     if !file.exists() {
         fs::create_dir_all(&dir).ok()?;
-        fs::write(&file, bytes).ok()?;
+        fs::write(&file, shrink(bytes).as_deref().unwrap_or(bytes)).ok()?;
     }
     Some(name)
 }
@@ -546,6 +624,29 @@ fn store_saved(items: &[Saved]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_covers_are_kept_at_spotify_size_in_their_own_format() {
+        let picture = image::DynamicImage::new_rgb8(1600, 1200);
+        for format in [image::ImageFormat::Png, image::ImageFormat::Jpeg] {
+            let mut bytes = Vec::new();
+            picture
+                .write_to(&mut std::io::Cursor::new(&mut bytes), format)
+                .unwrap();
+            let small = shrink(&bytes).unwrap();
+            assert_eq!(image::guess_format(&small).unwrap(), format);
+            let small = image::load_from_memory(&small).unwrap();
+            assert_eq!((small.width(), small.height()), (640, 480));
+        }
+        let mut tiny = Vec::new();
+        image::DynamicImage::new_rgb8(300, 300)
+            .write_to(
+                &mut std::io::Cursor::new(&mut tiny),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        assert!(shrink(&tiny).is_none());
+    }
 
     #[test]
     fn local_uris_match_spotify_and_parse_back() {

@@ -438,7 +438,7 @@ export type AppEvent =
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
   | { type: "play_uri"; uri: string }
-  /** A `spotiflex://` link is waiting; `take_link` returns it. */
+  /** A `lyssna://` link is waiting; `take_link` returns it. */
   | { type: "link" }
   | { type: "local_files"; count: number }
   | {

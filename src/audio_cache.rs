@@ -6,11 +6,11 @@
 use anyhow::{Context, Result};
 use std::{fs, path::Path, path::PathBuf};
 
-/// `%LOCALAPPDATA%\SpotiFlex\cache\audio`: machine-local, kept out of the
+/// `%LOCALAPPDATA%\Lyssna\cache\audio`: machine-local, kept out of the
 /// roaming profile and apart from Spotify's own installation.
 pub fn directory() -> Result<PathBuf> {
-    let dirs = directories::ProjectDirs::from("", "", "SpotiFlex")
-        .context("Cannot locate the SpotiFlex cache directory")?;
+    let dirs = directories::ProjectDirs::from("", "", "Lyssna")
+        .context("Cannot locate the Lyssna cache directory")?;
     Ok(dirs.cache_dir().join("audio"))
 }
 
@@ -76,8 +76,7 @@ mod tests {
 
     #[test]
     fn size_and_clear_cover_nested_files_and_keep_the_folder() {
-        let root =
-            std::env::temp_dir().join(format!("spotiflex-cache-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("lyssna-cache-test-{}", std::process::id()));
         let nested = root.join("ab");
         fs::create_dir_all(&nested).unwrap();
         fs::write(nested.join("cdef"), vec![0; 300]).unwrap();

@@ -1,8 +1,8 @@
-//! Nightly builds: SpotiFlex built on this computer from the latest source.
+//! Nightly builds: Lyssna built on this computer from the latest source.
 //!
 //! Tools already on the computer are used as they are: rustup (a missing
 //! Rust version is added to it), a recent enough Node.js, CMake and
-//! libclang. Anything missing is kept in SpotiFlex's own folder, pinned and
+//! libclang. Anything missing is kept in Lyssna's own folder, pinned and
 //! checked against published SHA-256 sums: a private rustup with its own
 //! homes, portable Node.js, libclang and CMake. Nothing is added to PATH
 //! and no administrator rights are needed, except for the system's C++
@@ -35,7 +35,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const REPOSITORY: &str = "Stormanzanii/SpotiFlex";
+const REPOSITORY: &str = "Stormanzanii/Lyssna";
 const NODE_RELEASES: &str = "https://nodejs.org/dist/latest-v24.x";
 const LIBCLANG_VERSION: &str = "18.1.1";
 const CMAKE_VERSION: &str = "3.31.6";
@@ -143,7 +143,11 @@ const KEPT_VARIABLES: &[&str] = &[
 type Progress = Box<dyn FnMut(&str) -> Option<f64>>;
 
 /// The commit a Nightly copy was built from.
-pub const COMMIT: Option<&str> = option_env!("SPOTIFLEX_NIGHTLY");
+pub const COMMIT: Option<&str> = match option_env!("LYSSNA_NIGHTLY") {
+    Some(commit) => Some(commit),
+    // Set by Nightly copies from before the rename that build this source.
+    None => option_env!("SPOTIFLEX_NIGHTLY"),
+};
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static CANCEL: AtomicBool = AtomicBool::new(false);
@@ -187,7 +191,7 @@ pub struct Report {
 }
 
 pub enum Outcome {
-    /// Installed; SpotiFlex restarts into it.
+    /// Installed; Lyssna restarts into it.
     Installed,
     /// Built in the background and waiting to be installed.
     Staged(String),
@@ -237,7 +241,7 @@ static HOOKS: std::sync::OnceLock<Hooks> = std::sync::OnceLock::new();
 /// A finished background build: its commit and executable.
 static READY: Mutex<Option<(String, PathBuf)>> = Mutex::new(None);
 
-/// The latest report, if a build ran since SpotiFlex started.
+/// The latest report, if a build ran since Lyssna started.
 pub fn last() -> Option<Report> {
     LAST.lock().ok()?.clone()
 }
@@ -375,7 +379,7 @@ pub fn ready() -> Option<String> {
 }
 
 /// Replace this copy with the Nightly built in the background; the
-/// caller restarts SpotiFlex.
+/// caller restarts Lyssna.
 pub fn install_ready() -> Result<()> {
     let (_, staged) = READY
         .lock()
@@ -403,8 +407,8 @@ fn cancelled() -> Result<()> {
 
 /// Where Nightly keeps its tools, source and build.
 fn root() -> Result<PathBuf> {
-    let dirs = directories::ProjectDirs::from("", "", "SpotiFlex")
-        .context("Cannot locate SpotiFlex's local data folder")?;
+    let dirs = directories::ProjectDirs::from("", "", "Lyssna")
+        .context("Cannot locate Lyssna's local data folder")?;
     Ok(dirs.data_local_dir().join("nightly"))
 }
 
@@ -475,7 +479,7 @@ impl<F: Fn(&Report)> Run<F> {
             ("packages", "Interface packages"),
             ("interface", "Building the interface"),
             ("crates", "Rust packages"),
-            ("app", "Building SpotiFlex"),
+            ("app", "Building Lyssna"),
             ("check", "Checking the build"),
             ("install", "Installing"),
         ]
@@ -591,7 +595,7 @@ impl<F: Fn(&Report)> Run<F> {
         self.open_log()?;
         self.send(true);
         self.log(&format!(
-            "SpotiFlex {} building Nightly in {}",
+            "Lyssna {} building Nightly in {}",
             env!("CARGO_PKG_VERSION"),
             root.display()
         ));
@@ -1037,7 +1041,7 @@ impl<F: Fn(&Report)> Run<F> {
         )?;
         self.set("interface", State::Done);
 
-        // SpotiFlex itself: packages first, so a dropped connection never
+        // Lyssna itself: packages first, so a dropped connection never
         // costs a compile, then the build.
         let cargo = self.tools.rust_bin.join(format!("cargo{EXE}"));
         let lock = fs::read_to_string(source.join("Cargo.lock")).unwrap_or_default();
@@ -1054,7 +1058,7 @@ impl<F: Fn(&Report)> Run<F> {
         )?;
         self.set("crates", State::Done);
         self.set("app", State::Running);
-        let build = ["build", "--release", "--locked", "--bin", "spotiflex"];
+        let build = ["build", "--release", "--locked", "--bin", "lyssna"];
         if let Err(error) = self.command(
             "app",
             &cargo,
@@ -1097,13 +1101,13 @@ impl<F: Fn(&Report)> Run<F> {
             .tools
             .target
             .join("release")
-            .join(format!("spotiflex{EXE}"));
-        ensure!(built.is_file(), "The build finished without SpotiFlex");
+            .join(format!("lyssna{EXE}"));
+        ensure!(built.is_file(), "The build finished without Lyssna");
         let output = self
             .output(&built, &["--version"], Duration::from_secs(60))
             .context("The new build didn't start")?;
         ensure!(
-            output.contains("SpotiFlex") && output.contains(&commit[..7]),
+            output.contains("Lyssna") && output.contains(&commit[..7]),
             "The new build reported \"{}\" instead of Nightly {}",
             output.trim(),
             &commit[..7]
@@ -1361,7 +1365,7 @@ impl<F: Fn(&Report)> Run<F> {
         if let Some(commit) = &self.tools.commit {
             // Marks the copy as Nightly; it keeps the updater, so choosing
             // Stable again installs the release.
-            command.env("SPOTIFLEX_NIGHTLY", commit);
+            command.env("LYSSNA_NIGHTLY", commit);
         }
         isolate(command);
     }
@@ -1566,7 +1570,7 @@ fn state_name(state: State) -> &'static str {
 
 fn client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
-        .user_agent(concat!("SpotiFlex/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Lyssna/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(60 * 60))
         .build()?)
@@ -1876,7 +1880,7 @@ fn rust_version(source: &Path) -> Result<String> {
 fn stage(built: &Path, commit: &str) -> Result<PathBuf> {
     let updates = crate::config::data_dir()?.join("updates");
     fs::create_dir_all(&updates)?;
-    let staged = updates.join(format!("spotiflex-nightly-{}{EXE}", &commit[..7]));
+    let staged = updates.join(format!("lyssna-nightly-{}{EXE}", &commit[..7]));
     fs::copy(built, &staged)?;
     Ok(staged)
 }
@@ -1885,13 +1889,10 @@ fn stage(built: &Path, commit: &str) -> Result<PathBuf> {
 fn replace_running(staged: &Path) -> Result<()> {
     let updates = crate::config::data_dir()?.join("updates");
     let executable = std::env::current_exe()?;
-    fs::copy(
-        &executable,
-        updates.join(format!("previous-spotiflex{EXE}")),
-    )
-    .context("Cannot back up the current executable")?;
+    fs::copy(&executable, updates.join(format!("previous-lyssna{EXE}")))
+        .context("Cannot back up the current executable")?;
     self_replace::self_replace(staged)
-        .context("Cannot install. Run SpotiFlex from a folder your account can write to.")?;
+        .context("Cannot install. Run Lyssna from a folder your account can write to.")?;
     let _ = fs::remove_file(staged);
     // The app's signature covers the executable it replaced: bring its
     // Info.plist up to date, sign it again as the build script did, and
@@ -2187,7 +2188,7 @@ mod windows_impl {
         core::{HSTRING, PCWSTR, w},
     };
 
-    /// Processes that are stopped together, and when SpotiFlex exits;
+    /// Processes that are stopped together, and when Lyssna exits;
     /// they run below normal priority so playback stays smooth.
     pub struct Job(HANDLE);
     // The handle is only passed to thread-safe system calls.
@@ -2397,7 +2398,7 @@ mod tests {
 
     #[test]
     fn rust_versions_get_a_patch_number() {
-        let dir = std::env::temp_dir().join(format!("spotiflex-nightly-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lyssna-nightly-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             dir.join("Cargo.toml"),
@@ -2413,7 +2414,7 @@ mod tests {
     /// The whole pipeline against the real services, without installing:
     /// `cargo test --lib nightly_end_to_end -- --ignored --nocapture`.
     #[test]
-    #[ignore = "downloads the build tools and builds SpotiFlex"]
+    #[ignore = "downloads the build tools and builds Lyssna"]
     fn nightly_end_to_end() {
         let seen = Mutex::new(Vec::new());
         let mut run = Run::new(move |report: &Report| {
@@ -2490,7 +2491,7 @@ mod tests {
 
     #[test]
     fn archives_unpack_without_their_top_folder_and_refuse_escapes() {
-        let dir = std::env::temp_dir().join(format!("spotiflex-unpack-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lyssna-unpack-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let write = |name: &str, entries: &[&str]| {
@@ -2508,7 +2509,7 @@ mod tests {
         let mut run = Run::new(|_: &Report| {});
         let good = write(
             "good.zip",
-            &["SpotiFlex-abc/Cargo.toml", "SpotiFlex-abc/src/main.rs"],
+            &["Lyssna-abc/Cargo.toml", "Lyssna-abc/src/main.rs"],
         );
         let comment = run
             .extract("source", &good, &dir.join("good"), true)

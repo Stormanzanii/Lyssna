@@ -151,7 +151,7 @@ fn shrink(bytes: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// A local cover as a small JPEG data URL, for apps that cannot load
-/// SpotiFlex's cover protocol, such as the Stream Deck plugin.
+/// Lyssna's cover protocol, such as the Stream Deck plugin.
 pub fn inline_cover(url: &str) -> Option<String> {
     static INLINE: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
     let name = url.rsplit('/').next()?;

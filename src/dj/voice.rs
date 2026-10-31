@@ -1,4 +1,4 @@
-//! Bounded local voice recognition. Audio is never uploaded or saved by SpotiFlex.
+//! Bounded local voice recognition. Audio is never uploaded or saved by Lyssna.
 use anyhow::{Result, ensure};
 use std::{
     collections::VecDeque,

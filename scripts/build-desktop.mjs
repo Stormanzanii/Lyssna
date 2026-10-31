@@ -24,20 +24,26 @@ function prepare(command, args, operation, env = process.env) {
 }
 
 function localSigningIdentity() {
-  const directory = join(
-    homedir(),
-    "Library",
-    "Application Support",
-    "SpotiFlex",
-    "build-signing",
-  );
+  const support = join(homedir(), "Library", "Application Support");
+  const directory = join(support, "Lyssna", "build-signing");
   const metadata = join(directory, "identity.json");
-  const keychain = join(
-    homedir(),
-    "Library",
-    "Keychains",
-    "SpotiFlex-local-build.keychain-db",
-  );
+  const keychains = join(homedir(), "Library", "Keychains");
+  const keychain = join(keychains, "Lyssna-local-build.keychain-db");
+  // Builds from before the rename keep their identity, so Keychain trust survives.
+  const legacyDirectory = join(support, "SpotiFlex", "build-signing");
+  const legacyMetadata = join(legacyDirectory, "identity.json");
+  const legacyKeychain = join(keychains, "SpotiFlex-local-build.keychain-db");
+  if (!existsSync(metadata) && existsSync(legacyMetadata)) {
+    if (existsSync(directory)) {
+      renameSync(legacyMetadata, metadata);
+    } else {
+      mkdirSync(join(support, "Lyssna"), { recursive: true, mode: 0o700 });
+      renameSync(legacyDirectory, directory);
+    }
+  }
+  if (!existsSync(keychain) && existsSync(legacyKeychain)) {
+    renameSync(legacyKeychain, keychain);
+  }
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
   let identity;
@@ -56,10 +62,10 @@ function localSigningIdentity() {
         "Local signing metadata is missing. Restore it to preserve the existing identity.",
       );
     }
-    const temporary = mkdtempSync(join(tmpdir(), "spotiflex-signing-"));
+    const temporary = mkdtempSync(join(tmpdir(), "lyssna-signing-"));
     chmodSync(temporary, 0o700);
     const password = randomBytes(32).toString("hex");
-    const env = { ...process.env, SPOTIFLEX_CERT_PASSWORD: password };
+    const env = { ...process.env, LYSSNA_CERT_PASSWORD: password };
     const config = join(temporary, "certificate.cnf");
     const certificate = join(temporary, "certificate.pem");
     const privateKey = join(temporary, "private-key.pem");
@@ -73,7 +79,7 @@ prompt = no
 distinguished_name = subject
 x509_extensions = code_signing
 [subject]
-CN = SpotiFlex Local Build
+CN = Lyssna Local Build
 [code_signing]
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature
@@ -114,7 +120,7 @@ extendedKeyUsage = critical,codeSigning
           "-out",
           archive,
           "-passout",
-          "env:SPOTIFLEX_CERT_PASSWORD",
+          "env:LYSSNA_CERT_PASSWORD",
         ],
         "prepare the local signing certificate",
         env,
@@ -206,7 +212,7 @@ extendedKeyUsage = critical,codeSigning
     ["set-keychain-settings", "-lut", "3600", keychain],
     "configure the local signing keychain",
   );
-  const keychains = prepare(
+  const searchList = prepare(
     "/usr/bin/security",
     ["list-keychains", "-d", "user"],
     "read the keychain search list",
@@ -214,10 +220,13 @@ extendedKeyUsage = critical,codeSigning
     .split("\n")
     .map((line) => line.trim().replace(/^"|"$/g, ""))
     .filter(Boolean);
-  if (!keychains.includes(keychain)) {
+  if (searchList.includes(legacyKeychain) || !searchList.includes(keychain)) {
+    const kept = searchList.filter(
+      (path) => path !== legacyKeychain && path !== keychain,
+    );
     prepare(
       "/usr/bin/security",
-      ["list-keychains", "-d", "user", "-s", ...keychains, keychain],
+      ["list-keychains", "-d", "user", "-s", ...kept, keychain],
       "register the local signing keychain",
     );
   }
@@ -245,36 +254,39 @@ async function installMacApp(args) {
     options.includes("--debug") || options.includes("-d") ? "debug" : "release",
     "bundle",
   );
-  const source = join(output, "macos", "SpotiFlex.app");
-  const destination = "/Applications/SpotiFlex.app";
+  const source = join(output, "macos", "Lyssna.app");
+  const destination = "/Applications/Lyssna.app";
+  // The app was called SpotiFlex before; Lyssna replaces that install.
+  const legacyDestination = "/Applications/SpotiFlex.app";
   if (!existsSync(source))
-    throw new Error("The build did not produce SpotiFlex.app.");
+    throw new Error("The build did not produce Lyssna.app.");
 
   // Stage and validate before interrupting playback or replacing the installed app.
-  const staging = mkdtempSync("/Applications/.SpotiFlex-install-");
-  const stagedApp = join(staging, "SpotiFlex.app");
+  const staging = mkdtempSync("/Applications/.Lyssna-install-");
+  const stagedApp = join(staging, "Lyssna.app");
   let preservePrevious = false;
   try {
     prepare(
       "/usr/bin/ditto",
       [source, stagedApp],
-      "stage SpotiFlex in Applications",
+      "stage Lyssna in Applications",
     );
     prepare(
       "/usr/bin/codesign",
       ["--verify", "--deep", "--strict", stagedApp],
       "verify the new app signature",
     );
-    const executables = new Set(
-      [source, destination].map((app) =>
-        join(app, "Contents", "MacOS", "spotiflex"),
+    const executables = new Set([
+      ...[source, destination].map((app) =>
+        join(app, "Contents", "MacOS", "lyssna"),
       ),
-    );
+      join(legacyDestination, "Contents", "MacOS", "spotiflex"),
+    ]);
     const running = () =>
       prepare(
         "/bin/ps",
         ["-axo", "pid=,comm="],
-        "find running SpotiFlex instances",
+        "find running Lyssna instances",
       )
         .split("\n")
         .flatMap((line) => {
@@ -313,12 +325,13 @@ async function installMacApp(args) {
       }
       throw error;
     }
+    rmSync(legacyDestination, { recursive: true, force: true });
     // Keep only the installed bundle. Old disk images are generated artifacts.
     rmSync(source, { recursive: true, force: true });
     rmSync(join(output, "dmg"), { recursive: true, force: true });
-    prepare("/usr/bin/open", [destination], "open SpotiFlex from Applications");
+    prepare("/usr/bin/open", [destination], "open Lyssna from Applications");
     console.log(
-      "Installed and opened /Applications/SpotiFlex.app. Removed the build copy.",
+      "Installed and opened /Applications/Lyssna.app. Removed the build copy.",
     );
   } finally {
     if (!preservePrevious) rmSync(staging, { recursive: true, force: true });
@@ -332,7 +345,7 @@ try {
     !env.CI &&
     !env.APPLE_SIGNING_IDENTITY &&
     !env.APPLE_CERTIFICATE &&
-    env.SPOTIFLEX_ADHOC_SIGNING !== "1"
+    (env.LYSSNA_ADHOC_SIGNING ?? env.SPOTIFLEX_ADHOC_SIGNING) !== "1"
   ) {
     env.APPLE_SIGNING_IDENTITY = localSigningIdentity();
   }
@@ -355,9 +368,7 @@ try {
         await installMacApp(process.argv.slice(2));
       } catch (error) {
         console.error(
-          error instanceof Error
-            ? error.message
-            : "Could not install SpotiFlex.",
+          error instanceof Error ? error.message : "Could not install Lyssna.",
         );
         process.exitCode = 1;
       }

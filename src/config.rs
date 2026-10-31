@@ -297,7 +297,7 @@ pub struct Settings {
     pub auto_download_updates: bool,
     /// Builds to follow: "stable" or "nightly" (built from source).
     pub update_channel: String,
-    /// The close button hides SpotiFlex to the notification area and music
+    /// The close button hides Lyssna to the notification area and music
     /// keeps playing; Quit in the tray menu exits. Off by default. Replaces
     /// an earlier `close_to_tray` that was on by default.
     pub keep_playing_on_close: bool,
@@ -481,8 +481,8 @@ pub struct PlaylistFolder {
 }
 
 pub fn data_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("", "", "SpotiFlex")
-        .context("Cannot locate SpotiFlex application data directory")?;
+    let dirs = ProjectDirs::from("", "", "Lyssna")
+        .context("Cannot locate Lyssna application data directory")?;
     Ok(dirs.config_dir().to_path_buf())
 }
 
@@ -610,7 +610,7 @@ impl Settings {
         let temporary = directory.join("settings.json.tmp");
         fs::write(&temporary, serde_json::to_vec_pretty(self)?)?;
         fs::rename(temporary, directory.join("settings.json"))
-            .context("Cannot save SpotiFlex settings")
+            .context("Cannot save Lyssna settings")
     }
 }
 

@@ -485,7 +485,7 @@ fn configure_session_identity() -> windows::core::Result<()> {
                 let session: IAudioSessionControl2 = sessions.GetSession(index)?.cast()?;
                 if session.GetProcessId()? == std::process::id() {
                     session.SetIconPath(PCWSTR(icon.as_ptr()), std::ptr::null())?;
-                    session.SetDisplayName(w!("SpotiFlex"), std::ptr::null())?;
+                    session.SetDisplayName(w!("Lyssna"), std::ptr::null())?;
                 }
             }
         }

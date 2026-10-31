@@ -1,10 +1,10 @@
-//! `spotiflex://` links: a song to play, or an album, playlist or artist to
+//! `lyssna://` links: a song to play, or an album, playlist or artist to
 //! open, as `spotify:` links open Spotify. A link comes from a browser or
 //! another app, so only well-formed IDs are taken from it.
 use serde::Serialize;
 use std::sync::Mutex;
 
-pub const SCHEME: &str = "spotiflex";
+pub const SCHEME: &str = "lyssna";
 
 /// What a link asks for.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -14,11 +14,11 @@ pub enum Link {
     Play(String),
     /// Open a page by its route, as `album:<id>`.
     Open(String),
-    /// Only bring SpotiFlex to the front.
+    /// Only bring Lyssna to the front.
     Show,
 }
 
-/// A `spotiflex://` link, also written `spotiflex:track:<id>` like Spotify's
+/// A `lyssna://` link, also written `lyssna:track:<id>` like Spotify's
 /// own links.
 pub fn parse(text: &str) -> Option<Link> {
     let rest = text.strip_prefix(SCHEME)?.strip_prefix(':')?;
@@ -44,7 +44,7 @@ pub fn parse(text: &str) -> Option<Link> {
         {
             Some(Link::Open(format!("user:{id}")))
         }
-        // Podcasts don't play in SpotiFlex; the link still brings it up.
+        // Podcasts don't play in Lyssna; the link still brings it up.
         "episode" | "show" if spotify_id => Some(Link::Show),
         _ => None,
     }
@@ -56,7 +56,7 @@ pub fn from_args<I: IntoIterator<Item = S>, S: AsRef<str>>(args: I) -> Option<Li
         let argument = argument.as_ref();
         argument
             .get(..SCHEME.len() + 1)
-            .is_some_and(|start| start.eq_ignore_ascii_case("spotiflex:"))
+            .is_some_and(|start| start.eq_ignore_ascii_case("lyssna:"))
             .then(|| parse(&format!("{SCHEME}{}", &argument[SCHEME.len()..])))
             .flatten()
     })
@@ -76,7 +76,7 @@ pub fn take() -> Option<Link> {
     PENDING.lock().ok()?.take()
 }
 
-/// Make Windows open `spotiflex://` links with this copy. The per-user key
+/// Make Windows open `lyssna://` links with this copy. The per-user key
 /// needs no administrator rights and follows the copy wherever it moves.
 #[cfg(windows)]
 pub fn register() -> anyhow::Result<()> {
@@ -89,7 +89,7 @@ pub fn register() -> anyhow::Result<()> {
     let exe = exe.to_string_lossy();
     let root = format!(r"Software\Classes\{SCHEME}");
     let values = [
-        (root.clone(), "", "URL:SpotiFlex".to_owned()),
+        (root.clone(), "", "URL:Lyssna".to_owned()),
         (root.clone(), "URL Protocol", String::new()),
         (format!(r"{root}\DefaultIcon"), "", format!("\"{exe}\",0")),
         (
@@ -113,9 +113,14 @@ pub fn register() -> anyhow::Result<()> {
             )
         };
         if status != ERROR_SUCCESS {
-            bail!("Cannot register spotiflex:// links");
+            bail!("Cannot register lyssna:// links");
         }
     }
+    // Lyssna was SpotiFlex, whose `spotiflex://` links it no longer opens.
+    let former = HSTRING::from(r"Software\Classes\spotiflex");
+    let _ = unsafe {
+        windows::Win32::System::Registry::RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(former.as_ptr()))
+    };
     Ok(())
 }
 
@@ -128,46 +133,43 @@ mod tests {
     #[test]
     fn links_play_songs_and_open_pages() {
         let play = Some(Link::Play(format!("spotify:track:{ID}")));
-        assert_eq!(parse(&format!("spotiflex://track/{ID}")), play);
-        assert_eq!(parse(&format!("spotiflex:track:{ID}")), play);
-        assert_eq!(parse(&format!("spotiflex://track/{ID}/?si=abc")), play);
+        assert_eq!(parse(&format!("lyssna://track/{ID}")), play);
+        assert_eq!(parse(&format!("lyssna:track:{ID}")), play);
+        assert_eq!(parse(&format!("lyssna://track/{ID}/?si=abc")), play);
         for kind in ["album", "playlist", "artist"] {
             assert_eq!(
-                parse(&format!("spotiflex://{kind}/{ID}")),
+                parse(&format!("lyssna://{kind}/{ID}")),
                 Some(Link::Open(format!("{kind}:{ID}")))
             );
         }
         assert_eq!(
-            parse("spotiflex://user/some.user_name-1"),
+            parse("lyssna://user/some.user_name-1"),
             Some(Link::Open("user:some.user_name-1".into()))
         );
-        assert_eq!(
-            parse(&format!("spotiflex://episode/{ID}")),
-            Some(Link::Show)
-        );
-        assert_eq!(parse("spotiflex://"), Some(Link::Show));
-        assert_eq!(parse("spotiflex:"), Some(Link::Show));
+        assert_eq!(parse(&format!("lyssna://episode/{ID}")), Some(Link::Show));
+        assert_eq!(parse("lyssna://"), Some(Link::Show));
+        assert_eq!(parse("lyssna:"), Some(Link::Show));
     }
 
     #[test]
     fn malformed_links_are_refused() {
         assert_eq!(parse(&format!("spotify://track/{ID}")), None);
-        assert_eq!(parse("spotiflex://track/short"), None);
-        assert_eq!(parse(&format!("spotiflex://track/{ID}x")), None);
-        assert_eq!(parse("spotiflex://track/4uLU6hMCjMI75M1A2tKU%2F"), None);
-        assert_eq!(parse("spotiflex://user/a%20b"), None);
-        assert_eq!(parse("spotiflex://user/.."), None);
-        assert_eq!(parse("spotiflex://settings"), None);
+        assert_eq!(parse("lyssna://track/short"), None);
+        assert_eq!(parse(&format!("lyssna://track/{ID}x")), None);
+        assert_eq!(parse("lyssna://track/4uLU6hMCjMI75M1A2tKU%2F"), None);
+        assert_eq!(parse("lyssna://user/a%20b"), None);
+        assert_eq!(parse("lyssna://user/.."), None);
+        assert_eq!(parse("lyssna://settings"), None);
     }
 
     #[test]
     fn links_are_found_among_arguments() {
         let args = [
-            "spotiflex.exe",
+            "lyssna.exe",
             "--minimized",
-            "SpotiFlex://album/4uLU6hMCjMI75M1A2tKUQC",
+            "Lyssna://album/4uLU6hMCjMI75M1A2tKUQC",
         ];
         assert_eq!(from_args(args), Some(Link::Open(format!("album:{ID}"))));
-        assert_eq!(from_args(["spotiflex.exe", "--quit"]), None);
+        assert_eq!(from_args(["lyssna.exe", "--quit"]), None);
     }
 }

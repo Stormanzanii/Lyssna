@@ -13,7 +13,7 @@ use crate::{
     model::Track,
 };
 
-const SERVICE: &str = "SpotiFlex/Lyrics";
+const SERVICE: &str = "Lyssna/Lyrics";
 
 #[derive(Serialize, Deserialize)]
 struct Provider {
@@ -95,7 +95,7 @@ pub fn configured() -> bool {
     load().is_ok()
 }
 pub fn builtin_configured() -> bool {
-    option_env!("SPOTIFLEX_SPICY_LYRICS_KEY").is_some_and(|key| validate_public_key(key).is_ok())
+    option_env!("LYSSNA_SPICY_LYRICS_KEY").is_some_and(|key| validate_public_key(key).is_ok())
 }
 pub fn kind() -> Option<String> {
     load().ok().map(|provider| {
@@ -109,7 +109,7 @@ pub fn kind() -> Option<String> {
 
 fn load() -> Result<Provider> {
     if let Some(key) =
-        option_env!("SPOTIFLEX_SPICY_LYRICS_KEY").filter(|key| validate_public_key(key).is_ok())
+        option_env!("LYSSNA_SPICY_LYRICS_KEY").filter(|key| validate_public_key(key).is_ok())
     {
         return Ok(Provider {
             host: "https://api.spicylyrics.org/".into(),
@@ -222,7 +222,7 @@ pub fn resolve_contributors(lyrics: &mut Lyrics) {
     let Ok(client) = Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent(concat!("SpotiFlex/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Lyssna/", env!("CARGO_PKG_VERSION")))
         .build()
     else {
         return;

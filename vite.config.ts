@@ -54,7 +54,7 @@ export default defineConfig({
               new URL("./THIRD_PARTY_NOTICES.md", import.meta.url),
               "utf8",
             ) +
-            "\n\n## SpotiFlex\n\nSource: https://github.com/Stormanzanii/SpotiFlex\n\n" +
+            "\n\n## Lyssna\n\nSource: https://github.com/Stormanzanii/Lyssna\n\n" +
             readFileSync(new URL("./LICENSE", import.meta.url), "utf8"),
         });
       },

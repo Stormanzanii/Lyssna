@@ -1,4 +1,4 @@
-// SpotiFlex app icon, rendered from geometry so the window icon, the Windows
+// Lyssna app icon, rendered from geometry so the window icon, the Windows
 // executable icon (see build.rs, which includes this file) and the in-app mark
 // stay identical. Keep this file free of crate imports and inner attributes.
 
@@ -243,12 +243,12 @@ mod tests {
         assert!(black > 200, "Microphone must be visible");
     }
 
-    /// Regenerates assets/spotiflex.ico: `cargo test write_bundled_icon -- --ignored`.
+    /// Regenerates assets/lyssna.ico: `cargo test write_bundled_icon -- --ignored`.
     #[test]
     #[ignore]
     fn write_bundled_icon() {
         std::fs::write(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/spotiflex.ico"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/lyssna.ico"),
             ico(&[16, 24, 32, 48, 64, 128, 256]),
         )
         .unwrap();
@@ -258,7 +258,7 @@ mod tests {
     fn bundled_icon_matches_shared_geometry_and_encoder() {
         assert_eq!(
             ico(&[16, 24, 32, 48, 64, 128, 256]),
-            include_bytes!("../../assets/spotiflex.ico").as_slice(),
+            include_bytes!("../../assets/lyssna.ico").as_slice(),
         );
     }
 }

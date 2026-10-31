@@ -54,8 +54,8 @@ export function UpdatePrompt({
       setDismissed(undefined);
       setAsked(true);
     };
-    window.addEventListener("spotiflex:show-update", show);
-    return () => window.removeEventListener("spotiflex:show-update", show);
+    window.addEventListener("lyssna:show-update", show);
+    return () => window.removeEventListener("lyssna:show-update", show);
   }, []);
   useEffect(() => {
     setRequested(undefined);
@@ -124,13 +124,13 @@ export function UpdatePrompt({
         }
       }}
     >
-      <h2 id="update-title">SpotiFlex {version} is available</h2>
+      <h2 id="update-title">Lyssna {version} is available</h2>
       <p id="update-description">
         You're using{" "}
         {nightly && current
           ? `Nightly ${current.slice(0, 7)}`
           : `version ${__APP_VERSION__}`}
-        . Updating restarts SpotiFlex.
+        . Updating restarts Lyssna.
       </p>
       {state.update_notes &&
         (nightly ? (

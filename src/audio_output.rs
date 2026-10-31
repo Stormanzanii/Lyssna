@@ -501,7 +501,7 @@ mod tests {
         assert_eq!(choice.take_issue(), None);
         assert!(choice.open(Some(revision)).unwrap().is_none());
         drop(stream);
-        choice.request(Some("SpotiFlex unavailable test output".into()));
+        choice.request(Some("Lyssna unavailable test output".into()));
         let (stream, _) = choice.open(None).unwrap().unwrap();
         assert_eq!(choice.take_issue(), Some(OutputIssue::UsingDefault));
         drop(stream);

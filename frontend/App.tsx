@@ -314,7 +314,7 @@ function App() {
       ? `${state.playback.item.name} - ${state.playback.item.artists
           .map((artist) => artist.name)
           .join(", ")}`
-      : "SpotiFlex";
+      : "Lyssna";
   useEffect(() => {
     document.title = windowTitle;
     void windowHandle()
@@ -359,7 +359,7 @@ function App() {
   // The Spotify Jam this computer is in, shown above the queue.
   const [jam, setJam] = useState<Jam | null>(null);
   const [jamInvite, setJamInvite] = useState(false);
-  // Join a Jam from a link made by Spotify or SpotiFlex.
+  // Join a Jam from a link made by Spotify or Lyssna.
   const joinJam = (link: string) =>
     rpc<Jam>("jam", { action: "join", link: link.trim() })
       .then((joined) => {
@@ -562,7 +562,7 @@ function App() {
   const [popularMore, setPopularMore] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
-  // The SpotiFlex settings window and the tab it opened on.
+  // The Lyssna settings window and the tab it opened on.
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [animatorPanel, setAnimatorPanel] = useState(false);
   // Manage enters full screen only for tuning; closing leaves it again
@@ -678,7 +678,7 @@ function App() {
     setCheckingNightly(false);
     if (found === "current") notify("You're on the latest Nightly.");
     else if (found === "available" || found === "building" || found === "ready")
-      window.dispatchEvent(new Event("spotiflex:show-update"));
+      window.dispatchEvent(new Event("lyssna:show-update"));
     else if (found) notify(found);
   }, [call, notify]);
   const navigate = useCallback(
@@ -753,7 +753,7 @@ function App() {
           playRef.current?.({ command: "play", uri: event.uri });
           return;
         }
-        // A `spotiflex://` link: taken below once signed in and ready.
+        // A `lyssna://` link: taken below once signed in and ready.
         if (event.type === "link") {
           setLinkSignal((count) => count + 1);
           return;
@@ -1396,7 +1396,7 @@ function App() {
       mode === "persistent"
         ? "Lyrics saved for this song."
         : mode === "session"
-          ? "Lyrics applied until SpotiFlex restarts."
+          ? "Lyrics applied until Lyssna restarts."
           : "Lyrics applied until they reload.",
     );
   };
@@ -1651,7 +1651,7 @@ function App() {
       label: "Help",
       items: [
         {
-          label: "About SpotiFlex",
+          label: "About Lyssna",
           onSelect: () => setAbout(true),
         },
         {
@@ -1951,8 +1951,8 @@ function App() {
       saveRecentSearches(account, next);
       return next;
     });
-  // `spotiflex://` links play a song or open a page, as Spotify's own do;
-  // one that opened SpotiFlex waits until it is signed in and ready.
+  // `lyssna://` links play a song or open a page, as Spotify's own do;
+  // one that opened Lyssna waits until it is signed in and ready.
   useEffect(() => {
     if (!state.profile || !state.native_ready) return;
     rpc<{ kind: "play" | "open"; value: string } | null>("take_link")
@@ -2855,7 +2855,7 @@ function App() {
               onShow={() =>
                 switchingToNightly
                   ? setFirstBuildOpen(true)
-                  : window.dispatchEvent(new Event("spotiflex:show-update"))
+                  : window.dispatchEvent(new Event("lyssna:show-update"))
               }
               onRestart={() => void call("app_update", { action: "install" })}
             />
@@ -3226,7 +3226,7 @@ function App() {
                 </button>
                 <button
                   className="icon-button"
-                  title="SpotiFlex settings"
+                  title="Lyssna settings"
                   data-icon="settings"
                   onClick={() =>
                     setSettingsTab(
@@ -4446,7 +4446,7 @@ function App() {
                       isJamLink(text)
                         ? joinJam(text)
                         : notify(
-                            "Copy a Jam link from Spotify or SpotiFlex, then press Join a Jam.",
+                            "Copy a Jam link from Spotify or Lyssna, then press Join a Jam.",
                             true,
                           ),
                     )
@@ -5511,7 +5511,7 @@ function App() {
           aria-label="Restoring session"
         >
           <LoaderCircle className="spin" size={28} />
-          <strong>SpotiFlex</strong>
+          <strong>Lyssna</strong>
           <span>Restoring session…</span>
         </div>
       )}
@@ -5993,7 +5993,7 @@ function Setup({
           <Logo size={40} />
         </div>
         <h1 id="setup-title">
-          {state.login_issue ? "Reconnect Spotify" : "Log in to SpotiFlex"}
+          {state.login_issue ? "Reconnect Spotify" : "Log in to Lyssna"}
         </h1>
         <p>Use your Spotify account to play your music.</p>
         <p className="setup-premium">Spotify Premium required</p>
@@ -6078,7 +6078,7 @@ function Setup({
               : "Developer connection (optional)"}
           </button>
         )}
-        <small>No password or client secret is stored in SpotiFlex.</small>
+        <small>No password or client secret is stored in Lyssna.</small>
       </section>
     </div>
   );

@@ -23,7 +23,7 @@ use librespot_protocol::authentication::AuthenticationType;
 use tokio::sync::mpsc as async_channel;
 use tokio::sync::oneshot;
 
-const CREDENTIAL_SERVICE: &str = "SpotiFlex/SpotifyAudio";
+const CREDENTIAL_SERVICE: &str = "Lyssna/SpotifyAudio";
 static CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
@@ -65,11 +65,11 @@ mod scoped_tests {
             };
             let track = public_track_change(&event).unwrap();
             let mut playback = crate::model::Playback::default();
-            playback.load_native_track(track, Some("native-session"), "SpotiFlex", 100);
+            playback.load_native_track(track, Some("native-session"), "Lyssna", 100);
             assert!(
                 playback.apply_native_position(
                     Some("native-session"),
-                    "SpotiFlex",
+                    "Lyssna",
                     &requested.to_uri(),
                     1500,
                     Some(true)
@@ -1725,7 +1725,7 @@ fn playing_position(decoded_ms: u32, queued_ms: u64, resumed: Option<u64>) -> u6
 }
 
 /// The Spotify Connect name: the computer first, as Spotify's own client
-/// names itself, then the app, e.g. "ARASHII-PC (SpotiFlex)".
+/// names itself, then the app, e.g. "ARASHII-PC (Lyssna)".
 pub fn device_name() -> String {
     let host = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
@@ -1735,8 +1735,8 @@ pub fn device_name() -> String {
 
 fn named_device(host: &str) -> String {
     match host.trim() {
-        "" => "SpotiFlex".into(),
-        host => format!("{host} (SpotiFlex)"),
+        "" => "Lyssna".into(),
+        host => format!("{host} (Lyssna)"),
     }
 }
 
@@ -1784,7 +1784,7 @@ fn save_credentials(
     }
     anyhow::ensure!(
         valid_credentials(credentials, account),
-        "Audio sign-in belongs to a different Spotify account. Reconnect and select the account used in SpotiFlex."
+        "Audio sign-in belongs to a different Spotify account. Reconnect and select the account used in Lyssna."
     );
     keyring::Entry::new(CREDENTIAL_SERVICE, account)?
         .set_password(&serde_json::to_string(credentials)?)
@@ -1808,7 +1808,7 @@ pub fn forget_credentials(account: &str) -> Result<()> {
     if account.is_empty() {
         return Ok(());
     }
-    let active = keyring::Entry::new("SpotiFlex/Account", "active")?;
+    let active = keyring::Entry::new("Lyssna/Account", "active")?;
     if active
         .get_password()
         .ok()
@@ -1829,7 +1829,7 @@ pub(crate) fn saved_profile() -> Result<Option<crate::model::Profile>> {
     let _guard = CREDENTIAL_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("Spotify credential store unavailable"))?;
-    match keyring::Entry::new("SpotiFlex/Account", "active")?.get_password() {
+    match keyring::Entry::new("Lyssna/Account", "active")?.get_password() {
         Ok(value) => Ok(Some(
             serde_json::from_str(&value)
                 .context("Saved Spotify account is invalid; sign in again")?,
@@ -1844,7 +1844,7 @@ pub(crate) fn save_profile(profile: &crate::model::Profile) -> Result<()> {
     let _guard = CREDENTIAL_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("Spotify credential store unavailable"))?;
-    keyring::Entry::new("SpotiFlex/Account", "active")?
+    keyring::Entry::new("Lyssna/Account", "active")?
         .set_password(&serde_json::to_string(profile)?)
         .context("Cannot save Spotify account")
 }
@@ -1865,7 +1865,7 @@ pub(crate) fn save_login(
     keyring::Entry::new(CREDENTIAL_SERVICE, &profile.id)?
         .set_password(&serde_json::to_string(credentials)?)
         .context("Cannot save Spotify login")?;
-    keyring::Entry::new("SpotiFlex/Account", "active")?
+    keyring::Entry::new("Lyssna/Account", "active")?
         .set_password(&serde_json::to_string(profile)?)
         .context("Cannot save Spotify account")?;
     Ok(())
@@ -2304,7 +2304,7 @@ async fn run(
         let _ = spirc.shutdown();
         session.shutdown();
         return Outcome::Failed(Failure::other(
-            "Audio sign-in belongs to a different Spotify account. Reconnect and select the account used in SpotiFlex",
+            "Audio sign-in belongs to a different Spotify account. Reconnect and select the account used in Lyssna",
         ));
     }
     if !reusable.auth_data.is_empty()
@@ -2708,8 +2708,8 @@ pub(crate) fn with_live_session<T>(check: impl AsyncFnOnce(&Session) -> T) -> T 
 mod tests {
     #[test]
     fn connect_name_puts_the_computer_first() {
-        assert_eq!(super::named_device("ARASHII-PC"), "ARASHII-PC (SpotiFlex)");
-        assert_eq!(super::named_device("  "), "SpotiFlex");
+        assert_eq!(super::named_device("ARASHII-PC"), "ARASHII-PC (Lyssna)");
+        assert_eq!(super::named_device("  "), "Lyssna");
     }
     #[test]
     #[ignore = "Saved sign-in; register an idle Connect device without starting playback"]
@@ -3605,7 +3605,7 @@ mod tests {
                 }
             }
         }
-        if let Ok(name) = std::env::var("SPOTIFLEX_TEST_CONNECT_TARGET") {
+        if let Ok(name) = std::env::var("LYSSNA_TEST_CONNECT_TARGET") {
             let devices = controls.devices().unwrap();
             let matching: Vec<_> = devices
                 .iter()
@@ -3615,7 +3615,7 @@ mod tests {
             let target = matching[0].id.as_ref().unwrap().clone();
             controls.transfer(&target).unwrap();
             println!("Remote transfer request accepted; confirm speaker audio separately");
-            let hold = std::env::var("SPOTIFLEX_TEST_CONNECT_HOLD_SECONDS")
+            let hold = std::env::var("LYSSNA_TEST_CONNECT_HOLD_SECONDS")
                 .ok()
                 .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(0)

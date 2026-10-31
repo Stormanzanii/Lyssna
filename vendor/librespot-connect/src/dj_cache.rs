@@ -31,7 +31,7 @@ impl Pending {
 pub(crate) struct DjCache {
     session: Session,
     current: Mutex<Option<Arc<Pending>>>,
-    /// Sets started since SpotiFlex opened, so starting DJ again moves on.
+    /// Sets started since Lyssna opened, so starting DJ again moves on.
     heard: Mutex<HashSet<String>>,
 }
 /// Names a set: its page URL, else its first track.

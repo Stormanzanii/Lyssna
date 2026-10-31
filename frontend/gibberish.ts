@@ -8,7 +8,7 @@ import { GIBBERISH_ENTRIES } from "./gibberish-dictionary";
  * phonetic rules for words it lacks, t/d + y blending and the joining.
  *
  * Output matches the fork's: lower case, no punctuation, words joined.
- * SpotiFlex changes: a word timed in syllables is respelled whole and then
+ * Lyssna changes: a word timed in syllables is respelled whole and then
  * shared back out over its syllables, where the fork respelled each
  * syllable alone ("beau-ti-ful" missed the dictionary's "byutifo"); curly
  * apostrophes and accents are read like plain ones; and words with no

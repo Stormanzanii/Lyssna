@@ -59,7 +59,7 @@ enum RowAction {
     Save(usize),
 }
 
-pub struct SpotiFlex {
+pub struct Lyssna {
     updater: Updater,
     available_update: Option<updater::Update>,
     ready_update: Option<updater::ReadyUpdate>,
@@ -123,7 +123,7 @@ pub struct SpotiFlex {
     provider_configured: bool,
 }
 
-impl SpotiFlex {
+impl Lyssna {
     pub fn new(context: &eframe::CreationContext<'_>) -> Self {
         theme::install(&context.egui_ctx);
         egui_extras::install_image_loaders(&context.egui_ctx);
@@ -2431,13 +2431,8 @@ impl SpotiFlex {
                 let mut transfer = None;
                 let current = self.playback.device.id.clone();
                 if let Some(id) = self.native_id.clone() {
-                    if device_row(
-                        ui,
-                        "This computer",
-                        "SpotiFlex",
-                        current.as_ref() == Some(&id),
-                    )
-                    .clicked()
+                    if device_row(ui, "This computer", "Lyssna", current.as_ref() == Some(&id))
+                        .clicked()
                     {
                         transfer = Some(id);
                     }
@@ -3202,7 +3197,7 @@ impl SpotiFlex {
     fn update_controls(&mut self, ui: &mut Ui) {
         ui.label(
             RichText::new(format!(
-                "SpotiFlex {} · {}",
+                "Lyssna {} · {}",
                 env!("CARGO_PKG_VERSION"),
                 self.update_status
             ))
@@ -3399,7 +3394,7 @@ impl SpotiFlex {
                         let (rect, _) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::hover());
                         brand(ui.painter(), rect.center(), 40.0);
                         ui.vertical(|ui| {
-                            ui.label(RichText::new("Welcome to SpotiFlex").font(theme::bold(24.0)).color(TEXT));
+                            ui.label(RichText::new("Welcome to Lyssna").font(theme::bold(24.0)).color(TEXT));
                             ui.label(RichText::new("Your Spotify, with synced lyrics and playlist tools.").color(SUBDUED));
                         });
                     });
@@ -3544,7 +3539,7 @@ impl SpotiFlex {
     }
 }
 
-impl eframe::App for SpotiFlex {
+impl eframe::App for Lyssna {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.receive();
         self.art.poll(context);

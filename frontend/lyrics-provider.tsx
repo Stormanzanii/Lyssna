@@ -74,8 +74,8 @@ export function LyricsProvider({
             onChange={(event) => setConsent(event.target.checked)}
           />
           <span>
-            Allow SpotiFlex to request lyrics from Spicy Lyrics using this key
-            and the current Spotify track ID.
+            Allow Lyssna to request lyrics from Spicy Lyrics using this key and
+            the current Spotify track ID.
           </span>
         </label>
         {lyricsKey.trim().startsWith("sl_sk_") && (

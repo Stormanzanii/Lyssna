@@ -27,11 +27,11 @@ pub const UNSUPPORTED_MESSAGE: &str =
     "Automatic updates are unavailable on this platform. Install new builds manually.";
 /// Set by `build.ps1`. A build from source must never be replaced by a
 /// release; it is updated by rebuilding.
-pub const LOCAL_BUILD: bool = option_env!("SPOTIFLEX_LOCAL_BUILD").is_some();
+pub const LOCAL_BUILD: bool = option_env!("LYSSNA_LOCAL_BUILD").is_some();
 pub const LOCAL_BUILD_MESSAGE: &str =
     "Local build: automatic updates are off. Run build.ps1 to update.";
 /// A Nightly copy may go back to the release of the same version.
-const NIGHTLY_BUILD: bool = option_env!("SPOTIFLEX_NIGHTLY").is_some();
+const NIGHTLY_BUILD: bool = crate::nightly::COMMIT.is_some();
 /// Passed to a restarted copy so it starts once this one has exited.
 pub const AFTER_EXIT_ARG: &str = "--after-exit";
 /// Passed to a restarted copy when a song was playing, so it plays on.
@@ -139,6 +139,8 @@ fn verify(envelope: &[u8], key: &VerifyingKey) -> Result<Manifest> {
         "Update targets a different platform"
     );
     ensure!(
+        // Releases keep SpotiFlex's file name: copies from before the rename
+        // only accept that one.
         manifest.artifact == format!("releases/{}/{TARGET}/spotiflex.exe", manifest.version),
         "Invalid update artifact path"
     );
@@ -159,7 +161,7 @@ fn verify(envelope: &[u8], key: &VerifyingKey) -> Result<Manifest> {
 
 fn client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
-        .user_agent(concat!("SpotiFlex/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Lyssna/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(300))
         .redirect(reqwest::redirect::Policy::none())
@@ -240,7 +242,7 @@ fn download(
     let directory = data_dir()?.join("updates");
     fs::create_dir_all(&directory)?;
     let path = directory.join(format!(
-        "spotiflex-{}-{}.exe",
+        "lyssna-{}-{}.exe",
         manifest.version,
         &manifest.sha256[..16]
     ));
@@ -316,12 +318,12 @@ fn install(update: ReadyUpdate) -> Result<()> {
     let executable = std::env::current_exe()?;
     fs::copy(
         &executable,
-        data_dir()?.join("updates").join("previous-spotiflex.exe"),
+        data_dir()?.join("updates").join("previous-lyssna.exe"),
     )
     .context("Cannot back up the current executable")?;
     self_replace::self_replace(&update.path)
-        .context("Cannot install update. Run SpotiFlex from a folder your account can write to.")?;
-    relaunch().context("Update installed; restart SpotiFlex to finish")
+        .context("Cannot install update. Run Lyssna from a folder your account can write to.")?;
+    relaunch().context("Update installed; restart Lyssna to finish")
 }
 
 /// Whether a published version should replace this copy.

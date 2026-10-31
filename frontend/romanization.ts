@@ -10,7 +10,7 @@ import type { Line, Lyrics, Word } from "./types";
  * its kanji read as Japanese (Kuroshiro over the Kuromoji dictionary), never
  * as Chinese; Han text without kana is Chinese (pinyin). Korean, Cyrillic
  * and Greek have their own converters. Romanization supplied with the lyrics
- * always wins. SpotiFlex addition: any other non-Latin letters, such as
+ * always wins. Lyssna addition: any other non-Latin letters, such as
  * Arabic or Thai, fall back to a general transliteration. */
 
 type Script = "japanese" | "chinese" | "korean" | "cyrillic" | "greek";

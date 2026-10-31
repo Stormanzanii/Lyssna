@@ -151,8 +151,8 @@ mod macos_impl {
             on_action: impl Fn(MediaAction) + Send + Sync + 'static,
         ) -> Self {
             let config = PlatformConfig {
-                dbus_name: "spotiflex",
-                display_name: "SpotiFlex",
+                dbus_name: "lyssna",
+                display_name: "Lyssna",
                 hwnd: None,
             };
             if let Ok(mut controls) = MediaControls::new(config) {
@@ -479,8 +479,8 @@ mod windows_impl {
                 *taskbar = Some(created);
             });
             let config = PlatformConfig {
-                dbus_name: "spotiflex",
-                display_name: "SpotiFlex",
+                dbus_name: "lyssna",
+                display_name: "Lyssna",
                 hwnd: Some(hwnd.0),
             };
             if let Ok(mut controls) = MediaControls::new(config) {

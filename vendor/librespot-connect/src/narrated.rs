@@ -1,4 +1,4 @@
-//! SpotiFlex: DJ speaks each of its lines once. Going back to a song DJ
+//! Lyssna: DJ speaks each of its lines once. Going back to a song DJ
 //! introduced plays the song without the introduction again.
 
 use std::collections::{BTreeMap, HashMap, HashSet};

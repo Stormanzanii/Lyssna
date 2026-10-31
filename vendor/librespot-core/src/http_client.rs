@@ -170,7 +170,7 @@ impl HttpClient {
         };
         let proxy_connector = ProxyConnector::from_proxy(https_connector, proxy)?;
 
-        // SpotiFlex: a router or NAT can drop an idle connection without
+        // Lyssna: a router or NAT can drop an idle connection without
         // telling either end. Pings find such a connection and the pool
         // drops it, so a request after a long pause opens a fresh one
         // instead of waiting out TCP retransmits for about a minute.

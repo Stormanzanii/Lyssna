@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Builds SpotiFlex from source and installs it for the current Windows user.
+Builds Lyssna from source and installs it for the current Windows user.
 
 .DESCRIPTION
 No target: update main from origin, then build and install the latest commit.
@@ -10,7 +10,7 @@ commit:    build a commit already available in this repository.
 
 The original branch or commit is restored afterward, including on failure.
 Nothing is pushed. The build is installed to
-%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe and started, unless
+%LOCALAPPDATA%\Programs\Lyssna\lyssna.exe and started, unless
 -NoLaunch is given. Credentials and application data are not touched.
 #>
 param(
@@ -23,8 +23,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = $PSScriptRoot
-$installDirectory = Join-Path $env:LOCALAPPDATA 'Programs\SpotiFlex'
-$installedExe = Join-Path $installDirectory 'spotiflex.exe'
+$installDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Lyssna'
+$installedExe = Join-Path $installDirectory 'lyssna.exe'
+# Lyssna was SpotiFlex, installed here as spotiflex.exe.
+$formerInstallDirectory = Join-Path $env:LOCALAPPDATA 'Programs\SpotiFlex'
 
 function Invoke-Checked {
     param(
@@ -140,9 +142,9 @@ function Get-RequiredRust {
     return $version
 }
 
-function Get-SpotiFlexProcesses([string]$Directory) {
+function Get-LyssnaProcesses([string]$Directory) {
     $prefix = "$([IO.Path]::GetFullPath($Directory).TrimEnd('\'))\"
-    @(Get-CimInstance Win32_Process -Filter "Name = 'spotiflex.exe'" | Where-Object {
+    @(Get-CimInstance Win32_Process -Filter "Name = 'lyssna.exe' OR Name = 'spotiflex.exe'" | Where-Object {
         $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
     })
 }
@@ -202,20 +204,20 @@ function Remove-PreviousExecutable {
     }
 }
 
-function Stop-InstalledSpotiFlex([string]$Directory = $installDirectory) {
-    $processes = Get-SpotiFlexProcesses $Directory
+function Stop-InstalledLyssna([string]$Directory = $installDirectory) {
+    $processes = Get-LyssnaProcesses $Directory
     if ($processes.Count -eq 0) {
         return
     }
 
-    # Ask SpotiFlex to quit first so it can save its state. Closing the
+    # Ask Lyssna to quit first so it can save its state. Closing the
     # window alone only hides it to the tray when music keeps playing, so
     # `--quit` reaches the running copy and exits it fully; builds without it
     # still get the window close.
     foreach ($process in $processes) {
         $running = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
         if ($running) {
-            Write-Host "Closing installed SpotiFlex (PID $($process.ProcessId))."
+            Write-Host "Closing installed Lyssna (PID $($process.ProcessId))."
         }
     }
     $quitter = Start-Process -FilePath $processes[0].ExecutablePath -ArgumentList '--quit' -PassThru -ErrorAction SilentlyContinue
@@ -321,32 +323,32 @@ try {
     Invoke-Checked npm run build
     # Marks the executable as a local build, so the updater never replaces
     # it with a release. Rebuild with this script to update.
-    $env:SPOTIFLEX_LOCAL_BUILD = '1'
-    $builtExe = Join-Path $repoRoot 'target\release\spotiflex.exe'
+    $env:LYSSNA_LOCAL_BUILD = '1'
+    $builtExe = Join-Path $repoRoot 'target\release\lyssna.exe'
     $targetDirectory = Join-Path $repoRoot 'target'
     try {
-        # A SpotiFlex started from target\ locks the executable Cargo
+        # A Lyssna started from target\ locks the executable Cargo
         # replaces. Close it first; if the build still fails on a locked
         # file, say so and try once more.
-        Stop-InstalledSpotiFlex $targetDirectory
+        Stop-InstalledLyssna $targetDirectory
         try {
-            Invoke-Checked cargo build --release --locked --bin spotiflex
+            Invoke-Checked cargo build --release --locked --bin lyssna
         }
         catch {
-            $holders = Get-SpotiFlexProcesses $targetDirectory
+            $holders = Get-LyssnaProcesses $targetDirectory
             if ($holders.Count -eq 0 -and -not (Test-FileLocked $builtExe)) {
                 throw
             }
-            Write-Warning "Build failed because SpotiFlex is open from $targetDirectory (PID $(@($holders.ProcessId) -join ', ')). Closing it and building again."
-            Stop-InstalledSpotiFlex $targetDirectory
+            Write-Warning "Build failed because Lyssna is open from $targetDirectory (PID $(@($holders.ProcessId) -join ', ')). Closing it and building again."
+            Stop-InstalledLyssna $targetDirectory
             if (Test-FileLocked $builtExe) {
-                throw "Build failed: $builtExe is still in use. Close SpotiFlex (check the system tray) and run the build again."
+                throw "Build failed: $builtExe is still in use. Close Lyssna (check the system tray) and run the build again."
             }
-            Invoke-Checked cargo build --release --locked --bin spotiflex
+            Invoke-Checked cargo build --release --locked --bin lyssna
         }
     }
     finally {
-        Remove-Item Env:SPOTIFLEX_LOCAL_BUILD -ErrorAction SilentlyContinue
+        Remove-Item Env:LYSSNA_LOCAL_BUILD -ErrorAction SilentlyContinue
     }
 
     if (-not (Test-Path -LiteralPath $builtExe)) {
@@ -355,10 +357,11 @@ try {
 
     # Stage beside the install so the swap is a rename on the same volume.
     New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
-    $staged = Join-Path $installDirectory ('.spotiflex-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    $staged = Join-Path $installDirectory ('.lyssna-' + [Guid]::NewGuid().ToString('N') + '.exe')
     Copy-Item -LiteralPath $builtExe -Destination $staged
     try {
-        Stop-InstalledSpotiFlex
+        Stop-InstalledLyssna
+        Stop-InstalledLyssna $formerInstallDirectory
         try {
             Install-Executable $staged
         }
@@ -367,10 +370,10 @@ try {
                 throw
             }
             # Still open: a copy that ignored the close, or one just started.
-            Write-Warning 'Install failed because SpotiFlex is still open. Closing it and installing again.'
-            Stop-InstalledSpotiFlex
+            Write-Warning 'Install failed because Lyssna is still open. Closing it and installing again.'
+            Stop-InstalledLyssna
             if (Test-FileLocked $installedExe) {
-                throw "Install failed: $installedExe is still in use. Close SpotiFlex (check the system tray) and run the build again."
+                throw "Install failed: $installedExe is still in use. Close Lyssna (check the system tray) and run the build again."
             }
             Install-Executable $staged
         }
@@ -381,9 +384,15 @@ try {
         }
     }
     Write-Host "Installed $shortCommit to $installedExe"
+    if (Test-Path -LiteralPath $formerInstallDirectory) {
+        Remove-Item -LiteralPath $formerInstallDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $formerInstallDirectory)) {
+            Write-Host "Removed the SpotiFlex install at $formerInstallDirectory."
+        }
+    }
 
     if (-not $NoLaunch) {
-        Write-Host 'Starting SpotiFlex.'
+        Write-Host 'Starting Lyssna.'
         Start-Process -FilePath $installedExe -WorkingDirectory $installDirectory
     }
 }

@@ -1,8 +1,8 @@
-![SpotiFlex playing a song, with its Spotify Canvas behind word-synced lyrics](.github/assets/app.avif)
+![Lyssna playing a song, with its Spotify Canvas behind word-synced lyrics](.github/assets/app.avif)
 
 <div align="center">
 
-# SpotiFlex
+# Lyssna
 
 **Spotify on your desktop, with Spicy Lyrics built in.**
 
@@ -16,7 +16,7 @@
 </div>
 
 > [!IMPORTANT]
-> **Spotify Premium is required.** librespot, which SpotiFlex streams through, cannot play on free accounts.
+> **Spotify Premium is required.** librespot, which Lyssna streams through, cannot play on free accounts.
 
 ## What it is
 
@@ -39,7 +39,7 @@ Press **F11** for full-screen lyrics over the Canvas. The controls fade out unti
 
 ## Get started
 
-1. **Install.** On Windows 10 or 11 (x64), download [SpotiFlex 0.2.0](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/spotiflex.exe). On macOS 12 or later, [build from source](#build-from-source).
+1. **Install.** On Windows 10 or 11 (x64), download [version 0.2.0](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/spotiflex.exe), released under the old name SpotiFlex. On macOS 12 or later, [build from source](#build-from-source).
 2. **Sign in.** Choose **Sign in with Spotify** and approve the connection in your browser. The setup window stays up until Spotify confirms the account.
 3. **Play something.** Your playlists, albums and artists load into the library on the left.
 4. **Make it yours.** Open **Settings** from the account menu for lyrics sources, the animator, crossfade and tray behaviour.
@@ -53,14 +53,14 @@ Spotify credentials stay on your computer: Windows Credential Manager on Windows
 <details>
 <summary>Lyrics lookups: who receives what</summary>
 
-Every build includes SpotiFlex's publishable Spicy Lyrics client key, so you do not need a Spicy Lyrics account. Lyric sources receive the track ID, title and artist they need to find a match. Answers are cached on disk for three days, separately for each source; **Settings > Storage** clears them.
+Every build includes Lyssna's publishable Spicy Lyrics client key, so you do not need a Spicy Lyrics account. Lyric sources receive the track ID, title and artist they need to find a match. Answers are cached on disk for three days, separately for each source; **Settings > Storage** clears them.
 
 Community credits show the maker's Discord username by looking up their public spicylyrics.org profile. **Settings > Display** turns this off.
 
 Self-hosted lyrics deployments can still be provisioned through standard input. That legacy mode asks for explicit consent before it sends a short-lived Spotify access token to the configured host, and it never sends refresh tokens or client secrets:
 
 ```powershell
-Read-Host 'HTTPS lyrics host' | .\target\debug\spotiflex.exe --set-lyrics-host --allow-spotify-access-token
+Read-Host 'HTTPS lyrics host' | .\target\debug\lyssna.exe --set-lyrics-host --allow-spotify-access-token
 ```
 
 The host is kept in the credential store, not in source. Your DNS and network traffic still reveal where requests go.
@@ -92,8 +92,8 @@ On macOS, install the Xcode Command Line Tools, Rustup, Node.js 24 and CMake (`b
 
 By default each script requires a clean worktree, switches to `main`, fast-forwards from `origin/main`, restores npm dependencies, and builds a release. It installs the Rust version that `Cargo.toml` requires unless `RUSTUP_TOOLCHAIN` is set, and restores your original branch afterwards, including on failure. Nothing is pushed, and credentials and app data are left alone.
 
-- **Windows** installs to `%LOCALAPPDATA%\Programs\SpotiFlex\spotiflex.exe`, closes a running copy first, and starts the new one. `-NoLaunch` installs without starting it. Builds from this script turn automatic updates off; run it again to update. If PowerShell blocks the script, use `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script finds Visual Studio's bundled CMake and LLVM's default folder; otherwise put CMake on `PATH` and set `LIBCLANG_PATH` to the folder that contains `libclang.dll`.
-- **macOS** signs the bundle with a reusable self-signed certificate (an explicit `APPLE_SIGNING_IDENTITY` or `APPLE_CERTIFICATE` takes precedence, and `SPOTIFLEX_ADHOC_SIGNING=1` opts out), replaces `/Applications/SpotiFlex.app` and opens it. Credentials live encrypted under `~/Library/Application Support/SpotiFlex/credentials/`; keep `device.key` with them when backing up.
+- **Windows** installs to `%LOCALAPPDATA%\Programs\Lyssna\lyssna.exe`, closes a running copy first, and starts the new one. `-NoLaunch` installs without starting it. Builds from this script turn automatic updates off; run it again to update. If PowerShell blocks the script, use `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script finds Visual Studio's bundled CMake and LLVM's default folder; otherwise put CMake on `PATH` and set `LIBCLANG_PATH` to the folder that contains `libclang.dll`.
+- **macOS** signs the bundle with a reusable self-signed certificate (an explicit `APPLE_SIGNING_IDENTITY` or `APPLE_CERTIFICATE` takes precedence, and `LYSSNA_ADHOC_SIGNING=1` opts out), replaces `/Applications/Lyssna.app` (and removes an old `/Applications/Lyssna.app`) and opens it. Credentials live encrypted under `~/Library/Application Support/Lyssna/credentials/`; keep `device.key` with them when backing up.
 - `.\build.ps1 <branch>` or `./build.sh <branch>` builds another branch; a commit hash builds that commit.
 
 To build by hand:
@@ -102,7 +102,7 @@ To build by hand:
 npm ci
 npm run build
 cargo build --release --locked
-.\target\release\spotiflex.exe
+.\target\release\lyssna.exe
 ```
 
 </details>
@@ -110,7 +110,7 @@ cargo build --release --locked
 <details>
 <summary>Releases and CI</summary>
 
-The release workflow builds and tests the client, signs the update manifest, uploads the executable and source archive to the `spotiflex-releases` bucket, and activates the stable channel last. [docs/UPDATES.md](docs/UPDATES.md) has the maintainer steps. The **Build macOS app** workflow produces ad-hoc signed Apple Silicon and Intel `.app.zip` files when dispatched by hand; they are not notarized, and macOS builds do not update automatically.
+The release workflow builds and tests the client, signs the update manifest, uploads the executable and source archive to the `spotiflex-releases` bucket (it keeps the old name for compatibility), and activates the stable channel last. [docs/UPDATES.md](docs/UPDATES.md) has the maintainer steps. The **Build macOS app** workflow produces ad-hoc signed Apple Silicon and Intel `.app.zip` files when dispatched by hand; they are not notarized, and macOS builds do not update automatically.
 
 </details>
 
@@ -144,7 +144,7 @@ At the time of writing, 234 Rust tests, 185 frontend unit tests and 183 browser 
     <td align="center" valign="top" width="200">
       <a href="https://github.com/Stormanzanii"><img src="https://images.weserv.nl/?url=github.com/Stormanzanii.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="Arashii"></a><br>
       <b>Arashii</b><br>
-      <sub>Creator of SpotiFlex</sub>
+      <sub>Creator of Lyssna</sub>
     </td>
     <td align="center" valign="top" width="200">
       <a href="https://github.com/iPixelGalaxy"><img src="https://images.weserv.nl/?url=github.com/iPixelGalaxy.png&w=200&h=200&fit=cover&mask=circle&output=png" width="96" alt="iPixelGalaxy"></a><br>
@@ -167,8 +167,8 @@ At the time of writing, 234 Rust tests, 185 frontend unit tests and 183 browser 
 - **[spr](https://github.com/Fraktality/spr)** · Fraktality · MIT<br>The spring that animates lyrics.
 - **[Kawarp](https://github.com/better-lyrics/kawarp)** · Better Lyrics · MIT<br>The warped artwork and Canvas ambience.
 
-SpotiFlex reimplements Spicy Lyrics' behaviour. The only Spicy Lyrics code it copies is the Gibberish word filter's dictionary and rules, under the same AGPL-3.0 licence; [NOTICE.md](NOTICE.md) has the details.
+Lyssna reimplements Spicy Lyrics' behaviour. The only Spicy Lyrics code it copies is the Gibberish word filter's dictionary and rules, under the same AGPL-3.0 licence; [NOTICE.md](NOTICE.md) has the details.
 
 ## License
 
-SpotiFlex is free software under the [GNU AGPL v3](LICENSE). [NOTICE.md](NOTICE.md) records each upstream project SpotiFlex references, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) holds the licences of bundled dependencies. Spotify is a trademark of Spotify AB; SpotiFlex is not affiliated with Spotify.
+Lyssna is free software under the [GNU AGPL v3](LICENSE). [NOTICE.md](NOTICE.md) records each upstream project Lyssna references, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) holds the licences of bundled dependencies. Spotify is a trademark of Spotify AB; Lyssna is not affiliated with Spotify.

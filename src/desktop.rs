@@ -246,7 +246,7 @@ fn load_native_catalogue(
                 snapshot.more = false;
             }
             let _ = app.emit(
-                "spotiflex",
+                "lyssna",
                 json!({"type":"browse_info","generation":generation,"info":info}),
             );
             if needs_status {
@@ -260,7 +260,7 @@ fn load_native_catalogue(
                 let _ = inner.commands.send(Command::BrowseInfo { key, generation });
             }
         } else {
-            let _ = app.emit("spotiflex", json!({"type":"info_prefetch","info":info}));
+            let _ = app.emit("lyssna", json!({"type":"info_prefetch","info":info}));
         }
     });
 }
@@ -288,7 +288,7 @@ impl Desktop {
         updater::set_channel(&settings.update_channel);
         let scanned = app.clone();
         crate::local_files::on_change(move |count| {
-            let _ = scanned.emit("spotiflex", json!({"type":"local_files","count":count}));
+            let _ = scanned.emit("lyssna", json!({"type":"local_files","count":count}));
         });
         crate::local_files::rescan(&settings);
         let worker = Worker::start(notifier.clone());
@@ -383,13 +383,13 @@ impl Desktop {
             },
             move |status| nightly_update_status(&updated, &statuses, status),
             move |report| {
-                let _ = reports.emit("spotiflex", json!({"type":"nightly","report":report}));
+                let _ = reports.emit("lyssna", json!({"type":"nightly","report":report}));
             },
         );
         let pump = inner.clone();
         thread::spawn(move || {
             let emit = |value: Value| {
-                let _ = app.emit("spotiflex", value);
+                let _ = app.emit("lyssna", value);
             };
             while !pump.stopped.load(Ordering::Relaxed) {
                 let _ = wakes.recv_timeout(Duration::from_millis(50));
@@ -1453,7 +1453,7 @@ async fn dj_voice(
     tauri::async_runtime::spawn_blocking(move || {
         capture.transcribe_in_dialog(&vocabulary,&dialog,|progress| {
             let _ = app.emit(
-                "spotiflex-dj-voice",
+                "lyssna-dj-voice",
                 json!({"account":account,"id":id,"level":progress.level,"speech":progress.speech,"stage":progress.stage,"percent":progress.percent}),
             );
         })
@@ -1563,7 +1563,7 @@ fn cancel_sign_in(app: tauri::AppHandle, state: State<'_, Desktop>) {
     if let Ok(mut snapshot) = state.0.snapshot.lock() {
         snapshot.login_pending = false;
     }
-    let _ = app.emit("spotiflex", json!({"type":"login_finished"}));
+    let _ = app.emit("lyssna", json!({"type":"login_finished"}));
 }
 #[tauri::command]
 fn retry_sign_in(state: State<'_, Desktop>) -> std::result::Result<(), String> {
@@ -1661,10 +1661,7 @@ async fn home(
             inner.home_generation.fetch_add(1, Ordering::SeqCst) + 1,
         )
     };
-    let _ = app.emit(
-        "spotiflex",
-        json!({"type":"home_loading","account":account}),
-    );
+    let _ = app.emit("lyssna", json!({"type":"home_loading","account":account}));
     let controls = inner.controls.scoped(&account).map_err(error)?;
     let result = tauri::async_runtime::spawn_blocking(move || {
         let page = controls.home(&timezone)?;
@@ -1682,12 +1679,12 @@ async fn home(
     match result {
         Ok(Ok(page)) if page.account == account => {
             snapshot.home = Some(page.clone());
-            let _ = app.emit("spotiflex", json!({"type":"home","page":page}));
+            let _ = app.emit("lyssna", json!({"type":"home","page":page}));
         }
         _ => {
             snapshot.home_error = "Personalized Home could not load. Try refreshing.".into();
             let _ = app.emit(
-                "spotiflex",
+                "lyssna",
                 json!({"type":"home_error","account":account,"message":snapshot.home_error}),
             );
         }
@@ -1727,7 +1724,7 @@ fn browse(
                 .and_then(|profile| crate::library_cache::info(&profile.id, &key));
             if let Some(info) = snapshot.browse_info.as_ref() {
                 let _ = app.emit(
-                    "spotiflex",
+                    "lyssna",
                     json!({"type":"browse_info","generation":generation,"info":info}),
                 );
                 if info
@@ -2201,13 +2198,13 @@ fn player(
                 })?;
                 if matches!(action, PlayerAction::Enqueue(_)) {
                     let _ = app.emit(
-                        "spotiflex",
+                        "lyssna",
                         json!({"type":"notice","message":"Added to queue","error":false}),
                     );
                     return Ok(());
                 }
                 let _ = app.emit(
-                    "spotiflex",
+                    "lyssna",
                     json!({"type":"native","ready":true,"status":snapshot.native_status}),
                 );
             } else if matches!(action, PlayerAction::Pause) {
@@ -2314,7 +2311,7 @@ fn send_to_jam(
         "The Jam didn't take that. Try again."
     };
     let _ = app.emit(
-        "spotiflex",
+        "lyssna",
         json!({"type":"notice","message":message,"error":true}),
     );
 }
@@ -2461,7 +2458,7 @@ fn save_settings(
         }
         // Every window shows the same settings, so a change made in the
         // Cinema or popout window reaches the main one and the reverse.
-        let _ = app.emit("spotiflex", json!({"type":"settings","settings":&settings}));
+        let _ = app.emit("lyssna", json!({"type":"settings","settings":&settings}));
         snapshot.settings = settings;
         Ok(())
     };
@@ -2636,7 +2633,7 @@ async fn jam(
     let controls = state.0.controls.scoped(&account).map_err(error)?;
     let inner = state.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // A Jam link from Spotify or SpotiFlex, short or long.
+        // A Jam link from Spotify or Lyssna, short or long.
         let join = match (action.as_str(), link.as_deref()) {
             ("join", Some(link)) => Some(match crate::jam::short_link_code(link) {
                 Some(code) => crate::jam::resolve_short_link(code)?,
@@ -2654,7 +2651,7 @@ async fn jam(
             _ => {}
         }
         // Spotify ties a new Jam to the host's active device. Started while
-        // SpotiFlex isn't the one playing, the Jam would follow another
+        // Lyssna isn't the one playing, the Jam would follow another
         // device and songs changed here would never reach the guests.
         if action == "start" {
             let local = controls
@@ -2823,7 +2820,7 @@ fn signed_in_account(state: &State<'_, Desktop>) -> Result<String> {
         .id
         .clone())
 }
-/// Build the latest Nightly from source; once it is installed SpotiFlex
+/// Build the latest Nightly from source; once it is installed Lyssna
 /// follows Nightly and restarts into it. True once the build has started.
 #[tauri::command]
 fn nightly_build(
@@ -2835,7 +2832,7 @@ fn nightly_build(
     crate::nightly::start(
         crate::nightly::Mode::Install,
         move |report| {
-            let _ = events.emit("spotiflex", json!({"type":"nightly","report":report}));
+            let _ = events.emit("lyssna", json!({"type":"nightly","report":report}));
         },
         move |outcome| {
             if !matches!(outcome, Ok(crate::nightly::Outcome::Installed)) {
@@ -2852,7 +2849,7 @@ fn nightly_build(
             match updater::relaunch() {
                 Ok(()) => app.exit(0),
                 Err(error) => {
-                    log::warn!("Nightly installed; restart SpotiFlex to use it: {error:#}")
+                    log::warn!("Nightly installed; restart Lyssna to use it: {error:#}")
                 }
             }
         },
@@ -2860,7 +2857,7 @@ fn nightly_build(
     .map(|()| true)
     .map_err(error)
 }
-/// Before an update restarts SpotiFlex: save exactly where the song is, and
+/// Before an update restarts Lyssna: save exactly where the song is, and
 /// whether it is playing here, so the new copy carries on from that spot.
 fn hand_over_playback(inner: &Inner) {
     let Ok(snapshot) = inner.snapshot.lock() else {
@@ -2937,7 +2934,7 @@ fn nightly_update_status(inner: &Inner, app: &tauri::AppHandle, status: crate::n
         }
     }
     let _ = app.emit(
-        "spotiflex",
+        "lyssna",
         json!({"type":"update","status":snapshot.update_status,"version":snapshot.update_version,"notes":snapshot.update_notes}),
     );
 }
@@ -2995,7 +2992,7 @@ fn local_files_count() -> usize {
 async fn pick_local_folder(
     window: tauri::WebviewWindow,
 ) -> std::result::Result<Option<String>, String> {
-    // The picker sits on SpotiFlex's window, so it opens in front of it.
+    // The picker sits on Lyssna's window, so it opens in front of it.
     #[cfg(windows)]
     let owner = window
         .hwnd()
@@ -3495,7 +3492,7 @@ fn round_corners(
     }
     Ok(())
 }
-/// The profile script with SpotiFlex's Metropolis in place of the site's
+/// The profile script with Lyssna's Metropolis in place of the site's
 /// typefaces. The page is remote, so the faces travel inside the script.
 fn profile_window_script() -> &'static str {
     static SCRIPT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -3525,11 +3522,11 @@ fn profile_window_script() -> &'static str {
         let mut css = String::new();
         for (weight, font) in faces {
             css += &format!(
-                "@font-face{{font-family:SpotiFlexMetropolis;font-weight:{weight};font-display:block;src:url(data:font/woff2;base64,{}) format('woff2')}}",
+                "@font-face{{font-family:LyssnaMetropolis;font-weight:{weight};font-display:block;src:url(data:font/woff2;base64,{}) format('woff2')}}",
                 STANDARD.encode(font)
             );
         }
-        css += "body,body *:not(svg):not(svg *){font-family:SpotiFlexMetropolis,\"Segoe UI\",sans-serif!important}";
+        css += "body,body *:not(svg):not(svg *){font-family:LyssnaMetropolis,\"Segoe UI\",sans-serif!important}";
         PROFILE_WINDOW_SCRIPT.replacen(
             "PROFILE_FONTS",
             &serde_json::Value::String(css).to_string(),
@@ -3555,7 +3552,7 @@ async fn toggle_cinema_lyrics(app: tauri::AppHandle) -> std::result::Result<(), 
             LABEL,
             tauri::WebviewUrl::App("index.html?view=cinema".into()),
         )
-        .title("SpotiFlex Cinema")
+        .title("Lyssna Cinema")
         .inner_size(1280.0, 720.0)
         .min_inner_size(640.0, 360.0)
         .theme(Some(tauri::Theme::Dark))
@@ -3568,7 +3565,7 @@ async fn toggle_cinema_lyrics(app: tauri::AppHandle) -> std::result::Result<(), 
 }
 /// Spicy Lyrics' popup lyrics: the lyrics in their own small window that
 /// stays above others, opened again from where it was last closed. The page
-/// is SpotiFlex's own, in its lyrics popout view.
+/// is Lyssna's own, in its lyrics popout view.
 #[tauri::command]
 async fn open_lyrics_popout(app: tauri::AppHandle) -> std::result::Result<(), String> {
     const LABEL: &str = "lyrics-popout";
@@ -3583,7 +3580,7 @@ async fn open_lyrics_popout(app: tauri::AppHandle) -> std::result::Result<(), St
             LABEL,
             tauri::WebviewUrl::App("index.html?view=lyrics-popout".into()),
         )
-        .title("SpotiFlex Lyrics")
+        .title("Lyssna Lyrics")
         // Frameless like Spicy Lyrics' popup; the page draws its own close
         // button and drags the window.
         .decorations(false)
@@ -3667,7 +3664,7 @@ async fn open_creator_profile(
                 .on_navigation(move |url| {
                     // Listen plays the song here instead of leaving the page.
                     if let Some(uri) = listen_uri(url) {
-                        let _ = listens.emit("spotiflex", json!({"type":"play_uri","uri":uri}));
+                        let _ = listens.emit("lyssna", json!({"type":"play_uri","uri":uri}));
                         return false;
                     }
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
@@ -3688,7 +3685,7 @@ async fn open_creator_profile(
             f64::from(origin.x) + (f64::from(size.width) - width) / 2.,
             f64::from(origin.y) + (f64::from(size.height) - height) / 2.,
         ))?;
-        let _ = app.emit("spotiflex", json!({"type":"creator_profile","open":true}));
+        let _ = app.emit("lyssna", json!({"type":"creator_profile","open":true}));
         let events = app.clone();
         let popup = window.clone();
         window.on_window_event(move |event| match event {
@@ -3700,7 +3697,7 @@ async fn open_creator_profile(
                     .webview_windows()
                     .keys()
                     .any(|name| name.starts_with("creator-") && name != popup.label());
-                let _ = events.emit("spotiflex", json!({"type":"creator_profile","open":open}));
+                let _ = events.emit("lyssna", json!({"type":"creator_profile","open":open}));
             }
             _ => {}
         });
@@ -3896,7 +3893,7 @@ fn allowed_link(url: &url::Url) -> bool {
         "/iPixelGalaxy/spicy-lyrics",
         "/librespot-org/librespot",
         "/Fraktality/spr",
-        "/Stormanzanii/SpotiFlex",
+        "/Stormanzanii/Lyssna",
     ];
     url.scheme() == "https"
         && url.username().is_empty()
@@ -4179,7 +4176,7 @@ fn memory_target(window: &tauri::WebviewWindow, low: bool) {
 fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
 /// Hidden windows stop compositing like minimized ones; audio is native and
 /// keeps playing.
-/// Act on a `spotiflex://` link: show SpotiFlex, and let the interface play
+/// Act on a `lyssna://` link: show Lyssna, and let the interface play
 /// or open what it names once signed in and ready.
 fn follow_link(app: &tauri::AppHandle, link: crate::links::Link) {
     if let Some(window) = app.get_webview_window("main") {
@@ -4188,10 +4185,10 @@ fn follow_link(app: &tauri::AppHandle, link: crate::links::Link) {
     }
     if link != crate::links::Link::Show {
         crate::links::keep(link);
-        let _ = app.emit("spotiflex", json!({"type":"link"}));
+        let _ = app.emit("lyssna", json!({"type":"link"}));
     }
 }
-/// The `spotiflex://` link waiting to be acted on, taken once.
+/// The `lyssna://` link waiting to be acted on, taken once.
 #[tauri::command]
 fn take_link() -> Option<crate::links::Link> {
     crate::links::take().filter(|link| *link != crate::links::Link::Show)
@@ -4235,13 +4232,13 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     let menu = MenuBuilder::new(app)
-        .item(&MenuItemBuilder::with_id("show", "Show SpotiFlex").build(app)?)
+        .item(&MenuItemBuilder::with_id("show", "Show Lyssna").build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("toggle", "Play/Pause").build(app)?)
         .item(&MenuItemBuilder::with_id("next", "Next").build(app)?)
         .item(&MenuItemBuilder::with_id("previous", "Previous").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("quit", "Quit SpotiFlex").build(app)?)
+        .item(&MenuItemBuilder::with_id("quit", "Quit Lyssna").build(app)?)
         .build()?;
     TrayIconBuilder::with_id("main")
         .icon(tauri::image::Image::new_owned(
@@ -4249,7 +4246,7 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
             32,
             32,
         ))
-        .tooltip("SpotiFlex")
+        .tooltip("Lyssna")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -4261,7 +4258,7 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
             "quit" => app.exit(0),
             action @ ("toggle" | "next" | "previous") => {
                 let _ = app.emit(
-                    "spotiflex",
+                    "lyssna",
                     json!({"type":"media_control","action":action,"position_ms":null}),
                 );
             }
@@ -4309,13 +4306,13 @@ fn trim_memory(window: tauri::WebviewWindow) {
         }
     });
 }
-/// Asks a running SpotiFlex to exit instead of hiding to the tray.
+/// Asks a running Lyssna to exit instead of hiding to the tray.
 pub const QUIT_ARG: &str = "--quit";
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_window_state::StateFlags;
     let app = tauri::Builder::default()
-        // Opening SpotiFlex again, as from the Start menu while it sits in
+        // Opening Lyssna again, as from the Start menu while it sits in
         // the tray, shows the running window instead of a second copy.
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             // `--quit` from the build script closes the running copy fully,
@@ -4324,7 +4321,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 app.exit(0);
                 return;
             }
-            // A `spotiflex://` link opened while SpotiFlex runs.
+            // A `lyssna://` link opened while Lyssna runs.
             if let Some(link) = crate::links::from_args(&args) {
                 follow_link(app, link);
             } else if let Some(window) = app.get_webview_window("main") {
@@ -4363,11 +4360,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if std::env::args().any(|argument| argument == QUIT_ARG) {
                 std::process::exit(0);
             }
-            // SpotiFlex opened by a `spotiflex://` link: acted on once ready.
+            // Lyssna opened by a `lyssna://` link: acted on once ready.
             if let Some(link) = crate::links::from_args(std::env::args()) {
                 crate::links::keep(link);
             }
-            // Installed copies open `spotiflex://` links; a debug build from
+            // Installed copies open `lyssna://` links; a debug build from
             // `target` would take them from the installed one.
             #[cfg(windows)]
             if !cfg!(debug_assertions)
@@ -4378,7 +4375,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(target_os = "macos")]
             app.set_menu(tauri::menu::Menu::default(app.handle())?)?;
             // In-app updates replace only the executable; bring the bundle's
-            // Info.plist (and so `spotiflex://` links) up to date with it.
+            // Info.plist (and so `lyssna://` links) up to date with it.
             #[cfg(target_os = "macos")]
             crate::mac_bundle::refresh();
             if let Some(window) = app.get_webview_window("main") {
@@ -4410,7 +4407,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     if let tauri::WindowEvent::Moved(position) = event {
                         let scale = activity.scale_factor().unwrap_or(1.0);
                         let _ = activity.emit(
-                            "spotiflex",
+                            "lyssna",
                             json!({
                                 "type": "window_moved",
                                 "x": f64::from(position.x) / scale,
@@ -4440,7 +4437,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             memory_target(&activity, lean);
                         }
                         let _ = activity.emit(
-                            "spotiflex",
+                            "lyssna",
                             json!({"type":"window_activity","minimized":minimized,"focused":focused}),
                         );
                     }
@@ -4476,7 +4473,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     _ => None,
                 };
                 let _ = handle.emit(
-                    "spotiflex",
+                    "lyssna",
                     json!({"type":"media_control","action":action.name(),"position_ms":position}),
                 );
             });
@@ -4570,7 +4567,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .build(tauri::generate_context!())?;
     app.run(|app, event| {
-        // macOS hands `spotiflex://` links to the running app.
+        // macOS hands `lyssna://` links to the running app.
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Opened { urls } = &event
             && let Some(link) = urls.iter().find_map(|url| crate::links::parse(url.as_str()))
@@ -4782,7 +4779,7 @@ mod tests {
         let script = profile_window_script();
         assert!(!script.contains("PROFILE_FONTS"));
         assert_eq!(script.matches("@font-face").count(), 5);
-        assert!(script.contains("font-family:SpotiFlexMetropolis"));
+        assert!(script.contains("font-family:LyssnaMetropolis"));
     }
     #[test]
     fn local_playlist_selection_uses_the_chosen_loaded_track() {
@@ -4890,7 +4887,7 @@ mod tests {
         let allowed = |url: &str| allowed_link(&url::Url::parse(url).unwrap());
         assert!(allowed("https://open.spotify.com/track/abc"));
         assert!(allowed("https://github.com/iPixelGalaxy/spotify-plus"));
-        assert!(allowed("https://github.com/Stormanzanii/SpotiFlex"));
+        assert!(allowed("https://github.com/Stormanzanii/Lyssna"));
         assert!(allowed("https://github.com/Spikerko"));
         assert!(!allowed("https://github.com/someone/else"));
         assert!(!allowed(

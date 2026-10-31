@@ -5,7 +5,7 @@ import { romanizedLyrics } from "./romanization";
  * Experimental word sync: estimated timing for line-synced and static lyrics.
  *
  * Reimplements the behaviour of Spicy Lyrics' ExperimentalWordSync
- * (iPixelGalaxy/spicy-lyrics, AGPL-3.0) for SpotiFlex's lyric model. Each
+ * (iPixelGalaxy/spicy-lyrics, AGPL-3.0) for Lyssna's lyric model. Each
  * line's time is spread over its words by letter weight, bracketed parts
  * become background vocals, and a line whose end runs straight into the next
  * line but lasts far longer than its words need is trimmed to a speech-rate
@@ -118,7 +118,7 @@ export function distribute(start: number, end: number, weights: number[]) {
   });
 }
 
-/** Words for `text`, using SpotiFlex's leading-space word convention. */
+/** Words for `text`, using Lyssna's leading-space word convention. */
 function buildWords(text: string, start: number, end: number): Word[] {
   const units = splitUnits(text);
   const ranges = distribute(

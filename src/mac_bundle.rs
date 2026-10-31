@@ -1,7 +1,7 @@
-//! Keeping the installed `SpotiFlex.app` in step with this executable on
-//! macOS. Nightly and in-app updates replace only `Contents/MacOS/spotiflex`,
+//! Keeping the installed `Lyssna.app` in step with this executable on
+//! macOS. Nightly and in-app updates replace only `Contents/MacOS/lyssna`,
 //! so keys added to `Info.macos.plist` since the app was installed, such as
-//! the `spotiflex://` link type, would never reach the bundle. Each copy
+//! the `lyssna://` link type, would never reach the bundle. Each copy
 //! carries the plist it was built with and merges it in at startup, then
 //! signs the app again as the build script did and tells Launch Services.
 use anyhow::{Context, Result, bail, ensure};
@@ -25,6 +25,20 @@ pub fn bundle() -> Option<PathBuf> {
         .ancestors()
         .find(|path| path.extension().is_some_and(|extension| extension == "app"))
         .map(Path::to_path_buf)
+}
+
+/// The running app's bundle identifier, as its Info.plist names it.
+pub fn identifier() -> Option<String> {
+    let output = Command::new(PLUTIL)
+        .args(["-extract", "CFBundleIdentifier", "raw", "-o", "-"])
+        .arg(bundle()?.join("Contents/Info.plist"))
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 /// Bring the bundle's Info.plist up to date with this executable's, then
@@ -109,7 +123,7 @@ fn refresh_bundle(bundle: &Path, replaced: bool) -> Result<()> {
 }
 
 /// Sign as `build.sh` does: with its local identity when this Mac has one,
-/// so Keychain keeps trusting SpotiFlex, else ad hoc.
+/// so Keychain keeps trusting Lyssna, else ad hoc.
 fn sign(bundle: &Path, entitlements: &Path) -> Result<()> {
     let mut command = Command::new(CODESIGN);
     command.args(["--force", "--deep"]);
@@ -144,8 +158,16 @@ fn local_identity() -> Option<(String, PathBuf)> {
         password: String,
     }
     let home = directories::BaseDirs::new()?.home_dir().to_path_buf();
-    let metadata = home.join("Library/Application Support/SpotiFlex/build-signing/identity.json");
-    let keychain = home.join("Library/Keychains/SpotiFlex-local-build.keychain-db");
+    // Under SpotiFlex's names until the build script moves them.
+    let pick = |current: PathBuf, former: PathBuf| if current.exists() { current } else { former };
+    let metadata = pick(
+        home.join("Library/Application Support/Lyssna/build-signing/identity.json"),
+        home.join("Library/Application Support/SpotiFlex/build-signing/identity.json"),
+    );
+    let keychain = pick(
+        home.join("Library/Keychains/Lyssna-local-build.keychain-db"),
+        home.join("Library/Keychains/SpotiFlex-local-build.keychain-db"),
+    );
     let identity: Identity = serde_json::from_slice(&fs::read(metadata).ok()?).ok()?;
     if identity.fingerprint.len() != 40
         || !identity
@@ -194,7 +216,7 @@ fn extract(plist: &Path, key: &str) -> Result<serde_json::Value> {
 }
 
 fn tempfile_dir() -> Result<PathBuf> {
-    let dir = std::env::temp_dir().join(format!("spotiflex-bundle-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("lyssna-bundle-{}", std::process::id()));
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }

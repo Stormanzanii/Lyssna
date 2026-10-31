@@ -210,7 +210,7 @@ export const emptyState: AppState = {
     folders: [],
   },
   native_ready: false,
-  local_device_name: "SpotiFlex",
+  local_device_name: "Lyssna",
   native_status: "Connecting…",
   provider_configured: false,
   login_pending: false,

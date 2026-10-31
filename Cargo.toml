@@ -1,12 +1,27 @@
 [package]
-name = "spotiflex"
+name = "lyssna"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.98"
 description = "Native Rust Spotify client with synchronized lyrics and playlist tools"
 license = "AGPL-3.0-only"
 publish = false
-default-run = "spotiflex"
+default-run = "lyssna"
+
+[[bin]]
+name = "lyssna"
+path = "src/main.rs"
+
+# Copies of SpotiFlex Nightly from before the rename build `--bin spotiflex`
+# and install `target/release/spotiflex`; this keeps them able to update into
+# Lyssna. Remove once those copies have updated.
+[[bin]]
+name = "spotiflex"
+path = "src/main.rs"
+
+[[bin]]
+name = "lyssna-release"
+path = "src/bin/lyssna-release.rs"
 
 [workspace]
 members = ["vendor/librespot-core", "vendor/librespot-playback", "vendor/librespot-connect"]

@@ -6,9 +6,9 @@ License: MIT, copyright 2015 Paul Lietar. The upstream license is included as `L
 
 Playback and Connect are vendored. Other librespot crates remain pinned to the same revision. The manifest replaces workspace inheritance and relative dependency paths with explicit package metadata and dependencies resolved by the application's patches.
 
-SpotiFlex changes tag decoded narration packets. Its audio sink can identify speech when samples reach playback, without treating buffering or paused music as narration. Preserve this marker when updating the vendored crate.
+Lyssna changes tag decoded narration packets. Its audio sink can identify speech when samples reach playback, without treating buffering or paused music as narration. Preserve this marker when updating the vendored crate.
 
-The sink receives track identity before playback events or decoded samples. SpotiFlex uses this boundary to discard interrupted selections while keeping automatic track transitions gapless.
+The sink receives track identity before playback events or decoded samples. Lyssna uses this boundary to discard interrupted selections while keeping automatic track transitions gapless.
 
 Each player owns bounded five-minute metadata and audio-key caches in memory. New sessions clear them. Audio opening and key retrieval overlap; failures are never cached, and keys are never written to disk.
 

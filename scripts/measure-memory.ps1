@@ -1,7 +1,7 @@
 param([double]$BudgetMiB = 0)
-$processRows = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(spotiflex.*|msedgewebview2)\.exe$' })
+$processRows = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(lyssna.*|spotiflex.*|msedgewebview2)\.exe$' })
 $ids = [System.Collections.Generic.HashSet[uint32]]::new()
-foreach ($row in $processRows) { if ($row.Name -like 'spotiflex*') { [void]$ids.Add([uint32]$row.ProcessId) } }
+foreach ($row in $processRows) { if ($row.Name -match '^(lyssna|spotiflex)') { [void]$ids.Add([uint32]$row.ProcessId) } }
 do {
     $added = $false
     foreach ($row in $processRows) { if ($ids.Contains([uint32]$row.ParentProcessId) -and $ids.Add([uint32]$row.ProcessId)) { $added = $true } }
@@ -12,7 +12,7 @@ $memoryRows = @(foreach ($row in $processRows) {
     if (!$ids.Contains([uint32]$row.ProcessId)) { continue }
     $appProcess = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue
     if (!$appProcess) { continue }
-    $kind = if ($row.Name -like 'spotiflex*') { 'native' } elseif ($row.CommandLine -match '--type=([^ ]+)') { $matches[1] } else { 'browser' }
+    $kind = if ($row.Name -match '^(lyssna|spotiflex)') { 'native' } elseif ($row.CommandLine -match '--type=([^ ]+)') { $matches[1] } else { 'browser' }
     [pscustomobject]@{
         Id = $appProcess.Id
         Kind = $kind
@@ -21,7 +21,7 @@ $memoryRows = @(foreach ($row in $processRows) {
         PrivateMiB = [math]::Round($appProcess.PrivateMemorySize64 / 1MB, 1)
     }
 })
-if (!$memoryRows.Count) { throw 'SpotiFlex is not running' }
+if (!$memoryRows.Count) { throw 'Lyssna is not running' }
 $total = [math]::Round(($memoryRows | Measure-Object PrivateWorkingSetMiB -Sum).Sum, 1)
 [pscustomobject]@{
     Timestamp = [DateTime]::UtcNow.ToString('o')

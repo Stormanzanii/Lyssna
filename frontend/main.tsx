@@ -1,3 +1,4 @@
+import "./storage-migration";
 import React from "react";
 // Default lyrics typeface: Inter (SIL OFL), with optical sizes for display text.
 import "@fontsource-variable/inter/opsz.css";

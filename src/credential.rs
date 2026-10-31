@@ -1,8 +1,67 @@
 //! Platform credential storage. macOS uses authenticated encrypted local files.
+//!
+//! Lyssna was called SpotiFlex: a credential saved under a `SpotiFlex/...`
+//! service is moved to the same `Lyssna/...` service when first read.
 #[cfg(not(target_os = "macos"))]
-pub use keyring::{Entry, Error};
+use keyring as platform;
 #[cfg(target_os = "macos")]
-pub use local::{Entry, Error};
+use local as platform;
+pub use platform::Error;
+
+/// A saved credential, by service and user.
+pub struct Entry {
+    entry: platform::Entry,
+    service: String,
+    user: String,
+}
+
+/// The service a credential had before the rename, if it had another.
+fn former(service: &str) -> Option<String> {
+    service
+        .strip_prefix("Lyssna/")
+        .map(|rest| format!("SpotiFlex/{rest}"))
+}
+
+impl Entry {
+    pub fn new(service: &str, user: &str) -> std::result::Result<Self, Error> {
+        Ok(Self {
+            entry: platform::Entry::new(service, user)?,
+            service: service.to_owned(),
+            user: user.to_owned(),
+        })
+    }
+
+    pub fn get_password(&self) -> std::result::Result<String, Error> {
+        match self.entry.get_password() {
+            Err(Error::NoEntry) => {
+                let Some(service) = former(&self.service) else {
+                    return Err(Error::NoEntry);
+                };
+                let old = platform::Entry::new(&service, &self.user)?;
+                let value = old.get_password()?;
+                self.entry.set_password(&value)?;
+                let _ = old.delete_credential();
+                Ok(value)
+            }
+            result => result,
+        }
+    }
+
+    pub fn set_password(&self, value: &str) -> std::result::Result<(), Error> {
+        self.entry.set_password(value)
+    }
+
+    /// Deletes the credential, and any copy still under the old name.
+    pub fn delete_credential(&self) -> std::result::Result<(), Error> {
+        let old = former(&self.service)
+            .and_then(|service| platform::Entry::new(&service, &self.user).ok())
+            .map(|old| old.delete_credential());
+        match (self.entry.delete_credential(), old) {
+            (Err(Error::NoEntry), Some(Ok(()))) => Ok(()),
+            (result, _) => result,
+        }
+    }
+}
 
 #[cfg(target_os = "macos")]
 mod local {
@@ -237,7 +296,7 @@ mod local {
         impl Directory {
             fn new() -> Self {
                 let path = std::env::temp_dir().join(format!(
-                    "spotiflex-credentials-{:032x}",
+                    "lyssna-credentials-{:032x}",
                     u128::from_le_bytes(random::<16>().unwrap())
                 ));
                 Self(path)
@@ -330,5 +389,17 @@ mod local {
             symlink(&original, &path).unwrap();
             assert!(matches!(entry.get_password(), Err(Error::Storage(_))));
         }
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    #[test]
+    fn lyssna_credentials_come_from_the_same_spotiflex_service() {
+        assert_eq!(
+            super::former("Lyssna/SpotifyAudio").as_deref(),
+            Some("SpotiFlex/SpotifyAudio")
+        );
+        assert_eq!(super::former("test-service"), None);
     }
 }

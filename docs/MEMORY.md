@@ -1,12 +1,12 @@
 # Memory measurements
 
-Run this from the repository root while SpotiFlex is open:
+Run this from the repository root while Lyssna is open:
 
 ```powershell
 pwsh -NoProfile -File scripts/measure-memory.ps1
 ```
 
-The script follows SpotiFlex's WebView2 child processes. It reports each
+The script follows Lyssna's WebView2 child processes. It reports each
 process's working set, private working set and committed private bytes.
 `TotalPrivateWorkingSetMiB` counts resident private memory; `TotalPrivateMiB`
 counts committed memory, including pages that are not resident. Summing full

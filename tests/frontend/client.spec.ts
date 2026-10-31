@@ -343,7 +343,7 @@ test("bundled lyrics stay ready after sign-out and another sign-in", async ({
     (window as any).__clientTest.emit({ type: "signed_out" }),
   );
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toHaveCount(0);
   await expect(page.getByRole("dialog")).toContainText(
     "Spotify Premium required",
@@ -359,7 +359,7 @@ test("bundled lyrics stay ready after sign-out and another sign-in", async ({
   });
   await expect(page.locator(".application")).toBeVisible();
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toHaveCount(0);
   await openSettings(page, "Sources");
   await expect(
@@ -555,15 +555,15 @@ test("metadata menus stay off blank rows, backgrounds and player controls", asyn
 });
 
 async function showLyrics(page: Page) {
-  const settings = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  const settings = page.getByRole("dialog", { name: "Lyssna settings" });
   if (await settings.count())
     await settings.getByRole("button", { name: "Close settings" }).click();
   if (!(await page.locator(".lyrics-page").count()))
     await page.getByTitle("Lyrics", { exact: true }).click();
 }
-/** Opens the SpotiFlex settings window, unless it is open, on a tab. */
+/** Opens the Lyssna settings window, unless it is open, on a tab. */
 async function openSettings(page: Page, tab = "General") {
-  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
   if (!(await dialog.count())) {
     await page
       .getByRole("button", { name: "Account menu", exact: true })
@@ -596,11 +596,11 @@ async function startClient(
             handler.event === event &&
             callbacks.get(handler.handler)?.({ event, payload }),
         );
-      const emit = (payload: any) => emitNamed("spotiflex", payload);
+      const emit = (payload: any) => emitNamed("lyssna", payload);
       host.__clientTest = {
         commands,
         emit,
-        emitVoice: (payload: any) => emitNamed("spotiflex-dj-voice", payload),
+        emitVoice: (payload: any) => emitNamed("lyssna-dj-voice", payload),
         emitNamed,
         pendingVoice: null,
         resolveVoice: null,
@@ -975,14 +975,14 @@ async function startClient(
         provider_kind: bundledLyrics ? "spicy" : undefined,
         route: initialRoute,
         profile: { id: "test-user" },
-        local_device_name: "SpotiFlex (test)",
+        local_device_name: "Lyssna (test)",
         native_ready: true,
         playback: {
           ...emptyState.playback,
           item: track,
           progress_ms: 40_000,
           device: {
-            name: "SpotiFlex (test)",
+            name: "Lyssna (test)",
             id: "local-device",
             is_active: true,
           },
@@ -1469,7 +1469,7 @@ test("holding hint appears at DJ startup and stays quiet during later segments",
     page.getByText("Hold the DJ button to ask for music.", { exact: true }),
   ).toBeVisible();
   const first = await page.evaluate(() =>
-    localStorage.getItem("spotiflex.dj-hint.test-user"),
+    localStorage.getItem("lyssna.dj-hint.test-user"),
   );
   expect(Number(first)).toBeGreaterThan(0);
   await page.evaluate(() => {
@@ -1483,10 +1483,27 @@ test("holding hint appears at DJ startup and stays quiet during later segments",
   );
   await expect(page.getByText("Other notice", { exact: true })).toBeVisible();
   expect(
-    await page.evaluate(() =>
-      localStorage.getItem("spotiflex.dj-hint.test-user"),
-    ),
+    await page.evaluate(() => localStorage.getItem("lyssna.dj-hint.test-user")),
   ).toBe(first);
+});
+test("saved preferences from before the rename carry over to Lyssna", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("spotiflex.dj-hint.test-user", "1234");
+    localStorage.setItem("spotiflex.settings-place", "old");
+    localStorage.setItem("lyssna.settings-place", "new");
+  });
+  await startClient(page);
+  expect(
+    await page.evaluate(() => ({
+      hint: localStorage.getItem("lyssna.dj-hint.test-user"),
+      place: localStorage.getItem("lyssna.settings-place"),
+      old: Object.keys(localStorage).filter((key) =>
+        key.startsWith("spotiflex."),
+      ),
+    })),
+  ).toEqual({ hint: "1234", place: "new", old: [] });
 });
 test("player DJ button requests a fresh DJ selection on every click", async ({
   page,
@@ -3033,7 +3050,7 @@ test("song title resolves native album metadata before navigating", async ({
         progress_ms: 0,
         shuffle_state: false,
         repeat_state: "off",
-        device: { name: "SpotiFlex", is_active: true },
+        device: { name: "Lyssna", is_active: true },
       },
       observed_at: Date.now(),
       changed: true,
@@ -3097,7 +3114,7 @@ async function playLyricTrack(page: Page, playing = true) {
         shuffle_state: false,
         repeat_state: "off",
         device: {
-          name: "SpotiFlex (test)",
+          name: "Lyssna (test)",
           id: "local-device",
           is_active: true,
         },
@@ -3442,8 +3459,8 @@ test("Appearance pins the lyrics footer with Off, No Writers and Full modes", as
   }, track.uri);
   await page.getByTitle("Lyrics", { exact: true }).click();
   const mode = async (value: string) => {
-    await page.getByTitle("SpotiFlex settings", { exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+    await page.getByTitle("Lyssna settings", { exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
     // Settings reopen where they were left; pick Lyrics each time.
     await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
     const select = dialog.getByLabel("Pinned Lyrics Footer", { exact: true });
@@ -5131,7 +5148,7 @@ test("Space Gravity words keep drifting while the song plays", async ({
           item: track,
           is_playing: true,
           progress_ms: 40_000,
-          device: { name: "SpotiFlex", is_active: true },
+          device: { name: "Lyssna", is_active: true },
         },
         observed_at: Date.now(),
         changed: false,
@@ -5397,8 +5414,8 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
   await expect(page.locator(".lyrics-page")).toHaveClass(/artwork-right/);
   await toolbar.getByTitle("Compact lyrics", { exact: true }).click();
   await expect(page.locator(".lyrics-page")).toHaveClass(/narrow/);
-  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  await toolbar.getByTitle("Lyssna settings", { exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
   await expect(
@@ -5438,10 +5455,10 @@ test("lyrics toolbar toggles romanization, word sync and layout", async ({
     .getByRole("button", { name: /close/i })
     .first()
     .click();
-  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
+  await toolbar.getByTitle("Lyssna settings", { exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await toolbar.getByTitle("SpotiFlex settings", { exact: true }).click();
+  await toolbar.getByTitle("Lyssna settings", { exact: true }).click();
   // About opens from the footer card and lists the credits.
   await expect(dialog.locator(".lyrics-settings-wordmark")).toHaveCount(1);
   await expect(dialog.getByRole("tab", { name: "About" })).toHaveCount(0);
@@ -7860,7 +7877,7 @@ test("updates can be downloaded manually before installing and restarting", asyn
     }),
   );
   await page
-    .getByRole("dialog", { name: "SpotiFlex 0.2.0 is available" })
+    .getByRole("dialog", { name: "Lyssna 0.2.0 is available" })
     .getByRole("button", { name: "Download update", exact: true })
     .click();
   await expect.poll(action).toBe("download");
@@ -7872,7 +7889,7 @@ test("updates can be downloaded manually before installing and restarting", asyn
     }),
   );
   await page
-    .getByRole("dialog", { name: "SpotiFlex 0.2.0 is available" })
+    .getByRole("dialog", { name: "Lyssna 0.2.0 is available" })
     .getByRole("button", { name: "Install and restart", exact: true })
     .click();
   await expect.poll(action).toBe("install");
@@ -8399,7 +8416,7 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
     .getByRole("menuitem", { name: "Settings" })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   // Clicking elsewhere closes it.
@@ -8408,34 +8425,34 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
   await expect(page.getByRole("menu", { name: "Menu" })).toHaveCount(0);
 });
 
-test("Help > About SpotiFlex opens the About dialog", async ({ page }) => {
+test("Help > About Lyssna opens the About dialog", async ({ page }) => {
   await startClient(page);
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Help" }).click();
   await page
     .getByRole("menu", { name: "Help" })
-    .getByRole("menuitem", { name: "About SpotiFlex" })
+    .getByRole("menuitem", { name: "About Lyssna" })
     .click();
-  const about = page.getByRole("dialog", { name: "About SpotiFlex" });
+  const about = page.getByRole("dialog", { name: "About Lyssna" });
   await expect(about).toBeVisible();
-  await expect(about).toContainText("SpotiFlex for Windows (64 bit)");
+  await expect(about).toContainText("Lyssna for Windows (64 bit)");
   await expect(about.locator(".about-legal")).toContainText("Copyright");
   await about.getByRole("button", { name: "Close", exact: true }).click();
   await expect(about).toHaveCount(0);
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Help" }).click();
-  await page.getByRole("menuitem", { name: "About SpotiFlex" }).click();
+  await page.getByRole("menuitem", { name: "About Lyssna" }).click();
   await expect(about).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(about).toHaveCount(0);
 });
 
-test("SpotiFlex settings combines app and lyrics options with ordered sources", async ({
+test("Lyssna settings combines app and lyrics options with ordered sources", async ({
   page,
 }) => {
   await startClient(page);
   await openSettings(page);
-  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
   await expect(dialog).toBeVisible();
   await expect(page.locator(".settings-page")).toHaveCount(0);
   await expect(
@@ -8488,7 +8505,7 @@ test("SpotiFlex settings combines app and lyrics options with ordered sources", 
   await dialog.getByRole("switch", { name: "Liquid Glass" }).check();
   await dialog.getByRole("tab", { name: "Lyrics", exact: true }).click();
   await dialog.screenshot({
-    path: "target/diagnostics/spotiflex-settings-glass.png",
+    path: "target/diagnostics/lyssna-settings-glass.png",
     animations: "disabled",
   });
   // Every category fits the smallest supported window.
@@ -8513,7 +8530,7 @@ test("SpotiFlex settings combines app and lyrics options with ordered sources", 
     ).toBe(true);
   }
   await dialog.screenshot({
-    path: "target/diagnostics/spotiflex-settings-small.png",
+    path: "target/diagnostics/lyssna-settings-small.png",
     animations: "disabled",
   });
   await page.mouse.click(5, 300);
@@ -9570,7 +9587,7 @@ test("a green bar names the other device playing and opens the device list", asy
   await bar.click();
   await expect(page.locator(".device-menu")).toBeVisible();
   // This computer playing shows no bar.
-  await playOn("SpotiFlex (test)");
+  await playOn("Lyssna (test)");
   await expect(bar).toHaveCount(0);
 });
 
@@ -9689,7 +9706,7 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   const panel = page.getByRole("dialog", { name: "Animator Behavior" });
   await expect(panel).toBeVisible();
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toHaveCount(0);
   await expect(page.locator(".application")).toHaveClass(/immersive/);
   await expect(page.locator(".lyrics-page")).toBeVisible();
@@ -9756,7 +9773,7 @@ test("animator presets import Spicy Lyrics share codes into Custom tuning", asyn
   await page.mouse.move(900, 300);
   await page
     .locator(".lyrics-toolbar")
-    .getByTitle("SpotiFlex settings", { exact: true })
+    .getByTitle("Lyssna settings", { exact: true })
     .click();
   await page.getByRole("tab", { name: "Effects", exact: true }).click();
   await page.getByRole("button", { name: "Manage", exact: true }).click();
@@ -10202,7 +10219,7 @@ test("Settings reopen on the tab and scroll position they were left at", async (
     .toBeGreaterThan(200);
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
@@ -10345,7 +10362,7 @@ async function gravityWithoutCanvas(page: Page) {
           item: track,
           is_playing: true,
           progress_ms: 40_000,
-          device: { name: "SpotiFlex", is_active: true },
+          device: { name: "Lyssna", is_active: true },
         },
         observed_at: Date.now(),
         changed: false,
@@ -10372,7 +10389,7 @@ test("in a small window the player's extra buttons keep clear of the progress ba
           item: track,
           is_playing: false,
           progress_ms: 0,
-          device: { name: "SpotiFlex", is_active: true },
+          device: { name: "Lyssna", is_active: true },
         },
         observed_at: Date.now(),
         changed: false,
@@ -10409,7 +10426,7 @@ test("credits Show all opens Spotify's grouped Credits dialog", async ({
           item: track,
           is_playing: false,
           progress_ms: 0,
-          device: { name: "SpotiFlex", is_active: true },
+          device: { name: "Lyssna", is_active: true },
         },
         observed_at: Date.now(),
         changed: false,
@@ -10456,7 +10473,7 @@ test("lyrics artwork scales with the window and the title keeps to its width", a
           },
           is_playing: false,
           progress_ms: 0,
-          device: { name: "SpotiFlex", is_active: true },
+          device: { name: "Lyssna", is_active: true },
         },
         observed_at: Date.now(),
         changed: false,
@@ -11644,7 +11661,7 @@ test("Escape can leave the lyrics page as well as full screen", async ({
   // Escape closes Settings first without leaving the lyrics.
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toHaveCount(0);
   await expect(page.locator(".lyrics-page")).toBeVisible();
   await page.keyboard.press("F11");
@@ -11810,7 +11827,7 @@ test("a Musixmatch token is saved without being shown again", async ({
 
 test("Settings can forget where it was closed", async ({ page }) => {
   await startClient(page);
-  const dialog = page.getByRole("dialog", { name: "SpotiFlex settings" });
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
   await openSettings(page, "Advanced");
   await page
     .getByRole("switch", { name: "Remember settings location" })
@@ -13444,9 +13461,9 @@ test("Cinema opens Settings over itself and Escape closes only Settings", async 
   await page.mouse.move(420, 320);
   await cinema
     .getByRole("toolbar", { name: "Lyrics" })
-    .getByTitle("SpotiFlex settings", { exact: true })
+    .getByTitle("Lyssna settings", { exact: true })
     .click();
-  await expect(cinema.getByText("SpotiFlex settings").last()).toBeVisible();
+  await expect(cinema.getByText("Lyssna settings").last()).toBeVisible();
   await expect(cinema.locator(".lyrics-page")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(cinema.getByRole("tab", { name: "Appearance" })).toHaveCount(0);
@@ -13463,7 +13480,7 @@ test("the main window acts on the Cinema window's requests", async ({
     }),
   );
   await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+    page.getByRole("dialog", { name: "Lyssna settings" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.evaluate(() =>
@@ -13979,7 +13996,7 @@ test("Your Library and Now playing keep their dragged widths", async ({
   await expect(page.locator("aside.now-playing")).toHaveCSS("width", "450px");
 });
 
-test("Listen on a creator profile plays the song in SpotiFlex", async ({
+test("Listen on a creator profile plays the song in Lyssna", async ({
   page,
 }) => {
   await startClient(page);
@@ -14108,7 +14125,7 @@ test("Nightly sets itself up and shows each step's progress", async ({
   await report([
     step("cpp", "C++ build tools", "skipped"),
     step("rust", "Rust", "running", 0.4, "info: downloading component 'rustc'"),
-    step("app", "Building SpotiFlex", "pending"),
+    step("app", "Building Lyssna", "pending"),
   ]);
   const building = page.getByRole("alertdialog", { name: "Building Nightly" });
   await expect(
@@ -14126,7 +14143,7 @@ test("Nightly sets itself up and shows each step's progress", async ({
     [
       step("cpp", "C++ build tools", "skipped"),
       step("rust", "Rust", "done", 1),
-      step("app", "Building SpotiFlex", "failed", null, "error[E0308]"),
+      step("app", "Building Lyssna", "failed", null, "error[E0308]"),
     ],
     { running: false, error: "cargo failed (exit code 101)" },
   );
@@ -14219,7 +14236,7 @@ test("the Nightly button shows a building update, then restarts into it", async 
           },
           {
             id: "app",
-            label: "Building SpotiFlex",
+            label: "Building Lyssna",
             state: "running",
             progress: 0.5,
             detail: null,
@@ -14235,7 +14252,7 @@ test("the Nightly button shows a building update, then restarts into it", async 
   await expect(building.locator(".nightly-ring")).toBeVisible();
   // The prompt stays out of the way until the build is clicked.
   const prompt = page.getByRole("dialog", {
-    name: "SpotiFlex Nightly 1234567 is available",
+    name: "Lyssna Nightly 1234567 is available",
   });
   await page.evaluate(() =>
     (window as any).__clientTest.emit({
@@ -14319,7 +14336,7 @@ test("with automatic builds off, a new Nightly turns the button blue instead of 
   // Fades from its usual colour to blue.
   await expect(button).toHaveCSS("color", "rgb(77, 155, 255)");
   const prompt = page.getByRole("dialog", {
-    name: "SpotiFlex Nightly 1234567 is available",
+    name: "Lyssna Nightly 1234567 is available",
   });
   await expect(prompt).toBeHidden();
   await button.click();
@@ -14329,7 +14346,7 @@ test("with automatic builds off, a new Nightly turns the button blue instead of 
   ).toBeEnabled();
 });
 
-test("spotiflex:// links play songs and open pages", async ({ page }) => {
+test("lyssna:// links play songs and open pages", async ({ page }) => {
   await startClient(page);
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
@@ -14399,7 +14416,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
     });
   });
   const prompt = page.getByRole("dialog", {
-    name: "SpotiFlex Nightly 1234567 is available",
+    name: "Lyssna Nightly 1234567 is available",
   });
   // It builds by itself, so it shows on the button, not over the app.
   await expect(prompt).toBeHidden();
@@ -14441,7 +14458,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
           },
           {
             id: "app",
-            label: "Building SpotiFlex",
+            label: "Building Lyssna",
             state: "running",
             progress: 0.5,
             detail: "Compiling librespot",
@@ -14450,7 +14467,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
       },
     }),
   );
-  await expect(prompt.getByText("Building SpotiFlex")).toBeVisible();
+  await expect(prompt.getByText("Building Lyssna")).toBeVisible();
   await expect(prompt.getByText("Compiling librespot")).toBeVisible();
   await expect(
     prompt.getByRole("progressbar", { name: "Building update" }),

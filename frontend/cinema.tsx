@@ -85,9 +85,7 @@ export function CinemaLyrics() {
     return () => clearTimeout(timer);
   }, [state.toast, dispatch]);
   useEffect(() => {
-    document.title = track
-      ? `${track.name} · SpotiFlex Cinema`
-      : "SpotiFlex Cinema";
+    document.title = track ? `${track.name} · Lyssna Cinema` : "Lyssna Cinema";
   }, [track?.name]);
   const fullscreen = async () => {
     const window = getCurrentWindow();
@@ -200,7 +198,7 @@ export function CinemaLyrics() {
               </button>
               <button
                 className="icon-button"
-                title="SpotiFlex settings"
+                title="Lyssna settings"
                 data-icon="settings"
                 onClick={() =>
                   setSettingsTab(

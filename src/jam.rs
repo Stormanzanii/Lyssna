@@ -308,7 +308,7 @@ pub async fn start(session: &Session) -> Result<Jam> {
     Ok(with_short_link(session, jam).await)
 }
 
-/// The join token in a Jam link from Spotify or SpotiFlex:
+/// The join token in a Jam link from Spotify or Lyssna:
 /// `open.spotify.com/socialsession/…` or `spotify:socialsession:…`. Short
 /// `spotify.link` links are resolved with [`resolve_short_link`] first.
 pub fn link_token(text: &str) -> Option<String> {
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn jam_links_from_spotify_and_spotiflex_give_their_token() {
+    fn jam_links_from_spotify_and_lyssna_give_their_token() {
         for link in [
             "https://open.spotify.com/socialsession/0AMT6YW2zwhkPgQz7iBlJ2",
             "https://open.spotify.com/socialsession/0AMT6YW2zwhkPgQz7iBlJ2?si=abc&utm_source=share",

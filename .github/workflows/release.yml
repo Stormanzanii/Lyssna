@@ -42,19 +42,21 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - name: Build release
         env:
-          SPOTIFLEX_SPICY_LYRICS_KEY: ${{ vars.SPOTIFLEX_SPICY_LYRICS_KEY }}
-        run: cargo build --release --locked --bin spotiflex --bin spotiflex-release
+          LYSSNA_SPICY_LYRICS_KEY: ${{ vars.LYSSNA_SPICY_LYRICS_KEY || vars.SPOTIFLEX_SPICY_LYRICS_KEY }}
+        run: cargo build --release --locked --bin lyssna --bin lyssna-release
       - name: Sign and publish
         env:
-          SPOTIFLEX_RELEASE_SIGNING_KEY: ${{ secrets.SPOTIFLEX_RELEASE_SIGNING_KEY }}
-          SPOTIFLEX_RELEASE_PUBLISH_TOKEN: ${{ secrets.SPOTIFLEX_RELEASE_PUBLISH_TOKEN }}
+          LYSSNA_RELEASE_SIGNING_KEY: ${{ secrets.LYSSNA_RELEASE_SIGNING_KEY || secrets.SPOTIFLEX_RELEASE_SIGNING_KEY }}
+          LYSSNA_RELEASE_PUBLISH_TOKEN: ${{ secrets.LYSSNA_RELEASE_PUBLISH_TOKEN || secrets.SPOTIFLEX_RELEASE_PUBLISH_TOKEN }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_NOTES: ${{ inputs.notes }}
         run: |
           $releaseVersion = $env:RELEASE_VERSION
           if (-not $releaseVersion) { $releaseVersion = $env:GITHUB_REF_NAME -replace '^v', '' }
           $releaseNotes = $env:RELEASE_NOTES
-          if (-not $releaseNotes) { $releaseNotes = "SpotiFlex $releaseVersion" }
+          if (-not $releaseNotes) { $releaseNotes = "Lyssna $releaseVersion" }
           [System.IO.File]::WriteAllText('release-notes.txt', $releaseNotes)
-          & '.\target\release\spotiflex-release.exe' publish $releaseVersion '.\target\release\spotiflex.exe' 'release-notes.txt'
+          # The tool uploads the build as releases/<version>/windows-x86_64/spotiflex.exe,
+          # the object name installed copies accept, whatever the local file is called.
+          & '.\target\release\lyssna-release.exe' publish $releaseVersion '.\target\release\lyssna.exe' 'release-notes.txt'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

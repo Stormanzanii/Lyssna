@@ -268,7 +268,10 @@ impl ContextResolver {
                 });
         }
         // A detached native page must never reach the network's legacy resolver.
-        if resolve_uri.starts_with("hm://spotiflex-dj/") {
+        // Restored sessions may still hold the pre-rename `hm://spotiflex-dj/` prefix.
+        if resolve_uri.starts_with("hm://lyssna-dj/")
+            || resolve_uri.starts_with("hm://spotiflex-dj/")
+        {
             return Err(Error::failed_precondition("DJ request session ended"));
         }
 
@@ -475,7 +478,7 @@ mod native_page_tests {
     struct Pages;
     impl ContextPageProvider for Pages {
         fn owns(&self, uri: &str) -> bool {
-            uri == "hm://spotiflex-dj/test/1"
+            uri == "hm://lyssna-dj/test/1"
         }
         fn page(&self, _: String) -> ContextPageFuture<'_> {
             Box::pin(async {
@@ -522,7 +525,7 @@ mod native_page_tests {
         );
         resolver.clear();
         resolver.set_page_provider(Some(std::sync::Arc::new(Pages)));
-        resolver.add(ResolveContext::append_context("hm://spotiflex-dj/test/1"));
+        resolver.add(ResolveContext::append_context("hm://lyssna-dj/test/1"));
         assert_eq!(
             resolver.get_next_context(Vec::new).await.unwrap().pages[0].tracks[0]
                 .uri
@@ -530,6 +533,9 @@ mod native_page_tests {
             Some("spotify:track:requested")
         );
         resolver.set_page_provider(None);
+        assert!(resolver.get_next_context(Vec::new).await.is_err());
+        // Pre-rename pages from restored sessions stay off the network too.
+        resolver.add(ResolveContext::append_context("hm://spotiflex-dj/test/1"));
         assert!(resolver.get_next_context(Vec::new).await.is_err());
     }
 }

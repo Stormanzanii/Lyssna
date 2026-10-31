@@ -536,6 +536,10 @@ const VOLUME_UPDATE_DELAY: Duration = Duration::from_millis(500);
 const UPDATE_STATE_DELAY: Duration = Duration::from_millis(200);
 /// The context metadata entry naming the Jam a state belongs to.
 const JAM_SESSION_KEY: &str = "jam-session-id";
+/// Marks a requested DJ queue; the pre-rename `spotiflex.dj_request` key is still accepted.
+fn is_dj_request(metadata: &std::collections::HashMap<String, String>) -> bool {
+    metadata.contains_key("lyssna.dj_request") || metadata.contains_key("spotiflex.dj_request")
+}
 fn requested_context_index(context: &Context, track: &PlayingTrack) -> Option<usize> {
     let mut tracks = context.pages.iter().flat_map(|page| &page.tracks);
     match track {
@@ -1224,10 +1228,7 @@ impl SpircTask {
             })
             .collect();
 
-        let context_uri = if state_player
-            .context_metadata
-            .contains_key("spotiflex.dj_request")
-        {
+        let context_uri = if is_dj_request(&state_player.context_metadata) {
             crate::REQUESTED_DJ_CONTEXT.to_owned()
         } else {
             self.connect_state.context_uri().clone()
@@ -2419,8 +2420,7 @@ impl SpircTask {
                 .connect_state
                 .get_context(update_context)
                 .is_ok_and(|ctx| {
-                    ctx.metadata.contains_key(LEXICON_CONTEXT_URL)
-                        || ctx.metadata.contains_key("spotiflex.dj_request")
+                    ctx.metadata.contains_key(LEXICON_CONTEXT_URL) || is_dj_request(&ctx.metadata)
                 });
 
         // The loaded part of the playing context may not hold the track

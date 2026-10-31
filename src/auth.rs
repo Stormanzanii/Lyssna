@@ -130,7 +130,7 @@ pub fn http_client() -> Result<Client> {
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("SpotiFlex/0.1.0")
+        .user_agent("Lyssna/0.1.0")
         .build()?)
 }
 
@@ -229,7 +229,7 @@ fn read_target(stream: &mut TcpStream) -> Result<String> {
 
 fn reply(stream: &mut TcpStream, status: &str, message: &str) {
     let body = format!(
-        "<!doctype html><html><head><meta name=viewport content='width=device-width'><title>SpotiFlex</title></head><body style='background:#121212;color:#fff;font:18px system-ui;padding:64px'><h1>SpotiFlex</h1><p>{message}</p><p>You can close this tab.</p></body></html>"
+        "<!doctype html><html><head><meta name=viewport content='width=device-width'><title>Lyssna</title></head><body style='background:#121212;color:#fff;font:18px system-ui;padding:64px'><h1>Lyssna</h1><p>{message}</p><p>You can close this tab.</p></body></html>"
     );
     let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
     let _ = write!(
@@ -264,7 +264,7 @@ fn wait_for_code(
                         reply(
                             &mut stream,
                             "200 OK",
-                            "Authorization received. Return to SpotiFlex to finish sign-in.",
+                            "Authorization received. Return to Lyssna to finish sign-in.",
                         );
                         return Ok(code);
                     }
@@ -273,7 +273,7 @@ fn wait_for_code(
                         reply(
                             &mut stream,
                             "400 Bad Request",
-                            "Sign-in callback rejected. Return to SpotiFlex or retry sign-in.",
+                            "Sign-in callback rejected. Return to Lyssna or retry sign-in.",
                         );
                         if callback_has_valid_denial(&target, state) {
                             bail!("Spotify sign-in was declined");
@@ -326,7 +326,7 @@ fn authorize(
     let state = random_string()?;
     let url = authorization_url_for(flow, &verifier, &state)?;
     let listener = TcpListener::bind(address).with_context(|| {
-        format!("Login port {address} is busy. Close other SpotiFlex or librespot apps and retry.")
+        format!("Login port {address} is busy. Close other Lyssna or librespot apps and retry.")
     })?;
     ensure!(!cancelled.load(Ordering::Relaxed), "Sign-in cancelled");
     webbrowser::open(url.as_str()).context("Cannot open default browser for Spotify sign-in")?;
@@ -399,7 +399,7 @@ impl Tokens {
     }
 
     pub fn save(&self, client_id: &str) -> Result<()> {
-        keyring::Entry::new("SpotiFlex/Spotify", client_id)?
+        keyring::Entry::new("Lyssna/Spotify", client_id)?
             .set_password(&serde_json::to_string(self)?)
             .context("Cannot save login to the secure credential store")
     }
@@ -408,7 +408,7 @@ impl Tokens {
         if !valid_client_id(client_id) {
             return Ok(None);
         }
-        match keyring::Entry::new("SpotiFlex/Spotify", client_id)?.get_password() {
+        match keyring::Entry::new("Lyssna/Spotify", client_id)?.get_password() {
             Ok(value) => {
                 Ok(Some(serde_json::from_str(&value).map_err(|_| {
                     anyhow::Error::new(SignInRequired::Damaged)
@@ -423,7 +423,7 @@ impl Tokens {
         if !valid_client_id(client_id) {
             return Ok(());
         }
-        match keyring::Entry::new("SpotiFlex/Spotify", client_id)?.delete_credential() {
+        match keyring::Entry::new("Lyssna/Spotify", client_id)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(error).context("Cannot remove saved Spotify login"),
         }

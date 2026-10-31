@@ -5,7 +5,7 @@ use crate::{
 use std::ops::Deref;
 
 /// Internal queue identity: requested DJ queues resume as music, not legacy DJ sessions.
-pub const REQUESTED_DJ_CONTEXT: &str = "spotiflex:requested-dj";
+pub const REQUESTED_DJ_CONTEXT: &str = "lyssna:requested-dj";
 
 /// Asynchronous native context page result.
 pub type ContextPageFuture<'a> = std::pin::Pin<

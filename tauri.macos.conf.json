@@ -4,7 +4,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "SpotiFlex",
+        "title": "Lyssna",
         "width": 1440,
         "height": 900,
         "minWidth": 900,
@@ -22,9 +22,9 @@
   "bundle": {
     "targets": ["app"],
     "icon": [
-      "assets/spotiflex.icns",
-      "assets/spotiflex.png",
-      "assets/spotiflex.ico"
+      "assets/lyssna.icns",
+      "assets/lyssna.png",
+      "assets/lyssna.ico"
     ],
     "category": "Music",
     "macOS": {

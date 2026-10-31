@@ -1,9 +1,9 @@
-//! Local control for the SpotiFlex Stream Deck plugin.
+//! Local control for the Lyssna Stream Deck plugin.
 //!
 //! A TCP server on 127.0.0.1 only, on a port chosen at start. The port and a
-//! random key go to `stream-deck.json` in SpotiFlex's application data; the
+//! random key go to `stream-deck.json` in Lyssna's application data; the
 //! plugin reads them and must send the key before anything else. Messages
-//! are one JSON object per line. The plugin sends commands; SpotiFlex sends
+//! are one JSON object per line. The plugin sends commands; Lyssna sends
 //! the player state whenever it changes. No Spotify credentials or tokens
 //! ever pass through it.
 
@@ -83,7 +83,7 @@ pub(super) fn start(app: tauri::AppHandle) -> Result<()> {
     // Liked Songs status arrives with the app's own library events.
     {
         let shared = shared.clone();
-        app.listen_any("spotiflex", move |event| {
+        app.listen_any("lyssna", move |event| {
             let Ok(value) = serde_json::from_str::<Value>(event.payload()) else {
                 return;
             };

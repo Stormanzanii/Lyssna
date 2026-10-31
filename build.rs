@@ -1,12 +1,15 @@
-// Embed the generated SpotiFlex icon in the Windows executable.
+// Embed the generated Lyssna icon in the Windows executable.
 
 include!("src/ui/icon_pixels.rs");
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=LYSSNA_SPICY_LYRICS_KEY");
     println!("cargo:rerun-if-env-changed=SPOTIFLEX_SPICY_LYRICS_KEY");
     println!("cargo:rerun-if-changed=config/spicy-lyrics-client-key.txt");
     // This is a public client identifier, never a secret key or Spotify token.
-    let key = std::env::var("SPOTIFLEX_SPICY_LYRICS_KEY")
+    // SPOTIFLEX_SPICY_LYRICS_KEY is the name from before the rename.
+    let key = std::env::var("LYSSNA_SPICY_LYRICS_KEY")
+        .or_else(|_| std::env::var("SPOTIFLEX_SPICY_LYRICS_KEY"))
         .ok()
         .filter(|key| !key.trim().is_empty())
         .unwrap_or_else(|| include_str!("config/spicy-lyrics-client-key.txt").into());
@@ -17,9 +20,9 @@ fn main() {
             && key
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)),
-        "SPOTIFLEX_SPICY_LYRICS_KEY must contain a publishable sl_pk_ client key"
+        "LYSSNA_SPICY_LYRICS_KEY must contain a publishable sl_pk_ client key"
     );
-    println!("cargo:rustc-env=SPOTIFLEX_SPICY_LYRICS_KEY={key}");
+    println!("cargo:rustc-env=LYSSNA_SPICY_LYRICS_KEY={key}");
     if std::env::var_os("CARGO_FEATURE_DESKTOP").is_some() {
         println!("cargo:rerun-if-changed=dist");
         tauri_build::build();
@@ -31,12 +34,12 @@ fn main() {
         return;
     }
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
-    let path = out.join("spotiflex.ico");
+    let path = out.join("lyssna.ico");
     std::fs::write(&path, ico(&[16, 24, 32, 48, 64, 128, 256])).expect("write icon");
     let mut resource = winresource::WindowsResource::new();
     resource.set_icon(path.to_str().expect("icon path"));
-    resource.set("ProductName", "SpotiFlex");
-    resource.set("FileDescription", "SpotiFlex");
+    resource.set("ProductName", "Lyssna");
+    resource.set("FileDescription", "Lyssna");
     if let Err(error) = resource.compile() {
         // A missing resource compiler should not block development builds.
         println!("cargo:warning=Executable icon not embedded: {error}");

@@ -324,7 +324,7 @@ fn valid_track(uri: &str) -> Result<()> {
 }
 
 fn play_command(context: Value, options: Value) -> Value {
-    json!({"endpoint":"play","context":context,"options":options,"play_origin":{"feature_identifier":"spotiflex"}})
+    json!({"endpoint":"play","context":context,"options":options,"play_origin":{"feature_identifier":"lyssna"}})
 }
 
 /// This computer's time on Spotify's clock, which stamps remote positions.

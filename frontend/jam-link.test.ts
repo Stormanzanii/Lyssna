@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isJamLink } from "./jam-link";
 
 describe("isJamLink", () => {
-  it("accepts Jam links from Spotify and SpotiFlex", () => {
+  it("accepts Jam links from Spotify and Lyssna", () => {
     for (const link of [
       "https://spotify.link/IdREaHOTC7b",
       " spotify.link/IdREaHOTC7b ",

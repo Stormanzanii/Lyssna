@@ -1105,7 +1105,7 @@ impl PlayerTrackLoader {
         position_ms: u32,
         narration: Option<Narration>,
     ) -> Option<PlayerLoadedTrackData> {
-        // SpotiFlex: a fetch can fail once (audio key, file or metadata
+        // Lyssna: a fetch can fail once (audio key, file or metadata
         // request) and work a moment later, as going back to the song
         // showed. Try again once before calling it unavailable.
         let music = async {

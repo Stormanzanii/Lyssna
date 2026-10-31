@@ -50,7 +50,7 @@ export function groupRecents(tracks: Track[], now = new Date()): RecentDay[] {
   return days;
 }
 
-/** Maps a context URI to the in-app route, if SpotiFlex can open it. */
+/** Maps a context URI to the in-app route, if Lyssna can open it. */
 export function contextRoute(context: string) {
   if (/^spotify:user:[^:]+:collection$/.test(context)) return "liked";
   const match = /^spotify:(album|artist|playlist):([A-Za-z0-9]{22})$/.exec(

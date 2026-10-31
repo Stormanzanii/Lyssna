@@ -42,6 +42,7 @@ pub mod notify;
 mod playback_intent;
 pub mod provider;
 mod reconnect;
+pub mod rename;
 pub mod resume;
 pub mod search;
 pub mod spotify;

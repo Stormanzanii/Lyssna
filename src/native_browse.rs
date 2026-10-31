@@ -1998,8 +1998,8 @@ mod owner_name_tests {
         .expect("Saved native login required");
         login.runtime.block_on(async {
             let session = &login.connection.0;
-            let query = std::env::var("SPOTIFLEX_TEST_PLAYLIST_QUERY")
-                .unwrap_or_else(|_| "road trip".into());
+            let query =
+                std::env::var("LYSSNA_TEST_PLAYLIST_QUERY").unwrap_or_else(|_| "road trip".into());
             let playlists = crate::search::playlists(session, &query).await.unwrap();
             let playlist = playlists
                 .iter()
@@ -2091,7 +2091,7 @@ mod live_playlist_tests {
     #[ignore = "Creates a temporary private playlist with the saved sign-in, adds songs twice, then removes it"]
     fn live_playlist_create_add_and_remove() {
         crate::native::with_live_session(async |session: &Session| {
-            let id = create_playlist(session, "SpotiFlex write test")
+            let id = create_playlist(session, "Lyssna write test")
                 .await
                 .expect("Native playlist creation failed");
             let checked = async {
@@ -2109,8 +2109,8 @@ mod live_playlist_tests {
                 }
                 let first = add_to_playlist(session, &id, &picks).await?;
                 let again = add_to_playlist(session, &id, &picks).await?;
-                edit_details(session, &id, "SpotiFlex edit test", "Temporary test").await?;
-                edit_details(session, &id, "SpotiFlex edit test", "").await?;
+                edit_details(session, &id, "Lyssna edit test", "Temporary test").await?;
+                edit_details(session, &id, "Lyssna edit test", "").await?;
                 let mut jpeg = Vec::new();
                 image::RgbImage::from_pixel(300, 300, image::Rgb([30, 140, 90])).write_to(
                     &mut std::io::Cursor::new(&mut jpeg),
@@ -2162,10 +2162,10 @@ mod live_folder_tests {
     #[ignore = "Creates a temporary folder and playlist with the saved sign-in, edits them, then removes both"]
     fn live_folder_create_move_rename_and_delete() {
         crate::native::with_live_session(async |session: &Session| {
-            let folder = create_folder(session, "SpotiFlex folder test")
+            let folder = create_folder(session, "Lyssna folder test")
                 .await
                 .expect("Native folder creation failed");
-            let playlist = create_playlist(session, "SpotiFlex folder playlist").await;
+            let playlist = create_playlist(session, "Lyssna folder playlist").await;
             let checked = async {
                 let playlist = playlist
                     .as_ref()
@@ -2177,16 +2177,16 @@ mod live_folder_tests {
                     .find(|item| item.id == *playlist)
                     .context("Playlist missing")?;
                 ensure!(
-                    inside.folders.len() == 1 && inside.folders[0].name == "SpotiFlex folder test",
+                    inside.folders.len() == 1 && inside.folders[0].name == "Lyssna folder test",
                     "Folder path not read back"
                 );
-                rename_folder(session, &folder, "SpotiFlex folder & test 2").await?;
+                rename_folder(session, &folder, "Lyssna folder & test 2").await?;
                 let renamed = library(session).await?;
                 ensure!(
                     renamed.iter().any(|item| item
                         .folders
                         .iter()
-                        .any(|f| f.name == "SpotiFlex folder & test 2")),
+                        .any(|f| f.name == "Lyssna folder & test 2")),
                     "Renamed folder not read back"
                 );
                 move_to_folder(session, playlist, None).await?;

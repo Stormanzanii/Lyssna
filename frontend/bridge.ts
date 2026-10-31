@@ -7,4 +7,4 @@ export const rpc = <T = void>(
   args?: Record<string, unknown>,
 ) => invoke<T>(command, args);
 export const subscribe = (callback: (event: AppEvent) => void) =>
-  listen<AppEvent>("spotiflex", (event) => callback(event.payload));
+  listen<AppEvent>("lyssna", (event) => callback(event.payload));

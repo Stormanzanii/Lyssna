@@ -335,7 +335,7 @@ impl Playback {
 }
 
 /// Pick the Web API device to play on: the requested ID when Spotify lists
-/// it, else this computer's SpotiFlex player (matched by name). With no
+/// it, else this computer's Lyssna player (matched by name). With no
 /// requested device, fall back to the active device.
 pub fn resolve_device(
     devices: &[Device],
@@ -461,18 +461,18 @@ mod tests {
             },
             ..Playback::default()
         };
-        assert!(!playback.load_native_track(track, Some("native-session"), "SpotiFlex", 35));
+        assert!(!playback.load_native_track(track, Some("native-session"), "Lyssna", 35));
         // The speaker's level must not become this computer's.
         assert_eq!(playback.device.volume_percent, Some(35));
         assert!(playback.apply_native_position(
             Some("native-session"),
-            "SpotiFlex",
+            "Lyssna",
             "spotify:track:current",
             1200,
             Some(true)
         ));
         assert_eq!(playback.progress_ms, Some(1200));
-        assert_eq!(playback.device.name, "SpotiFlex");
+        assert_eq!(playback.device.name, "Lyssna");
     }
 
     #[test]
@@ -485,14 +485,14 @@ mod tests {
             is_playing: true,
             device: Device {
                 id: Some("web-api-id".into()),
-                name: "SpotiFlex (PC)".into(),
+                name: "Lyssna (PC)".into(),
                 ..Device::default()
             },
             ..Playback::default()
         };
         assert!(playback.apply_native_position(
             Some("session-id"),
-            "SpotiFlex (PC)",
+            "Lyssna (PC)",
             "spotify:track:current",
             1234,
             Some(false)
@@ -502,7 +502,7 @@ mod tests {
         playback.device.name = "Phone".into();
         assert!(!playback.apply_native_position(
             Some("session-id"),
-            "SpotiFlex (PC)",
+            "Lyssna (PC)",
             "spotify:track:current",
             9999,
             Some(true)
@@ -548,26 +548,26 @@ mod tests {
         };
         let devices = vec![
             device("phone", "Phone", true),
-            device("web-id", "SpotiFlex (PC)", false),
+            device("web-id", "Lyssna (PC)", false),
         ];
         assert_eq!(
-            resolve_device(&devices, Some("phone"), "SpotiFlex (PC)").as_deref(),
+            resolve_device(&devices, Some("phone"), "Lyssna (PC)").as_deref(),
             Some("phone")
         );
         // librespot's own ID is not what the Web API lists: match by name.
         assert_eq!(
-            resolve_device(&devices, Some("librespot-id"), "SpotiFlex (PC)").as_deref(),
+            resolve_device(&devices, Some("librespot-id"), "Lyssna (PC)").as_deref(),
             Some("web-id")
         );
         assert_eq!(
-            resolve_device(&devices, None, "SpotiFlex (PC)").as_deref(),
+            resolve_device(&devices, None, "Lyssna (PC)").as_deref(),
             Some("web-id")
         );
         assert_eq!(
-            resolve_device(&devices[..1], None, "SpotiFlex (PC)").as_deref(),
+            resolve_device(&devices[..1], None, "Lyssna (PC)").as_deref(),
             Some("phone")
         );
-        assert_eq!(resolve_device(&[], None, "SpotiFlex (PC)"), None);
+        assert_eq!(resolve_device(&[], None, "Lyssna (PC)"), None);
     }
 
     #[test]
@@ -579,7 +579,7 @@ mod tests {
             ..Default::default()
         }];
         assert_eq!(
-            resolve_device(&devices, Some("not-yet-listed-native-id"), "SpotiFlex (PC)"),
+            resolve_device(&devices, Some("not-yet-listed-native-id"), "Lyssna (PC)"),
             None
         );
     }

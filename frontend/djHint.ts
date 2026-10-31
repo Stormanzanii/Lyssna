@@ -7,7 +7,7 @@ export function createDJReminder(
   const shown = new Map<string, number>();
   return (account: string, now = Date.now()): boolean => {
     if (!account) return false;
-    const key = `spotiflex.dj-hint.${account}`;
+    const key = `lyssna.dj-hint.${account}`;
     let previous = shown.get(account);
     if (previous === undefined) {
       try {

@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn a_jam_transfer_with_null_or_odd_fields_still_parses() {
-        // Every key present, as social-connect sent it to a SpotiFlex guest,
+        // Every key present, as social-connect sent it to a Lyssna guest,
         // but in shapes the desktop client never uses.
         for (options, from, logging) in [
             (Value::Null, Value::Null, Value::Null),

@@ -32,7 +32,7 @@ export function nightlyProgress(report: NightlyReport): number {
 }
 
 /**
- * Switching to Nightly: what SpotiFlex will set up, then each step with its
+ * Switching to Nightly: what Lyssna will set up, then each step with its
  * progress while it builds. The build keeps going when this is hidden.
  */
 export function NightlyDialog({
@@ -78,11 +78,11 @@ export function NightlyDialog({
           <>
             <h2 id="nightly-title">Switch to Nightly?</h2>
             <p>
-              Nightly is the newest SpotiFlex, built on this computer from the
+              Nightly is the newest Lyssna, built on this computer from the
               latest code. It gets changes first and hasn't been tested like
               Stable.
             </p>
-            <h3>SpotiFlex sets everything up itself</h3>
+            <h3>Lyssna sets everything up itself</h3>
             <ul>
               <li>
                 Uses the Rust, Node.js, CMake and libclang already on your
@@ -102,13 +102,13 @@ export function NightlyDialog({
                 </li>
               )}
               <li>
-                Builds SpotiFlex. The first build takes 15 to 40 minutes; music
+                Builds Lyssna. The first build takes 15 to 40 minutes; music
                 keeps playing.
               </li>
             </ul>
             <p className="nightly-note">
-              When it&rsquo;s done, SpotiFlex restarts into Nightly. Choose
-              Stable any time to go back.
+              When it&rsquo;s done, Lyssna restarts into Nightly. Choose Stable
+              any time to go back.
             </p>
             <div className="inline-actions">
               <button className="pill" autoFocus onClick={onHide}>

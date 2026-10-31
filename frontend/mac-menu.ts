@@ -49,7 +49,7 @@ export function useMacMenu(
       const source = current.current[group].items[index];
       const item = own(
         await MenuItem.new({
-          id: `spotiflex-${group}-${index}`,
+          id: `lyssna-${group}-${index}`,
           text: source.label,
           enabled: !source.disabled,
           // Space must remain available while typing a search or DJ request.
@@ -77,7 +77,7 @@ export function useMacMenu(
       );
       const appMenu = own(
         await Submenu.new({
-          text: "SpotiFlex",
+          text: "Lyssna",
           items: [
             await action(help, 0),
             { item: "Separator" },
@@ -89,7 +89,7 @@ export function useMacMenu(
             { item: "HideOthers" },
             { item: "ShowAll" },
             { item: "Separator" },
-            { item: "Quit", text: "Quit SpotiFlex" },
+            { item: "Quit", text: "Quit Lyssna" },
           ],
         }),
       );
@@ -100,7 +100,7 @@ export function useMacMenu(
           if (
             item.label === "Exit" ||
             item.label === "Settings" ||
-            item.label === "About SpotiFlex"
+            item.label === "About Lyssna"
           )
             continue;
           if (item.divider && items.length) items.push({ item: "Separator" });

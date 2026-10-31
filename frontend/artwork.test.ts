@@ -33,7 +33,7 @@ it("uses listed widths, else the first secure image", () => {
   );
   expect(artworkFor([])).toBeUndefined();
 });
-it("accepts Local Files covers served by SpotiFlex only", () => {
+it("accepts Local Files covers served by Lyssna only", () => {
   const cover = `http://localcover.localhost/${"a".repeat(64)}.jpg`;
   expect(isLocalCover(cover)).toBe(true);
   expect(artworkFor([{ url: cover }])).toBe(cover);

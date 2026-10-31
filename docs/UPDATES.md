@@ -1,16 +1,16 @@
 # Signed releases on R2
 
-Release objects live in the dedicated `spotiflex-releases` bucket in the Cloudflare account that owns ClypDat. The `spotiflex-updates` Worker serves `https://updates.clypdat.xyz`. The bucket itself remains private. The Worker exposes only release executables, corresponding source archives, and stable channel manifests. Publishing requires a separate credential.
+Release objects live in the dedicated `spotiflex-releases` bucket in the Cloudflare account that owns ClypDat. The `spotiflex-updates` Worker serves `https://updates.clypdat.xyz`. The bucket itself remains private. The Worker exposes only release executables, corresponding source archives, and stable channel manifests. Publishing requires a separate credential. The bucket and Worker keep their SpotiFlex-era names for compatibility.
 
-The desktop checks on startup and every 30 minutes. An update dialog opens automatically with the available version and signed release notes. It downloads new releases automatically by default; this preference is under **Settings > About SpotiFlex**. With automatic downloads off, the dialog offers **Download update**. Once verification finishes, **Install and restart** applies the executable. **Not now** dismisses the prompt for that version until the next launch; Settings remains available. Checks and downloads run outside the UI thread. Installation always requires an explicit button press.
+The desktop checks on startup and every 30 minutes. An update dialog opens automatically with the available version and signed release notes. It downloads new releases automatically by default; this preference is under **Settings > About Lyssna**. With automatic downloads off, the dialog offers **Download update**. Once verification finishes, **Install and restart** applies the executable. **Not now** dismisses the prompt for that version until the next launch; Settings remains available. Checks and downloads run outside the UI thread. Installation always requires an explicit button press.
 
-Every channel manifest is an envelope containing a base64 JSON payload and an Ed25519 signature. The public key is compiled into the app from `config/update-public-key.base64`. The signed payload fixes the version, Windows x86_64 target, relative artifact path, byte count, SHA-256 digest, and release notes. Redirects are disabled. Downloads have signed size limits; verification runs again immediately before replacement. Older versions and other platforms are rejected.
+Every channel manifest is an envelope containing a base64 JSON payload and an Ed25519 signature. The public key is compiled into the app from `config/update-public-key.base64`. The signed payload fixes the version, Windows x86_64 target, relative artifact path, byte count, SHA-256 digest, and release notes. Redirects are disabled. Downloads have signed size limits; verification runs again immediately before replacement. Older versions and other platforms are rejected. The Windows artifact is still published as `releases/<version>/windows-x86_64/spotiflex.exe`, because installed copies only accept that name.
 
-The updater backs up the running executable to SpotiFlex's application data `updates/previous-spotiflex.exe`, replaces only its own executable using `self-replace`, and starts the new version. The application must be in a directory the user can write to. Automatic installation currently targets Windows x86_64.
+The updater backs up the running executable to Lyssna's application data `updates/previous-lyssna.exe`, replaces only its own executable using `self-replace`, and starts the new version. The application must be in a directory the user can write to. Automatic installation currently targets Windows x86_64.
 
 ## Publish a version
 
-The GitHub Actions secrets for signing and upload have been configured. Neither secret is committed or bundled into the client. Local copies are in the operating system credential store under `SpotiFlex/Release`.
+The GitHub Actions secrets for signing and upload have been configured. Neither secret is committed or bundled into the client. Local copies are in the operating system credential store under `Lyssna/Release`; entries saved under the old `SpotiFlex/Release` name migrate automatically.
 
 1. Update `version` in `Cargo.toml`, run checks, commit, and push.
 2. Push a matching `vMAJOR.MINOR.PATCH` tag, or run **Publish signed release to R2** from GitHub Actions with the matching version and release notes.
@@ -21,8 +21,8 @@ Source archives use `git archive HEAD`, excluding ignored credentials and local 
 For a local prepared release without uploading:
 
 ```powershell
-cargo build --release --locked --bin spotiflex --bin spotiflex-release
-.\target\release\spotiflex-release.exe prepare 0.1.0 .\target\release\spotiflex.exe .\release-notes.txt
+cargo build --release --locked --bin lyssna --bin lyssna-release
+.\target\release\lyssna-release.exe prepare 0.1.0 .\target\release\lyssna.exe .\release-notes.txt
 ```
 
 Use `publish` in place of `prepare` to upload. `setup-keys` is for initial maintainer provisioning; it preserves existing credentials. `sync-github` sends those credentials directly to the repository's Actions secret store.
@@ -41,7 +41,7 @@ Wrangler generates binding types from `wrangler.jsonc`. The Worker streams execu
 
 The deployed service responds at `/health`. The stable manifest returns 404 until a real signed version is published. An absent channel means no update is available.
 
-The first signed release is [SpotiFlex 0.1.0 for Windows x86_64](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/spotiflex.exe), with its [corresponding source archive](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/source.zip). Each person signs in with their own Spotify Premium account.
+Releases up to 0.2.0 shipped under the name SpotiFlex. The first signed release is [SpotiFlex 0.1.0 for Windows x86_64](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/spotiflex.exe), with its [corresponding source archive](https://updates.clypdat.xyz/releases/0.1.0/windows-x86_64/source.zip). Each person signs in with their own Spotify Premium account.
 
 The current stable release is [SpotiFlex 0.2.0 for Windows x86_64](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/spotiflex.exe) ([source](https://updates.clypdat.xyz/releases/0.2.0/windows-x86_64/source.zip)), published from a local build on 2026-10-27. The downloaded executable matched the local build's SHA-256, and the stable channel reports 0.2.0. [SpotiFlex 0.1.1](https://updates.clypdat.xyz/releases/0.1.1/windows-x86_64/spotiflex.exe) was published on 2026-10-22. An installed release updating to a later published one has not been observed yet.
 

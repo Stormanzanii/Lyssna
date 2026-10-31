@@ -46,7 +46,7 @@ export function LyricsPopout() {
   useEffect(() => () => clearTimeout(sleep.current), []);
   const track = state.playback.item;
   useEffect(() => {
-    document.title = track ? `${track.name} · Lyrics` : "SpotiFlex Lyrics";
+    document.title = track ? `${track.name} · Lyrics` : "Lyssna Lyrics";
   }, [track?.name]);
   // Re-render when romanized lyrics finish converting.
   useRomanization();

@@ -25,7 +25,7 @@ export function AboutDialog({
     return () => window.removeEventListener("keydown", key);
   }, [onClose]);
   const build = import.meta.env.DEV ? "development build" : "release build";
-  const details = `SpotiFlex for ${PLATFORM_LABEL}\n${__APP_VERSION__} (${build})`;
+  const details = `Lyssna for ${PLATFORM_LABEL}\n${__APP_VERSION__} (${build})`;
   const ready = updateStatus === "Ready to install";
   return (
     <div className="modal-backdrop about-backdrop" onClick={onClose}>
@@ -33,16 +33,14 @@ export function AboutDialog({
         className="about-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="About SpotiFlex"
+        aria-label="About Lyssna"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="about-brand">
           <Logo size={48} />
           <div>
-            <span className="about-wordmark">SpotiFlex</span>
-            <span className="about-platform">
-              SpotiFlex for {PLATFORM_LABEL}
-            </span>
+            <span className="about-wordmark">Lyssna</span>
+            <span className="about-platform">Lyssna for {PLATFORM_LABEL}</span>
           </div>
           <button
             className="icon-button about-close"
@@ -101,8 +99,8 @@ export function AboutDialog({
         <footer className="about-legal">
           <p>Copyright © {new Date().getFullYear()} Arashii.</p>
           <p>
-            SpotiFlex is an independent client and is not affiliated with
-            Spotify AB. Spotify® is a registered trademark of the Spotify Group.
+            Lyssna is an independent client and is not affiliated with Spotify
+            AB. Spotify® is a registered trademark of the Spotify Group.
           </p>
         </footer>
       </section>

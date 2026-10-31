@@ -140,7 +140,7 @@ impl Requests {
                 getrandom::fill(&mut bytes)
                     .map_err(|_| anyhow::anyhow!("DJ session ID unavailable"))?;
                 format!(
-                    "hm://spotiflex-dj/{}/",
+                    "hm://lyssna-dj/{}/",
                     base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(bytes)
                 )
             },
@@ -186,7 +186,7 @@ impl Requests {
         let context = PlayContext {
             uri: Some(crate::home::DJ_URI.into()),
             pages: vec![page],
-            metadata: [("spotiflex.dj_request".into(), "true".into())].into(),
+            metadata: [("lyssna.dj_request".into(), "true".into())].into(),
             ..Default::default()
         };
         Ok(Prepared {

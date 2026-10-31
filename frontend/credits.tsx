@@ -1,9 +1,9 @@
 import { ExternalLink } from "lucide-react";
 
-/** The people behind SpotiFlex and the projects it builds on, creator
+/** The people behind Lyssna and the projects it builds on, creator
  *  first. Avatars and profiles come from GitHub. */
 export const PEOPLE = [
-  { login: "Stormanzanii", name: "Arashii", role: "Creator of SpotiFlex" },
+  { login: "Stormanzanii", name: "Arashii", role: "Creator of Lyssna" },
   {
     login: "iPixelGalaxy",
     name: "iPixelGalaxy",
@@ -12,7 +12,7 @@ export const PEOPLE = [
   { login: "Spikerko", name: "Spikerko", role: "Creator of Spicy Lyrics" },
 ] as const;
 
-/** Who SpotiFlex builds on, and under which licence. Shown in Settings and
+/** Who Lyssna builds on, and under which licence. Shown in Settings and
  *  in the Lyrics settings About screen; README.md's Credits section lists the
  *  same people and projects, so keep the two in step. */
 export const CREDITS = [
@@ -20,7 +20,7 @@ export const CREDITS = [
     name: "Spicy Lyrics",
     by: "Spikerko · fork by iPixelGalaxy",
     licence: "AGPL-3.0",
-    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork SpotiFlex follows.",
+    note: "Lyrics display, Space Gravity, word sync and the TTML tools reimplement its behaviour. Thanks to iPixelGalaxy for the fork Lyssna follows.",
     url: "https://github.com/iPixelGalaxy/spicy-lyrics",
   },
   {
@@ -91,12 +91,12 @@ export function Credits({ onOpen }: { onOpen: (url: string) => void }) {
         ))}
       </div>
       <p className="credits-licence">
-        SpotiFlex is free software under the GNU Affero General Public License
-        v3.0. Spotify is a trademark of Spotify AB; SpotiFlex is not affiliated
+        Lyssna is free software under the GNU Affero General Public License
+        v3.0. Spotify is a trademark of Spotify AB; Lyssna is not affiliated
         with Spotify.{" "}
         <button
           className="text-link"
-          onClick={() => onOpen("https://github.com/Stormanzanii/SpotiFlex")}
+          onClick={() => onOpen("https://github.com/Stormanzanii/Lyssna")}
         >
           Source code and licence
         </button>

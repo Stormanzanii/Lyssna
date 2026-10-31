@@ -504,7 +504,7 @@ static MUSIXMATCH_USER: OnceLock<Mutex<String>> = OnceLock::new();
 /// Whether the token in use is the user's own, saved in the credential
 /// store. Their token is never replaced by an automatic one.
 static MUSIXMATCH_OWN: AtomicBool = AtomicBool::new(false);
-const MUSIXMATCH_SERVICE: &str = "SpotiFlex/Musixmatch";
+const MUSIXMATCH_SERVICE: &str = "Lyssna/Musixmatch";
 const MUSIXMATCH_ACCOUNT: &str = "user-token";
 
 fn use_musixmatch_token(token: &str) {

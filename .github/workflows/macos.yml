@@ -48,11 +48,11 @@ jobs:
       - name: Archive app with permissions and symlinks
         run: >-
           ditto -c -k --sequesterRsrc --keepParent
-          target/release/bundle/macos/SpotiFlex.app
-          target/release/bundle/SpotiFlex-${{ matrix.arch }}.app.zip
+          target/release/bundle/macos/Lyssna.app
+          target/release/bundle/Lyssna-${{ matrix.arch }}.app.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: SpotiFlex-macos-${{ matrix.arch }}
+          name: Lyssna-macos-${{ matrix.arch }}
           if-no-files-found: error
           path: |
-            target/release/bundle/SpotiFlex-*.app.zip
+            target/release/bundle/Lyssna-*.app.zip

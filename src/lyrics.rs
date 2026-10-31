@@ -1079,10 +1079,10 @@ mod tests {
     }
 
     /// Parses a local corpus of real AMLL/Apple-style TTML files when present
-    /// (set SPOTIFLEX_TTML_DIR); skipped otherwise.
+    /// (set LYSSNA_TTML_DIR); skipped otherwise.
     #[test]
     fn ttml_corpus_parses() {
-        let Ok(directory) = std::env::var("SPOTIFLEX_TTML_DIR") else {
+        let Ok(directory) = std::env::var("LYSSNA_TTML_DIR") else {
             return;
         };
         let mut count = 0;
@@ -1118,7 +1118,7 @@ mod tests {
     #[test]
     fn session_loads_last_until_reset_and_temporary_loads_are_not_kept() {
         let directory =
-            std::env::temp_dir().join(format!("spotiflex-session-lyrics-{}", std::process::id()));
+            std::env::temp_dir().join(format!("lyssna-session-lyrics-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let track = Track {
             uri: "spotify:track:session".into(),
@@ -1146,7 +1146,7 @@ mod tests {
     #[test]
     fn forgetting_cached_lyrics_clears_every_source_for_that_song_only() {
         let directory =
-            std::env::temp_dir().join(format!("spotiflex-lyric-cache-{}", std::process::id()));
+            std::env::temp_dir().join(format!("lyssna-lyric-cache-{}", std::process::id()));
         let song = Track {
             uri: "spotify:track:song".into(),
             ..Track::default()
@@ -1182,7 +1182,7 @@ mod tests {
     #[test]
     fn saved_imports_list_newest_first_with_song_details() {
         let directory =
-            std::env::temp_dir().join(format!("spotiflex-saved-lyrics-{}", std::process::id()));
+            std::env::temp_dir().join(format!("lyssna-saved-lyrics-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let (old, new) = ("a".repeat(64), "b".repeat(64));
         fs::write(directory.join(format!("{old}.lrc")), "[00:01.00]Old").unwrap();
@@ -1252,7 +1252,7 @@ mod tests {
     #[test]
     fn local_lyrics_are_remembered_per_track_and_reparsed() {
         let directory =
-            std::env::temp_dir().join(format!("spotiflex-local-lyrics-{}", std::process::id()));
+            std::env::temp_dir().join(format!("lyssna-local-lyrics-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let track = Track {
             uri: "spotify:track:abc".into(),

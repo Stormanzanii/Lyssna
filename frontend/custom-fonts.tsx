@@ -2,26 +2,70 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Settings } from "./types";
 import { SettingRow } from "./setting-row";
 type StoredFont = { family: string; name: string; data: Blob };
+/** Fonts imported before the rename to Lyssna live in this database. */
+const LEGACY_DATABASE = "spotiflex-fonts";
+/** Custom font families: `LyssnaFont_<sha256>`, or the pre-rename
+ * `SpotiFlexFont_<sha256>` still saved in settings and font storage. */
+const isCustomFont = (family?: string) =>
+  !!family && /^(Lyssna|SpotiFlex)Font_/.test(family);
 let database: Promise<IDBDatabase> | undefined;
 function openFonts() {
   return (database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open("spotiflex-fonts", 1);
+    const request = indexedDB.open("lyssna-fonts", 1);
     request.onupgradeneeded = () =>
       request.result.createObjectStore("fonts", { keyPath: "family" });
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      // A failed import leaves the old fonts in place for the next start.
+      importLegacyFonts(db)
+        .catch(() => {})
+        .finally(() => resolve(db));
+    };
     request.onerror = () => {
       database = undefined;
       reject(new Error("Custom font storage is unavailable"));
     };
   }));
 }
-async function storedFonts() {
-  const db = await openFonts();
+function allFonts(db: IDBDatabase) {
   return new Promise<StoredFont[]>((resolve, reject) => {
     const request = db.transaction("fonts").objectStore("fonts").getAll();
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+/** Copies fonts from the pre-rename database into an empty `db`, then
+ * deletes the old database. */
+async function importLegacyFonts(db: IDBDatabase) {
+  if ((await allFonts(db)).length) return;
+  if (
+    indexedDB.databases &&
+    !(await indexedDB.databases()).some(({ name }) => name === LEGACY_DATABASE)
+  )
+    return;
+  const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(LEGACY_DATABASE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  try {
+    if (legacy.objectStoreNames.contains("fonts")) {
+      const fonts = await allFonts(legacy);
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction("fonts", "readwrite");
+        for (const font of fonts) transaction.objectStore("fonts").put(font);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = transaction.onabort = () =>
+          reject(transaction.error);
+      });
+    }
+  } finally {
+    legacy.close();
+  }
+  indexedDB.deleteDatabase(LEGACY_DATABASE);
+}
+async function storedFonts() {
+  return allFonts(await openFonts());
 }
 const loaded = new Map<string, Promise<void>>();
 async function registerFont(font: StoredFont) {
@@ -44,9 +88,7 @@ async function registerFont(font: StoredFont) {
 export async function loadSelectedFonts(families: (string | undefined)[]) {
   const wanted = [
     ...new Set(
-      families.filter(
-        (family): family is string => !!family?.startsWith("SpotiFlexFont_"),
-      ),
+      families.filter((family): family is string => isCustomFont(family)),
     ),
   ];
   if (!wanted.length) return;
@@ -126,7 +168,7 @@ export function FontSettings({
           "SHA-256",
           await file.arrayBuffer(),
         ),
-        family = `SpotiFlexFont_${Array.from(new Uint8Array(hash))
+        family = `LyssnaFont_${Array.from(new Uint8Array(hash))
           .map((byte) => byte.toString(16).padStart(2, "0"))
           .join("")}`;
       if (fonts.length >= 20 && !fonts.some((font) => font.family === family))
@@ -191,7 +233,7 @@ export function FontSettings({
                 maxLength={100}
                 value={
                   fonts.find((font) => font.family === settings[key])?.name ??
-                  (settings[key]?.startsWith("SpotiFlexFont_")
+                  (isCustomFont(settings[key])
                     ? "Saved custom font"
                     : (settings[key] ?? ""))
                 }

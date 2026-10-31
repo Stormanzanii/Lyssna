@@ -39,7 +39,7 @@ const MODES: { mode: LoadMode; title: string; detail: string }[] = [
   {
     mode: "session",
     title: "Session Load",
-    detail: "Used for this song until SpotiFlex restarts",
+    detail: "Used for this song until Lyssna restarts",
   },
 ];
 

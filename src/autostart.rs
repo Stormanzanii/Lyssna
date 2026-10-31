@@ -1,11 +1,11 @@
-//! Opening SpotiFlex when the user signs in to Windows, as Spotify's
+//! Opening Lyssna when the user signs in to Windows, as Spotify's
 //! "Open Spotify automatically after you log into the computer". The
 //! per-user Run key holds the choice, so Task Manager's Startup apps page
 //! shows and changes the same setting.
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-/// Passed by the Run entry when SpotiFlex should start out of the way.
+/// Passed by the Run entry when Lyssna should start out of the way.
 pub const MINIMIZED_ARG: &str = "--minimized";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,10 +45,12 @@ mod registry {
     use windows::core::{HSTRING, PCWSTR};
 
     const RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    const NAME: &str = "SpotiFlex";
+    pub const NAME: &str = "Lyssna";
+    /// The Run entry's name before Lyssna was renamed from SpotiFlex.
+    pub const FORMER_NAME: &str = "SpotiFlex";
 
-    pub fn read() -> Result<Option<String>> {
-        let (key, name) = (HSTRING::from(RUN), HSTRING::from(NAME));
+    pub fn read(name: &str) -> Result<Option<String>> {
+        let (key, name) = (HSTRING::from(RUN), HSTRING::from(name));
         let mut buffer = vec![0u16; 2048];
         let mut size = (buffer.len() * 2) as u32;
         let status = unsafe {
@@ -72,8 +74,8 @@ mod registry {
         Ok(Some(String::from_utf16_lossy(&buffer[..length])))
     }
 
-    pub fn write(command: Option<&str>) -> Result<()> {
-        let (key, name) = (HSTRING::from(RUN), HSTRING::from(NAME));
+    pub fn write(name: &str, command: Option<&str>) -> Result<()> {
+        let (key, name) = (HSTRING::from(RUN), HSTRING::from(name));
         let status = match command {
             Some(command) => {
                 let mut value: Vec<u16> = command.encode_utf16().collect();
@@ -109,13 +111,28 @@ mod registry {
 
 #[cfg(windows)]
 pub fn get() -> Result<Launch> {
-    Ok(parse(registry::read()?.as_deref()))
+    Ok(parse(registry::read(registry::NAME)?.as_deref()))
 }
 
 #[cfg(windows)]
 pub fn set(launch: Launch) -> Result<()> {
     let exe = std::env::current_exe()?;
-    registry::write(command_line(&exe.to_string_lossy(), launch).as_deref())
+    registry::write(
+        registry::NAME,
+        command_line(&exe.to_string_lossy(), launch).as_deref(),
+    )
+}
+
+/// Carry SpotiFlex's Run entry over to Lyssna's, pointing at this copy.
+#[cfg(windows)]
+pub fn migrate() -> Result<()> {
+    let Some(former) = registry::read(registry::FORMER_NAME)? else {
+        return Ok(());
+    };
+    if registry::read(registry::NAME)?.is_none() {
+        set(parse(Some(&former)))?;
+    }
+    registry::write(registry::FORMER_NAME, None)
 }
 
 #[cfg(not(windows))]
@@ -134,7 +151,7 @@ mod tests {
 
     #[test]
     fn run_entry_round_trips_each_choice() {
-        let exe = r"C:\Users\me\AppData\Local\Programs\SpotiFlex\spotiflex.exe";
+        let exe = r"C:\Users\me\AppData\Local\Programs\Lyssna\lyssna.exe";
         for launch in [Launch::Off, Launch::Open, Launch::Minimized] {
             assert_eq!(parse(command_line(exe, launch).as_deref()), launch);
         }

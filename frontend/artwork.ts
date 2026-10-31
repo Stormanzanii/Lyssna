@@ -22,7 +22,7 @@ const FAMILIES: [number, string][][] = [
     [300, "ab67706c0000da84"],
   ],
 ];
-/** A Local Files cover, served by SpotiFlex from the song's own picture. */
+/** A Local Files cover, served by Lyssna from the song's own picture. */
 export const isLocalCover = (url: string) =>
   /^(http:\/\/localcover\.localhost|localcover:\/\/localhost)\/[0-9a-f]{64}\.(jpg|png)$/.test(
     url,

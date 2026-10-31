@@ -121,7 +121,7 @@ export function DJRequest({
         speech: boolean;
         stage?: string;
         percent?: number;
-      }>("spotiflex-dj-voice", ({ payload }) => {
+      }>("lyssna-dj-voice", ({ payload }) => {
         if (
           !live.current ||
           active.current !== id ||

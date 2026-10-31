@@ -1,4 +1,4 @@
-use spotiflex::credential as keyring;
+use lyssna::credential as keyring;
 use std::{
     fs::{self, File},
     io::Write,
@@ -10,16 +10,16 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ed25519_dalek::{Signer, SigningKey};
-use spotiflex::updater::{BASE_URL, Envelope, Manifest, TARGET, file_hash};
+use lyssna::updater::{BASE_URL, Envelope, Manifest, TARGET, file_hash};
 
 fn secret(name: &str) -> Result<String> {
     if let Ok(value) = std::env::var(format!(
-        "SPOTIFLEX_RELEASE_{}",
+        "LYSSNA_RELEASE_{}",
         name.to_uppercase().replace('-', "_")
     )) {
         return Ok(value);
     }
-    keyring::Entry::new("SpotiFlex/Release", name)?
+    keyring::Entry::new("Lyssna/Release", name)?
         .get_password()
         .context("Release credentials missing; run setup-keys first")
 }
@@ -34,7 +34,7 @@ fn signing_key() -> Result<SigningKey> {
 
 fn setup() -> Result<()> {
     for name in ["signing-key", "publish-token"] {
-        let entry = keyring::Entry::new("SpotiFlex/Release", name)?;
+        let entry = keyring::Entry::new("Lyssna/Release", name)?;
         match entry.get_password() {
             Ok(_) => {}
             Err(keyring::Error::NoEntry) => {
@@ -64,12 +64,12 @@ fn setup() -> Result<()> {
 
 fn github_secrets() -> Result<()> {
     for (name, key) in [
-        ("SPOTIFLEX_RELEASE_SIGNING_KEY", "signing-key"),
-        ("SPOTIFLEX_RELEASE_PUBLISH_TOKEN", "publish-token"),
+        ("LYSSNA_RELEASE_SIGNING_KEY", "signing-key"),
+        ("LYSSNA_RELEASE_PUBLISH_TOKEN", "publish-token"),
     ] {
         let value = secret(key)?;
         let mut child = Command::new("gh")
-            .args(["secret", "set", name, "--repo", "Stormanzanii/SpotiFlex"])
+            .args(["secret", "set", name, "--repo", "Stormanzanii/Lyssna"])
             .stdin(Stdio::piped())
             .spawn()?;
         child
@@ -106,7 +106,7 @@ fn upload(client: &reqwest::blocking::Client, path: &str, file: &Path, token: &s
 fn publish(arguments: &[String], upload_files: bool) -> Result<()> {
     ensure!(
         arguments.len() == 3,
-        "Usage: spotiflex-release prepare|publish VERSION EXE NOTES_FILE"
+        "Usage: lyssna-release prepare|publish VERSION EXE NOTES_FILE"
     );
     let version = semver::Version::parse(&arguments[0])?;
     ensure!(
@@ -125,6 +125,7 @@ fn publish(arguments: &[String], upload_files: bool) -> Result<()> {
     let manifest = Manifest {
         version: version.to_string(),
         target: TARGET.into(),
+        // SpotiFlex's file name, which copies from before the rename require.
         artifact: format!("releases/{version}/{TARGET}/spotiflex.exe"),
         sha256: file_hash(executable)?,
         size: fs::metadata(executable)?.len(),
@@ -132,7 +133,7 @@ fn publish(arguments: &[String], upload_files: bool) -> Result<()> {
     };
     let key = signing_key()?;
     ensure!(
-        STANDARD.encode(key.verifying_key().to_bytes()) == spotiflex::updater::PUBLIC_KEY.trim(),
+        STANDARD.encode(key.verifying_key().to_bytes()) == lyssna::updater::PUBLIC_KEY.trim(),
         "Release signing key does not match the compiled public key; rebuild first"
     );
     let payload = serde_json::to_vec(&manifest)?;

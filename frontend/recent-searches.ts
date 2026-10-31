@@ -7,7 +7,7 @@ export type RecentSearch = Pick<
 >;
 
 const LIMIT = 20;
-const key = (account: string) => `spotiflex.recent-searches.${account}`;
+const key = (account: string) => `lyssna.recent-searches.${account}`;
 
 /** Newest first, without duplicates, capped at 20. */
 export function rememberSearch(

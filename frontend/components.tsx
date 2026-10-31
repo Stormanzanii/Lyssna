@@ -1212,7 +1212,7 @@ function TimedLyricsPreview({
   ) : null;
 }
 
-const LYRICS_CARD_KEY = "spotiflex.npv-lyrics-card";
+const LYRICS_CARD_KEY = "lyssna.npv-lyrics-card";
 type LyricsCardView = { open: boolean; expanded: boolean };
 function savedCardView(): LyricsCardView {
   try {
@@ -2397,7 +2397,7 @@ export function NowPlaying({
               <div>
                 <small>Playing on</small>
                 <strong>
-                  {state.playback.device.name.startsWith("SpotiFlex")
+                  {state.playback.device.name.startsWith("Lyssna")
                     ? "This computer"
                     : state.playback.device.name || "This computer"}
                 </strong>

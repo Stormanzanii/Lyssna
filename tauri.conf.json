@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SpotiFlex",
+  "productName": "Lyssna",
   "version": "0.2.0",
-  "identifier": "xyz.clypdat.spotiflex",
+  "identifier": "xyz.clypdat.lyssna",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "SpotiFlex",
+        "title": "Lyssna",
         "width": 1440,
         "height": 900,
         "minWidth": 900,
@@ -32,7 +32,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["assets/spotiflex.ico"],
+    "icon": ["assets/lyssna.ico"],
     "shortDescription": "A Spotify client with synchronized lyrics"
   }
 }

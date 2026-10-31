@@ -25,7 +25,7 @@ async function startMac(page: Page, signedIn: boolean) {
           host.__macTest.item(text).handler.onmessage(),
         signOut: () => {
           for (const { event, handler } of listeners.values()) {
-            if (event === "spotiflex")
+            if (event === "lyssna")
               callbacks.get(handler)?.({
                 event,
                 payload: { type: "signed_out" },
@@ -81,7 +81,7 @@ async function startMac(page: Page, signedIn: boolean) {
   await expect(page.locator(".application.macos")).toBeVisible();
   await expect
     .poll(() =>
-      page.evaluate(() => !!(window as any).__macTest.item("About SpotiFlex")),
+      page.evaluate(() => !!(window as any).__macTest.item("About Lyssna")),
     )
     .toBe(true);
   await expect(page.locator(".app-menu")).toHaveCount(0);
@@ -92,12 +92,10 @@ test("native menus use current actions and keep signed-out playback locked", asy
 }) => {
   await startMac(page, true);
   await expect(page.getByLabel("Close window", { exact: true })).toHaveCount(0);
-  await page.evaluate(() =>
-    (window as any).__macTest.activate("About SpotiFlex"),
-  );
+  await page.evaluate(() => (window as any).__macTest.activate("About Lyssna"));
   await expect(
-    page.getByRole("dialog", { name: "About SpotiFlex" }),
-  ).toContainText("SpotiFlex for macOS");
+    page.getByRole("dialog", { name: "About Lyssna" }),
+  ).toContainText("Lyssna for macOS");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.evaluate(() => (window as any).__macTest.signOut());
   await expect(page.locator(".setup-backdrop")).toBeVisible();

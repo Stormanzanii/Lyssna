@@ -6,7 +6,7 @@ use eframe::egui::{
     text::{LayoutJob, TextFormat, TextWrapping},
 };
 
-// SpotiFlex palette: Spotify's layout, its own look. Violet accent with a
+// Lyssna palette: Spotify's layout, its own look. Violet accent with a
 // cyan partner, and slightly cool, blue-tinted surfaces.
 pub const ACCENT: Color32 = Color32::from_rgb(167, 139, 250);
 pub const ACCENT_HOVER: Color32 = Color32::from_rgb(196, 181, 253);

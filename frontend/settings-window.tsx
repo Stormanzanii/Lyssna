@@ -51,7 +51,7 @@ const DEFAULT_SOURCES = [
   "netease",
 ];
 const DEFAULT_SOURCES_OFF = ["lrclib", "netease"];
-/** Lyric sources SpotiFlex can use, as listed in Sources. */
+/** Lyric sources Lyssna can use, as listed in Sources. */
 const SOURCES: Record<string, { name: string; help: string }> = {
   spicy: {
     name: "Spicy Lyrics",
@@ -94,7 +94,7 @@ export type SettingsTab = (typeof TABS)[number][0] | "About";
 type Tab = SettingsTab;
 
 /** Settings reopen on the tab and scroll position they were left at. */
-const PLACE_KEY = "spotiflex.settings-place";
+const PLACE_KEY = "lyssna.settings-place";
 function readPlace(): { tab: Tab; scroll: number } {
   try {
     const place = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null");
@@ -137,7 +137,7 @@ type Amount = {
   [K in keyof Settings]-?: Settings[K] extends number | undefined ? K : never;
 }[keyof Settings];
 
-/** Every SpotiFlex setting in one window, laid out like Spicy Lyrics'
+/** Every Lyssna setting in one window, laid out like Spicy Lyrics'
  *  settings panel: category tabs, search across all of them, then rows
  *  grouped into cards. */
 export function SettingsWindow({
@@ -406,7 +406,7 @@ export function SettingsWindow({
           <SettingRow
             key="follow"
             label="Artist following"
-            help="Allow SpotiFlex to follow your favourite artists."
+            help="Allow Lyssna to follow your favourite artists."
             keywords="permissions scopes"
           >
             <button
@@ -488,7 +488,7 @@ export function SettingsWindow({
         <SettingRow
           key="refresh"
           label="New headphones or speakers"
-          help="Find outputs you connected while SpotiFlex was open."
+          help="Find outputs you connected while Lyssna was open."
           keywords="audio output device refresh"
         >
           <button
@@ -545,12 +545,12 @@ export function SettingsWindow({
       [
         <SettingRow
           key="autostart"
-          label="Open SpotiFlex automatically after you log into the computer"
+          label="Open Lyssna automatically after you log into the computer"
           keywords="startup autostart login sign in boot launch minimized"
         >
           <select
             className="settings-select"
-            aria-label="Open SpotiFlex automatically"
+            aria-label="Open Lyssna automatically"
             value={launch ?? "off"}
             disabled={launch === null}
             onChange={(event) => {
@@ -566,7 +566,7 @@ export function SettingsWindow({
         </SettingRow>,
         flag(
           "keep_playing_on_close",
-          "Close button should minimize the SpotiFlex window",
+          "Close button should minimize the Lyssna window",
           "",
           "close minimize minimise tray background notification area system tray quit keep playing",
         ),
@@ -996,7 +996,7 @@ export function SettingsWindow({
         flag(
           "lyrics_profiles_in_browser",
           "Open profiles in browser",
-          "Open community lyrics makers' spicylyrics.org profiles in your browser instead of in SpotiFlex.",
+          "Open community lyrics makers' spicylyrics.org profiles in your browser instead of in Lyssna.",
           "profile browser community credits maker spicylyrics website",
         ),
         range(
@@ -1528,7 +1528,7 @@ export function SettingsWindow({
           label="Version"
           help={
             nightly
-              ? "Nightly: the newest changes, built by SpotiFlex on this computer from the latest code."
+              ? "Nightly: the newest changes, built by Lyssna on this computer from the latest code."
               : "Stable: tested releases that update automatically."
           }
           keywords="build version channel stable nightly beta updates source"
@@ -1556,7 +1556,7 @@ export function SettingsWindow({
             }
             help={
               nightlyBuilding
-                ? "SpotiFlex restarts into it when it's done."
+                ? "Lyssna restarts into it when it's done."
                 : "Build the newest code now."
             }
             keywords="nightly build latest source update"
@@ -1621,7 +1621,7 @@ export function SettingsWindow({
           <SettingRow
             key="devtools"
             label="Developer tools"
-            help="Inspect SpotiFlex's interface. Anything you run there acts as you."
+            help="Inspect Lyssna's interface. Anything you run there acts as you."
             keywords="developer devtools debug inspect console"
           >
             <button
@@ -1707,7 +1707,7 @@ export function SettingsWindow({
         <header className="lyrics-settings-head">
           <h2 id="settings-window-title">
             <Settings2 size={20} />
-            SpotiFlex settings
+            Lyssna settings
           </h2>
           <label className="lyrics-settings-search">
             <Search size={15} />
@@ -1818,7 +1818,7 @@ export function SettingsWindow({
               aria-pressed={about}
               onClick={() => select(about ? "General" : "About")}
             >
-              <span className="lyrics-settings-wordmark">SpotiFlex</span>
+              <span className="lyrics-settings-wordmark">Lyssna</span>
               <span className="lyrics-settings-version">
                 v{__APP_VERSION__}
                 {status && (

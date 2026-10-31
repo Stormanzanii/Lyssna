@@ -2678,7 +2678,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
           },
           maker: {
             id: "2",
-            username: "Maker",
+            username: "! </Maker>",
             url: "https://spicylyrics.org/uid/2",
           },
         },
@@ -2770,7 +2770,7 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   ).toContainText("Uploaded by @Uploader");
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
-  ).toContainText("Made by @Maker");
+  ).toContainText("Made by @! </Maker>");
   await page.route("https://spicylyrics.org/**", (route) =>
     route.fulfill({ contentType: "text/html", body: "<h1>Profile</h1>" }),
   );
@@ -2785,6 +2785,18 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
       ),
     )
     .toEqual({ username: "Uploader", userId: "123456789012345678" });
+  // A name a page path cannot hold still opens through the creator's id.
+  await page.getByRole("button", { name: "@! </Maker>", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((call: any) => call.command === "open_creator_profile")
+            .at(-1)?.args,
+      ),
+    )
+    .toEqual({ username: "! </Maker>", userId: "2" });
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page

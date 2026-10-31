@@ -27,8 +27,9 @@ export function CreatorProfiles({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [error]);
   const open = (person: Contributor) => {
-    const url = creatorEmbed(person.username);
-    if (url)
+    // An id resolves the profile itself, so names with slashes or other
+    // characters a page path cannot hold still open.
+    if (person.id || creatorEmbed(person.username))
       void rpc("open_creator_profile", {
         username: person.username,
         userId: person.id,

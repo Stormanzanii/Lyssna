@@ -365,15 +365,31 @@ function romanizer() {
   });
   return worker;
 }
+/** The Japanese dictionary holds about 340 MB once loaded. An idle worker
+ *  is shut down so that memory returns to the system; the next song that
+ *  needs it starts a fresh one. Converted songs stay cached on this side. */
+const IDLE_MS = 20_000;
+let idle: ReturnType<typeof setTimeout> | undefined;
+function settle() {
+  clearTimeout(idle);
+  idle = undefined;
+  if (jobs.size || !worker) return;
+  idle = setTimeout(() => {
+    if (jobs.size || !worker) return;
+    worker.terminate();
+    worker = undefined;
+  }, IDLE_MS);
+}
 /** Converts in the worker when there is one, else on this thread. */
 function romanizeAway(lyrics: Lyrics): Promise<Lyrics> {
   const thread = romanizer();
   if (!thread) return romanizeLyrics(lyrics);
-  return new Promise((done) => {
+  clearTimeout(idle);
+  return new Promise<Lyrics>((done) => {
     const id = ++nextJob;
     jobs.set(id, { lyrics, done });
     thread.postMessage({ id, lyrics });
-  });
+  }).finally(settle);
 }
 
 const ready = new WeakMap<Lyrics, Lyrics>();

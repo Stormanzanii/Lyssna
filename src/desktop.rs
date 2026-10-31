@@ -3638,22 +3638,22 @@ async fn open_lyrics_popout(app: tauri::AppHandle) -> std::result::Result<(), St
 #[tauri::command]
 async fn open_creator_profile(
     app: tauri::AppHandle,
+    caller: tauri::WebviewWindow,
     username: String,
     user_id: Option<String>,
 ) -> std::result::Result<(), String> {
-    let resolved = if let Some(id) = user_id.filter(|id| !id.is_empty()) {
-        Some(
+    let resolved = match user_id.filter(|id| !id.is_empty()) {
+        Some(id) => {
             tauri::async_runtime::spawn_blocking(move || crate::provider::creator_profile(&id))
                 .await
-                .map_err(error)?
-                .map_err(error)?,
-        )
-    } else {
-        None
+                .map_err(anyhow::Error::from)
+                .and_then(|found| found)
+        }
+        None => creator_profile_url(&username),
     };
     let result = || -> Result<()> {
         use sha2::{Digest, Sha256};
-        let url = resolved.map_or_else(|| creator_profile_url(&username), Ok)?;
+        let url = resolved?;
         let digest = Sha256::digest(url.as_str());
         let label = format!(
             "creator-{}",
@@ -3664,6 +3664,9 @@ async fn open_creator_profile(
                 .collect::<String>()
         );
         if let Some(window) = app.get_webview_window(&label) {
+            // A sheet left hidden by a failed open would swallow every
+            // later click; show it rather than only focusing it.
+            window.show()?;
             window.set_focus()?;
             return Ok(());
         }
@@ -3681,11 +3684,11 @@ async fn open_creator_profile(
                 .take(80)
                 .collect::<String>()
         );
-        let main = app
-            .get_webview_window("main")
-            .context("Main window missing")?;
-        // A borderless sheet fixed over the main window, which dims behind
-        // it; clicking anywhere else closes it.
+        // A borderless sheet fixed over the window that asked for it (the
+        // main window dims behind it); clicking anywhere else closes it.
+        // Owned by the caller so it opens above the always-on-top lyrics
+        // windows instead of behind them, where it lost focus and closed.
+        let main = caller;
         let listens = app.clone();
         let window =
             tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
@@ -3709,21 +3712,28 @@ async fn open_creator_profile(
                     url.scheme() == "https" && url.host_str() == Some("spicylyrics.org")
                 })
                 .build()?;
-        let (origin, size, scale) = (
-            main.inner_position()?,
-            main.inner_size()?,
-            main.scale_factor()?,
-        );
-        // 1080 px keeps the profile page in its two-column layout.
-        let width = (f64::from(size.width) * 0.9).min(1080. * scale);
-        let height = (f64::from(size.height) * 0.9).min(800. * scale);
-        window.set_size(tauri::PhysicalSize::new(width, height))?;
-        #[cfg(windows)]
-        round_corners(&window, width as i32, height as i32, (18. * scale) as i32)?;
-        window.set_position(tauri::PhysicalPosition::new(
-            f64::from(origin.x) + (f64::from(size.width) - width) / 2.,
-            f64::from(origin.y) + (f64::from(size.height) - height) / 2.,
-        ))?;
+        let placed = || -> Result<()> {
+            let (origin, size, scale) = (
+                main.inner_position()?,
+                main.inner_size()?,
+                main.scale_factor()?,
+            );
+            // 1080 px keeps the profile page in its two-column layout.
+            let width = (f64::from(size.width) * 0.9).min(1080. * scale);
+            let height = (f64::from(size.height) * 0.9).min(800. * scale);
+            window.set_size(tauri::PhysicalSize::new(width, height))?;
+            #[cfg(windows)]
+            round_corners(&window, width as i32, height as i32, (18. * scale) as i32)?;
+            window.set_position(tauri::PhysicalPosition::new(
+                f64::from(origin.x) + (f64::from(size.width) - width) / 2.,
+                f64::from(origin.y) + (f64::from(size.height) - height) / 2.,
+            ))?;
+            Ok(())
+        };
+        if let Err(problem) = placed() {
+            let _ = window.close();
+            return Err(problem);
+        }
         let _ = app.emit("lyssna", json!({"type":"creator_profile","open":true}));
         let events = app.clone();
         let popup = window.clone();
@@ -3744,7 +3754,10 @@ async fn open_creator_profile(
         window.set_focus()?;
         Ok(())
     };
-    result().map_err(error)
+    result().map_err(|problem| {
+        crate::native::diagnostic(&format!("creator profile failed: {problem}"));
+        error(problem)
+    })
 }
 /// A Spotify user's profile page, read through this account's native session.
 #[tauri::command]

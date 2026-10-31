@@ -583,12 +583,20 @@ function App() {
     [songAge, setSongAge] = useState("");
   // Each page remembers its own sort across restarts, like Spotify.
   const songSort = state.settings.song_sorts?.[state.route] ?? "order";
-  // Random reshuffles every launch, every time a page opens, and when
-  // picked again.
-  const [shuffleSeed, setShuffleSeed] = useState(() => Math.random() * 2 ** 32);
-  useEffect(() => setShuffleSeed(Math.random() * 2 ** 32), [state.route]);
+  // Random reshuffles every launch, when a page is opened and when picked
+  // again. Coming back to a page with Back keeps its order.
+  const shuffleSeeds = useRef(new Map<string, number>());
+  const [, reshuffled] = useState(0);
+  let shuffleSeed = shuffleSeeds.current.get(state.route);
+  if (shuffleSeed === undefined) {
+    shuffleSeed = Math.random() * 2 ** 32;
+    shuffleSeeds.current.set(state.route, shuffleSeed);
+  }
   const setSongSort = (sort: string) => {
-    if (sort === "random") setShuffleSeed(Math.random() * 2 ** 32);
+    if (sort === "random") {
+      shuffleSeeds.current.delete(state.route);
+      reshuffled((count) => count + 1);
+    }
     const song_sorts = { ...state.settings.song_sorts };
     if (sort === "order") delete song_sorts[state.route];
     else song_sorts[state.route] = sort;
@@ -652,6 +660,8 @@ function App() {
   const navigate = useCallback(
     (key: string, push = true) => {
       if (!stateRef.current.profile) return;
+      // Opening a page shuffles Random anew; Back and Forward keep it.
+      if (push) shuffleSeeds.current.delete(key);
       if (push && routeRef.current !== key) {
         if (!(
           routeRef.current.startsWith("search:") && key.startsWith("search:")

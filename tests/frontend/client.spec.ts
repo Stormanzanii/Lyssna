@@ -2544,6 +2544,30 @@ test("Random sort shuffles the playlist and reshuffles when picked again", async
   const shuffled = await names();
   await random.click();
   await expect.poll(names).not.toEqual(shuffled);
+  // Leaving and coming back with Back keeps the order; opening it shuffles.
+  await page.keyboard.press("Escape");
+  const titles = () => rows.locator(".track-name").allInnerTexts();
+  // Every song is loaded first, since more songs change the shuffle.
+  let count = -1;
+  await expect
+    .poll(async () => {
+      const previous = count;
+      count = await rows.count();
+      return count === previous;
+    })
+    .toBe(true);
+  const kept = await titles();
+  await page.locator(".home-button").click();
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(rows.first()).toBeVisible();
+  await expect.poll(titles).toEqual(kept);
+  await page.locator(".home-button").click();
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  await expect(rows.first()).toBeVisible();
+  await expect.poll(titles).not.toEqual(kept);
 });
 
 test("near-bottom scrolling automatically loads one page per offset", async ({

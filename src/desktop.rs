@@ -2937,11 +2937,15 @@ fn nightly_log() -> std::result::Result<(), String> {
     let path = crate::nightly::last()
         .and_then(|report| report.log)
         .ok_or_else(|| "No Nightly build has run yet".to_owned())?;
-    std::process::Command::new("notepad")
-        .arg(path)
-        .spawn()
-        .map(|_| ())
-        .map_err(error)
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg("-t");
+        command
+    };
+    #[cfg(not(target_os = "macos"))]
+    let mut command = std::process::Command::new("notepad");
+    command.arg(path).spawn().map(|_| ()).map_err(error)
 }
 /// Songs in Local Files, for Your Library's row.
 #[tauri::command]

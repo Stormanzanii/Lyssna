@@ -636,7 +636,7 @@ export function SettingsWindow({
           <button
             className="pill outline"
             disabled={
-              IS_MAC ||
+              (IS_MAC && !nightly) ||
               state.update_status.startsWith("Downloading update") ||
               state.update_status.startsWith("Building update")
             }
@@ -658,7 +658,7 @@ export function SettingsWindow({
                 : "Check for updates"}
           </button>
         </SettingRow>,
-        !IS_MAC ? (
+        !IS_MAC || nightly ? (
           <SettingRow
             key="auto-update"
             label={
@@ -1543,9 +1543,7 @@ export function SettingsWindow({
             }}
           >
             <option value="stable">Stable</option>
-            <option value="nightly" disabled={IS_MAC}>
-              Nightly{IS_MAC ? " (Windows only for now)" : ""}
-            </option>
+            <option value="nightly">Nightly</option>
           </select>
         </SettingRow>,
         nightly || nightlyBuilding ? (

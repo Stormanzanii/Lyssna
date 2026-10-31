@@ -1,17 +1,21 @@
 //! Nightly builds: SpotiFlex built on this computer from the latest source.
 //!
-//! Everything the build needs is kept in SpotiFlex's own folder, pinned
-//! and checked against published SHA-256 sums: a private Rust (rustup with
-//! its own homes), portable Node.js, libclang and, when needed, CMake.
-//! Nothing is added to PATH and no administrator rights are needed, except
-//! for Visual Studio's C++ build tools, which Windows asks about once.
+//! Tools already on the computer are used as they are: rustup (a missing
+//! Rust version is added to it), a recent enough Node.js, CMake and
+//! libclang. Anything missing is kept in SpotiFlex's own folder, pinned and
+//! checked against published SHA-256 sums: a private rustup with its own
+//! homes, portable Node.js, libclang and CMake. Nothing is added to PATH
+//! and no administrator rights are needed, except for the system's C++
+//! tools: Visual Studio's build tools, which Windows asks about once, or
+//! Apple's Command Line Tools, which macOS offers in its own window.
 //! The source comes as GitHub's archive of one commit, so Git isn't needed.
 //!
-//! Tools run in a cleared environment inside a job object at below-normal
-//! priority, so the user's settings can't break the build, music keeps
-//! playing smoothly, and Cancel or quitting stops every process. Network
-//! steps retry, finished steps are kept for the next run, and the running
-//! copy is replaced only after the new build has started successfully.
+//! Tools run in a cleared environment, on Windows inside a job object at
+//! below-normal priority and elsewhere in a process group of their own, so
+//! the user's settings can't break the build, music keeps playing
+//! smoothly, and Cancel stops every process. Network steps retry, finished
+//! steps are kept for the next run, and the running copy is replaced only
+//! after the new build has started successfully.
 
 use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
@@ -35,8 +39,45 @@ const REPOSITORY: &str = "Stormanzanii/SpotiFlex";
 const NODE_RELEASES: &str = "https://nodejs.org/dist/latest-v24.x";
 const LIBCLANG_VERSION: &str = "18.1.1";
 const CMAKE_VERSION: &str = "3.31.6";
-const RUSTUP_INIT: &str =
-    "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe";
+const RUSTUP_DIST: &str = "https://static.rust-lang.org/rustup/dist";
+const EXE: &str = std::env::consts::EXE_SUFFIX;
+/// What Rust builds for, and the ends of this system's download names.
+#[cfg(windows)]
+mod system {
+    pub const HOST: &str = "x86_64-pc-windows-msvc";
+    pub const NODE: &str = "-win-x64.zip";
+    pub const CMAKE: &str = "-windows-x86_64.zip";
+    pub const LIBCLANG_WHEEL: &str = "win_amd64.whl";
+    pub const LIBCLANG: &str = "libclang.dll";
+    pub const CPP_TOOLS: &str = "C++ build tools";
+}
+#[cfg(target_os = "macos")]
+mod system {
+    #[cfg(target_arch = "aarch64")]
+    pub const HOST: &str = "aarch64-apple-darwin";
+    #[cfg(not(target_arch = "aarch64"))]
+    pub const HOST: &str = "x86_64-apple-darwin";
+    #[cfg(target_arch = "aarch64")]
+    pub const NODE: &str = "-darwin-arm64.tar.gz";
+    #[cfg(not(target_arch = "aarch64"))]
+    pub const NODE: &str = "-darwin-x64.tar.gz";
+    pub const CMAKE: &str = "-macos-universal.tar.gz";
+    #[cfg(target_arch = "aarch64")]
+    pub const LIBCLANG_WHEEL: &str = "arm64.whl";
+    #[cfg(not(target_arch = "aarch64"))]
+    pub const LIBCLANG_WHEEL: &str = "x86_64.whl";
+    pub const LIBCLANG: &str = "libclang.dylib";
+    pub const CPP_TOOLS: &str = "Command Line Tools";
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+mod system {
+    pub const HOST: &str = "x86_64-unknown-linux-gnu";
+    pub const NODE: &str = "-linux-x64.tar.gz";
+    pub const CMAKE: &str = "-linux-x86_64.tar.gz";
+    pub const LIBCLANG_WHEEL: &str = "manylinux2010_x86_64.whl";
+    pub const LIBCLANG: &str = "libclang.so";
+    pub const CPP_TOOLS: &str = "C++ build tools";
+}
 const VS_BOOTSTRAPPER: &str = "https://aka.ms/vs/17/release/vs_BuildTools.exe";
 const VS_ARGUMENTS: &str = "--wait --passive --norestart --nocache \
     --add Microsoft.VisualStudio.Workload.VCTools \
@@ -85,6 +126,14 @@ const KEPT_VARIABLES: &[&str] = &[
     "https_proxy",
     "no_proxy",
     "windir",
+    // macOS
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "LANG",
+    "DEVELOPER_DIR",
 ];
 
 /// Reads a tool's output lines into a step's progress.
@@ -355,12 +404,36 @@ fn root() -> Result<PathBuf> {
 struct Tools {
     cmake: Option<PathBuf>,
     libclang: Option<PathBuf>,
-    node: Option<PathBuf>,
+    node: Option<Node>,
     rust_home: PathBuf,
     cargo_home: PathBuf,
     toolchain: Option<String>,
     target: PathBuf,
     commit: Option<String>,
+}
+
+/// Node.js and the npm it came with.
+#[derive(Clone)]
+struct Node {
+    program: PathBuf,
+    npm: PathBuf,
+}
+
+impl Node {
+    /// Node.js as its download unpacks.
+    fn unpacked(dir: &Path) -> Self {
+        if cfg!(windows) {
+            Self {
+                program: dir.join("node.exe"),
+                npm: dir.join("node_modules/npm/bin/npm-cli.js"),
+            }
+        } else {
+            Self {
+                program: dir.join("bin/node"),
+                npm: dir.join("lib/node_modules/npm/bin/npm-cli.js"),
+            }
+        }
+    }
 }
 
 struct Run<F: Fn(&Report)> {
@@ -382,7 +455,7 @@ struct Run<F: Fn(&Report)> {
 impl<F: Fn(&Report)> Run<F> {
     fn new(report: F) -> Self {
         let steps = [
-            ("cpp", "C++ build tools"),
+            ("cpp", system::CPP_TOOLS),
             ("cmake", "CMake"),
             ("libclang", "libclang"),
             ("node", "Node.js"),
@@ -515,22 +588,146 @@ impl<F: Fn(&Report)> Run<F> {
         let downloads = root.join("downloads");
         fs::create_dir_all(&tools_dir)?;
         fs::create_dir_all(&downloads)?;
-        self.tools.rust_home = tools_dir.join("rustup");
-        self.tools.cargo_home = tools_dir.join("cargo");
+        let own_rust = installed_rustup();
+        (self.tools.rust_home, self.tools.cargo_home) = own_rust
+            .clone()
+            .unwrap_or_else(|| (tools_dir.join("rustup"), tools_dir.join("cargo")));
+        if let Some((rust_home, _)) = &own_rust {
+            self.log(&format!("Using your rustup in {}", rust_home.display()));
+        }
         self.tools.target = root.join("target");
         let client = client()?;
 
         // Room for everything first, rather than failing half way.
-        let found = visual_studio();
         check_space(&root, BUILD_SPACE)?;
+        let studio = self.cpp_tools(&client, &downloads)?;
+
+        // CMake: Visual Studio's or one already installed, else a private one.
+        if let Some(cmake) = studio
+            .as_deref()
+            .and_then(bundled_cmake)
+            .or_else(installed_cmake)
+        {
+            self.log(&format!("Using CMake at {}", cmake.display()));
+            self.tools.cmake = Some(cmake);
+            self.set("cmake", State::Skipped);
+        } else {
+            let dir = tools_dir.join(format!("cmake-{CMAKE_VERSION}"));
+            let cmake = if cfg!(target_os = "macos") {
+                dir.join("CMake.app/Contents/bin/cmake")
+            } else {
+                dir.join("bin").join(format!("cmake{EXE}"))
+            };
+            if cmake.is_file() {
+                self.set("cmake", State::Skipped);
+            } else {
+                self.set("cmake", State::Running);
+                let base =
+                    format!("https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}");
+                let sums = get_text(
+                    &client,
+                    &format!("{base}/cmake-{CMAKE_VERSION}-SHA-256.txt"),
+                )?;
+                let (name, hash) = checksum_for(&sums, system::CMAKE)
+                    .context("CMake's checksums don't list a download for this system")?;
+                let archive = downloads.join(&name);
+                self.download(
+                    &client,
+                    "cmake",
+                    &format!("{base}/{name}"),
+                    &archive,
+                    Some(&hash),
+                )?;
+                self.extract("cmake", &archive, &dir, true)?;
+                self.set("cmake", State::Done);
+            }
+            self.tools.cmake = Some(cmake);
+        }
+
+        // libclang, which whisper's bindings are generated with: one already
+        // installed, else from PyPI's wheel. Where the wheel keeps it differs
+        // between releases, so it is looked for.
+        let libclang = tools_dir.join(format!("libclang-{LIBCLANG_VERSION}"));
+        let native = match installed_libclang(studio.as_deref())
+            .or_else(|| find_file(&libclang, system::LIBCLANG, 6))
+        {
+            Some(found) => {
+                self.log(&format!("Using libclang at {}", found.display()));
+                self.set("libclang", State::Skipped);
+                found
+            }
+            None => {
+                self.set("libclang", State::Running);
+                let release: serde_json::Value = serde_json::from_str(&get_text(
+                    &client,
+                    &format!("https://pypi.org/pypi/libclang/{LIBCLANG_VERSION}/json"),
+                )?)?;
+                let (url, hash) =
+                    libclang_wheel(&release).context("libclang has no download for this system")?;
+                let archive = downloads.join("libclang.whl");
+                self.download(&client, "libclang", &url, &archive, Some(&hash))?;
+                self.extract("libclang", &archive, &libclang, false)?;
+                let found = find_file(&libclang, system::LIBCLANG, 6)
+                    .with_context(|| format!("libclang's download has no {}", system::LIBCLANG))?;
+                self.set("libclang", State::Done);
+                found
+            }
+        };
+        self.tools.libclang = native.parent().map(Path::to_path_buf);
+
+        // Node.js: one already installed when it is recent enough for the
+        // interface's tools, else the newest Node.js 24.
+        if let Some(node) = installed_node() {
+            self.log(&format!("Using Node.js at {}", node.program.display()));
+            self.tools.node = Some(node);
+            self.set("node", State::Skipped);
+        } else {
+            self.set("node", State::Running);
+            let node = match get_text(&client, &format!("{NODE_RELEASES}/SHASUMS256.txt"))
+                .ok()
+                .and_then(|sums| checksum_for(&sums, system::NODE))
+            {
+                Some((name, hash)) => {
+                    let dir =
+                        tools_dir.join(name.trim_end_matches(".zip").trim_end_matches(".tar.gz"));
+                    if !Node::unpacked(&dir).program.is_file() {
+                        let archive = downloads.join(&name);
+                        self.download(
+                            &client,
+                            "node",
+                            &format!("{NODE_RELEASES}/{name}"),
+                            &archive,
+                            Some(&hash),
+                        )?;
+                        self.extract("node", &archive, &dir, true)?;
+                    }
+                    dir
+                }
+                // Offline: a Node.js 24 kept from an earlier build still works.
+                None => newest_dir(&tools_dir, "node-v24.")
+                    .filter(|dir| Node::unpacked(dir).program.is_file())
+                    .context("Cannot reach nodejs.org to download Node.js")?,
+            };
+            self.tools.node = Some(Node::unpacked(&node));
+            self.set("node", State::Done);
+        }
+        self.build_source(&root, &client, &downloads)
+    }
+
+    /// Visual Studio's C++ tools: the one install that needs Windows'
+    /// permission, through Microsoft's own installer.
+    #[cfg(windows)]
+    fn cpp_tools(
+        &mut self,
+        client: &reqwest::blocking::Client,
+        downloads: &Path,
+    ) -> Result<Option<PathBuf>> {
+        let found = visual_studio();
         if found.is_none() {
             let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
             check_space(Path::new(&format!("{system}\\")), VS_SPACE)?;
         }
-
-        // Visual Studio's C++ tools: the one install that needs Windows'
-        // permission, through Microsoft's own installer.
-        let studio = match found {
+        Ok(Some(match found {
             Some(found) => {
                 self.set("cpp", State::Skipped);
                 found
@@ -542,7 +739,7 @@ impl<F: Fn(&Report)> Run<F> {
             None => {
                 self.set("cpp", State::Running);
                 let installer = downloads.join("vs_BuildTools.exe");
-                self.download(&client, "cpp", VS_BOOTSTRAPPER, &installer, None)?;
+                self.download(client, "cpp", VS_BOOTSTRAPPER, &installer, None)?;
                 self.progress(
                     "cpp",
                     None,
@@ -576,97 +773,57 @@ impl<F: Fn(&Report)> Run<F> {
                 self.set("cpp", State::Done);
                 found
             }
-        };
+        }))
+    }
 
-        // CMake, from Visual Studio when it has it.
-        if let Some(cmake) = bundled_cmake(&studio) {
-            self.tools.cmake = Some(cmake);
-            self.set("cmake", State::Skipped);
-        } else {
-            let dir = tools_dir.join(format!("cmake-{CMAKE_VERSION}"));
-            let cmake = dir.join("bin").join("cmake.exe");
-            if cmake.is_file() {
-                self.set("cmake", State::Skipped);
-            } else {
-                self.set("cmake", State::Running);
-                let base =
-                    format!("https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}");
-                let sums = get_text(
-                    &client,
-                    &format!("{base}/cmake-{CMAKE_VERSION}-SHA-256.txt"),
-                )?;
-                let (name, hash) = checksum_for(&sums, "-windows-x86_64.zip")
-                    .context("CMake's checksums don't list a Windows download")?;
-                let archive = downloads.join(&name);
-                self.download(
-                    &client,
-                    "cmake",
-                    &format!("{base}/{name}"),
-                    &archive,
-                    Some(&hash),
-                )?;
-                self.extract("cmake", &archive, &dir, true)?;
-                self.set("cmake", State::Done);
-            }
-            self.tools.cmake = Some(cmake);
+    /// Apple's Command Line Tools, which macOS installs from a window of
+    /// its own when asked.
+    #[cfg(not(windows))]
+    fn cpp_tools(&mut self, _: &reqwest::blocking::Client, _: &Path) -> Result<Option<PathBuf>> {
+        if command_line_tools() {
+            self.set("cpp", State::Skipped);
+            return Ok(None);
         }
+        if self.mode == Mode::Stage {
+            bail!(
+                "Apple's Command Line Tools are missing. Use Build latest in Settings to set them up again."
+            );
+        }
+        self.set("cpp", State::Running);
+        // Fails when the window is already open, which is fine.
+        let _ = Command::new("xcode-select").arg("--install").status();
+        let started = Instant::now();
+        while !command_line_tools() {
+            cancelled()?;
+            ensure!(
+                started.elapsed() < Duration::from_secs(2 * 60 * 60),
+                "Apple's Command Line Tools weren't installed. Install them, then try again."
+            );
+            let seconds = started.elapsed().as_secs();
+            self.progress(
+                "cpp",
+                None,
+                format!(
+                    "Choose Install in the window macOS opened; it shows the progress ({}:{:02})",
+                    seconds / 60,
+                    seconds % 60
+                ),
+            );
+            thread::sleep(Duration::from_secs(2));
+        }
+        self.set("cpp", State::Done);
+        Ok(None)
+    }
 
-        // libclang, which whisper's bindings are generated with. Where the
-        // wheel keeps it differs between releases, so it is looked for.
-        let libclang = tools_dir.join(format!("libclang-{LIBCLANG_VERSION}"));
-        let native = match find_file(&libclang, "libclang.dll", 6) {
-            Some(dll) => {
-                self.set("libclang", State::Skipped);
-                dll
-            }
-            None => {
-                self.set("libclang", State::Running);
-                let release: serde_json::Value = serde_json::from_str(&get_text(
-                    &client,
-                    &format!("https://pypi.org/pypi/libclang/{LIBCLANG_VERSION}/json"),
-                )?)?;
-                let (url, hash) =
-                    windows_wheel(&release).context("libclang has no Windows download")?;
-                let archive = downloads.join("libclang.whl");
-                self.download(&client, "libclang", &url, &archive, Some(&hash))?;
-                self.extract("libclang", &archive, &libclang, false)?;
-                let dll = find_file(&libclang, "libclang.dll", 6)
-                    .context("libclang's download has no libclang.dll")?;
-                self.set("libclang", State::Done);
-                dll
-            }
-        };
-        self.tools.libclang = native.parent().map(Path::to_path_buf);
-
-        // Node.js 24, the newest release of that line.
-        self.set("node", State::Running);
-        let node = match get_text(&client, &format!("{NODE_RELEASES}/SHASUMS256.txt"))
-            .ok()
-            .and_then(|sums| checksum_for(&sums, "-win-x64.zip"))
-        {
-            Some((name, hash)) => {
-                let dir = tools_dir.join(name.trim_end_matches(".zip"));
-                if !dir.join("node.exe").is_file() {
-                    let archive = downloads.join(&name);
-                    self.download(
-                        &client,
-                        "node",
-                        &format!("{NODE_RELEASES}/{name}"),
-                        &archive,
-                        Some(&hash),
-                    )?;
-                    self.extract("node", &archive, &dir, true)?;
-                }
-                dir
-            }
-            // Offline: a Node.js 24 kept from an earlier build still works.
-            None => newest_dir(&tools_dir, "node-v24.")
-                .filter(|dir| dir.join("node.exe").is_file())
-                .context("Cannot reach nodejs.org to download Node.js")?,
-        };
-        self.tools.node = Some(node);
-        self.set("node", State::Done);
-
+    /// The newest source, built and checked, then installed or staged.
+    fn build_source(
+        &mut self,
+        root: &Path,
+        client: &reqwest::blocking::Client,
+        downloads: &Path,
+    ) -> Result<Outcome> {
+        let client = client.clone();
+        let downloads = downloads.to_path_buf();
         // The source of the newest commit on main.
         self.set("source", State::Running);
         let latest = latest_commit(&client).ok();
@@ -737,17 +894,30 @@ impl<F: Fn(&Report)> Run<F> {
 
         // A private Rust, at the version the source asks for.
         let toolchain = rust_version(&source)?;
-        let rustup = self.tools.cargo_home.join("bin").join("rustup.exe");
+        // Named for this system, so a rustup set to another host (as GNU
+        // on Windows) still builds with the right one.
+        let toolchain = format!("{toolchain}-{}", system::HOST);
+        let rustup = self
+            .tools
+            .cargo_home
+            .join("bin")
+            .join(format!("rustup{EXE}"));
         self.set("rust", State::Running);
         if !rustup.is_file() {
-            let init = downloads.join("rustup-init.exe");
-            let hash = get_text(&client, &format!("{RUSTUP_INIT}.sha256"))?;
+            let init = downloads.join(format!("rustup-init{EXE}"));
+            let url = format!("{RUSTUP_DIST}/{}/rustup-init{EXE}", system::HOST);
+            let hash = get_text(&client, &format!("{url}.sha256"))?;
             let hash = hash
                 .split_whitespace()
                 .next()
                 .unwrap_or_default()
                 .to_owned();
-            self.download(&client, "rust", RUSTUP_INIT, &init, Some(&hash))?;
+            self.download(&client, "rust", &url, &init, Some(&hash))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&init, fs::Permissions::from_mode(0o755))?;
+            }
             self.command(
                 "rust",
                 &init,
@@ -759,7 +929,7 @@ impl<F: Fn(&Report)> Run<F> {
                     "--profile",
                     "minimal",
                     "--default-host",
-                    "x86_64-pc-windows-msvc",
+                    system::HOST,
                 ],
                 None,
                 Box::new(|_: &str| None),
@@ -800,12 +970,7 @@ impl<F: Fn(&Report)> Run<F> {
 
         // The interface.
         let node = self.tools.node.clone().context("No Node.js")?;
-        let npm = node
-            .join("node_modules")
-            .join("npm")
-            .join("bin")
-            .join("npm-cli.js");
-        let npm = npm.to_string_lossy().into_owned();
+        let npm = node.npm.to_string_lossy().into_owned();
         let packages = fs::read_to_string(source.join("package-lock.json"))
             .map(|lock| lock.matches("\"resolved\":").count())
             .unwrap_or(0)
@@ -813,7 +978,7 @@ impl<F: Fn(&Report)> Run<F> {
         self.set("packages", State::Running);
         self.command(
             "packages",
-            &node.join("node.exe"),
+            &node.program,
             &[
                 &npm,
                 "ci",
@@ -832,7 +997,7 @@ impl<F: Fn(&Report)> Run<F> {
         self.set("interface", State::Running);
         self.command(
             "interface",
-            &node.join("node.exe"),
+            &node.program,
             &[&npm, "run", "build"],
             Some(&source),
             Box::new(|_: &str| None),
@@ -842,7 +1007,11 @@ impl<F: Fn(&Report)> Run<F> {
 
         // SpotiFlex itself: packages first, so a dropped connection never
         // costs a compile, then the build.
-        let cargo = self.tools.cargo_home.join("bin").join("cargo.exe");
+        let cargo = self
+            .tools
+            .cargo_home
+            .join("bin")
+            .join(format!("cargo{EXE}"));
         let lock = fs::read_to_string(source.join("Cargo.lock")).unwrap_or_default();
         let crates = lock.matches("source = \"registry+").count().max(1) as f64;
         let units = lock.matches("[[package]]").count().max(1) as f64;
@@ -896,8 +1065,12 @@ impl<F: Fn(&Report)> Run<F> {
 
         // The new copy must start before it replaces this one.
         self.set("check", State::Running);
-        let built = self.tools.target.join("release").join("spotiflex.exe");
-        ensure!(built.is_file(), "The build finished without spotiflex.exe");
+        let built = self
+            .tools
+            .target
+            .join("release")
+            .join(format!("spotiflex{EXE}"));
+        ensure!(built.is_file(), "The build finished without SpotiFlex");
         let output = self
             .output(&built, &["--version"], Duration::from_secs(60))
             .context("The new build didn't start")?;
@@ -1028,6 +1201,25 @@ impl<F: Fn(&Report)> Run<F> {
         if staging.exists() {
             fs::remove_dir_all(&staging)?;
         }
+        // macOS downloads come as .tar.gz, which its tar unpacks; it
+        // refuses names that would leave the folder.
+        if archive.to_string_lossy().ends_with(".tar.gz") {
+            fs::create_dir_all(&staging)?;
+            self.progress(id, None, "Unpacking");
+            let mut tar = Command::new("tar");
+            tar.arg("-xzf").arg(archive).arg("-C").arg(&staging);
+            if strip {
+                tar.args(["--strip-components", "1"]);
+            }
+            let status = tar.status().context("Cannot start tar")?;
+            ensure!(status.success(), "Cannot unpack {}", archive.display());
+            if dir.exists() {
+                fs::remove_dir_all(dir)?;
+            }
+            fs::rename(&staging, dir)?;
+            let _ = fs::remove_file(archive);
+            return Ok(String::new());
+        }
         let mut zip = zip::ZipArchive::new(fs::File::open(archive)?)?;
         let comment = String::from_utf8_lossy(zip.comment()).into_owned();
         let count = zip.len();
@@ -1079,24 +1271,33 @@ impl<F: Fn(&Report)> Run<F> {
                 command.env(name, value);
             }
         }
-        let system = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
         let mut path: Vec<PathBuf> = vec![self.tools.cargo_home.join("bin")];
-        path.extend(self.tools.node.clone());
+        path.extend(
+            self.tools
+                .node
+                .as_ref()
+                .and_then(|node| node.program.parent().map(Path::to_path_buf)),
+        );
         path.extend(
             self.tools
                 .cmake
                 .as_ref()
                 .and_then(|cmake| cmake.parent().map(Path::to_path_buf)),
         );
-        path.extend(
-            [
-                "System32",
-                "",
-                "System32\\Wbem",
-                "System32\\WindowsPowerShell\\v1.0",
-            ]
-            .map(|dir| Path::new(&system).join(dir)),
-        );
+        if cfg!(windows) {
+            let system = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+            path.extend(
+                [
+                    "System32",
+                    "",
+                    "System32\\Wbem",
+                    "System32\\WindowsPowerShell\\v1.0",
+                ]
+                .map(|dir| Path::new(&system).join(dir)),
+            );
+        } else {
+            path.extend(["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map(PathBuf::from));
+        }
         if let Ok(path) = std::env::join_paths(path) {
             command.env("PATH", path);
         }
@@ -1134,7 +1335,7 @@ impl<F: Fn(&Report)> Run<F> {
             // Stable again installs the release.
             command.env("SPOTIFLEX_NIGHTLY", commit);
         }
-        hide_window(command);
+        isolate(command);
     }
 
     /// Run a tool, showing its output and progress on step `id`, trying
@@ -1454,11 +1655,22 @@ fn checksum_for(sums: &str, suffix: &str) -> Option<(String, String)> {
     })
 }
 
-/// The Windows wheel in PyPI's release listing, with its SHA-256.
-fn windows_wheel(release: &serde_json::Value) -> Option<(String, String)> {
+/// This system's wheel in PyPI's release listing, with its SHA-256.
+fn libclang_wheel(release: &serde_json::Value) -> Option<(String, String)> {
+    wheel_for(release, system::LIBCLANG_WHEEL)
+}
+
+fn wheel_for(release: &serde_json::Value, suffix: &str) -> Option<(String, String)> {
     release["urls"].as_array()?.iter().find_map(|file| {
         let name = file["filename"].as_str()?;
-        name.ends_with("win_amd64.whl").then(|| {
+        let system = if suffix.starts_with("win") {
+            true
+        } else if suffix.starts_with("manylinux") {
+            name.contains("manylinux")
+        } else {
+            name.contains("macosx")
+        };
+        (system && name.ends_with(suffix)).then(|| {
             Some((
                 file["url"].as_str()?.to_owned(),
                 file["digests"]["sha256"].as_str()?.to_owned(),
@@ -1601,7 +1813,7 @@ fn rust_version(source: &Path) -> Result<String> {
 fn stage(built: &Path, commit: &str) -> Result<PathBuf> {
     let updates = crate::config::data_dir()?.join("updates");
     fs::create_dir_all(&updates)?;
-    let staged = updates.join(format!("spotiflex-nightly-{}.exe", &commit[..7]));
+    let staged = updates.join(format!("spotiflex-nightly-{}{EXE}", &commit[..7]));
     fs::copy(built, &staged)?;
     Ok(staged)
 }
@@ -1610,26 +1822,208 @@ fn stage(built: &Path, commit: &str) -> Result<PathBuf> {
 fn replace_running(staged: &Path) -> Result<()> {
     let updates = crate::config::data_dir()?.join("updates");
     let executable = std::env::current_exe()?;
-    fs::copy(&executable, updates.join("previous-spotiflex.exe"))
-        .context("Cannot back up the current executable")?;
+    fs::copy(
+        &executable,
+        updates.join(format!("previous-spotiflex{EXE}")),
+    )
+    .context("Cannot back up the current executable")?;
     self_replace::self_replace(staged)
         .context("Cannot install. Run SpotiFlex from a folder your account can write to.")?;
     let _ = fs::remove_file(staged);
+    // The app's signature covers the executable it replaced; sign it again
+    // for this computer so macOS opens it.
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = executable
+        .ancestors()
+        .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+    {
+        let signed = Command::new("codesign")
+            .args(["--force", "--deep", "--sign", "-"])
+            .arg(bundle)
+            .status();
+        if !signed.is_ok_and(|status| status.success()) {
+            log::warn!("Cannot sign {} again", bundle.display());
+        }
+    }
     Ok(())
 }
 
-fn hide_window(command: &mut Command) {
+/// A tool runs without a window on Windows and, elsewhere, in a process
+/// group of its own, so Cancel stops it and everything it started.
+fn isolate(command: &mut Command) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    #[cfg(not(any(windows, unix)))]
     let _ = command;
 }
 
+/// The user's own rustup and its homes, when Rust is installed with it.
+fn installed_rustup() -> Option<(PathBuf, PathBuf)> {
+    let home = directories::BaseDirs::new()?.home_dir().to_path_buf();
+    let cargo_home =
+        std::env::var_os("CARGO_HOME").map_or_else(|| home.join(".cargo"), PathBuf::from);
+    let rust_home =
+        std::env::var_os("RUSTUP_HOME").map_or_else(|| home.join(".rustup"), PathBuf::from);
+    (cargo_home
+        .join("bin")
+        .join(format!("rustup{EXE}"))
+        .is_file()
+        && rust_home.is_dir())
+    .then_some((rust_home, cargo_home))
+}
+
+/// A program on PATH or in the folders it is usually installed in, which
+/// an app opened from the Dock or Start doesn't always have on PATH.
+fn installed(name: &str) -> Option<PathBuf> {
+    let file = format!("{name}{EXE}");
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    if cfg!(windows) {
+        if let Some(files) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
+            dirs.extend([files.join("nodejs"), files.join("CMake").join("bin")]);
+        }
+    } else {
+        dirs.extend(
+            [
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "/Applications/CMake.app/Contents/bin",
+            ]
+            .map(PathBuf::from),
+        );
+    }
+    dirs.into_iter()
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.join(&file))
+        .find(|path| path.is_file())
+}
+
+/// A quick command's output, when it succeeds.
+fn version_of(program: &Path) -> Option<String> {
+    let mut command = Command::new(program);
+    command
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null());
+    isolate(&mut command);
+    let output = command.output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+/// Whether a Node.js version runs the interface's tools: Vite needs
+/// 20.19 or 22.12 and later.
+fn node_supported(version: &str) -> bool {
+    let mut parts = version.trim().trim_start_matches('v').split('.');
+    let (Some(Ok(major)), Some(Ok(minor))) = (
+        parts.next().map(str::parse::<u32>),
+        parts.next().map(str::parse::<u32>),
+    ) else {
+        return false;
+    };
+    matches!((major, minor), (20, 19..) | (22, 12..) | (23.., _))
+}
+
+/// An installed Node.js recent enough, with its npm.
+fn installed_node() -> Option<Node> {
+    let program = installed("node")?;
+    if !node_supported(&version_of(&program)?) {
+        return None;
+    }
+    // A Homebrew or nvm `node` is often a link into its own folder.
+    let real = fs::canonicalize(&program).ok().filter(|_| !cfg!(windows));
+    [Some(program.clone()), real]
+        .into_iter()
+        .flatten()
+        .filter_map(|path| path.parent().map(Path::to_path_buf))
+        .flat_map(|bin| {
+            let prefix = bin.parent().map(Path::to_path_buf).unwrap_or_default();
+            [
+                bin.join("node_modules/npm/bin/npm-cli.js"),
+                prefix.join("lib/node_modules/npm/bin/npm-cli.js"),
+                prefix.join("libexec/lib/node_modules/npm/bin/npm-cli.js"),
+            ]
+        })
+        .find(|npm| npm.is_file())
+        .map(|npm| Node {
+            program: program.clone(),
+            npm,
+        })
+}
+
+/// An installed CMake that runs.
+fn installed_cmake() -> Option<PathBuf> {
+    installed("cmake").filter(|cmake| version_of(cmake).is_some())
+}
+
+/// An installed libclang: the one LIBCLANG_PATH names, LLVM's, Visual
+/// Studio's or Apple's.
+fn installed_libclang(studio: Option<&Path>) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("LIBCLANG_PATH")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
+    if cfg!(windows) {
+        dirs.extend(studio.map(|studio| studio.join("VC\\Tools\\Llvm\\x64\\bin")));
+        if let Some(files) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
+            dirs.push(files.join("LLVM").join("bin"));
+        }
+    } else {
+        if let Some(developer) = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
+        {
+            dirs.push(developer.join("usr/lib"));
+            dirs.push(developer.join("Toolchains/XcodeDefault.xctoolchain/usr/lib"));
+        }
+        dirs.extend(
+            [
+                "/Library/Developer/CommandLineTools/usr/lib",
+                "/opt/homebrew/opt/llvm/lib",
+                "/usr/local/opt/llvm/lib",
+            ]
+            .map(PathBuf::from),
+        );
+    }
+    dirs.into_iter()
+        .map(|dir| dir.join(system::LIBCLANG))
+        .find(|path| path.is_file())
+}
+
+/// Whether Apple's Command Line Tools, or Xcode, can compile.
+#[cfg(not(windows))]
+fn command_line_tools() -> bool {
+    Command::new("xcode-select")
+        .arg("-p")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
+        .is_some_and(|developer| {
+            developer.join("usr/bin/clang").is_file()
+                || developer
+                    .join("Toolchains/XcodeDefault.xctoolchain/usr/bin/clang")
+                    .is_file()
+        })
+}
+
 /// A Visual Studio with the C++ build tools.
+#[cfg(windows)]
 fn visual_studio() -> Option<PathBuf> {
     let program_files = std::env::var("ProgramFiles(x86)").ok()?;
     let vswhere = Path::new(&program_files).join("Microsoft Visual Studio\\Installer\\vswhere.exe");
@@ -1642,7 +2036,7 @@ fn visual_studio() -> Option<PathBuf> {
         "-property",
         "installationPath",
     ]);
-    hide_window(&mut command);
+    isolate(&mut command);
     let output = command.output().ok()?;
     String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -1672,7 +2066,7 @@ fn check_space(path: &Path, needed: u64) -> Result<()> {
 }
 
 #[cfg(not(windows))]
-use self::other::{Job, free_space, run_elevated};
+use self::other::{Job, free_space};
 #[cfg(windows)]
 use self::windows_impl::{Job, free_space, run_elevated};
 
@@ -1800,25 +2194,51 @@ mod windows_impl {
 
 #[cfg(not(windows))]
 mod other {
-    use anyhow::{Result, bail};
-    use std::path::Path;
+    use anyhow::Result;
+    use std::{path::Path, process::Command, sync::Mutex};
 
-    pub struct Job;
+    /// The process groups of running tools, stopped together.
+    pub struct Job(Mutex<Vec<u32>>);
 
     impl Job {
         pub fn new() -> Result<Self> {
-            Ok(Self)
+            Ok(Self(Mutex::new(Vec::new())))
         }
-        pub fn assign(&self, _: &std::process::Child) {}
-        pub fn terminate(&self) {}
+        pub fn assign(&self, child: &std::process::Child) {
+            if let Ok(mut groups) = self.0.lock() {
+                groups.push(child.id());
+            }
+        }
+        pub fn terminate(&self) {
+            for group in self
+                .0
+                .lock()
+                .map(|groups| groups.clone())
+                .unwrap_or_default()
+            {
+                let _ = Command::new("kill")
+                    .args(["-KILL", &format!("-{group}")])
+                    .status();
+            }
+        }
     }
 
-    pub fn free_space(_: &Path) -> Option<u64> {
-        None
-    }
-
-    pub fn run_elevated(_: &Path, _: &str, _: &mut dyn FnMut()) -> Result<u32> {
-        bail!("Nightly builds are made on Windows")
+    /// Free space from `df`, in bytes.
+    pub fn free_space(path: &Path) -> Option<u64> {
+        let mut dir = path;
+        while !dir.exists() {
+            dir = dir.parent()?;
+        }
+        let output = Command::new("df").arg("-Pk").arg(dir).output().ok()?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        let kilobytes: u64 = text
+            .lines()
+            .nth(1)?
+            .split_whitespace()
+            .nth(3)?
+            .parse()
+            .ok()?;
+        Some(kilobytes * 1024)
     }
 }
 
@@ -1870,7 +2290,18 @@ mod tests {
             {"filename": "libclang-18.1.1-py2.py3-none-manylinux2010_x86_64.whl", "url": "l", "digests": {"sha256": "x"}},
             {"filename": "libclang-18.1.1-py2.py3-none-win_amd64.whl", "url": "w", "digests": {"sha256": "y"}},
         ]});
-        assert_eq!(windows_wheel(&pypi), Some(("w".into(), "y".into())));
+        assert_eq!(
+            wheel_for(&pypi, "win_amd64.whl"),
+            Some(("w".into(), "y".into()))
+        );
+        let pypi = serde_json::json!({"urls": [
+            {"filename": "libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl", "url": "l", "digests": {"sha256": "x"}},
+            {"filename": "libclang-18.1.1-1-py2.py3-none-macosx_11_0_arm64.whl", "url": "m", "digests": {"sha256": "z"}},
+        ]});
+        assert_eq!(
+            wheel_for(&pypi, "arm64.whl"),
+            Some(("m".into(), "z".into()))
+        );
     }
 
     #[test]
@@ -1936,6 +2367,15 @@ mod tests {
             change("Merge pull request #3 from fork: main"),
             Some(("other", "Merge pull request #3 from fork: main".into()))
         );
+    }
+    #[test]
+    fn only_node_versions_vite_runs_on_are_used() {
+        for version in ["v20.19.0", "v22.12.0", "v24.1.0", "23.0.0"] {
+            assert!(node_supported(version), "{version}");
+        }
+        for version in ["v20.18.1", "v21.7.3", "v22.11.0", "v18.20.0", "", "vx"] {
+            assert!(!node_supported(version), "{version}");
+        }
     }
     #[test]
     fn commits_are_full_hashes() {

@@ -1,4 +1,5 @@
 import { Check, CircleDashed, LoaderCircle, Minus, X } from "lucide-react";
+import { IS_MAC } from "./platform";
 import type { NightlyReport, NightlyStep } from "./types";
 
 /** How much of the whole build each step is, roughly by its time. */
@@ -84,13 +85,22 @@ export function NightlyDialog({
             <h3>SpotiFlex sets everything up itself</h3>
             <ul>
               <li>
-                Downloads Rust, Node.js and the other build tools into its own
-                folder, about 2 GB. Nothing else on your computer changes.
+                Uses the Rust, Node.js, CMake and libclang already on your
+                computer. Anything missing is downloaded into its own folder, up
+                to 2 GB, and nothing else on your computer changes.
               </li>
-              <li>
-                Installs Visual Studio&rsquo;s C++ build tools if they&rsquo;re
-                missing, about 6 GB. Windows asks for permission once.
-              </li>
+              {IS_MAC ? (
+                <li>
+                  Installs Apple&rsquo;s Command Line Tools if they&rsquo;re
+                  missing. macOS asks in a window of its own.
+                </li>
+              ) : (
+                <li>
+                  Installs Visual Studio&rsquo;s C++ build tools if
+                  they&rsquo;re missing, about 6 GB. Windows asks for permission
+                  once.
+                </li>
+              )}
               <li>
                 Builds SpotiFlex. The first build takes 15 to 40 minutes; music
                 keeps playing.

@@ -1465,6 +1465,7 @@ impl PlayerTrackLoader {
         };
 
         let mut decoder = Box::new(decoder);
+        decoder.set_gain(crate::local_file::local_gain(path));
         let normalisation_data = decoder.normalisation_data().unwrap_or_else(|| {
             warn!("Unable to get normalisation data, continuing with defaults.");
             NormalisationData::default()

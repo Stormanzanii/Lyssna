@@ -12,7 +12,10 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::{LazyLock, Mutex, OnceLock, RwLock},
+    sync::{
+        LazyLock, Mutex, OnceLock, RwLock,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::UNIX_EPOCH,
 };
 use symphonia::core::{
@@ -31,6 +34,11 @@ const COVER_LIMIT: usize = 16 * 1024 * 1024;
 /// Saved scan results; renamed when what a scan keeps changes, so every
 /// file is read again once.
 const INDEX_FILE: &str = "index-2.json";
+/// Spotify's songs play at their mastered level, commonly near this, so
+/// quieter local files are raised to it.
+const TARGET_LUFS: f64 = -10.0;
+/// The most a quiet file is raised; the limiter holds its peaks.
+const MAX_BOOST_DB: f64 = 12.0;
 /// The custom protocol that serves saved covers to the interface.
 pub const COVER_SCHEME: &str = "localcover";
 
@@ -43,6 +51,8 @@ struct Index {
 static INDEX: LazyLock<RwLock<Index>> = LazyLock::new(Default::default);
 /// One scan at a time; a newer request waits and replaces the result.
 static SCAN: Mutex<()> = Mutex::new(());
+/// Bumped by every rescan, so loudness measuring for an older one stops.
+static GENERATION: AtomicUsize = AtomicUsize::new(0);
 static LISTENER: OnceLock<Box<dyn Fn(usize) + Send + Sync>> = OnceLock::new();
 
 /// Called with the song count after each scan.
@@ -143,9 +153,10 @@ pub fn rescan(settings: &crate::config::Settings) {
     } else {
         Vec::new()
     };
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::spawn(move || {
-        let _scanning = SCAN.lock();
-        let index = scan(&folders);
+        let scanning = SCAN.lock();
+        let (index, kept) = scan(&folders);
         let count = index.tracks.len();
         let playable = index
             .paths
@@ -159,7 +170,73 @@ pub fn rescan(settings: &crate::config::Settings) {
         if let Some(listener) = LISTENER.get() {
             listener(count);
         }
+        drop(scanning);
+        measure(kept, generation);
     });
+}
+
+/// Measure the loudness of songs not measured yet, one by one in the
+/// background; each plays louder as soon as it is measured.
+fn measure(mut kept: Vec<Saved>, generation: usize) {
+    let mut changed = 0;
+    for index in 0..kept.len() {
+        if kept[index].loudness.is_some() {
+            continue;
+        }
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return;
+        }
+        let item = &mut kept[index];
+        let loudness = loudness(&item.path).unwrap_or_else(|error| {
+            log::warn!("Could not measure a local file's loudness: {error:#}");
+            TARGET_LUFS
+        });
+        item.loudness = Some(loudness);
+        librespot_playback::set_local_gain(item.path.clone(), boost(loudness));
+        changed += 1;
+        if changed % 20 == 0 {
+            store_measured(&kept, generation);
+        }
+    }
+    if changed > 0 {
+        store_measured(&kept, generation);
+    }
+}
+
+/// Saved unless a newer scan has started, which keeps its own list.
+fn store_measured(kept: &[Saved], generation: usize) {
+    let _scanning = SCAN.lock();
+    if GENERATION.load(Ordering::SeqCst) == generation {
+        let _ = store_saved(kept);
+    }
+}
+
+/// Integrated loudness (EBU R128, LUFS) of a file as the player plays it.
+fn loudness(path: &Path) -> Result<f64> {
+    use librespot_playback::decoder::{AudioDecoder, AudioPacket, SymphoniaDecoder};
+    let file = fs::File::open(path).context("Cannot open the file")?;
+    let mut hint = Hint::new();
+    if let Some(extension) = path.extension().and_then(|extension| extension.to_str()) {
+        hint.with_extension(extension);
+    }
+    let mut decoder = SymphoniaDecoder::new(file, hint).context("Cannot decode the file")?;
+    let mut meter = ebur128::EbuR128::new(2, librespot_playback::SAMPLE_RATE, ebur128::Mode::I)?;
+    let mut frames = Vec::new();
+    while let Some((_, packet)) = decoder.next_packet().context("Cannot decode the file")? {
+        if let AudioPacket::Samples(samples) = packet {
+            frames.clear();
+            frames.extend(samples.iter().map(|&sample| sample as f32));
+            meter.add_frames_f32(&frames)?;
+        }
+    }
+    let lufs = meter.loudness_global()?;
+    // Silence measures as -inf, which JSON cannot hold.
+    Ok(if lufs.is_finite() { lufs } else { -70.0 })
+}
+
+/// dB a file at `lufs` is raised; files at or above the target are kept.
+fn boost(lufs: f64) -> f64 {
+    (TARGET_LUFS - lufs).clamp(0.0, MAX_BOOST_DB)
 }
 
 /// What one file held when it was last read; unchanged files are not
@@ -171,9 +248,12 @@ struct Saved {
     modified: u64,
     track: Track,
     cover: Option<String>,
+    /// Integrated loudness in LUFS, once measured.
+    #[serde(default)]
+    loudness: Option<f64>,
 }
 
-fn scan(folders: &[PathBuf]) -> Index {
+fn scan(folders: &[PathBuf]) -> (Index, Vec<Saved>) {
     let saved: HashMap<PathBuf, Saved> = load_saved()
         .into_iter()
         .map(|item| (item.path.clone(), item))
@@ -202,6 +282,7 @@ fn scan(folders: &[PathBuf]) -> Index {
                     modified,
                     track,
                     cover,
+                    loudness: None,
                 },
                 Err(error) => {
                     log::warn!("Skipped a local file: {error:#}");
@@ -220,12 +301,15 @@ fn scan(folders: &[PathBuf]) -> Index {
                 width: None,
             }];
         }
+        if let Some(loudness) = item.loudness {
+            librespot_playback::set_local_gain(file.clone(), boost(loudness));
+        }
         index.paths.insert(track.uri.clone(), file);
         index.tracks.push(track);
         kept.push(item);
     }
     let _ = store_saved(&kept);
-    index
+    (index, kept)
 }
 
 /// Audio files under a folder; hidden and very deep folders are skipped.
@@ -492,6 +576,14 @@ mod tests {
         // Well inside the plugin's 64 KB line limit.
         assert!(data.len() < 20_000);
         assert!(small_jpeg(b"not a picture").is_none());
+    }
+
+    #[test]
+    fn only_quiet_files_are_raised_and_not_without_limit() {
+        assert_eq!(boost(-8.0), 0.0);
+        assert_eq!(boost(-10.0), 0.0);
+        assert!((boost(-16.0) - 6.0).abs() < 1e-9);
+        assert_eq!(boost(-40.0), MAX_BOOST_DB);
     }
 
     #[test]

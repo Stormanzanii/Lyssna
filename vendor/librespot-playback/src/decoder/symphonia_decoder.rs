@@ -23,6 +23,51 @@ pub struct SymphoniaDecoder {
     channels: usize,
     /// Local files at rates other than the player's 44.1 kHz.
     resampler: Option<Resampler>,
+    /// Quiet local files are raised toward Spotify's loudness.
+    limiter: Option<Limiter>,
+}
+
+/// A boost with an instant-attack limiter, so raised peaks stay below
+/// full scale instead of clipping.
+struct Limiter {
+    gain: f64,
+    /// Gain reduction now applied, 1 when none.
+    envelope: f64,
+    /// How far the reduction recovers each frame.
+    release: f64,
+}
+
+impl Limiter {
+    /// Peaks are held below -1 dBFS.
+    const CEILING: f64 = 0.891;
+
+    fn new(gain_db: f64) -> Self {
+        Self {
+            gain: 10f64.powf(gain_db / 20.0),
+            envelope: 1.0,
+            // Recovers over about 100 ms.
+            release: 1.0 - (-1.0 / (0.1 * f64::from(SAMPLE_RATE))).exp(),
+        }
+    }
+
+    fn process(&mut self, stereo: &mut [f64]) {
+        for frame in stereo.chunks_exact_mut(2) {
+            let peak = frame[0].abs().max(frame[1].abs()) * self.gain;
+            let wanted = if peak > Self::CEILING {
+                Self::CEILING / peak
+            } else {
+                1.0
+            };
+            self.envelope = if wanted < self.envelope {
+                wanted
+            } else {
+                self.envelope + (wanted - self.envelope) * self.release
+            };
+            for sample in frame {
+                *sample *= self.gain * self.envelope;
+            }
+        }
+    }
 }
 
 /// Linear resampling of stereo frames to the player's rate, carried across
@@ -146,7 +191,13 @@ impl SymphoniaDecoder {
             sample_buffer: None,
             channels,
             resampler,
+            limiter: None,
         })
+    }
+
+    /// Raise a local file by `gain_db`, limiting peaks. 0 leaves it as is.
+    pub fn set_gain(&mut self, gain_db: f64) {
+        self.limiter = (gain_db > 0.0 && gain_db.is_finite()).then(|| Limiter::new(gain_db));
     }
 
     pub fn normalisation_data(&mut self) -> Option<NormalisationData> {
@@ -322,10 +373,14 @@ impl AudioDecoder for SymphoniaDecoder {
                             .flat_map(|frame| [frame[0], frame[1]])
                             .collect(),
                     };
-                    let samples = AudioPacket::Samples(match self.resampler.as_mut() {
+                    let mut stereo = match self.resampler.as_mut() {
                         Some(resampler) => resampler.process(&stereo),
                         None => stereo,
-                    });
+                    };
+                    if let Some(limiter) = self.limiter.as_mut() {
+                        limiter.process(&mut stereo);
+                    }
+                    let samples = AudioPacket::Samples(stereo);
 
                     return Ok(Some((packet_position, samples)));
                 }
@@ -339,6 +394,25 @@ impl AudioDecoder for SymphoniaDecoder {
                 Err(err) => return Err(err.into()),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod limiter_tests {
+    use super::Limiter;
+
+    #[test]
+    fn quiet_audio_is_raised_and_peaks_stay_below_full_scale() {
+        let mut limiter = Limiter::new(6.0);
+        let mut quiet = vec![0.1; 8];
+        limiter.process(&mut quiet);
+        assert!(quiet.iter().all(|sample| (sample - 0.1995).abs() < 0.001));
+        let mut loud = vec![0.9, -0.9, 0.9, -0.9];
+        limiter.process(&mut loud);
+        assert!(
+            loud.iter()
+                .all(|sample| sample.abs() <= Limiter::CEILING + 1e-9)
+        );
     }
 }
 

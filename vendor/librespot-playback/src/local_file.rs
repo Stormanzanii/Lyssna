@@ -39,6 +39,24 @@ impl LocalFileLookup {
 
 static SHARED: LazyLock<RwLock<HashMap<SpotifyUri, PathBuf>>> = LazyLock::new(Default::default);
 
+static GAINS: LazyLock<RwLock<HashMap<PathBuf, f64>>> = LazyLock::new(Default::default);
+
+/// How many dB a local file is raised when it plays, measured by the
+/// application so quiet files match Spotify's songs.
+pub fn set_local_gain(path: PathBuf, gain_db: f64) {
+    if let Ok(mut gains) = GAINS.write() {
+        gains.insert(path, gain_db);
+    }
+}
+
+pub(crate) fn local_gain(path: &Path) -> f64 {
+    GAINS
+        .read()
+        .ok()
+        .and_then(|gains| gains.get(path).copied())
+        .unwrap_or(0.0)
+}
+
 /// Replace the local files every player can load, so folders chosen while
 /// running play without a new player.
 pub fn set_local_files(files: HashMap<SpotifyUri, PathBuf>) {

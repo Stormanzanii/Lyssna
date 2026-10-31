@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { nightlyProgress } from "./nightly-dialog";
 import type { NightlyReport } from "./types";
 
@@ -33,9 +34,16 @@ export function NightlyButton({
   const percent = report?.running
     ? Math.round(nightlyProgress(report) * 100)
     : 0;
-  // A tag under the button shows an automatic build without covering the
-  // app; the update prompt opens once it is ready.
+  // A tag under the button tells of a build without covering the app: for
+  // five seconds when it starts, then while the button is hovered.
   const tag = building ? `Building update · ${percent}%` : null;
+  const [announcing, setAnnouncing] = useState(false);
+  useEffect(() => {
+    if (!building) return;
+    setAnnouncing(true);
+    const timer = setTimeout(() => setAnnouncing(false), 5000);
+    return () => clearTimeout(timer);
+  }, [building]);
   const label = ready
     ? "Restart to update"
     : building
@@ -65,7 +73,10 @@ export function NightlyButton({
         <span className="nightly-restart-label">Restart to update</span>
       </button>
       {tag && (
-        <button className="nightly-tag" onClick={onShow}>
+        <button
+          className={`nightly-tag${announcing ? " shown" : ""}`}
+          onClick={onShow}
+        >
           {tag}
         </button>
       )}

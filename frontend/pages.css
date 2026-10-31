@@ -1363,8 +1363,29 @@
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+  transform: translate(-50%, -4px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Shown for a moment when a build starts, then only on hover. */
+.nightly-tag.shown,
+.nightly-wrap:hover .nightly-tag,
+.nightly-wrap:focus-within .nightly-tag {
   transform: translateX(-50%);
-  animation: nightly-tag-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Bridges the gap so the pointer can move from the ring to the tag. */
+.nightly-wrap:has(.nightly-tag)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 8px;
 }
 .nightly-tag::before {
   content: "";
@@ -1375,12 +1396,6 @@
 }
 .nightly-tag:hover {
   background: #333;
-}
-@keyframes nightly-tag-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -4px);
-  }
 }
 @keyframes nightly-ready-pop {
   0% {

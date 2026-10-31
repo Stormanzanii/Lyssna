@@ -14165,7 +14165,14 @@ test("switching to Nightly shows the build on the top bar at once", async ({
     }),
   );
   await expect(ring).toBeVisible();
-  await page.getByRole("button", { name: /Building update · / }).click();
+  // The tag tells of the build for five seconds, then only on hover.
+  const tag = page.getByRole("button", { name: /Building update · / });
+  await expect(tag).toHaveCSS("opacity", "1");
+  await page.mouse.move(4, 400);
+  await expect(tag).toHaveCSS("opacity", "0", { timeout: 7000 });
+  await ring.hover();
+  await expect(tag).toHaveCSS("opacity", "1");
+  await tag.click();
   const dialog = page.getByRole("alertdialog", { name: "Building Nightly" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Hide" }).click();
@@ -14364,8 +14371,10 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   await expect(
     prompt.getByRole("progressbar", { name: "Building update" }),
   ).toHaveAttribute("aria-valuenow", /^[1-9]/);
-  // Minimised while it builds; once ready the button offers the restart.
-  await prompt.getByRole("button", { name: "Minimise", exact: true }).click();
+  // Kept in the background while it builds; once ready the button offers the restart.
+  await prompt
+    .getByRole("button", { name: "Keep in background", exact: true })
+    .click();
   await expect(prompt).toBeHidden();
   await page.evaluate(() =>
     (window as any).__clientTest.emit({

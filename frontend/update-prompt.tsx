@@ -182,7 +182,9 @@ export function UpdatePrompt({
           disabled={requested === "install"}
           onClick={dismiss}
         >
-          {downloading || requested === "download" ? "Minimise" : "Not now"}
+          {downloading || requested === "download"
+            ? "Keep in background"
+            : "Not now"}
         </button>
         <button
           className="pill primary"

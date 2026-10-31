@@ -1,5 +1,5 @@
-//! `lyssna://` links: a song to play, or an album, playlist or artist to
-//! open, as `spotify:` links open Spotify. A link comes from a browser or
+//! `lyssna://` links: a song, album, playlist or artist to open, as
+//! `spotify:` links open Spotify. None starts playback. A link comes from a browser or
 //! another app, so only well-formed IDs are taken from it.
 use serde::Serialize;
 use std::sync::Mutex;
@@ -10,8 +10,9 @@ pub const SCHEME: &str = "lyssna";
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "value", rename_all = "lowercase")]
 pub enum Link {
-    /// Play a song by its `spotify:track:` URI.
-    Play(String),
+    /// Show a song by its `spotify:track:` URI: its album opens with it
+    /// selected.
+    Song(String),
     /// Open a page by its route, as `album:<id>`.
     Open(String),
     /// Only bring Lyssna to the front.
@@ -32,7 +33,7 @@ pub fn parse(text: &str) -> Option<Link> {
     let (kind, id) = rest.split_once(['/', ':'])?;
     let spotify_id = id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric());
     match kind {
-        "track" if spotify_id => Some(Link::Play(format!("spotify:track:{id}"))),
+        "track" if spotify_id => Some(Link::Song(format!("spotify:track:{id}"))),
         "album" | "playlist" | "artist" if spotify_id => Some(Link::Open(format!("{kind}:{id}"))),
         // Usernames are older than Spotify IDs and may hold `.`, `_` and `-`.
         "user"
@@ -131,8 +132,8 @@ mod tests {
     const ID: &str = "4uLU6hMCjMI75M1A2tKUQC";
 
     #[test]
-    fn links_play_songs_and_open_pages() {
-        let play = Some(Link::Play(format!("spotify:track:{ID}")));
+    fn links_open_songs_and_pages() {
+        let play = Some(Link::Song(format!("spotify:track:{ID}")));
         assert_eq!(parse(&format!("lyssna://track/{ID}")), play);
         assert_eq!(parse(&format!("lyssna:track:{ID}")), play);
         assert_eq!(parse(&format!("lyssna://track/{ID}/?si=abc")), play);

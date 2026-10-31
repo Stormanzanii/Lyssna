@@ -14409,24 +14409,33 @@ test("with automatic builds off, a new Nightly turns the button blue instead of 
   ).toBeEnabled();
 });
 
-test("lyssna:// links play songs and open pages", async ({ page }) => {
+test("lyssna:// links open songs and pages without playing", async ({
+  page,
+}) => {
   await startClient(page);
+  // A song link opens its album with the song selected; the album is
+  // looked up natively before the interface takes the link.
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
-    host.link = { kind: "play", value: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" };
+    host.link = {
+      kind: "open",
+      value: "album:0000000000000000000abc",
+      select: "spotify:track:item30",
+    };
     host.emit({ type: "link" });
   });
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (window as any).__clientTest.commands.some(
-          (call: any) =>
-            call.command === "player" &&
-            call.args?.request?.uri === "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
-        ),
+  const row = page.locator('.track-row[data-uri="spotify:track:item30"]');
+  await expect(row).toHaveClass(/selected/);
+  await expect(row).toBeInViewport();
+  await expect(page.locator(".track-row.selected")).toHaveCount(1);
+  expect(
+    await page.evaluate(() =>
+      (window as any).__clientTest.commands.some(
+        (call: any) =>
+          call.command === "player" && call.args?.request?.command === "play",
       ),
-    )
-    .toBe(true);
+    ),
+  ).toBe(false);
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
     host.link = { kind: "open", value: "album:4uLU6hMCjMI75M1A2tKUQC" };

@@ -722,6 +722,8 @@ function App() {
     [call],
   );
   const navigateRef = useRef(navigate);
+  /** A song a `lyssna://` link named, to select once its album lists it. */
+  const linkedSong = useRef<string | null>(null);
   navigateRef.current = navigate;
   // Songs found in Local Files folders, for Your Library's row.
   const [localCount, setLocalCount] = useState(0);
@@ -1951,16 +1953,15 @@ function App() {
       saveRecentSearches(account, next);
       return next;
     });
-  // `lyssna://` links play a song or open a page, as Spotify's own do;
-  // one that opened Lyssna waits until it is signed in and ready.
+  // `lyssna://` links open a page, as Spotify's own do, and never start
+  // playback. A song opens its album with the song selected. One that
+  // opened Lyssna waits until it is signed in and ready.
   useEffect(() => {
     if (!state.profile || !state.native_ready) return;
-    rpc<{ kind: "play" | "open"; value: string } | null>("take_link")
+    rpc<{ kind: "open"; value: string; select?: string } | null>("take_link")
       .then((link) => {
         if (!link) return;
-        if (link.kind === "play") {
-          playRef.current({ command: "play", uri: link.value });
-        } else if (link.value.startsWith("user:")) {
+        if (link.value.startsWith("user:")) {
           const user = link.value.slice(5);
           profileTrail.current = [];
           setProfileView({ user, hint: { id: user } });
@@ -1968,9 +1969,12 @@ function App() {
         } else {
           setCenter("browse");
           navigateRef.current(link.value);
+          // Opening a page clears the selection, so the song is picked
+          // once its album has listed it.
+          linkedSong.current = link.select ?? null;
         }
       })
-      .catch(() => {});
+      .catch((error) => notify(String(error), true));
   }, [state.profile?.id, state.native_ready, linkSignal]);
   const openRecentSearch = (item: RecentSearch) => {
     setSearchFocused(false);
@@ -2584,6 +2588,23 @@ function App() {
   };
   const listedRef = useRef(listedTracks);
   listedRef.current = listedTracks;
+  useEffect(() => {
+    const uri = linkedSong.current;
+    const index = uri
+      ? listedTracks.findIndex((track) => track.uri === uri)
+      : -1;
+    if (!uri || index < 0) return;
+    linkedSong.current = null;
+    setSelected(new Set([uri]));
+    selectAnchor.current = index;
+    requestAnimationFrame(() =>
+      mainScroll.current
+        ?.querySelector<HTMLElement>(
+          `.track-row[data-uri="${CSS.escape(uri)}"]`,
+        )
+        ?.scrollIntoView({ block: "center" }),
+    );
+  }, [listedTracks]);
   const anySelected = selected.size > 0;
   useEffect(() => {
     if (!anySelected) return;
@@ -3707,6 +3728,7 @@ function App() {
                                     : undefined
                                 }
                                 aria-selected={selected.has(track.uri)}
+                                data-uri={track.uri}
                                 className={`track-row ${current ? "playing" : ""} ${selected.has(track.uri) ? "selected" : ""} ${track.unavailable ? "unavailable" : ""} ${reorderable && dropAt === index ? "drop-before" : ""} ${reorderable && dropAt === displayTracks.length && index === displayTracks.length - 1 ? "drop-after" : ""}`}
                                 key={`${track.uri}-${index}`}
                                 draggable={reorderable}

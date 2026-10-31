@@ -4185,8 +4185,8 @@ fn memory_target(window: &tauri::WebviewWindow, low: bool) {
 fn memory_target(_window: &tauri::WebviewWindow, _low: bool) {}
 /// Hidden windows stop compositing like minimized ones; audio is native and
 /// keeps playing.
-/// Act on a `lyssna://` link: show Lyssna, and let the interface play
-/// or open what it names once signed in and ready.
+/// Act on a `lyssna://` link: show Lyssna, and let the interface open
+/// what it names once signed in and ready.
 fn follow_link(app: &tauri::AppHandle, link: crate::links::Link) {
     if let Some(window) = app.get_webview_window("main") {
         set_window_shown(&window, true);
@@ -4197,10 +4197,40 @@ fn follow_link(app: &tauri::AppHandle, link: crate::links::Link) {
         let _ = app.emit("lyssna", json!({"type":"link"}));
     }
 }
-/// The `lyssna://` link waiting to be acted on, taken once.
+/// The `lyssna://` link waiting to be acted on, taken once. A song opens
+/// its album with the song selected, so its album is looked up here.
 #[tauri::command]
-fn take_link() -> Option<crate::links::Link> {
-    crate::links::take().filter(|link| *link != crate::links::Link::Show)
+async fn take_link(
+    state: State<'_, Desktop>,
+) -> std::result::Result<Option<serde_json::Value>, String> {
+    let Some(link) = crate::links::take().filter(|link| *link != crate::links::Link::Show) else {
+        return Ok(None);
+    };
+    let crate::links::Link::Song(uri) = link else {
+        return Ok(Some(json!(link)));
+    };
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    let controls = state.0.controls.scoped(&account).map_err(error)?;
+    let song = uri.clone();
+    let album = tauri::async_runtime::spawn_blocking(move || controls.resolve(&[song]))
+        .await
+        .map_err(error)?
+        .map_err(error)?
+        .into_iter()
+        .next()
+        .and_then(|track| track.album.id)
+        .context("Spotify couldn't find that song")
+        .map_err(error)?;
+    Ok(Some(
+        json!({"kind": "open", "value": format!("album:{album}"), "select": uri}),
+    ))
 }
 fn set_window_shown(window: &tauri::WebviewWindow, shown: bool) {
     #[cfg(windows)]

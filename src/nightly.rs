@@ -416,6 +416,8 @@ struct Tools {
     node: Option<Node>,
     rust_home: PathBuf,
     cargo_home: PathBuf,
+    /// The folder with `cargo`, and `rustup` when Rust came with it.
+    rust_bin: PathBuf,
     toolchain: Option<String>,
     target: PathBuf,
     commit: Option<String>,
@@ -598,10 +600,19 @@ impl<F: Fn(&Report)> Run<F> {
         fs::create_dir_all(&tools_dir)?;
         fs::create_dir_all(&downloads)?;
         let own_rust = installed_rustup();
-        (self.tools.rust_home, self.tools.cargo_home) = own_rust
-            .clone()
-            .unwrap_or_else(|| (tools_dir.join("rustup"), tools_dir.join("cargo")));
-        if let Some((rust_home, _)) = &own_rust {
+        (
+            self.tools.rust_home,
+            self.tools.cargo_home,
+            self.tools.rust_bin,
+        ) = own_rust.clone().unwrap_or_else(|| {
+            let cargo_home = tools_dir.join("cargo");
+            (
+                tools_dir.join("rustup"),
+                cargo_home.clone(),
+                cargo_home.join("bin"),
+            )
+        });
+        if let Some((rust_home, ..)) = &own_rust {
             self.log(&format!("Using your rustup in {}", rust_home.display()));
         }
         self.tools.target = root.join("target");
@@ -901,81 +912,93 @@ impl<F: Fn(&Report)> Run<F> {
         self.tools.commit = Some(commit.clone());
         self.set("source", State::Done);
 
-        // A private Rust, at the version the source asks for.
-        let toolchain = rust_version(&source)?;
+        // Rust already installed when it is new enough for the source, else
+        // the version the source asks for.
+        let required = rust_version(&source)?;
         // Named for this system, so a rustup set to another host (as GNU
         // on Windows) still builds with the right one.
-        let toolchain = format!("{toolchain}-{}", system::HOST);
-        let rustup = self
-            .tools
-            .cargo_home
-            .join("bin")
-            .join(format!("rustup{EXE}"));
-        self.set("rust", State::Running);
-        if !rustup.is_file() {
-            let init = downloads.join(format!("rustup-init{EXE}"));
-            let url = format!("{RUSTUP_DIST}/{}/rustup-init{EXE}", system::HOST);
-            let hash = get_text(&client, &format!("{url}.sha256"))?;
-            let hash = hash
-                .split_whitespace()
-                .next()
-                .unwrap_or_default()
-                .to_owned();
-            self.download(&client, "rust", &url, &init, Some(&hash))?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(&init, fs::Permissions::from_mode(0o755))?;
+        let toolchain = format!("{required}-{}", system::HOST);
+        let rustup = self.tools.rust_bin.join(format!("rustup{EXE}"));
+        if !rustup.is_file()
+            && let Some((bin, version)) = installed_rust(&required)
+        {
+            // Rust without rustup, as Homebrew installs it.
+            self.log(&format!("Using Rust at {} ({version})", bin.display()));
+            self.tools.rust_bin = bin;
+            self.set("rust", State::Skipped);
+        } else if rustup.is_file()
+            && let Some(installed) = self.installed_toolchain(&rustup, &required)
+        {
+            self.log(&format!("Using your Rust toolchain {installed}"));
+            self.tools.toolchain = Some(installed);
+            self.set("rust", State::Skipped);
+        } else {
+            self.set("rust", State::Running);
+            if !rustup.is_file() {
+                let init = downloads.join(format!("rustup-init{EXE}"));
+                let url = format!("{RUSTUP_DIST}/{}/rustup-init{EXE}", system::HOST);
+                let hash = get_text(&client, &format!("{url}.sha256"))?;
+                let hash = hash
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned();
+                self.download(&client, "rust", &url, &init, Some(&hash))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&init, fs::Permissions::from_mode(0o755))?;
+                }
+                self.command(
+                    "rust",
+                    &init,
+                    &[
+                        "-y",
+                        "--no-modify-path",
+                        "--default-toolchain",
+                        "none",
+                        "--profile",
+                        "minimal",
+                        "--default-host",
+                        system::HOST,
+                    ],
+                    None,
+                    Box::new(|_: &str| None),
+                    1,
+                )?;
+                let _ = fs::remove_file(&init);
             }
-            self.command(
-                "rust",
-                &init,
-                &[
-                    "-y",
-                    "--no-modify-path",
-                    "--default-toolchain",
-                    "none",
-                    "--profile",
-                    "minimal",
-                    "--default-host",
-                    system::HOST,
-                ],
-                None,
-                Box::new(|_: &str| None),
-                1,
-            )?;
-            let _ = fs::remove_file(&init);
+            self.tools.toolchain = Some(toolchain.clone());
+            if !self.succeeds(&rustup, &["run", &toolchain, "rustc", "--version"]) {
+                let mut components = 0.0;
+                self.command(
+                    "rust",
+                    &rustup,
+                    &[
+                        "toolchain",
+                        "install",
+                        &toolchain,
+                        "--profile",
+                        "minimal",
+                        "--no-self-update",
+                    ],
+                    None,
+                    Box::new(move |line: &str| {
+                        // Three components, each downloaded then installed.
+                        if line.contains("downloading component")
+                            || line.contains("installing component")
+                        {
+                            components += 1.0;
+                            Some(components / 6.0)
+                        } else {
+                            None
+                        }
+                    }),
+                    3,
+                )?;
+            }
+            self.set("rust", State::Done);
         }
-        self.tools.toolchain = Some(toolchain.clone());
-        if !self.succeeds(&rustup, &["run", &toolchain, "rustc", "--version"]) {
-            let mut components = 0.0;
-            self.command(
-                "rust",
-                &rustup,
-                &[
-                    "toolchain",
-                    "install",
-                    &toolchain,
-                    "--profile",
-                    "minimal",
-                    "--no-self-update",
-                ],
-                None,
-                Box::new(move |line: &str| {
-                    // Three components, each downloaded then installed.
-                    if line.contains("downloading component")
-                        || line.contains("installing component")
-                    {
-                        components += 1.0;
-                        Some(components / 6.0)
-                    } else {
-                        None
-                    }
-                }),
-                3,
-            )?;
-        }
-        self.set("rust", State::Done);
 
         // The interface.
         let node = self.tools.node.clone().context("No Node.js")?;
@@ -1016,11 +1039,7 @@ impl<F: Fn(&Report)> Run<F> {
 
         // SpotiFlex itself: packages first, so a dropped connection never
         // costs a compile, then the build.
-        let cargo = self
-            .tools
-            .cargo_home
-            .join("bin")
-            .join(format!("cargo{EXE}"));
+        let cargo = self.tools.rust_bin.join(format!("cargo{EXE}"));
         let lock = fs::read_to_string(source.join("Cargo.lock")).unwrap_or_default();
         let crates = lock.matches("source = \"registry+").count().max(1) as f64;
         let units = lock.matches("[[package]]").count().max(1) as f64;
@@ -1280,7 +1299,7 @@ impl<F: Fn(&Report)> Run<F> {
                 command.env(name, value);
             }
         }
-        let mut path: Vec<PathBuf> = vec![self.tools.cargo_home.join("bin")];
+        let mut path: Vec<PathBuf> = vec![self.tools.rust_bin.clone()];
         path.extend(
             self.tools
                 .node
@@ -1455,6 +1474,41 @@ impl<F: Fn(&Report)> Run<F> {
     }
 
     /// Whether a quick command succeeds.
+    /// A toolchain the user's rustup already has for this system that is new
+    /// enough for the source, the newest first.
+    fn installed_toolchain(&self, rustup: &Path, required: &str) -> Option<String> {
+        let list = self
+            .output(rustup, &["toolchain", "list"], Duration::from_secs(30))
+            .ok()?;
+        let mut found: Vec<(Vec<u32>, String)> = list
+            .lines()
+            .filter_map(|line| line.split_whitespace().next())
+            .filter(|name| name.ends_with(system::HOST))
+            .filter_map(|name| {
+                let version = self
+                    .output(
+                        rustup,
+                        &["run", name, "rustc", "--version"],
+                        Duration::from_secs(30),
+                    )
+                    .ok()?;
+                let version = version.trim();
+                rust_new_enough(version, required).then(|| {
+                    let number = version
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap_or_default()
+                        .split('.')
+                        .filter_map(|part| part.parse().ok())
+                        .collect();
+                    (number, name.to_owned())
+                })
+            })
+            .collect();
+        found.sort();
+        found.pop().map(|(_, name)| name)
+    }
+
     fn succeeds(&self, program: &Path, args: &[&str]) -> bool {
         let mut command = Command::new(program);
         self.environment(&mut command);
@@ -1875,19 +1929,51 @@ fn isolate(command: &mut Command) {
     let _ = command;
 }
 
-/// The user's own rustup and its homes, when Rust is installed with it.
-fn installed_rustup() -> Option<(PathBuf, PathBuf)> {
+/// The user's own rustup, its homes and the folder with its programs, when
+/// Rust is installed with it: in Cargo's folder, or elsewhere on PATH (as
+/// Homebrew's rustup).
+fn installed_rustup() -> Option<(PathBuf, PathBuf, PathBuf)> {
     let home = directories::BaseDirs::new()?.home_dir().to_path_buf();
     let cargo_home =
         std::env::var_os("CARGO_HOME").map_or_else(|| home.join(".cargo"), PathBuf::from);
     let rust_home =
         std::env::var_os("RUSTUP_HOME").map_or_else(|| home.join(".rustup"), PathBuf::from);
-    (cargo_home
-        .join("bin")
-        .join(format!("rustup{EXE}"))
-        .is_file()
-        && rust_home.is_dir())
-    .then_some((rust_home, cargo_home))
+    if !rust_home.is_dir() {
+        return None;
+    }
+    let bin = Some(cargo_home.join("bin"))
+        .filter(|bin| bin.join(format!("rustup{EXE}")).is_file())
+        .or_else(|| {
+            installed("rustup")
+                .and_then(|rustup| rustup.parent().map(Path::to_path_buf))
+                .filter(|bin| bin.join(format!("cargo{EXE}")).is_file())
+        })?;
+    Some((rust_home, cargo_home, bin))
+}
+
+/// Rust installed without rustup, as Homebrew's, when it builds the source.
+fn installed_rust(required: &str) -> Option<(PathBuf, String)> {
+    let bin = installed("cargo")?.parent()?.to_path_buf();
+    let version = version_of(&bin.join(format!("rustc{EXE}")))?;
+    rust_new_enough(&version, required).then_some((bin, version))
+}
+
+/// Whether `rustc --version` output is a stable Rust at least `required`.
+fn rust_new_enough(output: &str, required: &str) -> bool {
+    let parse = |version: &str| -> Option<Vec<u32>> {
+        version.split('.').map(|part| part.parse().ok()).collect()
+    };
+    let Some(version) = output
+        .strip_prefix("rustc ")
+        .and_then(|rest| rest.split_whitespace().next())
+    else {
+        return false;
+    };
+    // Beta and nightly compilers may build differently; only releases.
+    match (parse(version), parse(required)) {
+        (Some(version), Some(required)) => version >= required,
+        _ => false,
+    }
 }
 
 /// A program on PATH or in the folders it is usually installed in, which
@@ -2377,6 +2463,19 @@ mod tests {
             Some(("other", "Merge pull request #3 from fork: main".into()))
         );
     }
+    #[test]
+    fn installed_rust_is_reused_when_it_is_a_new_enough_release() {
+        let output = "rustc 1.99.1 (abcdef012 2026-10-01)";
+        assert!(rust_new_enough(output, "1.98.0"));
+        assert!(rust_new_enough("rustc 1.98.0 (x 2026-08-01)", "1.98.0"));
+        assert!(!rust_new_enough("rustc 1.97.2 (x 2026-07-01)", "1.98.0"));
+        assert!(!rust_new_enough(
+            "rustc 1.99.0-nightly (x 2026-09-01)",
+            "1.98.0"
+        ));
+        assert!(!rust_new_enough("cargo 1.99.0", "1.98.0"));
+    }
+
     #[test]
     fn only_node_versions_vite_runs_on_are_used() {
         for version in ["v20.19.0", "v22.12.0", "v24.1.0", "23.0.0"] {

@@ -14335,6 +14335,19 @@ test("the Nightly button shows a building update, then restarts into it", async 
   await expect(prompt).toBeHidden();
   await page.getByRole("button", { name: "Building update · 55%" }).click();
   await expect(prompt).toBeVisible();
+  // The build can be stopped from the prompt.
+  await prompt
+    .getByRole("button", { name: "Cancel build", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) => call.command === "nightly_cancel",
+        ),
+      ),
+    )
+    .toBe(true);
   // Clicking outside the prompt hides it.
   await page.mouse.click(4, 4);
   await expect(prompt).toBeHidden();

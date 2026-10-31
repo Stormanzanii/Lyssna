@@ -42,6 +42,12 @@ export function UpdatePrompt({
   const report = nightly && state.nightly?.running ? state.nightly : undefined;
   const step = report?.steps.find((item) => item.state === "running");
   const percent = report ? Math.round(nightlyProgress(report) * 100) : 0;
+  const building =
+    nightly &&
+    !ready &&
+    (!!report ||
+      status.startsWith("Building update") ||
+      requested === "download");
   const open =
     enabled &&
     !!version &&
@@ -177,6 +183,17 @@ export function UpdatePrompt({
               : status)}
       </p>
       <div className="inline-actions">
+        {building && (
+          <button
+            className="pill outline"
+            onClick={() => {
+              void rpc("nightly_cancel");
+              setRequested(undefined);
+            }}
+          >
+            Cancel build
+          </button>
+        )}
         <button
           className="pill outline"
           disabled={requested === "install"}

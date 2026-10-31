@@ -14011,3 +14011,31 @@ test("Local Files sits in Your Library with its song count", async ({
     )
     .toContain("local");
 });
+
+test("a local song has no About the artist card", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await startClient(page);
+  await page.evaluate(
+    ({ track, playback }) => {
+      const local = {
+        ...track,
+        id: undefined,
+        uri: "spotify:local:Jeff+Guo:Album:Song:200",
+        artists: [{ name: "Jeff Guo", uri: "" }],
+        is_local: true,
+        on_disk: true,
+      };
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: { ...playback, item: local, is_playing: true },
+        observed_at: Date.now(),
+        changed: true,
+      });
+    },
+    { track, playback: emptyState.playback },
+  );
+  await expect(page.locator(".now-playing .now-artists")).toContainText(
+    "Jeff Guo",
+  );
+  await expect(page.locator(".now-playing .artist-card")).toHaveCount(0);
+});

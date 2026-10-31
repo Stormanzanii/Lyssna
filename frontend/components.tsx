@@ -2133,7 +2133,10 @@ export function NowPlaying({
   canvasInLyrics?: boolean;
 } & Links) {
   const track = state.playback.item;
-  const listed = state.details.artists[0] ?? track?.artists[0];
+  // Local songs have no Spotify artist, so no About the artist card.
+  const listed = track?.is_local
+    ? undefined
+    : (state.details.artists[0] ?? track?.artists[0]);
   // About details arrive by artist, often before the song's details, and
   // for upcoming songs ahead of time.
   const about = listed?.id ? state.artist_about[listed.id] : undefined;

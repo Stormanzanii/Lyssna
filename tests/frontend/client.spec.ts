@@ -14137,6 +14137,42 @@ test("Nightly sets itself up and shows each step's progress", async ({
   await expect.poll(() => calls("nightly_build")).toBe(2);
 });
 
+test("switching to Nightly shows the build on the top bar at once", async ({
+  page,
+}) => {
+  await startClient(page);
+  const ring = page.getByRole("button", { name: /Building Nightly update/ });
+  await expect(ring).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "nightly",
+      report: {
+        running: true,
+        finished: false,
+        error: null,
+        note: null,
+        log: null,
+        steps: [
+          {
+            id: "rust",
+            label: "Rust",
+            state: "running",
+            progress: 0.2,
+            detail: null,
+          },
+        ],
+      },
+    }),
+  );
+  await expect(ring).toBeVisible();
+  await page.getByRole("button", { name: /Building update · / }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Building Nightly" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Hide" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(ring).toBeVisible();
+});
+
 test("the Nightly button shows a building update, then restarts into it", async ({
   page,
 }) => {

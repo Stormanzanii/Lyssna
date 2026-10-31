@@ -155,6 +155,7 @@ import {
 import { useAppFonts } from "./custom-fonts";
 import { UpdatePrompt } from "./update-prompt";
 import { NightlyButton } from "./nightly-button";
+import { NightlyDialog } from "./nightly-dialog";
 import { GlassBackdrop } from "./liquid-glass";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
@@ -660,6 +661,10 @@ function App() {
   );
   // A Nightly copy gets a button that looks for newer Nightly code.
   const [nightlyCommit, setNightlyCommit] = useState<string | null>(null);
+  // The first Nightly build, started from Settings, shows on the top bar
+  // from the moment it is confirmed; clicking it shows its progress.
+  const switchingToNightly = !nightlyCommit && !!state.nightly?.running;
+  const [firstBuildOpen, setFirstBuildOpen] = useState(false);
   const [checkingNightly, setCheckingNightly] = useState(false);
   useEffect(() => {
     void rpc<{ commit: string | null }>("nightly_status")
@@ -2810,14 +2815,17 @@ function App() {
           </div>
         </div>
         <div className="top-actions">
-          {nightlyCommit && state.settings.update_channel === "nightly" && (
+          {((nightlyCommit && state.settings.update_channel === "nightly") ||
+            switchingToNightly) && (
             <NightlyButton
               status={state.update_status}
               report={state.nightly}
               checking={checkingNightly}
               onCheck={() => void checkNightly()}
               onShow={() =>
-                window.dispatchEvent(new Event("spotiflex:show-update"))
+                switchingToNightly
+                  ? setFirstBuildOpen(true)
+                  : window.dispatchEvent(new Event("spotiflex:show-update"))
               }
               onRestart={() => void call("app_update", { action: "install" })}
             />
@@ -5511,6 +5519,16 @@ function App() {
         enabled={sessionScreen(state) !== "restoring"}
         current={nightlyCommit}
       />
+      {firstBuildOpen && switchingToNightly && (
+        <NightlyDialog
+          report={state.nightly ?? null}
+          starting={false}
+          onStart={() => void call("nightly_build")}
+          onCancelBuild={() => void call("nightly_cancel")}
+          onHide={() => setFirstBuildOpen(false)}
+          onLog={() => void call("nightly_log")}
+        />
+      )}
       {state.toast && (
         <div
           className={`toast ${state.toast.error ? "error" : ""}`}

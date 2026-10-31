@@ -1292,7 +1292,7 @@ impl SpircTask {
             }
             SpircCommand::Activate if !self.connect_state.is_active() => {
                 trace!("Received SpircCommand::{cmd:?}");
-                self.handle_activate();
+                self.handle_activate(true);
                 return self.notify().await;
             }
             SpircCommand::Transfer(..) | SpircCommand::Activate => {
@@ -1713,7 +1713,7 @@ impl SpircTask {
             }
             Play(mut play) => {
                 if !self.connect_state.is_active() {
-                    self.handle_activate()
+                    self.handle_activate(false)
                 }
 
                 let context = match play.context.uri {
@@ -1882,7 +1882,7 @@ impl SpircTask {
             }
         };
 
-        self.handle_activate();
+        self.handle_activate(true);
 
         let timestamp = self.now_ms();
         let state = &mut self.connect_state;
@@ -2012,7 +2012,7 @@ impl SpircTask {
 
         self.set_jam_phase(JamPhase::Following);
         if !self.connect_state.is_active() {
-            self.handle_activate();
+            self.handle_activate(true);
         }
         // A Connect transfer still resolving would replace the Jam's queue.
         self.transfer_state = None;
@@ -2167,7 +2167,9 @@ impl SpircTask {
         }
     }
 
-    fn handle_activate(&mut self) {
+    /// `modes`: announce shuffle and repeat. A load announces its own once
+    /// applied, so announcing the reset ones first would flicker them off.
+    fn handle_activate(&mut self, modes: bool) {
         self.connect_state.set_active(true);
         self.player
             .emit_session_connected_event(self.session.connection_id(), self.session.username());
@@ -2187,13 +2189,15 @@ impl SpircTask {
         self.player
             .emit_filter_explicit_content_changed_event(self.session.filter_explicit_content());
 
-        self.player
-            .emit_shuffle_changed_event(self.connect_state.shuffling_context());
+        if modes {
+            self.player
+                .emit_shuffle_changed_event(self.connect_state.shuffling_context());
 
-        self.player.emit_repeat_changed_event(
-            self.connect_state.repeat_context(),
-            self.connect_state.repeat_track(),
-        );
+            self.player.emit_repeat_changed_event(
+                self.connect_state.repeat_context(),
+                self.connect_state.repeat_track(),
+            );
+        }
     }
 
     async fn handle_load(
@@ -2376,7 +2380,7 @@ impl SpircTask {
         options: &LoadRequestOptions,
     ) -> Result<bool, Error> {
         if !self.connect_state.is_active() {
-            self.handle_activate();
+            self.handle_activate(false);
         }
 
         let update_context = if autoplay {

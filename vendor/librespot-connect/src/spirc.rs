@@ -1311,11 +1311,11 @@ impl SpircTask {
             SpircCommand::Play => self.handle_play(),
             SpircCommand::PlayPause => self.handle_play_pause(),
             SpircCommand::Pause => self.handle_pause(),
-            SpircCommand::Prev => self.handle_prev()?,
-            SpircCommand::Next => self.handle_next(None)?,
+            SpircCommand::Prev => self.handle_prev(true)?,
+            SpircCommand::Next => self.handle_next(None, true)?,
             // Skipping toward a track that is not coming up would never stop.
             SpircCommand::NextTo(uri) if self.connect_state.has_next_track(&uri) => {
-                self.handle_next(Some(uri))?
+                self.handle_next(Some(uri), true)?
             }
             SpircCommand::NextTo(uri) => warn!("{uri} is not coming up; not skipping"),
             SpircCommand::VolumeUp => self.handle_volume_up(),
@@ -1383,7 +1383,7 @@ impl SpircTask {
                     .repeat_track()
                     .then(|| self.connect_state.current_track(|t| t.uri.clone()));
 
-                self.handle_next(next_track)?
+                self.handle_next(next_track, false)?
             }
             PlayerEvent::Loading { .. } => match self.play_status {
                 SpircPlayStatus::LoadingPlay { position_ms } => {
@@ -1458,7 +1458,7 @@ impl SpircTask {
             PlayerEvent::Unavailable { track_id, .. } => {
                 self.handle_unavailable(&track_id)?;
                 if self.connect_state.current_track(|t| &t.uri) == &track_id.to_uri() {
-                    self.handle_next(None)?
+                    self.handle_next(None, false)?
                 }
             }
             _ => return Ok(()),
@@ -1810,8 +1810,8 @@ impl SpircTask {
                     self.connect_state.set_mode(mode, value);
                 }
             }
-            SkipNext(skip_next) => self.handle_next(skip_next.track.map(|t| t.uri))?,
-            SkipPrev(_) => self.handle_prev()?,
+            SkipNext(skip_next) => self.handle_next(skip_next.track.map(|t| t.uri), true)?,
+            SkipPrev(_) => self.handle_prev(true)?,
             Resume(_) if matches!(self.play_status, SpircPlayStatus::Stopped) => {
                 self.load_track(true, 0)?
             }
@@ -2753,8 +2753,11 @@ impl SpircTask {
         self.context_resolver.add(resolve);
     }
 
-    fn handle_next(&mut self, track_uri: Option<String>) -> Result<(), Error> {
-        let continue_playing = self.connect_state.is_playing();
+    /// `play`: a skip the listener asked for starts the next song even when
+    /// paused, as Spotify's clients do; one that follows a song ending or
+    /// failing keeps the current play state.
+    fn handle_next(&mut self, track_uri: Option<String>, play: bool) -> Result<(), Error> {
+        let continue_playing = play || self.connect_state.is_playing();
 
         let current_uri = self.connect_state.current_track(|t| &t.uri);
         let mut has_next_track =
@@ -2783,9 +2786,10 @@ impl SpircTask {
         }
     }
 
-    fn handle_prev(&mut self) -> Result<(), Error> {
+    fn handle_prev(&mut self, play: bool) -> Result<(), Error> {
         // Previous behaves differently based on the position
-        // Under 3s it goes to the previous song (starts playing)
+        // Under 3s it goes to the previous song (starts playing when the
+        // listener asked, even if paused)
         // Over 3s it seeks to zero (retains previous play status)
         if self.position() < 3000 {
             let repeat_context = self.connect_state.repeat_context();
@@ -2795,7 +2799,7 @@ impl SpircTask {
                     self.connect_state.reset_playback_to_position(None)?;
                     self.handle_stop()
                 }
-                Some(_) => self.load_track(self.connect_state.is_playing(), 0)?,
+                Some(_) => self.load_track(play || self.connect_state.is_playing(), 0)?,
             }
         } else {
             self.handle_seek(0);

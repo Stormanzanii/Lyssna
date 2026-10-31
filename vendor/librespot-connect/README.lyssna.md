@@ -17,3 +17,5 @@ Queue snapshots also emit after the current selection resolves, before its playe
 Lyssna also exposes the account-local Connect cluster snapshot already received by device discovery. This supplies remote playback state without public Web API polling. No new subscription, credentials or network listener is added. Remote command payloads are independently constructed against librespot's MIT-licensed dealer protocol definitions; no other project source is copied.
 
 DJ speaks each introduction once: going back to a song it introduced plays the song alone. The same song introduced anew in a later set still speaks.
+
+Skipping forward or back to another song starts it playing, even when paused, as Spotify's clients do. A song that ends or fails still moves on in the current play state, and going back to the start of the same song keeps it paused.

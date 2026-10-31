@@ -1122,7 +1122,19 @@ impl Backend {
                         let mut tracks = Vec::new();
                         let mut more = true;
                         let mut failure = None;
-                        let whole = read_all(&native, &key, offset);
+                        let mut whole = read_all(&native, &key, offset);
+                        // A page restored at launch can ask before Spotify's
+                        // connection is up; it is moments away, and far
+                        // quicker than paging the Web API.
+                        for _ in 0..40 {
+                            let connecting = matches!(&whole, Some(Err(error))
+                                if error.to_string().starts_with("Connect native audio"));
+                            if !connecting {
+                                break;
+                            }
+                            thread::sleep(Duration::from_millis(250));
+                            whole = read_all(&native, &key, offset);
+                        }
                         if let Some(Err(error)) = &whole {
                             crate::native::diagnostic(&format!(
                                 "browse whole read failed, paging instead: {error:#}"

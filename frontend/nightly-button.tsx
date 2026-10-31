@@ -51,6 +51,11 @@ export function NightlyButton({
     const timer = setTimeout(() => setAnnouncing(false), 5000);
     return () => clearTimeout(timer);
   }, [building]);
+  // Hover is tracked rather than left to CSS: a popup opened from the
+  // button covers it, and WebKit keeps it hovered until the pointer comes
+  // back. Focus shows the tag only from the keyboard, since closing a popup
+  // hands focus back to the button.
+  const [hovered, setHovered] = useState(false);
   const label = ready
     ? "Restart to update"
     : building
@@ -59,13 +64,21 @@ export function NightlyButton({
         ? "A newer Nightly is available"
         : "Check for a newer Nightly";
   return (
-    <span className="nightly-wrap">
+    <span
+      className="nightly-wrap"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
       <button
         className={`icon-button nightly-refresh${checking || building ? " checking" : ""}${building ? " building" : ""}${ready ? " ready" : ""}${available ? " available" : ""}`}
-        title={label}
+        // While building, the tag says it; a native tooltip would repeat it.
+        title={tag ? undefined : label}
         aria-label={label}
         disabled={checking && !building && !ready}
-        onClick={ready ? onRestart : building || available ? onShow : onCheck}
+        onClick={() => {
+          setHovered(false);
+          (ready ? onRestart : building || available ? onShow : onCheck)();
+        }}
       >
         {building && (
           <svg className="nightly-ring" viewBox="0 0 32 32" aria-hidden="true">
@@ -83,8 +96,11 @@ export function NightlyButton({
       </button>
       {tag && (
         <button
-          className={`nightly-tag${announcing ? " shown" : ""}`}
-          onClick={onShow}
+          className={`nightly-tag${announcing || hovered ? " shown" : ""}`}
+          onClick={() => {
+            setHovered(false);
+            onShow();
+          }}
         >
           {tag}
         </button>

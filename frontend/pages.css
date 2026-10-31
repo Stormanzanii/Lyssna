@@ -1386,8 +1386,7 @@
 }
 /* Shown for a moment when a build starts, then only on hover. */
 .nightly-tag.shown,
-.nightly-wrap:hover .nightly-tag,
-.nightly-wrap:focus-within .nightly-tag {
+.nightly-wrap:has(:focus-visible) .nightly-tag {
   transform: translateX(-50%);
   opacity: 1;
   pointer-events: auto;

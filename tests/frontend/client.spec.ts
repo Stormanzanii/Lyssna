@@ -14228,6 +14228,13 @@ test("switching to Nightly shows the build on the top bar at once", async ({
   await dialog.getByRole("button", { name: "Hide" }).click();
   await expect(dialog).toBeHidden();
   await expect(ring).toBeVisible();
+  // Closing the popup hands focus back, but the tag stays hidden, and the
+  // button has no native tooltip repeating it.
+  await page.mouse.move(4, 400);
+  await expect(tag).toHaveCSS("opacity", "0");
+  await expect(
+    page.getByRole("button", { name: /^Building Nightly update/ }),
+  ).not.toHaveAttribute("title");
 });
 
 test("Nightly's build cache can be cleared from Settings", async ({ page }) => {

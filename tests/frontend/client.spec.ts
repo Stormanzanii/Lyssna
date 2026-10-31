@@ -677,7 +677,9 @@ async function startClient(
             return test.jam ?? null;
           }
           if (command === "artist_discography")
-            return (window as any).__discography?.list ?? [];
+            return (window as any).__discography?.pending
+              ? new Promise(() => {})
+              : ((window as any).__discography?.list ?? []);
           if (command === "release_tracks")
             return (window as any).__discography?.tracks?.[args.id] ?? [[], {}];
           if (command === "liked_songs_count")
@@ -13295,6 +13297,31 @@ test("lyrics open on the current line instead of sliding up to it", async ({
   );
   expect(trace.at(-1)!).toBeGreaterThan(100);
   expect(Math.abs(trace[0] - trace.at(-1)!)).toBeLessThan(8);
+});
+
+test("the discography page shows the drawing mic while releases load", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__discography = { pending: true };
+  });
+  await startClient(page, "discography:0123456789abcdefghijkl");
+  const loading = page.getByRole("status", { name: "Loading releases" });
+  await expect(loading.locator("svg.mic-loader")).toBeVisible();
+  // The head runs its own loop round from the base.
+  await expect
+    .poll(() =>
+      loading
+        .locator("circle")
+        .evaluate((circle) => circle.getAnimations().length),
+    )
+    .toBe(1);
+  // Centred in the page below the header.
+  const page_ = await page.locator(".discography-page").boundingBox();
+  const mic = await loading.locator("svg").boundingBox();
+  expect(
+    Math.abs(mic!.x + mic!.width / 2 - (page_!.x + page_!.width / 2)),
+  ).toBeLessThan(2);
 });
 
 test("the discography page lists each release with its songs", async ({

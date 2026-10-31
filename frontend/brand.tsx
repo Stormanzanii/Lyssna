@@ -1,4 +1,5 @@
 // App mark and DJ artwork, drawn locally so no Spotify assets are bundled.
+import { useEffect, useRef } from "react";
 
 // Mirrors src/ui/icon_pixels.rs so the window icon and in-app mark match:
 // Lucide's MicVocal (ISC) in black on a Spotify-green disc, with strokes
@@ -32,6 +33,78 @@ export function Logo({ size = 28 }: { size?: number }) {
         ))}
         <circle cx={16} cy={7} r={5} />
       </g>
+    </svg>
+  );
+}
+
+/** Eased 0 to 1 by cubic-bezier(0.65, 0, 0.35, 1), the stem's easing. */
+function easeInOut(x: number) {
+  const clamped = Math.min(1, Math.max(0, x));
+  const curve = (t: number, a: number, b: number) =>
+    3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  let low = 0,
+    high = 1;
+  for (let step = 0; step < 24; step++) {
+    const middle = (low + high) / 2;
+    if (curve(middle, 0.65, 0.35) < clamped) low = middle;
+    else high = middle;
+  }
+  return curve((low + high) / 2, 0, 1);
+}
+/** The head's loop. It is closed, so its gap cannot slide off an end as
+ * the stem's does: both edges of the gap make the same eased trip round
+ * from the base, the redrawing edge a moment behind, so the gap opens and
+ * closes there. Dash plus gap is the circle's length, so the pattern wraps
+ * without a seam. */
+const HEAD_LAG = 0.22;
+const HEAD_FRAMES: Keyframe[] = Array.from({ length: 81 }, (_, index) => {
+  const t = index / 80;
+  const erased = easeInOut(t / (1 - HEAD_LAG));
+  const gap = erased - easeInOut((t - HEAD_LAG) / (1 - HEAD_LAG));
+  return {
+    offset: t,
+    strokeDasharray: `${1 - gap} ${gap}`,
+    strokeDashoffset: `${-erased}`,
+  };
+});
+
+/** Loading mark: the app's mic in white. A gap sweeps through the stem
+ * while the old line runs off its end and the next grows behind it, and
+ * the head opens and closes at its base, so the mic is never empty. */
+export function MicLoader({ size = 64 }: { size?: number }) {
+  const head = useRef<SVGCircleElement>(null);
+  useEffect(() => {
+    const circle = head.current;
+    if (!circle || circle.closest(".reduce-motion")) return;
+    const animation = circle.animate(HEAD_FRAMES, {
+      duration: 2600,
+      delay: 120,
+      iterations: Infinity,
+      fill: "backwards",
+    });
+    return () => animation.cancel();
+  }, []);
+  return (
+    <svg
+      className="mic-loader"
+      width={size}
+      height={size}
+      // Centred on the mic itself, as the logo is.
+      viewBox="1.41 -0.48 24 24"
+      aria-hidden="true"
+    >
+      {MIC_PATHS.map((d) => (
+        <path key={d} d={d} pathLength={1} />
+      ))}
+      {/* Starts where the stem meets the head. */}
+      <circle
+        ref={head}
+        cx={16}
+        cy={7}
+        r={5}
+        pathLength={1}
+        transform="rotate(137 16 7)"
+      />
     </svg>
   );
 }

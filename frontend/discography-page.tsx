@@ -1,3 +1,4 @@
+import { MicLoader } from "./brand";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Play } from "lucide-react";
 import { rpc } from "./bridge";
@@ -93,7 +94,13 @@ export function DiscographyPage({
       {error ? (
         <p className="discography-message">{error}</p>
       ) : !releases ? (
-        <p className="discography-message">Loading releases…</p>
+        <div
+          className="discography-loading"
+          role="status"
+          aria-label="Loading releases"
+        >
+          <MicLoader />
+        </div>
       ) : (
         shown.map((release, index) => (
           <DiscographyRelease

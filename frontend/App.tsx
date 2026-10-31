@@ -85,7 +85,7 @@ import {
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
-import { Logo } from "./brand";
+import { Logo, MicLoader } from "./brand";
 import { playingRoute } from "./playing-context";
 import {
   emptyState,
@@ -5510,7 +5510,7 @@ function App() {
           role="status"
           aria-label="Restoring session"
         >
-          <LoaderCircle className="spin" size={28} />
+          <MicLoader size={56} />
           <strong>Lyssna</strong>
           <span>Restoring session…</span>
         </div>

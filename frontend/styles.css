@@ -4426,6 +4426,34 @@ input[type="range"]:hover {
   background: #121212;
   color: #b3b3b3;
 }
+.mic-loader {
+  overflow: visible;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Lines 1.2 long with 0.8 gaps repeat every 2, so moving the pattern by 2
+   returns it to the start: the gap sweeps through each stroke, the old
+   line running off the end as the next grows behind it. The head's loop
+   runs in MicLoader. */
+.mic-loader > path {
+  stroke-dasharray: 1.2 0.8;
+  animation: mic-sweep 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes mic-sweep {
+  from {
+    stroke-dashoffset: 0.1;
+  }
+  to {
+    stroke-dashoffset: -1.9;
+  }
+}
+.reduce-motion .mic-loader > * {
+  animation: none;
+  stroke-dasharray: none;
+}
 .startup-screen strong {
   color: #fff;
   font-size: 22px;
@@ -6541,6 +6569,20 @@ input[type="range"]:hover {
 }
 .discography-filter-menu button[aria-checked="true"] {
   color: #1ed760;
+}
+/* Releases still loading: the drawing mic, centred in the page below the
+   header. */
+.discography-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.discography-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding-bottom: 60px;
 }
 .discography-message {
   color: var(--muted);

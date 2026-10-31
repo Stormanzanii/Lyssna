@@ -2849,6 +2849,7 @@ fn nightly_build(
                     log::warn!("Cannot save the Nightly channel: {error:#}");
                 }
             }
+            hand_over_playback(&inner);
             match updater::relaunch() {
                 Ok(()) => app.exit(0),
                 Err(error) => {
@@ -2859,6 +2860,38 @@ fn nightly_build(
     )
     .map(|()| true)
     .map_err(error)
+}
+/// Before an update restarts SpotiFlex: save exactly where the song is, and
+/// whether it is playing here, so the new copy carries on from that spot.
+fn hand_over_playback(inner: &Inner) {
+    let Ok(snapshot) = inner.snapshot.lock() else {
+        return;
+    };
+    let Some(profile) = snapshot.profile.as_ref() else {
+        return;
+    };
+    let mut playback = snapshot.playback.clone();
+    let playing = playback.is_playing
+        && playback.device.name == native::device_name()
+        && playback.item.as_ref().is_some_and(|track| !track.is_local);
+    if playing {
+        playback.progress_ms = Some(
+            playback.progress_ms.unwrap_or_default()
+                + now_ms().saturating_sub(snapshot.observed_at),
+        );
+    }
+    if let Err(error) = crate::resume::save(&profile.id, &playback, now_ms(), true) {
+        log::warn!("Cannot save the song before restarting: {error:#}");
+    }
+    updater::keep_playing(playing);
+}
+/// Whether this copy was restarted by an update mid-song and should play on,
+/// once the song is restored; answers true only once.
+#[tauri::command]
+fn resume_after_restart(state: State<'_, Desktop>) -> bool {
+    lock(&state.0.snapshot)
+        .is_ok_and(|snapshot| snapshot.native_ready && snapshot.playback.item.is_some())
+        && updater::resumes_playing()
 }
 /// The commits a new Nightly brings, one per line.
 fn nightly_notes() -> String {
@@ -4074,7 +4107,10 @@ fn app_update(
                 Ok(())
             }
             "install" => crate::nightly::install_ready()
-                .and_then(|()| updater::relaunch())
+                .and_then(|()| {
+                    hand_over_playback(&state.0);
+                    updater::relaunch()
+                })
                 .map(|()| app.exit(0))
                 .map_err(error),
             _ => Err("Unknown update action".into()),
@@ -4091,11 +4127,13 @@ fn app_update(
                     .clone()
                     .context("No update available")?,
             ),
-            "install" => updater::Command::Install(
-                lock(&state.0.ready_update)?
+            "install" => {
+                let update = lock(&state.0.ready_update)?
                     .take()
-                    .context("Update is not downloaded yet")?,
-            ),
+                    .context("Update is not downloaded yet")?;
+                hand_over_playback(&state.0);
+                updater::Command::Install(update)
+            }
             _ => anyhow::bail!("Unknown update action"),
         };
         state.0.update_commands.send(command)?;
@@ -4398,6 +4436,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            resume_after_restart,
             window_fullscreen,
             open_lyrics_popout,
             toggle_cinema_lyrics,

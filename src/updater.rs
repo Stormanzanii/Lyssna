@@ -34,6 +34,10 @@ pub const LOCAL_BUILD_MESSAGE: &str =
 const NIGHTLY_BUILD: bool = option_env!("SPOTIFLEX_NIGHTLY").is_some();
 /// Passed to a restarted copy so it starts once this one has exited.
 pub const AFTER_EXIT_ARG: &str = "--after-exit";
+/// Passed to a restarted copy when a song was playing, so it plays on.
+pub const RESUME_ARG: &str = "--resume-playing";
+static PLAYING: AtomicBool = AtomicBool::new(false);
+static RESUMED: AtomicBool = AtomicBool::new(false);
 /// Why automatic updates are off, if they are.
 pub const DISABLED: Option<&str> = disabled(SUPPORTED, LOCAL_BUILD);
 pub const PUBLIC_KEY: &str = include_str!("../config/update-public-key.base64");
@@ -330,11 +334,25 @@ fn newer(version: &str) -> Result<bool> {
 /// Start this executable again; the new copy waits for this one to exit,
 /// so it never finds it still running and hands over to it.
 pub fn relaunch() -> Result<()> {
-    std::process::Command::new(std::env::current_exe()?)
+    let mut command = std::process::Command::new(std::env::current_exe()?);
+    command
         .arg(AFTER_EXIT_ARG)
-        .arg(std::process::id().to_string())
-        .spawn()?;
+        .arg(std::process::id().to_string());
+    if PLAYING.load(Ordering::SeqCst) {
+        command.arg(RESUME_ARG);
+    }
+    command.spawn()?;
     Ok(())
+}
+
+/// Whether the copy started by `relaunch` should carry on playing.
+pub fn keep_playing(playing: bool) {
+    PLAYING.store(playing, Ordering::SeqCst);
+}
+
+/// Whether this copy was restarted mid-song and should play on; true once.
+pub fn resumes_playing() -> bool {
+    std::env::args().any(|argument| argument == RESUME_ARG) && !RESUMED.swap(true, Ordering::SeqCst)
 }
 
 /// In a relaunched copy, wait up to 20 seconds for the previous one to exit.

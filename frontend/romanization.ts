@@ -328,6 +328,54 @@ export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
   return changed ? { ...lyrics, lines, estimated_words: estimated } : lyrics;
 }
 
+type Waiting = { lyrics: Lyrics; done: (result: Lyrics) => void };
+let worker: Worker | null | undefined;
+let nextJob = 0;
+const jobs = new Map<number, Waiting>();
+/** The worker, started on first use; null where workers are unavailable. */
+function romanizer() {
+  if (worker !== undefined) return worker;
+  try {
+    worker =
+      typeof Worker === "function" && typeof window !== "undefined"
+        ? new Worker(new URL("./romanize-worker.ts", import.meta.url), {
+            type: "module",
+          })
+        : null;
+  } catch {
+    worker = null;
+  }
+  worker?.addEventListener(
+    "message",
+    (event: MessageEvent<{ id: number; lyrics: Lyrics | null }>) => {
+      const job = jobs.get(event.data.id);
+      jobs.delete(event.data.id);
+      job?.done(event.data.lyrics ?? job.lyrics);
+    },
+  );
+  // A worker that cannot start hands its songs back to this thread.
+  worker?.addEventListener("error", () => {
+    worker = null;
+    const waiting = [...jobs.values()];
+    jobs.clear();
+    for (const job of waiting)
+      void romanizeLyrics(job.lyrics)
+        .catch(() => job.lyrics)
+        .then(job.done);
+  });
+  return worker;
+}
+/** Converts in the worker when there is one, else on this thread. */
+function romanizeAway(lyrics: Lyrics): Promise<Lyrics> {
+  const thread = romanizer();
+  if (!thread) return romanizeLyrics(lyrics);
+  return new Promise((done) => {
+    const id = ++nextJob;
+    jobs.set(id, { lyrics, done });
+    thread.postMessage({ id, lyrics });
+  });
+}
+
 const ready = new WeakMap<Lyrics, Lyrics>();
 const started = new WeakSet<Lyrics>();
 const listeners = new Set<() => void>();
@@ -341,7 +389,7 @@ export function romanizedLyrics(lyrics: Lyrics): Lyrics {
   if (done) return done;
   if (!started.has(lyrics)) {
     started.add(lyrics);
-    void romanizeLyrics(lyrics)
+    void romanizeAway(lyrics)
       .catch(() => lyrics)
       .then((result) => {
         ready.set(lyrics, result);

@@ -68,6 +68,8 @@ export default defineConfig({
       ),
     },
   },
+  // Module workers can load the romanizers' chunks on demand.
+  worker: { format: "es" },
   clearScreen: false,
   server: {
     host: "127.0.0.1",

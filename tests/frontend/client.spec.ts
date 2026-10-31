@@ -14594,3 +14594,26 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   ).toBeVisible();
   await expect(prompt).toBeHidden();
 });
+
+test("panel scrollers keep only the overlay bar after switching pages", async ({
+  page,
+}) => {
+  await startClient(page);
+  const scroller = page.locator(".browse-scroll");
+  // Search and other pages share one scroller element with different classes.
+  await page.getByPlaceholder("What do you want to play?").click();
+  await page.keyboard.type("song");
+  await expect(page.locator(".browse-scroll.search-scroll")).toBeVisible();
+  await page
+    .locator(".library-item")
+    .filter({ hasText: "Liked Songs" })
+    .click();
+  await expect(page.locator(".track-row").first()).toBeVisible();
+  await expect(scroller).not.toHaveClass(/search-scroll/);
+  await expect(scroller).toHaveClass(/overlay-scrolled/);
+  expect(
+    await scroller.evaluate(
+      (element: HTMLElement) => element.offsetWidth - element.clientWidth,
+    ),
+  ).toBe(0);
+});

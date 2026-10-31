@@ -87,11 +87,20 @@ function attach(scroller: HTMLElement) {
   // Content growing (pages loading, rows rendering) changes the range.
   const content = new MutationObserver(schedule);
   content.observe(scroller, { childList: true, subtree: true });
+  // React rewrites className when the page switches (Search adds a class to
+  // the same scroller), which would drop this class and bring back the
+  // native bar beside the overlay thumb.
+  const restyled = new MutationObserver(() => {
+    if (!scroller.classList.contains("overlay-scrolled"))
+      scroller.classList.add("overlay-scrolled");
+  });
+  restyled.observe(scroller, { attributes: true, attributeFilter: ["class"] });
   measure();
   return () => {
     cancelAnimationFrame(frame);
     sizes.disconnect();
     content.disconnect();
+    restyled.disconnect();
     scroller.removeEventListener("scroll", schedule);
     scroller.classList.remove("overlay-scrolled");
     track.remove();

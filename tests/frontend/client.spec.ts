@@ -10978,7 +10978,7 @@ test("Your Library lists saved albums and followed artists", async ({
   // Mixed by Recents, not grouped by kind.
   const names = await library
     .locator(
-      ".library-list > .library-item strong, .library-list > div:not(.library-liked) .library-item strong",
+      ".library-list > .library-item strong, .library-list > div:not(.library-liked, .library-local) .library-item strong",
     )
     .allTextContents();
   expect(names.indexOf("Creepy Nuts")).toBeLessThan(
@@ -13964,4 +13964,26 @@ test("Listen on a creator profile plays the song in SpotiFlex", async ({
       command: "play",
       uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
     });
+});
+
+test("Local Files sits in Your Library with its song count", async ({
+  page,
+}) => {
+  await startClient(page);
+  const row = page.locator('[data-context-route="local"]');
+  await expect(row).toContainText("Local Files");
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({ type: "local_files", count: 3 }),
+  );
+  await expect(row).toContainText("Playlist · 3 tracks");
+  await row.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "browse")
+          .map((entry: any) => entry.args.key),
+      ),
+    )
+    .toContain("local");
 });

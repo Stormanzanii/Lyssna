@@ -93,6 +93,9 @@ pub struct Track {
     pub duration_ms: u64,
     #[serde(default)]
     pub is_local: bool,
+    /// A local song found in a Local Files folder, so it can play.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_disk: bool,
     /// Context (album, playlist, artist) a recently played track came from.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub played_context: String,

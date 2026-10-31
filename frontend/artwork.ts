@@ -22,6 +22,11 @@ const FAMILIES: [number, string][][] = [
     [300, "ab67706c0000da84"],
   ],
 ];
+/** A Local Files cover, served by SpotiFlex from the song's own picture. */
+export const isLocalCover = (url: string) =>
+  /^(http:\/\/localcover\.localhost|localcover:\/\/localhost)\/[0-9a-f]{64}\.(jpg|png)$/.test(
+    url,
+  );
 const IMAGE = "https://i.scdn.co/image/";
 const MOSAIC = /^https:\/\/mosaic\.scdn\.co\/(640|300|60)\//;
 
@@ -67,7 +72,8 @@ export function artworkFor(
     return images?.find(
       (image) =>
         image.url.startsWith("https://") ||
-        image.url.startsWith("data:image/jpeg;base64,"),
+        image.url.startsWith("data:image/jpeg;base64,") ||
+        isLocalCover(image.url),
     )?.url;
   return (sizes.find(([, size]) => size >= pixels) ?? sizes.at(-1)!)[0];
 }

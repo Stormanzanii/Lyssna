@@ -185,3 +185,21 @@ describe("date added", () => {
     expect(nextHeaderSort("added", "recent")).toBe("order");
   });
 });
+it("plays local songs found on this computer and skips missing ones", () => {
+  const found = {
+    ...tracks[1],
+    uri: "spotify:local:a:b:c:1",
+    is_local: true,
+    on_disk: true,
+  };
+  const missing = {
+    ...tracks[2],
+    uri: "spotify:local:x:y:z:2",
+    is_local: true,
+  };
+  expect(collectionQueue([tracks[0], missing, found], found, 2)).toEqual({
+    uris: ["a", found.uri],
+    offset: 1,
+  });
+  expect(collectionQueue([missing], missing)).toBeUndefined();
+});

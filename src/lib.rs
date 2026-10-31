@@ -24,6 +24,7 @@ pub mod home;
 pub mod jam;
 pub mod library_cache;
 pub mod library_items;
+pub mod local_files;
 pub mod lyric_sources;
 pub mod lyrics;
 #[cfg(feature = "desktop")]

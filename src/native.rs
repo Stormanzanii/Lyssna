@@ -1480,7 +1480,9 @@ pub(crate) fn queue_uri(uri: &str) -> Result<librespot_core::SpotifyUri> {
     anyhow::ensure!(
         matches!(
             parsed,
-            librespot_core::SpotifyUri::Track { .. } | librespot_core::SpotifyUri::Episode { .. }
+            librespot_core::SpotifyUri::Track { .. }
+                | librespot_core::SpotifyUri::Episode { .. }
+                | librespot_core::SpotifyUri::Local { .. }
         ),
         "Choose a Spotify track or episode to add to queue"
     );
@@ -1571,6 +1573,19 @@ fn public_track_change(event: &PlayerEvent) -> Option<crate::model::Track> {
     else {
         return None;
     };
+    // Local files carry their details from the folder scan, cover included.
+    if matches!(track_id, librespot_core::SpotifyUri::Local { .. }) {
+        let uri = track_id.to_uri();
+        return crate::local_files::track(&uri).or_else(|| {
+            Some(crate::model::Track {
+                name: audio_item.name.clone(),
+                duration_ms: audio_item.duration_ms.into(),
+                is_local: true,
+                uri,
+                ..crate::model::Track::default()
+            })
+        });
+    }
     let mut track = public_track(audio_item)?;
     // Metadata may describe an available alternative. Transport and queue
     // events still use the originally requested track, so keep that identity.

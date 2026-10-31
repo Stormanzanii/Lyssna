@@ -196,6 +196,7 @@ import {
   collectionTracks,
   genresFor,
   nextHeaderSort,
+  playable,
 } from "./collection";
 import {
   albumKind,
@@ -686,6 +687,18 @@ function App() {
     },
     [call],
   );
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  // Songs found in Local Files folders, for Your Library's row.
+  const [localCount, setLocalCount] = useState(0);
+  const hasProfile = !!state.profile;
+  useEffect(() => {
+    if (!hasProfile) return;
+    rpc<number>("local_files_count").then(
+      (count) => setLocalCount(count ?? 0),
+      () => undefined,
+    );
+  }, [hasProfile]);
   useEffect(() => {
     let disposed = false,
       unlisten: (() => void) | undefined;
@@ -704,6 +717,12 @@ function App() {
         // Listen on a creator's profile plays the song here.
         if (event.type === "play_uri") {
           playRef.current?.({ command: "play", uri: event.uri });
+          return;
+        }
+        // A folder scan finished: count the row and refresh the open page.
+        if (event.type === "local_files") {
+          setLocalCount(event.count);
+          if (routeRef.current === "local") navigateRef.current("local", false);
           return;
         }
         if (event.type === "canvas_prefetch") preloadCanvas(event.url);
@@ -1736,6 +1755,7 @@ function App() {
     ? state.route.slice(13)
     : "";
   const likedRoute = state.route === "liked" || !!likedArtist;
+  const localRoute = state.route === "local";
   const artistId = artistPage ? state.route.slice(7) : "";
   const [likedTotal, setLikedTotal] = useState<number>();
   useEffect(() => {
@@ -1814,11 +1834,13 @@ function App() {
         .flatMap((track) => track.artists)
         .find((artist) => artist.id === likedArtist)?.name);
   const artworkColor = useArtworkColor(
-    likedRoute ? undefined : imageOf(heroImages),
+    likedRoute || localRoute ? undefined : imageOf(heroImages),
   );
   const heroColor = likedRoute
     ? "rgb(80 56 160)"
-    : (artworkColor ?? "rgb(83 83 83)");
+    : localRoute
+      ? "rgb(36 56 110)"
+      : (artworkColor ?? "rgb(83 83 83)");
   const playlistInfo = entity?.playlist;
   const personalizedMix = playlistInfo?.format.startsWith("daily-mix");
   const listTotal =
@@ -1834,7 +1856,7 @@ function App() {
       ? exactList.ms
       : listTotal &&
           timed.length >= listTotal &&
-          (playlistInfo || state.route === "liked")
+          (playlistInfo || state.route === "liked" || localRoute)
         ? timed.reduce((sum, track) => sum + track.duration_ms, 0)
         : undefined;
   const heroSongCount = entity?.album?.total_tracks ?? listTotal;
@@ -1846,25 +1868,27 @@ function App() {
     playlist?.name ||
     (state.route === "liked"
       ? "Liked Songs"
-      : likedArtist
-        ? likedArtistName
-          ? `Liked Songs by ${likedArtistName}`
-          : "Liked Songs"
-        : state.route === "queue"
-          ? "Queue"
-          : state.route === "recent"
-            ? "Recently played"
-            : state.route.startsWith("search:")
-              ? `Results for “${state.route.slice(7)}”`
-              : state.route.startsWith("playlist:")
-                ? "Playlist"
-                : state.route.startsWith("artist:")
-                  ? state.playback.item?.artists.find(
-                      (artist) => artist.id === state.route.slice(7),
-                    )?.name || "Artist"
-                  : state.route.startsWith("album:")
-                    ? "Album"
-                    : "Good to see you");
+      : localRoute
+        ? "Local Files"
+        : likedArtist
+          ? likedArtistName
+            ? `Liked Songs by ${likedArtistName}`
+            : "Liked Songs"
+          : state.route === "queue"
+            ? "Queue"
+            : state.route === "recent"
+              ? "Recently played"
+              : state.route.startsWith("search:")
+                ? `Results for “${state.route.slice(7)}”`
+                : state.route.startsWith("playlist:")
+                  ? "Playlist"
+                  : state.route.startsWith("artist:")
+                    ? state.playback.item?.artists.find(
+                        (artist) => artist.id === state.route.slice(7),
+                      )?.name || "Artist"
+                    : state.route.startsWith("album:")
+                      ? "Album"
+                      : "Good to see you");
   const profileName = state.profile?.display_name || state.profile?.id || "You";
   const account = state.profile?.id ?? "";
   useEffect(() => setRecentSearches(loadRecentSearches(account)), [account]);
@@ -1899,7 +1923,7 @@ function App() {
       ? creatorProfile
       : undefined;
   const ownerName =
-    likedRoute || (ownerId && ownerId === state.profile?.id)
+    likedRoute || localRoute || (ownerId && ownerId === state.profile?.id)
       ? profileName
       : ownerId === "spotify"
         ? "Spotify"
@@ -1913,12 +1937,13 @@ function App() {
   const profileImage = useLoadedImage(imageOf(state.profile?.images));
   const ownerImage = useLoadedImage(
     imageOf(
-      likedRoute || ownerId === state.profile?.id
+      likedRoute || localRoute || ownerId === state.profile?.id
         ? state.profile?.images
         : creator?.images,
     ),
   );
-  const collection = likedRoute || state.route.startsWith("playlist:");
+  const collection =
+    likedRoute || localRoute || state.route.startsWith("playlist:");
   const collectionPlays =
     collection &&
     !likedRoute &&
@@ -1958,7 +1983,7 @@ function App() {
       : state.tracks;
   const playTrack = useCallback(
     (track: Track, index?: number) => {
-      if (track.is_local || track.unavailable) return;
+      if (!playable(track)) return;
       const current = stateRef.current;
       const complete = current.browse_info?.album
         ? { ...track, album: current.browse_info.album }
@@ -2149,9 +2174,7 @@ function App() {
     );
   };
   const playLiked = () => {
-    const first = displayTracks.find(
-      (track) => !track.is_local && !track.unavailable,
-    );
+    const first = displayTracks.find(playable);
     if (stateRef.current.route === "liked" && first)
       playTrack(first, displayTracks.indexOf(first));
     else {
@@ -2166,9 +2189,7 @@ function App() {
       likedPlay.current = false;
       return;
     }
-    const first = displayTracks.find(
-      (track) => !track.is_local && !track.unavailable,
-    );
+    const first = displayTracks.find(playable);
     if (!first) return;
     likedPlay.current = false;
     playTrack(first, displayTracks.indexOf(first));
@@ -2915,6 +2936,30 @@ function App() {
               {playingMark("liked")}
               {coverPlay("Liked Songs", playLiked, "liked")}
             </div>
+            {state.settings.show_local_files && (
+              <div
+                className="library-local"
+                hidden={!!openFolder || !showingPlaylists}
+              >
+                <button
+                  className={`library-item ${localRoute ? "current" : ""}`}
+                  data-context-route="local"
+                  data-context-name="Local Files"
+                  onClick={() => navigate("local")}
+                >
+                  <div className="liked-cover local-cover">
+                    <Folder size={22} fill="currentColor" />
+                  </div>
+                  <div>
+                    <strong>Local Files</strong>
+                    <small>
+                      Playlist · {localCount}{" "}
+                      {localCount === 1 ? "track" : "tracks"}
+                    </small>
+                  </div>
+                </button>
+              </div>
+            )}
             {openFolder ? (
               <>
                 {sortLibrary(openFolder.entries, librarySort, entryFacts).map(
@@ -3287,6 +3332,10 @@ function App() {
                         <div className="liked-cover hero-cover">
                           <Heart size={84} fill="currentColor" />
                         </div>
+                      ) : localRoute ? (
+                        <div className="liked-cover local-cover hero-cover">
+                          <Folder size={84} fill="currentColor" />
+                        </div>
                       ) : ownPlaylist && !artistPage ? (
                         // Like Spotify, your own playlist's cover opens Edit details.
                         <button
@@ -3425,10 +3474,7 @@ function App() {
                                 context: `spotify:${state.route}`,
                               });
                             else {
-                              const index = displayTracks.findIndex(
-                                (track) =>
-                                  !track.is_local && !track.unavailable,
-                              );
+                              const index = displayTracks.findIndex(playable);
                               if (index >= 0)
                                 playTrack(displayTracks[index], index);
                             }

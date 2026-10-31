@@ -12,7 +12,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { artworkFor } from "./artwork";
+import { artworkFor, isLocalCover } from "./artwork";
 import { LyricsCanvas } from "./canvas-lyrics";
 import { SpaceGravityLyrics } from "./space-gravity-lyrics";
 import { displayLyrics } from "./word-sync";
@@ -84,9 +84,12 @@ import { HighlighterWords, markerColour } from "./highlighter";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
 
-/** Artwork is HTTPS, or a local JPEG preview of a cover being saved. */
+/** Artwork is HTTPS, a local JPEG preview of a cover being saved, or a
+ * Local Files cover. */
 export const usableImage = (url: string) =>
-  url.startsWith("https://") || url.startsWith("data:image/jpeg;base64,");
+  url.startsWith("https://") ||
+  url.startsWith("data:image/jpeg;base64,") ||
+  isLocalCover(url);
 export const imageOf = (images?: { url: string }[]) =>
   images?.find((image) => usableImage(image.url))?.url;
 export const artistNames = (track?: Track) =>

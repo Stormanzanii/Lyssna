@@ -120,6 +120,15 @@ function writePlace(tab: Tab, scroll: number) {
 export const lastSettingsTab = (remember = true): Tab =>
   remember ? readPlace().tab : "General";
 
+/** Downloads and Music read as Spotify names them; other folders by path. */
+function localSourceName(path: string) {
+  const last = path.split(/[\\/]/).filter(Boolean).pop();
+  return last === "Downloads"
+    ? "Downloads"
+    : last === "Music"
+      ? "Music Library"
+      : path;
+}
 type Flag = {
   [K in keyof Settings]-?: Settings[K] extends boolean | undefined ? K : never;
 }[keyof Settings];
@@ -696,6 +705,84 @@ export function SettingsWindow({
           "Show Your Library as a narrow column of covers.",
           "compact library sidebar",
         ),
+        flag(
+          "show_local_files",
+          "Show Local Files",
+          "Songs on this computer appear in Your Library as Local Files.",
+          "local files mp3 flac folder computer",
+        ),
+        ...(settings.show_local_files
+          ? (settings.local_sources ?? []).map((source, index) => {
+              const name = localSourceName(source.path);
+              const sources = settings.local_sources ?? [];
+              return (
+                <SettingRow
+                  key={`local-${source.path}`}
+                  label={name}
+                  help={
+                    index === 0 ? "Show songs from these folders." : undefined
+                  }
+                  keywords={`local files source folder ${source.path}`}
+                >
+                  <span className="settings-local-source">
+                    {name === source.path ? (
+                      <button
+                        className="pill outline"
+                        onClick={() =>
+                          onSettings({
+                            local_sources: sources.filter(
+                              (item) => item.path !== source.path,
+                            ),
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                    <Toggle
+                      label={name}
+                      checked={source.enabled}
+                      onChange={(enabled) =>
+                        onSettings({
+                          local_sources: sources.map((item) =>
+                            item.path === source.path
+                              ? { ...item, enabled }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                  </span>
+                </SettingRow>
+              );
+            })
+          : []),
+        settings.show_local_files ? (
+          <SettingRow
+            key="local-add"
+            label="Add a source"
+            help="Choose a folder of music. Songs with a .ttml or .lrc file of the same name get those lyrics."
+            keywords="local files add source folder"
+          >
+            <button
+              className="pill outline"
+              onClick={async () => {
+                const path = await onCall<string | null>("pick_local_folder");
+                if (!path) return;
+                const sources = settings.local_sources ?? [];
+                onSettings({
+                  local_sources: sources.some((item) => item.path === path)
+                    ? sources.map((item) =>
+                        item.path === path ? { ...item, enabled: true } : item,
+                      )
+                    : [...sources, { path, enabled: true }],
+                });
+              }}
+            >
+              Add a source
+            </button>
+          </SettingRow>
+        ) : null,
         <SettingRow
           key="folders"
           stacked

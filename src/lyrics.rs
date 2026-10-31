@@ -858,6 +858,17 @@ fn fetch_from(
     if let Some(lyrics) = load_local_in(&root.join("local"), track) {
         return Ok(lyrics);
     }
+    // A local song's lyrics can sit beside it: song.ttml next to song.mp3.
+    if track.is_local
+        && let Some((name, text)) = crate::local_files::sidecar_lyrics(&track.uri)
+        && let Ok(lyrics) = if name.ends_with(".ttml") {
+            parse_ttml(&text, track.duration_ms)
+        } else {
+            parse_lrc(&text, track.duration_ms)
+        }
+    {
+        return Ok(lyrics);
+    }
     // Every enabled source is asked at once; the best answer in the chosen
     // order wins as soon as it is known, while slower sources finish in the
     // background and keep their own three-day cache.

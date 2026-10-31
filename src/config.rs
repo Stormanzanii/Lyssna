@@ -167,6 +167,10 @@ pub struct Settings {
     pub last_view: String,
     pub show_lyrics: bool,
     pub compact_library: bool,
+    /// Local Files appears in Your Library.
+    pub show_local_files: bool,
+    /// Folders whose songs Local Files shows, each switched on or off.
+    pub local_sources: Vec<LocalSource>,
     /// Your Library's dragged width; `None` keeps the responsive default.
     pub library_width: Option<u32>,
     /// Now playing's dragged width; `None` keeps the default.
@@ -334,6 +338,8 @@ impl Default for Settings {
             last_view: "home".into(),
             show_lyrics: true,
             compact_library: false,
+            show_local_files: true,
+            local_sources: LocalSource::defaults(),
             library_width: None,
             now_playing_width: None,
             library_sort: "recents".into(),
@@ -422,6 +428,31 @@ impl Default for Settings {
             spotify_plus: SpotifyPlus::default(),
             lyrics_animator: LyricsAnimator::default(),
         }
+    }
+}
+
+/// A folder Local Files reads songs from.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LocalSource {
+    pub path: String,
+    pub enabled: bool,
+}
+
+impl LocalSource {
+    /// Downloads and Music, listed but off, as Spotify lists them.
+    pub fn defaults() -> Vec<Self> {
+        let Some(dirs) = directories::UserDirs::new() else {
+            return Vec::new();
+        };
+        [dirs.download_dir(), dirs.audio_dir()]
+            .into_iter()
+            .flatten()
+            .map(|path| Self {
+                path: path.display().to_string(),
+                enabled: false,
+            })
+            .collect()
     }
 }
 

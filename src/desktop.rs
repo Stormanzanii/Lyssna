@@ -283,6 +283,11 @@ impl Desktop {
         crate::lyric_sources::set_prefer_apple(settings.lyrics_prefer_apple);
         crate::lyric_sources::set_musixmatch_words(!settings.lyrics_musixmatch_lines_only);
         crate::lyric_sources::load_musixmatch_token();
+        let scanned = app.clone();
+        crate::local_files::on_change(move |count| {
+            let _ = scanned.emit("spotiflex", json!({"type":"local_files","count":count}));
+        });
+        crate::local_files::rescan(&settings);
         let worker = Worker::start(notifier.clone());
         let updates = updater::Updater::start(notifier);
         let route = settings.last_view.clone();
@@ -1544,7 +1549,7 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::Logout).map_err(error)
 }
 fn valid_route(key: &str) -> bool {
-    if ["home", "liked", "queue", "recent", "whats-new"].contains(&key) {
+    if ["home", "liked", "local", "queue", "recent", "whats-new"].contains(&key) {
         return true;
     }
     if let Some(query) = key.strip_prefix("search:") {
@@ -1752,6 +1757,7 @@ fn page_kind(route: &str) -> &'static str {
         "album" => "album",
         "artist" => "artist",
         "liked" | "liked-artist" => "liked",
+        "local" => "local",
         "recent" => "recent",
         "queue" => "queue",
         "home" => "home",
@@ -1797,7 +1803,7 @@ fn local_load(action: PlayerAction, tracks: &[Track]) -> Result<PlayerAction> {
     if let PlayerAction::PlayContext { context, offset } = &action {
         let uris: Vec<_> = tracks
             .iter()
-            .filter(|track| !track.is_local && !track.unavailable)
+            .filter(|track| (!track.is_local || track.on_disk) && !track.unavailable)
             .map(|track| track.uri.clone())
             .take(LISTED_CONTEXT_LIMIT)
             .collect();
@@ -2323,6 +2329,8 @@ fn save_settings(
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
         let output_changed = settings.audio_output != snapshot.settings.audio_output;
+        let local_changed = settings.show_local_files != snapshot.settings.show_local_files
+            || settings.local_sources != snapshot.settings.local_sources;
         let sources_changed = settings.lyrics_source_order != snapshot.settings.lyrics_source_order
             || settings.lyrics_sources_disabled != snapshot.settings.lyrics_sources_disabled
             || settings.lyrics_prefer_apple != snapshot.settings.lyrics_prefer_apple
@@ -2354,7 +2362,11 @@ fn save_settings(
             crate::lyric_sources::normalize_order(&settings.lyrics_source_order);
         crate::config::clean_song_sorts(&mut settings.song_sorts);
         settings.lyrics_animator.clean();
+        settings.local_sources.dedup_by(|a, b| a.path == b.path);
         settings.save()?;
+        if local_changed {
+            crate::local_files::rescan(&settings);
+        }
         crate::lyric_sources::configure(
             &settings.lyrics_source_order,
             &settings.lyrics_sources_disabled,
@@ -2744,6 +2756,83 @@ fn signed_in_account(state: &State<'_, Desktop>) -> Result<String> {
         .context("Sign in first")?
         .id
         .clone())
+}
+/// Songs in Local Files, for Your Library's row.
+#[tauri::command]
+fn local_files_count() -> usize {
+    crate::local_files::count()
+}
+/// A folder for Local Files, chosen in the system's folder picker; `None`
+/// when the picker was closed.
+#[tauri::command]
+async fn pick_local_folder(
+    window: tauri::WebviewWindow,
+) -> std::result::Result<Option<String>, String> {
+    // The picker sits on SpotiFlex's window, so it opens in front of it.
+    #[cfg(windows)]
+    let owner = window
+        .hwnd()
+        .map(|hwnd| hwnd.0 as isize)
+        .unwrap_or_default();
+    #[cfg(not(windows))]
+    let owner = {
+        let _ = window;
+        0
+    };
+    tauri::async_runtime::spawn_blocking(move || pick_folder(owner))
+        .await
+        .map_err(|_| "Folder picker unavailable".to_owned())?
+        .map(|path| path.map(|path| path.display().to_string()))
+        .map_err(error)
+}
+#[cfg(windows)]
+fn pick_folder(owner: isize) -> Result<Option<std::path::PathBuf>> {
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+    let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+    let result = show_folder_picker(owner);
+    if initialized {
+        unsafe { CoUninitialize() };
+    }
+    result
+}
+#[cfg(windows)]
+fn show_folder_picker(owner: isize) -> Result<Option<std::path::PathBuf>> {
+    use windows::Win32::{
+        Foundation::HWND,
+        System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree},
+        UI::Shell::{
+            FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog, IFileOpenDialog,
+            SIGDN_FILESYSPATH,
+        },
+    };
+    unsafe {
+        let dialog: IFileOpenDialog =
+            CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+        dialog.SetOptions(dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)?;
+        // Closing the picker is an error from Show; it chose nothing.
+        if dialog.Show(Some(HWND(owner as *mut _))).is_err() {
+            return Ok(None);
+        }
+        let name = dialog.GetResult()?.GetDisplayName(SIGDN_FILESYSPATH)?;
+        let path = name.to_string();
+        CoTaskMemFree(Some(name.0 as *const _));
+        Ok(Some(path?.into()))
+    }
+}
+#[cfg(target_os = "macos")]
+fn pick_folder(_owner: isize) -> Result<Option<std::path::PathBuf>> {
+    let output = std::process::Command::new("osascript")
+        .args([
+            "-e",
+            "POSIX path of (choose folder with prompt \"Add a source\")",
+        ])
+        .output()?;
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    Ok((output.status.success() && !path.is_empty()).then(|| path.into()))
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+fn pick_folder(_owner: isize) -> Result<Option<std::path::PathBuf>> {
+    anyhow::bail!("Folder picking is not available on this system")
 }
 /// Songs in Liked Songs, for its header count and total length.
 #[tauri::command]
@@ -3931,6 +4020,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
                 .build(),
         )
+        // Local Files covers, saved from the songs' own pictures.
+        .register_uri_scheme_protocol(crate::local_files::COVER_SCHEME, |_, request| {
+            let name = request.uri().path().trim_start_matches('/').to_owned();
+            match crate::local_files::cover(&name) {
+                Some((bytes, mime)) => tauri::http::Response::builder()
+                    .header("Content-Type", mime)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Cache-Control", "max-age=31536000, immutable")
+                    .body(bytes)
+                    .unwrap_or_default(),
+                None => tauri::http::Response::builder()
+                    .status(404)
+                    .body(Vec::new())
+                    .unwrap_or_default(),
+            }
+        })
         .setup(|app| {
             // Nothing was running to quit: this copy has nothing to do.
             if std::env::args().any(|argument| argument == QUIT_ARG) {
@@ -4095,6 +4200,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             artist_liked_count,
             list_duration,
             liked_songs_count,
+            local_files_count,
+            pick_local_folder,
             delete_saved_lyrics,
             add_tracks,
             create_playlist,

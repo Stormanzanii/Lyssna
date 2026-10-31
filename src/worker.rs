@@ -1090,6 +1090,21 @@ impl Backend {
                     });
                     return Ok(());
                 }
+                // Local Files are read from this computer, all at once.
+                if key == "local" {
+                    self.emit(Event::Tracks {
+                        tracks: if offset == 0 {
+                            crate::local_files::tracks()
+                        } else {
+                            Vec::new()
+                        },
+                        more: false,
+                        key,
+                        offset,
+                        generation,
+                    });
+                    return Ok(());
+                }
                 // A playlist, Liked Songs or an album shows every song at once,
                 // like Spotify. After the first page, the rest load together on
                 // a background thread instead of one round trip per page.

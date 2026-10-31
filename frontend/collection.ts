@@ -17,12 +17,16 @@ function shuffleKey(seed: number, uri: string, index: number) {
   return hash >>> 0;
 }
 /** Keep displayed order and duplicate occurrences when starting a queue. */
+/** Spotify can play it, or it is a local song found on this computer. */
+export function playable(track: Track) {
+  return (!track.is_local || !!track.on_disk) && !track.unavailable;
+}
 export function collectionQueue(
   tracks: Track[],
   selected: Track,
   index?: number,
 ) {
-  if (selected.is_local || selected.unavailable) return;
+  if (!playable(selected)) return;
   let clicked =
     index !== undefined && tracks[index]?.uri === selected.uri
       ? index
@@ -30,12 +34,12 @@ export function collectionQueue(
   if (clicked < 0)
     clicked = tracks.findIndex((track) => track.uri === selected.uri);
   if (clicked < 0) return;
-  const playable = tracks
+  const rows = tracks
     .map((track, position) => ({ track, position }))
-    .filter(({ track }) => !track.is_local && !track.unavailable);
+    .filter(({ track }) => playable(track));
   return {
-    uris: playable.map(({ track }) => track.uri),
-    offset: playable.findIndex(({ position }) => position === clicked),
+    uris: rows.map(({ track }) => track.uri),
+    offset: rows.findIndex(({ position }) => position === clicked),
   };
 }
 /**

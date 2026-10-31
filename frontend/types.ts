@@ -61,6 +61,8 @@ export interface Track {
   album: Album;
   duration_ms: number;
   is_local: boolean;
+  /** A local song found in a Local Files folder, so it can play. */
+  on_disk?: boolean;
   played_context?: string;
   /** Spotify cannot play it for this account; shown dimmed, never started. */
   unavailable?: boolean;
@@ -132,6 +134,8 @@ export interface Settings {
   last_view: string;
   show_lyrics: boolean;
   compact_library: boolean;
+  show_local_files: boolean;
+  local_sources: { path: string; enabled: boolean }[];
   /** Your Library's dragged width, kept between launches. */
   library_width?: number | null;
   /** Now playing's dragged width, kept between launches. */
@@ -430,6 +434,7 @@ export type AppEvent =
   /** A Spicy Lyrics creator profile sheet opened or closed. */
   | { type: "creator_profile"; open: boolean }
   | { type: "play_uri"; uri: string }
+  | { type: "local_files"; count: number }
   | {
       /** A press on the taskbar buttons, media keys or the media flyout. */
       type: "media_control";

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { artworkFor } from "./artwork";
+import { artworkFor, isLocalCover } from "./artwork";
 
 const id = "b11c3ab5cb818192b7a61fdd";
 const album = [{ url: `https://i.scdn.co/image/ab67616d0000b273${id}` }];
@@ -32,4 +32,11 @@ it("uses listed widths, else the first secure image", () => {
     "https://image.example/one",
   );
   expect(artworkFor([])).toBeUndefined();
+});
+it("accepts Local Files covers served by SpotiFlex only", () => {
+  const cover = `http://localcover.localhost/${"a".repeat(64)}.jpg`;
+  expect(isLocalCover(cover)).toBe(true);
+  expect(artworkFor([{ url: cover }])).toBe(cover);
+  expect(isLocalCover("http://localcover.localhost/../index.json")).toBe(false);
+  expect(isLocalCover("http://example.com/cover.jpg")).toBe(false);
 });

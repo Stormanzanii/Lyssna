@@ -751,6 +751,11 @@
 .lyrics-settings-about-link:hover .lyrics-settings-about-hint {
   color: #fff;
 }
+.settings-local-source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .settings-folder-picks {
   display: flex;
   flex-wrap: wrap;

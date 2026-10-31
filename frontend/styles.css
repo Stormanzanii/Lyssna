@@ -390,7 +390,8 @@ small {
   opacity: 0;
   transition: opacity 0.12s;
 }
-.library-liked {
+.library-liked,
+.library-local {
   position: relative;
 }
 /* The playing playlist: green title and a speaker where the pin sits,
@@ -855,6 +856,11 @@ small {
   aspect-ratio: 1;
   color: #fff;
   flex-shrink: 0;
+}
+/* Local Files: Spotify's green folder on dark blue. */
+.liked-cover.local-cover {
+  background: #1e3264;
+  color: #1ed760;
 }
 .empty-library {
   font-size: 13px;

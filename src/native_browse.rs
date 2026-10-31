@@ -1565,12 +1565,13 @@ pub(crate) async fn resolve_tracks(session: &Session, uris: &[String]) -> Result
                 remember_track(&identity, uri, &track);
                 result.push(track);
             }
-            None => result.push(Track {
+            // A playlist's local song plays when it is in a Local Files folder.
+            None => result.push(crate::local_files::track(uri).unwrap_or_else(|| Track {
                 uri: uri.clone(),
                 name: "Unavailable track".into(),
                 is_local: true,
                 ..Track::default()
-            }),
+            })),
         }
     }
     Ok(result)

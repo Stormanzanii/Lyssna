@@ -135,6 +135,8 @@ export const emptyState: AppState = {
     last_view: "home",
     show_lyrics: true,
     compact_library: false,
+    show_local_files: true,
+    local_sources: [],
     lyric_size: 36,
     lyric_offset_ms: 0,
     romanized: false,
@@ -312,6 +314,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     // Played by App; nothing to keep.
     case "play_uri":
+    case "local_files":
       return state;
     case "creator_profile":
       return { ...state, creator_profile_open: action.open };

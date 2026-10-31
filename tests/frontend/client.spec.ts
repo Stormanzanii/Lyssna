@@ -704,6 +704,9 @@ async function startClient(
             return freed;
           }
           if (command === "test_audio_output") return true;
+          if (command === "nightly_status")
+            return { commit: null, report: null };
+          if (command === "nightly_build") return true;
           if (command === "musixmatch_token_saved")
             return !!host.__clientTest.musixmatchToken;
           if (command === "save_musixmatch_token") {
@@ -14040,45 +14043,91 @@ test("a local song has no About the artist card", async ({ page }) => {
   await expect(page.locator(".now-playing .artist-card")).toHaveCount(0);
 });
 
-test("Nightly asks first and lists what building it needs", async ({
+test("Nightly sets itself up and shows each step's progress", async ({
   page,
 }) => {
   await startClient(page);
   await openSettings(page, "Advanced");
   const version = page.getByRole("combobox", { name: "Version", exact: true });
   await expect(version.locator("option")).toHaveText(["Stable", "Nightly"]);
-  const channel = () =>
+  const calls = (command: string) =>
     page.evaluate(
-      () =>
-        (window as any).__clientTest.commands
-          .filter((entry: any) => entry.command === "save_settings")
-          .at(-1)?.args.settings.update_channel,
+      (name) =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === name,
+        ).length,
+      command,
     );
   await version.selectOption("nightly");
-  const prompt = page.getByRole("alertdialog", {
-    name: "Nightly builds come from source",
-  });
-  await expect(prompt).toContainText("Rust, installed with rustup");
-  await expect(prompt.locator("pre")).toContainText(
-    "git clone https://github.com/Stormanzanii/SpotiFlex",
-  );
-  await prompt.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(prompt).toBeHidden();
+  const dialog = page.getByRole("alertdialog", { name: "Switch to Nightly?" });
+  await expect(dialog).toContainText("Windows asks for permission once");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(version).toHaveValue("stable");
-  await expect(
-    page.getByRole("dialog", { name: "SpotiFlex settings" }),
-  ).toBeVisible();
+  expect(await calls("nightly_build")).toBe(0);
+
   await version.selectOption("nightly");
-  await prompt
-    .getByRole("button", { name: "Switch to Nightly", exact: true })
+  await dialog
+    .getByRole("button", { name: "Build Nightly", exact: true })
     .click();
-  await expect.poll(channel).toBe("nightly");
-  await expect(version).toHaveValue("nightly");
-  await openSettings(page, "General");
+  await expect.poll(() => calls("nightly_build")).toBe(1);
+  const step = (
+    id: string,
+    label: string,
+    state: string,
+    progress: number | null = null,
+    detail = "",
+  ) => ({ id, label, state, progress, detail });
+  const report = (steps: unknown[], extra = {}) =>
+    page.evaluate(
+      ({ steps, extra }) =>
+        (window as any).__clientTest.emit({
+          type: "nightly",
+          report: {
+            steps,
+            running: true,
+            error: null,
+            note: null,
+            finished: false,
+            log: "C:/nightly.log",
+            ...extra,
+          },
+        }),
+      { steps, extra },
+    );
+  await report([
+    step("cpp", "C++ build tools", "skipped"),
+    step("rust", "Rust", "running", 0.4, "info: downloading component 'rustc'"),
+    step("app", "Building SpotiFlex", "pending"),
+  ]);
+  const building = page.getByRole("alertdialog", { name: "Building Nightly" });
   await expect(
-    page.getByRole("button", { name: "Check for updates", exact: true }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("switch", { name: "Download updates automatically" }),
-  ).toHaveCount(0);
+    building.getByRole("progressbar", { name: "Rust" }),
+  ).toHaveAttribute("aria-valuenow", "40");
+  await expect(building).toContainText("Already there");
+  await expect(building).toContainText("downloading component");
+  await building.getByRole("button", { name: "Hide", exact: true }).click();
+  await expect(building).toBeHidden();
+  await expect(page.getByText(/Building Nightly · \d+%/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Show progress", exact: true })
+    .click();
+  await report(
+    [
+      step("cpp", "C++ build tools", "skipped"),
+      step("rust", "Rust", "done", 1),
+      step("app", "Building SpotiFlex", "failed", null, "error[E0308]"),
+    ],
+    { running: false, error: "cargo failed (exit code 101)" },
+  );
+  const stopped = page.getByRole("alertdialog", {
+    name: "Nightly build stopped",
+  });
+  await expect(stopped.getByRole("alert")).toHaveText(
+    "cargo failed (exit code 101)",
+  );
+  await stopped.getByRole("button", { name: "Open log", exact: true }).click();
+  await expect.poll(() => calls("nightly_log")).toBe(1);
+  await stopped.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect.poll(() => calls("nightly_build")).toBe(2);
 });

@@ -30,6 +30,10 @@ pub const UNSUPPORTED_MESSAGE: &str =
 pub const LOCAL_BUILD: bool = option_env!("SPOTIFLEX_LOCAL_BUILD").is_some();
 pub const LOCAL_BUILD_MESSAGE: &str =
     "Local build: automatic updates are off. Run build.ps1 to update.";
+/// A Nightly copy may go back to the release of the same version.
+const NIGHTLY_BUILD: bool = option_env!("SPOTIFLEX_NIGHTLY").is_some();
+/// Passed to a restarted copy so it starts once this one has exited.
+pub const AFTER_EXIT_ARG: &str = "--after-exit";
 /// Why automatic updates are off, if they are.
 pub const DISABLED: Option<&str> = disabled(SUPPORTED, LOCAL_BUILD);
 pub const PUBLIC_KEY: &str = include_str!("../config/update-public-key.base64");
@@ -184,7 +188,7 @@ fn check(client: &reqwest::blocking::Client) -> Result<Option<Update>> {
     let mut envelope = Vec::new();
     response.take(65_537).read_to_end(&mut envelope)?;
     let manifest = verify(&envelope, &public_key(PUBLIC_KEY)?)?;
-    if Version::parse(&manifest.version)? <= Version::parse(env!("CARGO_PKG_VERSION"))? {
+    if !newer(&manifest.version)? {
         return Ok(None);
     }
     Ok(Some(Update { manifest, envelope }))
@@ -226,7 +230,7 @@ fn download(
     }
     let manifest = verify(&update.envelope, &public_key(PUBLIC_KEY)?)?;
     ensure!(
-        Version::parse(&manifest.version)? > Version::parse(env!("CARGO_PKG_VERSION"))?,
+        newer(&manifest.version)?,
         "Refusing to install an older version"
     );
     let directory = data_dir()?.join("updates");
@@ -301,7 +305,7 @@ fn install(update: ReadyUpdate) -> Result<()> {
     }
     let manifest = verify(&update.envelope, &public_key(PUBLIC_KEY)?)?;
     ensure!(
-        Version::parse(&manifest.version)? > Version::parse(env!("CARGO_PKG_VERSION"))?,
+        newer(&manifest.version)?,
         "Refusing to install an older version"
     );
     verify_file(&update.path, &manifest)?;
@@ -313,10 +317,55 @@ fn install(update: ReadyUpdate) -> Result<()> {
     .context("Cannot back up the current executable")?;
     self_replace::self_replace(&update.path)
         .context("Cannot install update. Run SpotiFlex from a folder your account can write to.")?;
-    std::process::Command::new(executable)
-        .spawn()
-        .context("Update installed; restart SpotiFlex to finish")?;
+    relaunch().context("Update installed; restart SpotiFlex to finish")
+}
+
+/// Whether a published version should replace this copy.
+fn newer(version: &str) -> Result<bool> {
+    let version = Version::parse(version)?;
+    let current = Version::parse(env!("CARGO_PKG_VERSION"))?;
+    Ok(version > current || (NIGHTLY_BUILD && version == current))
+}
+
+/// Start this executable again; the new copy waits for this one to exit,
+/// so it never finds it still running and hands over to it.
+pub fn relaunch() -> Result<()> {
+    std::process::Command::new(std::env::current_exe()?)
+        .arg(AFTER_EXIT_ARG)
+        .arg(std::process::id().to_string())
+        .spawn()?;
     Ok(())
+}
+
+/// In a relaunched copy, wait up to 20 seconds for the previous one to exit.
+pub fn wait_for_previous() {
+    let mut arguments = std::env::args().skip_while(|argument| argument != AFTER_EXIT_ARG);
+    let Some(pid) = arguments.nth(1).and_then(|pid| pid.parse::<u32>().ok()) else {
+        return;
+    };
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::{
+            Foundation::CloseHandle,
+            System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject},
+        };
+        if let Ok(process) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+            WaitForSingleObject(process, 20_000);
+            let _ = CloseHandle(process);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while Instant::now() < deadline
+            && std::process::Command::new("kill")
+                .args(["-0", &pid.to_string()])
+                .status()
+                .is_ok_and(|status| status.success())
+        {
+            thread::sleep(Duration::from_millis(200));
+        }
+    }
 }
 
 impl Updater {

@@ -829,6 +829,8 @@ export function reducer(state: AppState, action: Action): AppState {
         update_version: action.version,
         update_notes: action.notes ?? "",
       };
+    case "nightly":
+      return { ...state, nightly: action.report };
   }
 }
 export function position(

@@ -1,6 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Checked by a Nightly build before it replaces the running copy.
+    if std::env::args().any(|argument| argument == "--version") {
+        match spotiflex::nightly::COMMIT {
+            Some(commit) => println!(
+                "SpotiFlex {} Nightly {}",
+                env!("CARGO_PKG_VERSION"),
+                &commit[..7.min(commit.len())]
+            ),
+            None => println!("SpotiFlex {}", env!("CARGO_PKG_VERSION")),
+        }
+        return Ok(());
+    }
+    spotiflex::updater::wait_for_previous();
     if std::env::args().any(|argument| argument == "--set-lyrics-host") {
         use std::io::Read;
         let mut host = String::new();

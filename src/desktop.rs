@@ -2784,6 +2784,63 @@ fn signed_in_account(state: &State<'_, Desktop>) -> Result<String> {
         .id
         .clone())
 }
+/// Build the latest Nightly from source; once it is installed SpotiFlex
+/// follows Nightly and restarts into it. True once the build has started.
+#[tauri::command]
+fn nightly_build(
+    state: State<'_, Desktop>,
+    app: tauri::AppHandle,
+) -> std::result::Result<bool, String> {
+    let events = app.clone();
+    let inner = state.0.clone();
+    crate::nightly::start(
+        move |report| {
+            let _ = events.emit("spotiflex", json!({"type":"nightly","report":report}));
+        },
+        move |outcome| {
+            if !matches!(outcome, crate::nightly::Outcome::Installed) {
+                return;
+            }
+            // The new copy follows Nightly from its first start.
+            if let Ok(mut snapshot) = inner.snapshot.lock() {
+                snapshot.settings.update_channel = "nightly".into();
+                if let Err(error) = snapshot.settings.save() {
+                    log::warn!("Cannot save the Nightly channel: {error:#}");
+                }
+            }
+            match updater::relaunch() {
+                Ok(()) => app.exit(0),
+                Err(error) => {
+                    log::warn!("Nightly installed; restart SpotiFlex to use it: {error:#}")
+                }
+            }
+        },
+    )
+    .map(|()| true)
+    .map_err(error)
+}
+#[tauri::command]
+fn nightly_cancel() {
+    crate::nightly::cancel();
+}
+/// The commit this copy was built from, if it is Nightly, and the latest
+/// build's progress.
+#[tauri::command]
+fn nightly_status() -> serde_json::Value {
+    json!({"commit": crate::nightly::COMMIT, "report": crate::nightly::last()})
+}
+/// Open the latest Nightly build's full output.
+#[tauri::command]
+fn nightly_log() -> std::result::Result<(), String> {
+    let path = crate::nightly::last()
+        .and_then(|report| report.log)
+        .ok_or_else(|| "No Nightly build has run yet".to_owned())?;
+    std::process::Command::new("notepad")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(error)
+}
 /// Songs in Local Files, for Your Library's row.
 #[tauri::command]
 fn local_files_count() -> usize {
@@ -4229,6 +4286,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             liked_songs_count,
             local_files_count,
             pick_local_folder,
+            nightly_build,
+            nightly_cancel,
+            nightly_status,
+            nightly_log,
             delete_saved_lyrics,
             add_tracks,
             create_playlist,

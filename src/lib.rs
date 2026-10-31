@@ -34,6 +34,7 @@ pub mod native;
 pub mod native_browse;
 mod native_login;
 mod native_remote;
+pub mod nightly;
 pub mod notify;
 mod playback_intent;
 pub mod provider;

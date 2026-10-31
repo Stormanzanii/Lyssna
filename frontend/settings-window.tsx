@@ -24,7 +24,8 @@ import {
   Wrench,
 } from "lucide-react";
 import type { AppState } from "./state";
-import type { Settings, SpotifyPlus } from "./types";
+import type { NightlyReport, Settings, SpotifyPlus } from "./types";
+import { NightlyDialog, nightlyProgress } from "./nightly-dialog";
 import {
   HiddenSettings,
   SettingRow,
@@ -218,9 +219,31 @@ export function SettingsWindow({
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [testingOutput, setTestingOutput] = useState(false);
   const [cacheBytes, setCacheBytes] = useState<number | null>(null);
-  // Asked before following Nightly, which is built from source.
-  const [nightlyPrompt, setNightlyPrompt] = useState(false);
+  // Nightly is built on this computer; the dialog shows its progress.
+  const [nightlyOpen, setNightlyOpen] = useState(false);
+  const [nightlyStarting, setNightlyStarting] = useState(false);
+  const [nightlyStatus, setNightlyStatus] = useState<{
+    commit: string | null;
+    report: NightlyReport | null;
+  }>();
+  useEffect(() => {
+    void onCall<{ commit: string | null; report: NightlyReport | null }>(
+      "nightly_status",
+    ).then((status) => status && setNightlyStatus(status));
+  }, [onCall]);
   const nightly = state.settings.update_channel === "nightly";
+  const nightlyReport = state.nightly ?? nightlyStatus?.report ?? null;
+  const nightlyBuilding = nightlyStarting || !!nightlyReport?.running;
+  useEffect(() => {
+    if (state.nightly) setNightlyStarting(false);
+  }, [state.nightly]);
+  const buildNightly = () => {
+    setNightlyStarting(true);
+    setNightlyOpen(true);
+    void onCall<boolean>("nightly_build").then((started) => {
+      if (!started) setNightlyStarting(false);
+    });
+  };
   // Read from Windows each time Settings opens: Task Manager can change it.
   const [launch, setLaunch] = useState<"off" | "open" | "minimized" | null>(
     null,
@@ -602,7 +625,7 @@ export function SettingsWindow({
       [
         <SettingRow
           key="version"
-          label={`Version ${__APP_VERSION__}`}
+          label={`Version ${__APP_VERSION__}${nightlyStatus?.commit ? ` · Nightly ${nightlyStatus.commit.slice(0, 7)}` : ""}`}
           help={
             state.update_version
               ? `${state.update_status} · v${state.update_version}`
@@ -1493,7 +1516,7 @@ export function SettingsWindow({
           label="Version"
           help={
             nightly
-              ? "Nightly: the newest changes, built from source on this computer. Automatic updates are off."
+              ? "Nightly: the newest changes, built by SpotiFlex on this computer from the latest code."
               : "Stable: tested releases that update automatically."
           }
           keywords="build version channel stable nightly beta updates source"
@@ -1503,14 +1526,41 @@ export function SettingsWindow({
             aria-label="Version"
             value={nightly ? "nightly" : "stable"}
             onChange={(event) => {
-              if (event.target.value === "nightly") setNightlyPrompt(true);
+              if (event.target.value === "nightly") setNightlyOpen(true);
               else onSettings({ update_channel: "stable" });
             }}
           >
             <option value="stable">Stable</option>
-            <option value="nightly">Nightly</option>
+            <option value="nightly" disabled={IS_MAC}>
+              Nightly{IS_MAC ? " (Windows only for now)" : ""}
+            </option>
           </select>
         </SettingRow>,
+        nightly || nightlyBuilding ? (
+          <SettingRow
+            key="nightly-build"
+            label={
+              nightlyBuilding
+                ? `Building Nightly · ${nightlyReport ? Math.round(nightlyProgress(nightlyReport) * 100) : 0}%`
+                : "Nightly build"
+            }
+            help={
+              nightlyBuilding
+                ? "SpotiFlex restarts into it when it's done."
+                : "Build the newest code now."
+            }
+            keywords="nightly build latest source update"
+          >
+            <button
+              className="pill outline"
+              onClick={() =>
+                nightlyBuilding ? setNightlyOpen(true) : buildNightly()
+              }
+            >
+              {nightlyBuilding ? "Show progress" : "Build latest"}
+            </button>
+          </SettingRow>
+        ) : null,
       ],
     ],
     [
@@ -1778,104 +1828,16 @@ export function SettingsWindow({
           </footer>
         </div>
       </section>
-      {nightlyPrompt && (
-        <NightlyPrompt
-          onOpen={onOpen}
-          onCancel={() => setNightlyPrompt(false)}
-          onConfirm={() => {
-            setNightlyPrompt(false);
-            onSettings({ update_channel: "nightly" });
-          }}
+      {nightlyOpen && (
+        <NightlyDialog
+          report={nightlyStarting ? null : nightlyReport}
+          starting={nightlyStarting}
+          onStart={buildNightly}
+          onCancelBuild={() => void onCall("nightly_cancel")}
+          onHide={() => setNightlyOpen(false)}
+          onLog={() => void onCall("nightly_log")}
         />
       )}
-    </div>
-  );
-}
-
-const REPOSITORY = "https://github.com/Stormanzanii/SpotiFlex";
-
-/** What a Nightly build needs: SpotiFlex built from its source. */
-function NightlyPrompt({
-  onOpen,
-  onCancel,
-  onConfirm,
-}: {
-  onOpen: (url: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const needs = IS_MAC
-    ? [
-        "Xcode Command Line Tools (xcode-select --install)",
-        "Rust, installed with rustup",
-        "Node.js 24",
-        "CMake (brew install cmake)",
-      ]
-    : [
-        "Git",
-        "Rust, installed with rustup",
-        "Node.js 24",
-        "Visual Studio Build Tools with “Desktop development with C++” (includes CMake)",
-        "LLVM, for libclang",
-        "Microsoft Edge WebView2 (already on Windows 11)",
-      ];
-  const commands = [
-    `git clone ${REPOSITORY}`,
-    "cd SpotiFlex",
-    IS_MAC ? "./build.sh" : ".\\build.ps1",
-  ];
-  return (
-    <div
-      className="modal-backdrop nightly-backdrop"
-      onClick={(event) => {
-        event.stopPropagation();
-        onCancel();
-      }}
-    >
-      <section
-        className="dialog nightly-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="nightly-title"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape") return;
-          event.stopPropagation();
-          onCancel();
-        }}
-      >
-        <h2 id="nightly-title">Nightly builds come from source</h2>
-        <p>
-          Nightly is the newest SpotiFlex, built on this computer from the
-          latest code. It isn't downloaded or tested, and automatic updates turn
-          off. To update, build it again.
-        </p>
-        <h3>You need</h3>
-        <ul>
-          {needs.map((need) => (
-            <li key={need}>{need}</li>
-          ))}
-        </ul>
-        <h3>Then run</h3>
-        <pre>{commands.join("\n")}</pre>
-        {!IS_MAC && (
-          <p className="nightly-note">
-            If PowerShell blocks the script, run{" "}
-            <code>powershell -ExecutionPolicy Bypass -File .\build.ps1</code>
-          </p>
-        )}
-        <div className="inline-actions">
-          <button className="pill outline" onClick={() => onOpen(REPOSITORY)}>
-            Open source code
-          </button>
-          <button className="pill" autoFocus onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="pill primary" onClick={onConfirm}>
-            Switch to Nightly
-          </button>
-        </div>
-      </section>
     </div>
   );
 }

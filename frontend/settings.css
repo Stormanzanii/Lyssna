@@ -898,42 +898,121 @@
   width: 176px;
 }
 
-/* Nightly prompt, over Settings. */
+/* Nightly: what it sets up, then each step's progress, over Settings. */
 .nightly-backdrop {
   inset: 0;
   z-index: 90;
 }
 .nightly-dialog {
-  width: min(100%, 540px);
+  width: min(100%, 560px);
 }
 .nightly-dialog h3 {
   margin: 0 0 8px;
   font-size: 14px;
 }
 .nightly-dialog ul {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   padding-left: 20px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--muted, #b3b3b3);
 }
-.nightly-dialog pre {
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: #ffffff0f;
-  font-size: 12.5px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
 .nightly-dialog .nightly-note {
-  margin-bottom: 0;
   color: var(--muted, #b3b3b3);
 }
-.nightly-dialog code {
+.nightly-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: #ffffff1f;
+  overflow: hidden;
+}
+.nightly-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #1ed760;
+  transition: width 0.3s ease;
+}
+.nightly-bar.moving > span {
+  width: 30%;
+  animation: nightly-moving 1.4s ease-in-out infinite;
+}
+@keyframes nightly-moving {
+  from {
+    left: -30%;
+  }
+  to {
+    left: 100%;
+  }
+}
+.nightly-total {
+  height: 6px;
+  margin-bottom: 16px;
+}
+.nightly-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nightly-step {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  font-size: 13px;
+  color: var(--muted, #b3b3b3);
+}
+.nightly-step.running,
+.nightly-step.failed {
+  color: var(--text, #fff);
+}
+.nightly-step.done > svg {
+  color: #1ed760;
+}
+.nightly-step.failed > svg {
+  color: #f15e6c;
+}
+.nightly-step.running > svg {
+  animation: nightly-spin 1s linear infinite;
+}
+@keyframes nightly-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.nightly-step-status {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.nightly-step > .nightly-bar,
+.nightly-step-detail {
+  grid-column: 2 / -1;
+}
+.nightly-step-detail {
+  margin: 0;
+  overflow: hidden;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted, #b3b3b3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nightly-error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f15e6c1a;
+  color: #ffb3ba;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
   user-select: text;
-  word-break: break-all;
 }
 .nightly-dialog .inline-actions {
   flex-wrap: wrap;

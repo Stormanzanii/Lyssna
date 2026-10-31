@@ -372,6 +372,8 @@ export interface Snapshot {
   update_status: string;
   update_version?: string;
   update_notes?: string;
+  /** The latest Nightly build's progress, while or after it runs. */
+  nightly?: NightlyReport;
   notice: string;
   observed_at: number;
 }
@@ -507,7 +509,8 @@ export type AppEvent =
   | { type: "notice"; message: string; error: boolean }
   | { type: "saved"; uri: string; saved: boolean }
   | { type: "saved_many"; items: Record<string, boolean> }
-  | { type: "update"; status: string; version?: string; notes?: string };
+  | { type: "update"; status: string; version?: string; notes?: string }
+  | { type: "nightly"; report: NightlyReport };
 
 export type LibrarySort =
   "recents" | "recently_added" | "alphabetical" | "creator" | "custom";
@@ -531,3 +534,23 @@ export type Jam = {
   /** When Spotify last changed the Jam. */
   timestamp: number;
 };
+
+/** One step of building Nightly, as the backend reports it. */
+export interface NightlyStep {
+  id: string;
+  label: string;
+  state: "pending" | "running" | "done" | "skipped" | "failed";
+  /** 0 to 1 when known; null shows a moving bar. */
+  progress: number | null;
+  detail: string;
+}
+
+export interface NightlyReport {
+  steps: NightlyStep[];
+  running: boolean;
+  error: string | null;
+  /** Why it ended without installing, as when already up to date. */
+  note: string | null;
+  finished: boolean;
+  log: string | null;
+}

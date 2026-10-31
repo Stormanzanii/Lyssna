@@ -1,0 +1,1686 @@
+//! Nightly builds: SpotiFlex built on this computer from the latest source.
+//!
+//! Everything the build needs is kept in SpotiFlex's own folder, pinned
+//! and checked against published SHA-256 sums: a private Rust (rustup with
+//! its own homes), portable Node.js, libclang and, when needed, CMake.
+//! Nothing is added to PATH and no administrator rights are needed, except
+//! for Visual Studio's C++ build tools, which Windows asks about once.
+//! The source comes as GitHub's archive of one commit, so Git isn't needed.
+//!
+//! Tools run in a cleared environment inside a job object at below-normal
+//! priority, so the user's settings can't break the build, music keeps
+//! playing smoothly, and Cancel or quitting stops every process. Network
+//! steps retry, finished steps are kept for the next run, and the running
+//! copy is replaced only after the new build has started successfully.
+
+use anyhow::{Context, Result, bail, ensure};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::VecDeque,
+    fs,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+const REPOSITORY: &str = "Stormanzanii/SpotiFlex";
+const NODE_RELEASES: &str = "https://nodejs.org/dist/latest-v24.x";
+const LIBCLANG_VERSION: &str = "18.1.1";
+const CMAKE_VERSION: &str = "3.31.6";
+const RUSTUP_INIT: &str =
+    "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe";
+const VS_BOOTSTRAPPER: &str = "https://aka.ms/vs/17/release/vs_BuildTools.exe";
+const VS_ARGUMENTS: &str = "--wait --passive --norestart --nocache \
+    --add Microsoft.VisualStudio.Workload.VCTools \
+    --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+    --add Microsoft.VisualStudio.Component.VC.CMake.Project --includeRecommended";
+const GB: u64 = 1_000_000_000;
+/// Tools, source and the build's intermediate files.
+const BUILD_SPACE: u64 = 10 * GB;
+/// Visual Studio's C++ tools, on the system drive.
+const VS_SPACE: u64 = 8 * GB;
+/// Variables the build tools may see; everything else is left out.
+const KEPT_VARIABLES: &[&str] = &[
+    "ALLUSERSPROFILE",
+    "APPDATA",
+    "COMPUTERNAME",
+    "ComSpec",
+    "CommonProgramFiles",
+    "CommonProgramFiles(x86)",
+    "CommonProgramW6432",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "LOCALAPPDATA",
+    "NO_PROXY",
+    "NUMBER_OF_PROCESSORS",
+    "OS",
+    "PATHEXT",
+    "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_IDENTIFIER",
+    "PROCESSOR_LEVEL",
+    "PROCESSOR_REVISION",
+    "PUBLIC",
+    "ProgramData",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+    "ProgramW6432",
+    "SystemDrive",
+    "SystemRoot",
+    "TEMP",
+    "TMP",
+    "USERDOMAIN",
+    "USERNAME",
+    "USERPROFILE",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "windir",
+];
+
+/// Reads a tool's output lines into a step's progress.
+type Progress = Box<dyn FnMut(&str) -> Option<f64>>;
+
+/// The commit a Nightly copy was built from.
+pub const COMMIT: Option<&str> = option_env!("SPOTIFLEX_NIGHTLY");
+
+static RUNNING: AtomicBool = AtomicBool::new(false);
+static CANCEL: AtomicBool = AtomicBool::new(false);
+/// The latest report, for Settings opened while a build runs.
+static LAST: Mutex<Option<Report>> = Mutex::new(None);
+/// The processes of the tool now running, so Cancel can stop them all.
+static JOB: Mutex<Option<Arc<Job>>> = Mutex::new(None);
+
+#[derive(Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum State {
+    Pending,
+    Running,
+    Done,
+    Skipped,
+    Failed,
+}
+
+#[derive(Clone, Serialize)]
+pub struct Step {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub state: State,
+    /// 0 to 1 when known; `None` shows a moving bar.
+    pub progress: Option<f64>,
+    /// The tool's latest line of output.
+    pub detail: String,
+}
+
+/// What the interface is told after every change.
+#[derive(Clone, Serialize)]
+pub struct Report {
+    pub steps: Vec<Step>,
+    pub running: bool,
+    pub error: Option<String>,
+    /// Shown when the build ended without a new version to install.
+    pub note: Option<String>,
+    pub finished: bool,
+    /// The full output of this run.
+    pub log: Option<String>,
+}
+
+pub enum Outcome {
+    /// Installed; SpotiFlex restarts into it.
+    Installed,
+    /// This copy already is the latest Nightly.
+    Current,
+}
+
+/// The latest report, if a build ran since SpotiFlex started.
+pub fn last() -> Option<Report> {
+    LAST.lock().ok()?.clone()
+}
+
+/// Build the latest Nightly on a background thread, reporting each change.
+/// `done` is called when the new build is installed and should restart.
+pub fn start(
+    report: impl Fn(&Report) + Send + 'static,
+    done: impl FnOnce(Outcome) + Send + 'static,
+) -> Result<()> {
+    ensure!(
+        cfg!(all(windows, target_arch = "x86_64")),
+        "Nightly builds are made on 64-bit Windows for now."
+    );
+    ensure!(
+        !RUNNING.swap(true, Ordering::SeqCst),
+        "A Nightly build is already running."
+    );
+    CANCEL.store(false, Ordering::SeqCst);
+    thread::spawn(move || {
+        let mut run = Run::new(report);
+        let result = run.build();
+        if let Err(error) = &result {
+            let message = if CANCEL.load(Ordering::SeqCst) {
+                "Nightly build cancelled.".to_owned()
+            } else {
+                format!("{error:#}")
+            };
+            run.log(&format!("Stopped: {message}"));
+            log::warn!("Nightly build stopped: {message}");
+            for step in &mut run.steps {
+                if step.state == State::Running {
+                    step.state = State::Failed;
+                }
+            }
+            run.error = Some(message);
+        }
+        run.running = false;
+        run.finished = result.is_ok();
+        run.send(true);
+        RUNNING.store(false, Ordering::SeqCst);
+        if let Ok(outcome) = result {
+            done(outcome);
+        }
+    });
+    Ok(())
+}
+
+/// Stop the running build and every process it started.
+pub fn cancel() {
+    CANCEL.store(true, Ordering::SeqCst);
+    if let Ok(job) = JOB.lock()
+        && let Some(job) = job.as_ref()
+    {
+        job.terminate();
+    }
+}
+
+fn cancelled() -> Result<()> {
+    ensure!(!CANCEL.load(Ordering::SeqCst), "Cancelled");
+    Ok(())
+}
+
+/// Where Nightly keeps its tools, source and build.
+fn root() -> Result<PathBuf> {
+    let dirs = directories::ProjectDirs::from("", "", "SpotiFlex")
+        .context("Cannot locate SpotiFlex's local data folder")?;
+    Ok(dirs.data_local_dir().join("nightly"))
+}
+
+/// Tools that were found or installed, for the build's environment.
+#[derive(Default)]
+struct Tools {
+    cmake: Option<PathBuf>,
+    libclang: Option<PathBuf>,
+    node: Option<PathBuf>,
+    rust_home: PathBuf,
+    cargo_home: PathBuf,
+    toolchain: Option<String>,
+    target: PathBuf,
+    commit: Option<String>,
+}
+
+struct Run<F: Fn(&Report)> {
+    steps: Vec<Step>,
+    running: bool,
+    error: Option<String>,
+    note: Option<String>,
+    finished: bool,
+    report: F,
+    log_path: Option<PathBuf>,
+    log_file: Option<fs::File>,
+    last_sent: Instant,
+    tools: Tools,
+    /// Build and check without installing, for the end-to-end test.
+    dry_run: bool,
+}
+
+impl<F: Fn(&Report)> Run<F> {
+    fn new(report: F) -> Self {
+        let steps = [
+            ("cpp", "C++ build tools"),
+            ("cmake", "CMake"),
+            ("libclang", "libclang"),
+            ("node", "Node.js"),
+            ("source", "Latest source code"),
+            ("rust", "Rust"),
+            ("packages", "Interface packages"),
+            ("interface", "Building the interface"),
+            ("crates", "Rust packages"),
+            ("app", "Building SpotiFlex"),
+            ("check", "Checking the build"),
+            ("install", "Installing"),
+        ]
+        .into_iter()
+        .map(|(id, label)| Step {
+            id,
+            label,
+            state: State::Pending,
+            progress: None,
+            detail: String::new(),
+        })
+        .collect();
+        Self {
+            steps,
+            running: true,
+            error: None,
+            note: None,
+            finished: false,
+            report,
+            log_path: None,
+            log_file: None,
+            last_sent: Instant::now(),
+            tools: Tools::default(),
+            dry_run: false,
+        }
+    }
+
+    /// Tell the interface, at most ten times a second unless `now`.
+    fn send(&mut self, now: bool) {
+        if !now && self.last_sent.elapsed() < Duration::from_millis(100) {
+            return;
+        }
+        self.last_sent = Instant::now();
+        let report = Report {
+            steps: self.steps.clone(),
+            running: self.running,
+            error: self.error.clone(),
+            note: self.note.clone(),
+            finished: self.finished,
+            log: self
+                .log_path
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
+        };
+        if let Ok(mut last) = LAST.lock() {
+            *last = Some(report.clone());
+        }
+        (self.report)(&report);
+    }
+
+    fn log(&mut self, line: &str) {
+        if let Some(file) = self.log_file.as_mut() {
+            let _ = writeln!(file, "{line}");
+        }
+    }
+
+    fn step(&mut self, id: &str) -> &mut Step {
+        let index = self
+            .steps
+            .iter()
+            .position(|step| step.id == id)
+            .expect("known step");
+        &mut self.steps[index]
+    }
+
+    fn set(&mut self, id: &str, state: State) {
+        let step = self.step(id);
+        step.state = state;
+        step.progress = (state == State::Done).then_some(1.0);
+        if state != State::Running {
+            step.detail.clear();
+        }
+        let label = step.label;
+        self.log(&format!("== {label}: {}", state_name(state)));
+        self.send(true);
+    }
+
+    fn progress(&mut self, id: &str, progress: Option<f64>, detail: impl Into<String>) {
+        let step = self.step(id);
+        if let Some(progress) = progress {
+            step.progress = Some(progress.clamp(0.0, 1.0));
+        }
+        step.detail = detail.into().chars().take(160).collect();
+        self.send(false);
+    }
+
+    fn open_log(&mut self) -> Result<()> {
+        let dir = root()?.join("logs");
+        fs::create_dir_all(&dir)?;
+        let mut logs: Vec<PathBuf> = fs::read_dir(&dir)?
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "log"))
+            .collect();
+        logs.sort();
+        // Keep the last few runs.
+        while logs.len() >= 5 {
+            let _ = fs::remove_file(logs.remove(0));
+        }
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |time| time.as_secs());
+        let path = dir.join(format!("nightly-{stamp}.log"));
+        self.log_file = Some(fs::File::create(&path)?);
+        self.log_path = Some(path);
+        Ok(())
+    }
+
+    fn build(&mut self) -> Result<Outcome> {
+        let root = root()?;
+        fs::create_dir_all(&root)?;
+        self.open_log()?;
+        self.send(true);
+        self.log(&format!(
+            "SpotiFlex {} building Nightly in {}",
+            env!("CARGO_PKG_VERSION"),
+            root.display()
+        ));
+        let tools_dir = root.join("tools");
+        let downloads = root.join("downloads");
+        fs::create_dir_all(&tools_dir)?;
+        fs::create_dir_all(&downloads)?;
+        self.tools.rust_home = tools_dir.join("rustup");
+        self.tools.cargo_home = tools_dir.join("cargo");
+        self.tools.target = root.join("target");
+        let client = client()?;
+
+        // Room for everything first, rather than failing half way.
+        let found = visual_studio();
+        check_space(&root, BUILD_SPACE)?;
+        if found.is_none() {
+            let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+            check_space(Path::new(&format!("{system}\\")), VS_SPACE)?;
+        }
+
+        // Visual Studio's C++ tools: the one install that needs Windows'
+        // permission, through Microsoft's own installer.
+        let studio = match found {
+            Some(found) => {
+                self.set("cpp", State::Skipped);
+                found
+            }
+            None => {
+                self.set("cpp", State::Running);
+                let installer = downloads.join("vs_BuildTools.exe");
+                self.download(&client, "cpp", VS_BOOTSTRAPPER, &installer, None)?;
+                self.progress(
+                    "cpp",
+                    None,
+                    "Waiting for Windows' permission to install Visual Studio's C++ tools",
+                );
+                let started = Instant::now();
+                let code = run_elevated(&installer, VS_ARGUMENTS, &mut || {
+                    let seconds = started.elapsed().as_secs();
+                    self.progress(
+                        "cpp",
+                        None,
+                        format!(
+                            "Visual Studio Installer is adding the C++ tools; its window shows the progress ({}:{:02})",
+                            seconds / 60,
+                            seconds % 60
+                        ),
+                    );
+                })?;
+                let _ = fs::remove_file(&installer);
+                match code {
+                    0 | 3010 => {}
+                    1618 | 8006 => {
+                        bail!("Another installation is running. Let it finish, then try again.")
+                    }
+                    5007 => bail!("Visual Studio's installer needs administrator rights."),
+                    1602 | 1223 => bail!("Visual Studio's installation was cancelled."),
+                    code => bail!("Visual Studio's installer stopped with code {code}."),
+                }
+                let found = visual_studio()
+                    .context("Visual Studio's C++ tools were installed but cannot be found")?;
+                self.set("cpp", State::Done);
+                found
+            }
+        };
+
+        // CMake, from Visual Studio when it has it.
+        if let Some(cmake) = bundled_cmake(&studio) {
+            self.tools.cmake = Some(cmake);
+            self.set("cmake", State::Skipped);
+        } else {
+            let dir = tools_dir.join(format!("cmake-{CMAKE_VERSION}"));
+            let cmake = dir.join("bin").join("cmake.exe");
+            if cmake.is_file() {
+                self.set("cmake", State::Skipped);
+            } else {
+                self.set("cmake", State::Running);
+                let base =
+                    format!("https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}");
+                let sums = get_text(
+                    &client,
+                    &format!("{base}/cmake-{CMAKE_VERSION}-SHA-256.txt"),
+                )?;
+                let (name, hash) = checksum_for(&sums, "-windows-x86_64.zip")
+                    .context("CMake's checksums don't list a Windows download")?;
+                let archive = downloads.join(&name);
+                self.download(
+                    &client,
+                    "cmake",
+                    &format!("{base}/{name}"),
+                    &archive,
+                    Some(&hash),
+                )?;
+                self.extract("cmake", &archive, &dir, true)?;
+                self.set("cmake", State::Done);
+            }
+            self.tools.cmake = Some(cmake);
+        }
+
+        // libclang, which whisper's bindings are generated with.
+        let libclang = tools_dir.join(format!("libclang-{LIBCLANG_VERSION}"));
+        let native = libclang.join("clang").join("native");
+        if native.join("libclang.dll").is_file() {
+            self.set("libclang", State::Skipped);
+        } else {
+            self.set("libclang", State::Running);
+            let release: serde_json::Value = serde_json::from_str(&get_text(
+                &client,
+                &format!("https://pypi.org/pypi/libclang/{LIBCLANG_VERSION}/json"),
+            )?)?;
+            let (url, hash) =
+                windows_wheel(&release).context("libclang has no Windows download")?;
+            let archive = downloads.join("libclang.whl");
+            self.download(&client, "libclang", &url, &archive, Some(&hash))?;
+            self.extract("libclang", &archive, &libclang, false)?;
+            ensure!(
+                native.join("libclang.dll").is_file(),
+                "libclang's download has no libclang.dll"
+            );
+            self.set("libclang", State::Done);
+        }
+        self.tools.libclang = Some(native);
+
+        // Node.js 24, the newest release of that line.
+        self.set("node", State::Running);
+        let node = match get_text(&client, &format!("{NODE_RELEASES}/SHASUMS256.txt"))
+            .ok()
+            .and_then(|sums| checksum_for(&sums, "-win-x64.zip"))
+        {
+            Some((name, hash)) => {
+                let dir = tools_dir.join(name.trim_end_matches(".zip"));
+                if !dir.join("node.exe").is_file() {
+                    let archive = downloads.join(&name);
+                    self.download(
+                        &client,
+                        "node",
+                        &format!("{NODE_RELEASES}/{name}"),
+                        &archive,
+                        Some(&hash),
+                    )?;
+                    self.extract("node", &archive, &dir, true)?;
+                }
+                dir
+            }
+            // Offline: a Node.js 24 kept from an earlier build still works.
+            None => newest_dir(&tools_dir, "node-v24.")
+                .filter(|dir| dir.join("node.exe").is_file())
+                .context("Cannot reach nodejs.org to download Node.js")?,
+        };
+        self.tools.node = Some(node);
+        self.set("node", State::Done);
+
+        // The source of the newest commit on main.
+        self.set("source", State::Running);
+        let latest = latest_commit(&client).ok();
+        if let (Some(latest), Some(current)) = (&latest, COMMIT)
+            && latest == current
+        {
+            self.set("source", State::Done);
+            for id in [
+                "rust",
+                "packages",
+                "interface",
+                "crates",
+                "app",
+                "check",
+                "install",
+            ] {
+                self.set(id, State::Skipped);
+            }
+            self.note = Some(format!(
+                "You already have the latest Nightly ({}).",
+                &current[..7.min(current.len())]
+            ));
+            return Ok(Outcome::Current);
+        }
+        let sources = root.join("source");
+        let source = match latest.as_ref().map(|commit| sources.join(commit)) {
+            Some(dir) if dir.join(".complete").is_file() => dir,
+            _ => {
+                let reference = latest.as_deref().unwrap_or("refs/heads/main");
+                let archive = downloads.join("source.zip");
+                self.download(
+                    &client,
+                    "source",
+                    &format!("https://codeload.github.com/{REPOSITORY}/zip/{reference}"),
+                    &archive,
+                    None,
+                )?;
+                let staging = sources.join("incoming");
+                let comment = self.extract("source", &archive, &staging, true)?;
+                // GitHub names the commit in the archive's comment.
+                let commit = latest
+                    .clone()
+                    .or_else(|| is_commit(comment.trim()).then(|| comment.trim().to_owned()))
+                    .context("Cannot tell which commit the source is")?;
+                let dir = sources.join(&commit);
+                if dir.exists() {
+                    fs::remove_dir_all(&dir)?;
+                }
+                fs::rename(&staging, &dir)?;
+                fs::write(dir.join(".complete"), &commit)?;
+                dir
+            }
+        };
+        let commit = source
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .context("No source folder")?;
+        if let Ok(entries) = fs::read_dir(&sources) {
+            for entry in entries.flatten() {
+                if entry.path() != source {
+                    let _ = fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+        self.log(&format!("Source: {commit}"));
+        self.tools.commit = Some(commit.clone());
+        self.set("source", State::Done);
+
+        // A private Rust, at the version the source asks for.
+        let toolchain = rust_version(&source)?;
+        let rustup = self.tools.cargo_home.join("bin").join("rustup.exe");
+        self.set("rust", State::Running);
+        if !rustup.is_file() {
+            let init = downloads.join("rustup-init.exe");
+            let hash = get_text(&client, &format!("{RUSTUP_INIT}.sha256"))?;
+            let hash = hash
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_owned();
+            self.download(&client, "rust", RUSTUP_INIT, &init, Some(&hash))?;
+            self.command(
+                "rust",
+                &init,
+                &[
+                    "-y",
+                    "--no-modify-path",
+                    "--default-toolchain",
+                    "none",
+                    "--profile",
+                    "minimal",
+                    "--default-host",
+                    "x86_64-pc-windows-msvc",
+                ],
+                None,
+                Box::new(|_: &str| None),
+                1,
+            )?;
+            let _ = fs::remove_file(&init);
+        }
+        self.tools.toolchain = Some(toolchain.clone());
+        if !self.succeeds(&rustup, &["run", &toolchain, "rustc", "--version"]) {
+            let mut components = 0.0;
+            self.command(
+                "rust",
+                &rustup,
+                &[
+                    "toolchain",
+                    "install",
+                    &toolchain,
+                    "--profile",
+                    "minimal",
+                    "--no-self-update",
+                ],
+                None,
+                Box::new(move |line: &str| {
+                    // Three components, each downloaded then installed.
+                    if line.contains("downloading component")
+                        || line.contains("installing component")
+                    {
+                        components += 1.0;
+                        Some(components / 6.0)
+                    } else {
+                        None
+                    }
+                }),
+                3,
+            )?;
+        }
+        self.set("rust", State::Done);
+
+        // The interface.
+        let node = self.tools.node.clone().context("No Node.js")?;
+        let npm = node
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+        let npm = npm.to_string_lossy().into_owned();
+        let packages = fs::read_to_string(source.join("package-lock.json"))
+            .map(|lock| lock.matches("\"resolved\":").count())
+            .unwrap_or(0)
+            .max(1) as f64;
+        self.set("packages", State::Running);
+        self.command(
+            "packages",
+            &node.join("node.exe"),
+            &[
+                &npm,
+                "ci",
+                "--no-audit",
+                "--no-fund",
+                "--fetch-retries=5",
+                "--loglevel=http",
+            ],
+            Some(&source),
+            Box::new(counter(packages, |line| {
+                line.contains("http fetch") && line.contains(".tgz")
+            })),
+            2,
+        )?;
+        self.set("packages", State::Done);
+        self.set("interface", State::Running);
+        self.command(
+            "interface",
+            &node.join("node.exe"),
+            &[&npm, "run", "build"],
+            Some(&source),
+            Box::new(|_: &str| None),
+            1,
+        )?;
+        self.set("interface", State::Done);
+
+        // SpotiFlex itself: packages first, so a dropped connection never
+        // costs a compile, then the build.
+        let cargo = self.tools.cargo_home.join("bin").join("cargo.exe");
+        let lock = fs::read_to_string(source.join("Cargo.lock")).unwrap_or_default();
+        let crates = lock.matches("source = \"registry+").count().max(1) as f64;
+        let units = lock.matches("[[package]]").count().max(1) as f64;
+        self.set("crates", State::Running);
+        self.command(
+            "crates",
+            &cargo,
+            &["fetch", "--locked"],
+            Some(&source),
+            Box::new(counter(crates, |line| line.starts_with("Downloaded "))),
+            3,
+        )?;
+        self.set("crates", State::Done);
+        self.set("app", State::Running);
+        let build = ["build", "--release", "--locked", "--bin", "spotiflex"];
+        if let Err(error) = self.command(
+            "app",
+            &cargo,
+            &build,
+            Some(&source),
+            Box::new(cargo_progress(units)),
+            1,
+        ) {
+            // Files left by a different Rust are cleared once; any other
+            // failure is the source's and is reported as it is.
+            let stale = format!("{error:#}");
+            if !["E0514", "E0460", "incompatible version of rustc"]
+                .iter()
+                .any(|sign| stale.contains(sign))
+            {
+                return Err(error);
+            }
+            self.command(
+                "app",
+                &cargo,
+                &["clean", "--release"],
+                Some(&source),
+                Box::new(|_: &str| None),
+                1,
+            )?;
+            self.command(
+                "app",
+                &cargo,
+                &build,
+                Some(&source),
+                Box::new(cargo_progress(units)),
+                1,
+            )?;
+        }
+        self.set("app", State::Done);
+
+        // The new copy must start before it replaces this one.
+        self.set("check", State::Running);
+        let built = self.tools.target.join("release").join("spotiflex.exe");
+        ensure!(built.is_file(), "The build finished without spotiflex.exe");
+        let output = self
+            .output(&built, &["--version"], Duration::from_secs(60))
+            .context("The new build didn't start")?;
+        ensure!(
+            output.contains("SpotiFlex") && output.contains(&commit[..7]),
+            "The new build reported \"{}\" instead of Nightly {}",
+            output.trim(),
+            &commit[..7]
+        );
+        self.set("check", State::Done);
+
+        if self.dry_run {
+            self.set("install", State::Skipped);
+            return Ok(Outcome::Current);
+        }
+        self.set("install", State::Running);
+        install(&built, &commit)?;
+        let _ = fs::remove_dir_all(&downloads);
+        self.set("install", State::Done);
+        Ok(Outcome::Installed)
+    }
+
+    /// Download with retries, showing progress on step `id`, and check the
+    /// file against `sha256` when one is published. A file already there
+    /// with the right hash isn't fetched again.
+    fn download(
+        &mut self,
+        client: &reqwest::blocking::Client,
+        id: &str,
+        url: &str,
+        path: &Path,
+        sha256: Option<&str>,
+    ) -> Result<()> {
+        if let Some(expected) = sha256
+            && file_hash(path).is_ok_and(|hash| hash.eq_ignore_ascii_case(expected))
+        {
+            return Ok(());
+        }
+        self.log(&format!("Downloading {url}"));
+        let partial = path.with_extension("part");
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            cancelled()?;
+            match self.fetch(client, id, url, &partial, sha256) {
+                Ok(()) => break,
+                Err(error) if attempt < 4 && !CANCEL.load(Ordering::SeqCst) => {
+                    self.log(&format!("Download failed, retrying: {error:#}"));
+                    self.progress(id, None, format!("Retrying the download ({error})"));
+                    thread::sleep(Duration::from_secs(2 * attempt));
+                }
+                Err(error) => {
+                    let _ = fs::remove_file(&partial);
+                    return Err(error.context(format!("Cannot download {url}")));
+                }
+            }
+        }
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        fs::rename(&partial, path)?;
+        Ok(())
+    }
+
+    fn fetch(
+        &mut self,
+        client: &reqwest::blocking::Client,
+        id: &str,
+        url: &str,
+        partial: &Path,
+        sha256: Option<&str>,
+    ) -> Result<()> {
+        let mut response = client.get(url).send()?.error_for_status()?;
+        let total = response.content_length();
+        let mut file = fs::File::create(partial)?;
+        let mut hash = Sha256::new();
+        let mut buffer = vec![0u8; 256 * 1024];
+        let mut received = 0u64;
+        loop {
+            cancelled()?;
+            let size = response.read(&mut buffer)?;
+            if size == 0 {
+                break;
+            }
+            file.write_all(&buffer[..size])?;
+            hash.update(&buffer[..size]);
+            received += size as u64;
+            let megabytes = received as f64 / 1e6;
+            match total {
+                Some(total) if total > 0 => self.progress(
+                    id,
+                    Some(received as f64 / total as f64),
+                    format!(
+                        "Downloading · {megabytes:.1} of {:.1} MB",
+                        total as f64 / 1e6
+                    ),
+                ),
+                _ => self.progress(id, None, format!("Downloading · {megabytes:.1} MB")),
+            }
+        }
+        file.sync_all()?;
+        if let Some(total) = total {
+            ensure!(received == total, "The download ended early");
+        }
+        if let Some(expected) = sha256 {
+            let actual = format!("{:x}", hash.finalize());
+            ensure!(
+                actual.eq_ignore_ascii_case(expected),
+                "The download's checksum doesn't match"
+            );
+        }
+        Ok(())
+    }
+
+    /// Unpack `archive` into `dir`, without its top folder when `strip`.
+    /// Files land in a temporary folder that becomes `dir` when complete.
+    /// Returns the archive's comment.
+    fn extract(&mut self, id: &str, archive: &Path, dir: &Path, strip: bool) -> Result<String> {
+        let staging = dir.with_extension("unpacking");
+        if staging.exists() {
+            fs::remove_dir_all(&staging)?;
+        }
+        let mut zip = zip::ZipArchive::new(fs::File::open(archive)?)?;
+        let comment = String::from_utf8_lossy(zip.comment()).into_owned();
+        let count = zip.len();
+        for index in 0..count {
+            cancelled()?;
+            let mut entry = zip.by_index(index)?;
+            // Names that would leave the folder are refused.
+            let Some(name) = entry.enclosed_name() else {
+                bail!("The archive holds an unsafe path");
+            };
+            let name: PathBuf = if strip {
+                name.components().skip(1).collect()
+            } else {
+                name
+            };
+            if name.as_os_str().is_empty() {
+                continue;
+            }
+            let path = staging.join(name);
+            if entry.is_dir() {
+                fs::create_dir_all(&path)?;
+            } else {
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                std::io::copy(&mut entry, &mut fs::File::create(&path)?)?;
+            }
+            if index % 50 == 0 {
+                self.progress(
+                    id,
+                    Some(index as f64 / count as f64),
+                    format!("Unpacking · {index} of {count} files"),
+                );
+            }
+        }
+        if dir.exists() {
+            fs::remove_dir_all(dir)?;
+        }
+        fs::rename(&staging, dir)?;
+        let _ = fs::remove_file(archive);
+        Ok(comment)
+    }
+
+    /// The environment every build tool runs in.
+    fn environment(&self, command: &mut Command) {
+        command.env_clear();
+        for name in KEPT_VARIABLES {
+            if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
+        let system = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+        let mut path: Vec<PathBuf> = vec![self.tools.cargo_home.join("bin")];
+        path.extend(self.tools.node.clone());
+        path.extend(
+            self.tools
+                .cmake
+                .as_ref()
+                .and_then(|cmake| cmake.parent().map(Path::to_path_buf)),
+        );
+        path.extend(
+            [
+                "System32",
+                "",
+                "System32\\Wbem",
+                "System32\\WindowsPowerShell\\v1.0",
+            ]
+            .map(|dir| Path::new(&system).join(dir)),
+        );
+        if let Ok(path) = std::env::join_paths(path) {
+            command.env("PATH", path);
+        }
+        command
+            .env("RUSTUP_HOME", &self.tools.rust_home)
+            .env("CARGO_HOME", &self.tools.cargo_home)
+            .env("CARGO_TARGET_DIR", &self.tools.target)
+            .env("CARGO_NET_RETRY", "10")
+            .env("RUSTUP_MAX_RETRIES", "5")
+            .env("CARGO_TERM_COLOR", "never")
+            .env("CARGO_TERM_PROGRESS_WHEN", "always")
+            .env("CARGO_TERM_PROGRESS_WIDTH", "120")
+            .env("npm_config_update_notifier", "false")
+            .env(
+                "npm_config_userconfig",
+                self.tools.rust_home.with_file_name("npmrc"),
+            )
+            .env(
+                "npm_config_cache",
+                self.tools.rust_home.with_file_name("npm-cache"),
+            )
+            .env("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")
+            .env("NO_COLOR", "1");
+        if let Some(toolchain) = &self.tools.toolchain {
+            command.env("RUSTUP_TOOLCHAIN", toolchain);
+        }
+        if let Some(cmake) = &self.tools.cmake {
+            command.env("CMAKE", cmake);
+        }
+        if let Some(libclang) = &self.tools.libclang {
+            command.env("LIBCLANG_PATH", libclang);
+        }
+        if let Some(commit) = &self.tools.commit {
+            // Marks the copy as Nightly; it keeps the updater, so choosing
+            // Stable again installs the release.
+            command.env("SPOTIFLEX_NIGHTLY", commit);
+        }
+        hide_window(command);
+    }
+
+    /// Run a tool, showing its output and progress on step `id`, trying
+    /// up to `attempts` times.
+    fn command(
+        &mut self,
+        id: &str,
+        program: &Path,
+        args: &[&str],
+        dir: Option<&Path>,
+        mut progress: Progress,
+        attempts: u32,
+    ) -> Result<()> {
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match self.run_once(id, program, args, dir, &mut progress) {
+                Ok(()) => return Ok(()),
+                Err(error) if attempt < attempts && !CANCEL.load(Ordering::SeqCst) => {
+                    self.log(&format!("Failed, trying again: {error:#}"));
+                    self.progress(id, None, "Trying again");
+                    thread::sleep(Duration::from_secs(5 * u64::from(attempt)));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    fn run_once(
+        &mut self,
+        id: &str,
+        program: &Path,
+        args: &[&str],
+        dir: Option<&Path>,
+        progress: &mut Progress,
+    ) -> Result<()> {
+        cancelled()?;
+        let name = program
+            .file_stem()
+            .map_or("tool".into(), |name| name.to_string_lossy().into_owned());
+        self.log(&format!("$ {} {}", program.display(), args.join(" ")));
+        let mut command = Command::new(program);
+        self.environment(&mut command);
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(dir) = dir {
+            command.current_dir(dir);
+        }
+        let job = Arc::new(Job::new()?);
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("Cannot start {name}"))?;
+        job.assign(&child);
+        if let Ok(mut current) = JOB.lock() {
+            *current = Some(job.clone());
+        }
+        let (sender, lines) = mpsc::channel();
+        for pipe in [
+            child
+                .stdout
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+            child
+                .stderr
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let sender = sender.clone();
+            thread::spawn(move || read_lines(pipe, sender));
+        }
+        drop(sender);
+        let mut tail: VecDeque<String> = VecDeque::new();
+        for line in lines {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            self.log(line);
+            let fraction = progress(line);
+            self.progress(id, fraction, line);
+            if !line.starts_with("Building [") {
+                tail.push_back(line.to_owned());
+                if tail.len() > 12 {
+                    tail.pop_front();
+                }
+            }
+        }
+        let status = child.wait()?;
+        if let Ok(mut current) = JOB.lock() {
+            *current = None;
+        }
+        drop(job);
+        cancelled()?;
+        if status.success() {
+            return Ok(());
+        }
+        let code = status
+            .code()
+            .map_or("stopped".into(), |code| format!("exit code {code}"));
+        let tail: Vec<String> = tail.into_iter().collect();
+        bail!("{name} failed ({code}):\n{}", tail.join("\n"))
+    }
+
+    /// Whether a quick command succeeds.
+    fn succeeds(&self, program: &Path, args: &[&str]) -> bool {
+        let mut command = Command::new(program);
+        self.environment(&mut command);
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
+    /// A command's output, stopped after `limit`.
+    fn output(&self, program: &Path, args: &[&str], limit: Duration) -> Result<String> {
+        let mut command = Command::new(program);
+        self.environment(&mut command);
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        let job = Job::new()?;
+        let mut child = command.spawn()?;
+        job.assign(&child);
+        let mut stdout = child.stdout.take().context("No output")?;
+        let reader = thread::spawn(move || {
+            let mut text = String::new();
+            let _ = stdout.read_to_string(&mut text);
+            text
+        });
+        let started = Instant::now();
+        loop {
+            if child.try_wait()?.is_some() {
+                break;
+            }
+            if started.elapsed() > limit {
+                job.terminate();
+                bail!("It didn't finish within {} seconds", limit.as_secs());
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        Ok(reader.join().unwrap_or_default())
+    }
+}
+
+fn state_name(state: State) -> &'static str {
+    match state {
+        State::Pending => "waiting",
+        State::Running => "started",
+        State::Done => "done",
+        State::Skipped => "already there",
+        State::Failed => "failed",
+    }
+}
+
+fn client() -> Result<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::builder()
+        .user_agent(concat!("SpotiFlex/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(60 * 60))
+        .build()?)
+}
+
+/// A small text file, with retries.
+fn get_text(client: &reqwest::blocking::Client, url: &str) -> Result<String> {
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let result = client
+            .get(url)
+            .timeout(Duration::from_secs(30))
+            .send()
+            .and_then(|response| response.error_for_status())
+            .and_then(|response| response.text());
+        match result {
+            Ok(text) => return Ok(text),
+            Err(_) if attempt < 4 => thread::sleep(Duration::from_secs(2 * attempt)),
+            Err(error) => {
+                return Err(anyhow::Error::new(error).context(format!("Cannot reach {url}")));
+            }
+        }
+    }
+}
+
+/// The newest commit on main.
+fn latest_commit(client: &reqwest::blocking::Client) -> Result<String> {
+    let response = client
+        .get(format!(
+            "https://api.github.com/repos/{REPOSITORY}/commits/main"
+        ))
+        .header("Accept", "application/vnd.github.sha")
+        .timeout(Duration::from_secs(30))
+        .send()?
+        .error_for_status()?;
+    let commit = response.text()?.trim().to_owned();
+    ensure!(is_commit(&commit), "GitHub didn't return a commit");
+    Ok(commit)
+}
+
+fn is_commit(text: &str) -> bool {
+    text.len() == 40 && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// The file name and SHA-256 of the line in a checksum list whose file
+/// ends with `suffix`.
+fn checksum_for(sums: &str, suffix: &str) -> Option<(String, String)> {
+    sums.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let name = parts.next()?.trim_start_matches('*').rsplit('/').next()?;
+        (name.ends_with(suffix) && hash.len() == 64).then(|| (name.to_owned(), hash.to_owned()))
+    })
+}
+
+/// The Windows wheel in PyPI's release listing, with its SHA-256.
+fn windows_wheel(release: &serde_json::Value) -> Option<(String, String)> {
+    release["urls"].as_array()?.iter().find_map(|file| {
+        let name = file["filename"].as_str()?;
+        name.ends_with("win_amd64.whl").then(|| {
+            Some((
+                file["url"].as_str()?.to_owned(),
+                file["digests"]["sha256"].as_str()?.to_owned(),
+            ))
+        })?
+    })
+}
+
+/// The newest folder in `dir` starting with `prefix`.
+fn newest_dir(dir: &Path, prefix: &str) -> Option<PathBuf> {
+    let mut found: Vec<PathBuf> = fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(prefix))
+        })
+        .collect();
+    found.sort();
+    found.pop()
+}
+
+fn file_hash(path: &Path) -> Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hash = Sha256::new();
+    std::io::copy(&mut file, &mut hash)?;
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+/// Lines from a pipe; progress bars rewrite theirs with `\r`, so that
+/// ends a line too.
+fn read_lines(mut pipe: Box<dyn Read + Send>, lines: mpsc::Sender<String>) {
+    let mut buffer = [0u8; 8192];
+    let mut line = Vec::new();
+    while let Ok(size) = pipe.read(&mut buffer) {
+        if size == 0 {
+            break;
+        }
+        for &byte in &buffer[..size] {
+            if byte == b'\n' || byte == b'\r' {
+                if !line.is_empty() {
+                    let _ = lines.send(String::from_utf8_lossy(&line).into_owned());
+                    line.clear();
+                }
+            } else {
+                line.push(byte);
+            }
+        }
+    }
+    if !line.is_empty() {
+        let _ = lines.send(String::from_utf8_lossy(&line).into_owned());
+    }
+}
+
+/// Progress as matching lines out of `total`.
+fn counter(total: f64, matches: fn(&str) -> bool) -> impl FnMut(&str) -> Option<f64> {
+    let mut seen = 0.0;
+    move |line| {
+        if matches(line) {
+            seen += 1.0;
+            Some((seen / total).min(0.99))
+        } else {
+            None
+        }
+    }
+}
+
+/// Cargo's `Building [=====>   ] 123/456: crate` bar, or failing that the
+/// `Compiling` lines out of the packages in Cargo.lock.
+fn cargo_progress(units: f64) -> impl FnMut(&str) -> Option<f64> {
+    let mut compiled = 0.0;
+    let mut bar = false;
+    move |line| {
+        if let Some(fraction) = cargo_bar(line) {
+            bar = true;
+            return Some(fraction);
+        }
+        if !bar && line.starts_with("Compiling ") {
+            compiled += 1.0;
+            return Some((compiled / units).min(0.99));
+        }
+        None
+    }
+}
+
+fn cargo_bar(line: &str) -> Option<f64> {
+    let after = line.strip_prefix("Building [")?.split_once("] ")?.1;
+    let (done, total) = after.split(':').next()?.trim().split_once('/')?;
+    let total = total.parse::<f64>().ok()?;
+    (total > 0.0).then_some(done.parse::<f64>().ok()? / total)
+}
+
+/// Cargo.toml's `rust-version`, as a full version rustup installs.
+fn rust_version(source: &Path) -> Result<String> {
+    let manifest = fs::read_to_string(source.join("Cargo.toml"))?;
+    let version = manifest
+        .lines()
+        .find_map(|line| {
+            let value = line
+                .strip_prefix("rust-version")?
+                .trim()
+                .strip_prefix('=')?;
+            Some(value.trim().trim_matches('"').to_owned())
+        })
+        .context("Cargo.toml is missing rust-version")?;
+    ensure!(
+        version.split('.').all(|part| part.parse::<u32>().is_ok()),
+        "Cargo.toml's rust-version is not a version: {version}"
+    );
+    Ok(if version.split('.').count() == 2 {
+        format!("{version}.0")
+    } else {
+        version
+    })
+}
+
+/// Replace the running executable with the build, keeping a copy of it.
+fn install(built: &Path, commit: &str) -> Result<()> {
+    let updates = crate::config::data_dir()?.join("updates");
+    fs::create_dir_all(&updates)?;
+    // A copy beside the updates, so the build folder stays free to change.
+    let staged = updates.join(format!("spotiflex-nightly-{}.exe", &commit[..7]));
+    fs::copy(built, &staged)?;
+    let executable = std::env::current_exe()?;
+    fs::copy(&executable, updates.join("previous-spotiflex.exe"))
+        .context("Cannot back up the current executable")?;
+    self_replace::self_replace(&staged)
+        .context("Cannot install. Run SpotiFlex from a folder your account can write to.")?;
+    let _ = fs::remove_file(&staged);
+    Ok(())
+}
+
+fn hide_window(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
+/// A Visual Studio with the C++ build tools.
+fn visual_studio() -> Option<PathBuf> {
+    let program_files = std::env::var("ProgramFiles(x86)").ok()?;
+    let vswhere = Path::new(&program_files).join("Microsoft Visual Studio\\Installer\\vswhere.exe");
+    let mut command = Command::new(vswhere);
+    command.args([
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property",
+        "installationPath",
+    ]);
+    hide_window(&mut command);
+    let output = command.output().ok()?;
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(PathBuf::from)
+}
+
+/// CMake as Visual Studio's C++ tools ship it.
+fn bundled_cmake(visual_studio: &Path) -> Option<PathBuf> {
+    let cmake = visual_studio
+        .join("Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe");
+    cmake.is_file().then_some(cmake)
+}
+
+fn check_space(path: &Path, needed: u64) -> Result<()> {
+    if let Some(free) = free_space(path) {
+        ensure!(
+            free >= needed,
+            "{} needs about {} GB free for the build; it has {:.1} GB.",
+            path.display(),
+            needed / GB,
+            free as f64 / GB as f64
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+use self::other::{Job, free_space, run_elevated};
+#[cfg(windows)]
+use self::windows_impl::{Job, free_space, run_elevated};
+
+#[cfg(windows)]
+mod windows_impl {
+    use anyhow::{Result, bail};
+    use std::{os::windows::io::AsRawHandle, path::Path, time::Duration};
+    use windows::{
+        Win32::{
+            Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE, WAIT_OBJECT_0},
+            Storage::FileSystem::GetDiskFreeSpaceExW,
+            System::{
+                JobObjects::{
+                    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                    JOB_OBJECT_LIMIT_PRIORITY_CLASS, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+                },
+                Threading::{BELOW_NORMAL_PRIORITY_CLASS, GetExitCodeProcess, WaitForSingleObject},
+            },
+            UI::{
+                Shell::{
+                    SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
+                },
+                WindowsAndMessaging::SW_SHOWNORMAL,
+            },
+        },
+        core::{HSTRING, PCWSTR, w},
+    };
+
+    /// Processes that are stopped together, and when SpotiFlex exits;
+    /// they run below normal priority so playback stays smooth.
+    pub struct Job(HANDLE);
+    // The handle is only passed to thread-safe system calls.
+    unsafe impl Send for Job {}
+    unsafe impl Sync for Job {}
+
+    impl Job {
+        pub fn new() -> Result<Self> {
+            let job = unsafe { CreateJobObjectW(None, PCWSTR::null())? };
+            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            limits.BasicLimitInformation.LimitFlags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_PRIORITY_CLASS;
+            limits.BasicLimitInformation.PriorityClass = BELOW_NORMAL_PRIORITY_CLASS.0;
+            unsafe {
+                SetInformationJobObject(
+                    job,
+                    JobObjectExtendedLimitInformation,
+                    (&raw const limits).cast(),
+                    size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                )?;
+            }
+            Ok(Self(job))
+        }
+
+        pub fn assign(&self, child: &std::process::Child) {
+            let process = HANDLE(child.as_raw_handle());
+            if let Err(error) = unsafe { AssignProcessToJobObject(self.0, process) } {
+                log::warn!("Build tool runs outside its job: {error}");
+            }
+        }
+
+        pub fn terminate(&self) {
+            let _ = unsafe { TerminateJobObject(self.0, 1) };
+        }
+    }
+
+    impl Drop for Job {
+        fn drop(&mut self) {
+            let _ = unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    pub fn free_space(path: &Path) -> Option<u64> {
+        let mut dir = path;
+        while !dir.exists() {
+            dir = dir.parent()?;
+        }
+        let name = HSTRING::from(dir);
+        let mut free = 0u64;
+        unsafe { GetDiskFreeSpaceExW(PCWSTR(name.as_ptr()), Some(&raw mut free), None, None) }
+            .ok()?;
+        Some(free)
+    }
+
+    /// Run `program` with Windows' permission prompt and wait for its exit
+    /// code, calling `tick` every second.
+    pub fn run_elevated(program: &Path, arguments: &str, tick: &mut dyn FnMut()) -> Result<u32> {
+        let file = HSTRING::from(program);
+        let parameters = HSTRING::from(arguments);
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC,
+            lpVerb: w!("runas"),
+            lpFile: PCWSTR(file.as_ptr()),
+            lpParameters: PCWSTR(parameters.as_ptr()),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        if let Err(error) = unsafe { ShellExecuteExW(&mut info) } {
+            if error.code() == ERROR_CANCELLED.to_hresult() {
+                bail!("Windows' permission to install Visual Studio's C++ tools was declined.");
+            }
+            bail!("Cannot start Visual Studio's installer: {error}");
+        }
+        let process = info.hProcess;
+        let result = (|| {
+            loop {
+                if super::CANCEL.load(std::sync::atomic::Ordering::SeqCst) {
+                    bail!("Cancelled; Visual Studio's installer finishes on its own");
+                }
+                if unsafe { WaitForSingleObject(process, 1000) } == WAIT_OBJECT_0 {
+                    break;
+                }
+                tick();
+            }
+            let mut code = 0u32;
+            unsafe { GetExitCodeProcess(process, &mut code)? };
+            Ok(code)
+        })();
+        let _ = unsafe { CloseHandle(process) };
+        std::thread::sleep(Duration::from_millis(10));
+        result
+    }
+}
+
+#[cfg(not(windows))]
+mod other {
+    use anyhow::{Result, bail};
+    use std::path::Path;
+
+    pub struct Job;
+
+    impl Job {
+        pub fn new() -> Result<Self> {
+            Ok(Self)
+        }
+        pub fn assign(&self, _: &std::process::Child) {}
+        pub fn terminate(&self) {}
+    }
+
+    pub fn free_space(_: &Path) -> Option<u64> {
+        None
+    }
+
+    pub fn run_elevated(_: &Path, _: &str, _: &mut dyn FnMut()) -> Result<u32> {
+        bail!("Nightly builds are made on Windows")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn progress_is_read_from_each_tool() {
+        assert_eq!(
+            cargo_bar("Building [=====>      ] 123/492: serde, tokio"),
+            Some(0.25)
+        );
+        assert_eq!(cargo_bar("Compiling serde v1.0.0"), None);
+        let mut build = cargo_progress(4.0);
+        assert_eq!(build("Compiling serde v1.0.0"), Some(0.25));
+        assert_eq!(build("Building [=>   ] 1/2: x"), Some(0.5));
+        // Once the bar shows, it alone counts.
+        assert_eq!(build("Compiling tokio v1.0.0"), None);
+        let mut npm = counter(2.0, |line| line.contains(".tgz"));
+        assert_eq!(
+            npm("npm http fetch GET 200 https://x/a.tgz 10ms"),
+            Some(0.5)
+        );
+        assert_eq!(
+            npm("npm http fetch GET 200 https://x/b.tgz 10ms"),
+            Some(0.99)
+        );
+        assert_eq!(npm("added 2 packages"), None);
+    }
+
+    #[test]
+    fn checksums_name_the_right_download() {
+        let node = "aaaa  node-v24.1.0.pkg\n\
+            1111111111111111111111111111111111111111111111111111111111111111  node-v24.1.0-win-x64.zip\n";
+        assert_eq!(
+            checksum_for(node, "-win-x64.zip"),
+            Some((
+                "node-v24.1.0-win-x64.zip".into(),
+                "1111111111111111111111111111111111111111111111111111111111111111".into()
+            ))
+        );
+        let rustup = "2222222222222222222222222222222222222222222222222222222222222222 *./x86_64-pc-windows-msvc/rustup-init.exe";
+        assert_eq!(
+            checksum_for(rustup, "rustup-init.exe").map(|(name, _)| name),
+            Some("rustup-init.exe".into())
+        );
+        let pypi = serde_json::json!({"urls": [
+            {"filename": "libclang-18.1.1-py2.py3-none-manylinux2010_x86_64.whl", "url": "l", "digests": {"sha256": "x"}},
+            {"filename": "libclang-18.1.1-py2.py3-none-win_amd64.whl", "url": "w", "digests": {"sha256": "y"}},
+        ]});
+        assert_eq!(windows_wheel(&pypi), Some(("w".into(), "y".into())));
+    }
+
+    #[test]
+    fn rust_versions_get_a_patch_number() {
+        let dir = std::env::temp_dir().join(format!("spotiflex-nightly-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nrust-version = \"1.98\"\n",
+        )
+        .unwrap();
+        assert_eq!(rust_version(&dir).unwrap(), "1.98.0");
+        fs::write(dir.join("Cargo.toml"), "rust-version = \"1.98; rm\"\n").unwrap();
+        assert!(rust_version(&dir).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// The whole pipeline against the real services, without installing:
+    /// `cargo test --lib nightly_end_to_end -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "downloads the build tools and builds SpotiFlex"]
+    fn nightly_end_to_end() {
+        let seen = Mutex::new(Vec::new());
+        let mut run = Run::new(move |report: &Report| {
+            let states: Vec<String> = report
+                .steps
+                .iter()
+                .map(|step| format!("{} {}", step.label, state_name(step.state)))
+                .collect();
+            let mut seen = seen.lock().unwrap();
+            for state in &states {
+                if !seen.contains(state) {
+                    eprintln!("{state}");
+                }
+            }
+            *seen = states;
+        });
+        run.dry_run = true;
+        let result = run.build();
+        if let Some(log) = &run.log_path {
+            eprintln!("Log: {}", log.display());
+        }
+        result.unwrap();
+    }
+
+    #[test]
+    fn commits_are_full_hashes() {
+        assert!(is_commit("0adf971c0ffee0adf971c0ffee0adf971c0ffee0"));
+        assert!(!is_commit("0adf971"));
+        assert!(!is_commit("refs/heads/main"));
+    }
+
+    #[test]
+    fn archives_unpack_without_their_top_folder_and_refuse_escapes() {
+        let dir = std::env::temp_dir().join(format!("spotiflex-unpack-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let write = |name: &str, entries: &[&str]| {
+            let path = dir.join(name);
+            let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+            for entry in entries {
+                zip.start_file(*entry, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(b"x").unwrap();
+            }
+            zip.set_comment("0adf971c0ffee0adf971c0ffee0adf971c0ffee0");
+            zip.finish().unwrap();
+            path
+        };
+        let mut run = Run::new(|_: &Report| {});
+        let good = write(
+            "good.zip",
+            &["SpotiFlex-abc/Cargo.toml", "SpotiFlex-abc/src/main.rs"],
+        );
+        let comment = run
+            .extract("source", &good, &dir.join("good"), true)
+            .unwrap();
+        assert!(is_commit(&comment));
+        assert!(dir.join("good/Cargo.toml").is_file());
+        assert!(dir.join("good/src/main.rs").is_file());
+        let evil = write("evil.zip", &["top/../../escaped.txt"]);
+        assert!(
+            run.extract("source", &evil, &dir.join("evil"), true)
+                .is_err()
+        );
+        assert!(!dir.join("escaped.txt").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+}

@@ -12,14 +12,69 @@ use symphonia::core::{
 
 use super::{AudioDecoder, AudioPacket, AudioPacketPosition, DecoderError, DecoderResult};
 
-use crate::{NUM_CHANNELS, PAGES_PER_MS, SAMPLE_RATE, player::NormalisationData, symphonia_util};
+use crate::{PAGES_PER_MS, SAMPLE_RATE, player::NormalisationData, symphonia_util};
 
 pub struct SymphoniaDecoder {
     probe_result: ProbeResult,
     decoder: Box<dyn Decoder>,
     sample_buffer: Option<SampleBuffer<f64>>,
-    /// Mono input, such as DJ narration, is played on both channels.
-    mono: bool,
+    /// Channels in the input. Mono, such as DJ narration, is played on both
+    /// sides; surround local files keep their front left and right.
+    channels: usize,
+    /// Local files at rates other than the player's 44.1 kHz.
+    resampler: Option<Resampler>,
+}
+
+/// Linear resampling of stereo frames to the player's rate, carried across
+/// packets so packet edges stay seamless.
+struct Resampler {
+    /// Input frames per output frame.
+    step: f64,
+    /// Position of the next output frame; 0 is the last frame of the
+    /// previous packet.
+    position: f64,
+    previous: [f64; 2],
+}
+
+impl Resampler {
+    fn new(rate: u32) -> Self {
+        Self {
+            step: f64::from(rate) / f64::from(SAMPLE_RATE),
+            position: 1.0,
+            previous: [0.0; 2],
+        }
+    }
+
+    fn reset(&mut self) {
+        self.position = 1.0;
+        self.previous = [0.0; 2];
+    }
+
+    fn process(&mut self, stereo: &[f64]) -> Vec<f64> {
+        let frames = stereo.len() / 2;
+        let frame = |index: usize, channel: usize| {
+            if index == 0 {
+                self.previous[channel]
+            } else {
+                stereo[(index - 1) * 2 + channel]
+            }
+        };
+        let mut output = Vec::with_capacity(((frames as f64 / self.step) as usize + 2) * 2);
+        while self.position < frames as f64 {
+            let index = self.position as usize;
+            let along = self.position - index as f64;
+            for channel in 0..2 {
+                let (from, to) = (frame(index, channel), frame(index + 1, channel));
+                output.push(from + (to - from) * along);
+            }
+            self.position += self.step;
+        }
+        if frames > 0 {
+            self.previous = [stereo[(frames - 1) * 2], stereo[(frames - 1) * 2 + 1]];
+            self.position -= frames as f64;
+        }
+        output
+    }
 }
 
 #[derive(Default)]
@@ -66,24 +121,21 @@ impl SymphoniaDecoder {
             DecoderError::SymphoniaDecoder("Could not retrieve sample rate".into())
         })?;
 
-        // TODO: The official client supports local files with sample rates other than 44,100 kHz.
-        // To play these accurately, we need to either resample the input audio, or introduce a way
-        // to change the player's current sample rate (likely by closing and re-opening the sink
-        // with new parameters).
-        if rate != SAMPLE_RATE {
-            return Err(DecoderError::SymphoniaDecoder(format!(
-                "Unsupported sample rate: {rate}"
-            )));
-        }
+        // Local files at 48 kHz, 96 kHz and so on are resampled to the
+        // player's rate, as the official client plays them.
+        let resampler = (rate != SAMPLE_RATE).then(|| Resampler::new(rate));
 
-        let channels = decoder.codec_params().channels.ok_or_else(|| {
-            DecoderError::SymphoniaDecoder("Could not retrieve channel configuration".into())
-        })?;
-        let mono = channels.count() == 1;
-        if !mono && channels.count() != NUM_CHANNELS as usize {
-            return Err(DecoderError::SymphoniaDecoder(format!(
-                "Unsupported number of channels: {channels}"
-            )));
+        let channels = decoder
+            .codec_params()
+            .channels
+            .ok_or_else(|| {
+                DecoderError::SymphoniaDecoder("Could not retrieve channel configuration".into())
+            })?
+            .count();
+        if channels == 0 {
+            return Err(DecoderError::SymphoniaDecoder(
+                "Unsupported number of channels: 0".into(),
+            ));
         }
 
         Ok(Self {
@@ -92,7 +144,8 @@ impl SymphoniaDecoder {
             // We set the sample buffer when decoding the first full packet,
             // whose duration is also the ideal sample buffer size.
             sample_buffer: None,
-            mono,
+            channels,
+            resampler,
         })
     }
 
@@ -217,6 +270,9 @@ impl AudioDecoder for SymphoniaDecoder {
         // Seeking is a `FormatReader` operation, so the decoder cannot reliably
         // know when a seek took place. Reset it to avoid audio glitches.
         self.decoder.reset();
+        if let Some(resampler) = self.resampler.as_mut() {
+            resampler.reset();
+        }
 
         Ok(self.ts_to_ms(seeked_to_ts.actual_ts))
     }
@@ -258,10 +314,17 @@ impl AudioDecoder for SymphoniaDecoder {
 
                     sample_buffer.copy_interleaved_ref(decoded);
                     let samples = sample_buffer.samples();
-                    let samples = AudioPacket::Samples(if self.mono {
-                        samples.iter().flat_map(|&s| [s, s]).collect()
-                    } else {
-                        samples.to_vec()
+                    let stereo: Vec<f64> = match self.channels {
+                        1 => samples.iter().flat_map(|&s| [s, s]).collect(),
+                        2 => samples.to_vec(),
+                        channels => samples
+                            .chunks_exact(channels)
+                            .flat_map(|frame| [frame[0], frame[1]])
+                            .collect(),
+                    };
+                    let samples = AudioPacket::Samples(match self.resampler.as_mut() {
+                        Some(resampler) => resampler.process(&stereo),
+                        None => stereo,
                     });
 
                     return Ok(Some((packet_position, samples)));
@@ -276,5 +339,48 @@ impl AudioDecoder for SymphoniaDecoder {
                 Err(err) => return Err(err.into()),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod resampler_tests {
+    use super::Resampler;
+
+    #[test]
+    fn resampling_keeps_length_and_joins_packets_smoothly() {
+        // One second of a 48 kHz ramp, split into uneven packets.
+        let ramp: Vec<f64> = (0..48_000)
+            .flat_map(|frame| {
+                let value = frame as f64 / 48_000.0;
+                [value, -value]
+            })
+            .collect();
+        let mut resampler = Resampler::new(48_000);
+        let mut output = Vec::new();
+        for packet in ramp.chunks(1152 * 2 + 6) {
+            output.extend(resampler.process(packet));
+        }
+        let frames = output.len() / 2;
+        assert!((44_098..=44_100).contains(&frames), "{frames} frames");
+        // A ramp stays a ramp: each step is the same, packet edges included.
+        let step = 48_000.0 / 44_100.0 / 48_000.0;
+        for pair in output
+            .chunks_exact(2)
+            .collect::<Vec<_>>()
+            .windows(2)
+            .skip(1)
+        {
+            assert!((pair[1][0] - pair[0][0] - step).abs() < 1e-9);
+            assert_eq!(pair[1][1], -pair[1][0]);
+        }
+    }
+
+    #[test]
+    fn a_reset_starts_from_silence() {
+        let mut resampler = Resampler::new(96_000);
+        resampler.process(&[1.0; 64]);
+        resampler.reset();
+        let output = resampler.process(&[1.0; 8]);
+        assert_eq!(output[0], 1.0);
     }
 }

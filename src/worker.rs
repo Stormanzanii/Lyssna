@@ -1122,6 +1122,27 @@ impl Backend {
                         let mut tracks = Vec::new();
                         let mut more = true;
                         let mut failure = None;
+                        // The copy saved last time shows at once; the fresh
+                        // list below replaces it only if it changed.
+                        let saved = (offset == 0).then(|| spotify.account()).flatten().and_then(
+                            |account| {
+                                crate::library_cache::whole(
+                                    account,
+                                    &key,
+                                    crate::native_browse::READ_LIMIT - 1,
+                                )
+                            },
+                        );
+                        if let Some(saved) = &saved {
+                            let _ = events.send(Event::Tracks {
+                                key: key.clone(),
+                                offset,
+                                generation,
+                                tracks: saved.clone(),
+                                more: false,
+                            });
+                            context.request_repaint();
+                        }
                         let mut whole = read_all(&native, &key, offset);
                         // A page restored at launch can ask before Spotify's
                         // connection is up; it is moments away, and far
@@ -1143,15 +1164,11 @@ impl Backend {
                         let read_natively = match whole {
                             Some(Ok(batch)) => {
                                 more = batch.len() == crate::native_browse::READ_LIMIT;
-                                if let Some(account) = spotify.account() {
-                                    for (page, chunk) in batch.chunks(50).enumerate() {
-                                        crate::library_cache::save_tracks(
-                                            account,
-                                            &key,
-                                            offset + page * 50,
-                                            chunk,
-                                        );
-                                    }
+                                if offset == 0
+                                    && !more
+                                    && let Some(account) = spotify.account()
+                                {
+                                    crate::library_cache::save_whole(account, &key, &batch);
                                 }
                                 tracks = batch;
                                 true
@@ -1189,7 +1206,12 @@ impl Backend {
                                 generation,
                                 message,
                             });
-                        } else {
+                        } else if saved.as_ref().is_none_or(|saved| {
+                            more || saved.len() != tracks.len()
+                                || saved.iter().zip(&tracks).any(|(old, new)| {
+                                    old.uri != new.uri || old.added_at != new.added_at
+                                })
+                        }) {
                             let _ = events.send(Event::Tracks {
                                 key,
                                 offset,

@@ -244,6 +244,29 @@ pub fn known_tracks() -> std::collections::HashMap<String, Track> {
     }
     known
 }
+/// A whole list saved by `save_whole`, when every page of it is on disk.
+pub fn whole(account: &str, key: &str, limit: usize) -> Option<Vec<Track>> {
+    let mut list = Vec::new();
+    while list.len() < limit {
+        let page = tracks(account, key, list.len())?;
+        let last = page.len() < 50;
+        list.extend(page);
+        if last {
+            return Some(list);
+        }
+    }
+    None
+}
+/// Save a whole list as pages, ending with a short page so `whole` knows
+/// where it ends even if it was longer before.
+pub fn save_whole(account: &str, key: &str, list: &[Track]) {
+    for (page, chunk) in list.chunks(50).enumerate() {
+        save_tracks(account, key, page * 50, chunk);
+    }
+    if list.len().is_multiple_of(50) {
+        save_tracks(account, key, list.len(), &[]);
+    }
+}
 pub fn save_tracks(account: &str, key: &str, offset: usize, tracks: &[Track]) {
     let Some(path) = tracks_path(account, key, offset) else {
         return;

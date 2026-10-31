@@ -1310,7 +1310,7 @@
 .nightly-ring circle:last-child {
   stroke: #1ed760;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.4s ease;
+  transition: stroke-dasharray 0.4s ease;
 }
 .nightly-refresh.building {
   color: #fff;

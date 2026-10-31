@@ -23,6 +23,10 @@ export function UpdatePrompt({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [dismissed, setDismissed] = useState<string>();
+  // Nightly updates that build by themselves show on the top bar's button
+  // (a progress ring and tag, then Restart to update); this opens only when
+  // that is clicked.
+  const [asked, setAsked] = useState(false);
   const [requested, setRequested] = useState<"download" | "install">();
   const [error, setError] = useState("");
   const version = state.update_version;
@@ -42,10 +46,14 @@ export function UpdatePrompt({
     enabled &&
     !!version &&
     key(version, ready) !== dismissed &&
+    (!(nightly && state.settings.auto_download_updates) || asked) &&
     status !== "Up to date";
   // Checking for a Nightly by hand shows what was found again.
   useEffect(() => {
-    const show = () => setDismissed(undefined);
+    const show = () => {
+      setDismissed(undefined);
+      setAsked(true);
+    };
     window.addEventListener("spotiflex:show-update", show);
     return () => window.removeEventListener("spotiflex:show-update", show);
   }, []);
@@ -73,6 +81,7 @@ export function UpdatePrompt({
     if (requested === "install") return;
     // Hidden while it downloads or builds, it opens again once ready.
     if (version) setDismissed(key(version, ready));
+    setAsked(false);
     dialog.current?.close();
   };
   return (

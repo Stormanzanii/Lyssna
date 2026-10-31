@@ -14185,6 +14185,23 @@ test("the Nightly button shows a building update, then restarts into it", async 
   });
   await expect(building).toBeVisible();
   await expect(building.locator(".nightly-ring")).toBeVisible();
+  // The prompt stays out of the way until the build is clicked.
+  const prompt = page.getByRole("dialog", {
+    name: "SpotiFlex Nightly 1234567 is available",
+  });
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "update",
+      status: "Building update…",
+      version: "Nightly 1234567",
+    }),
+  );
+  await expect(prompt).toBeHidden();
+  await page.getByRole("button", { name: "Building update · 55%" }).click();
+  await expect(prompt).toBeVisible();
+  // Clicking outside the prompt hides it.
+  await page.mouse.click(4, 4);
+  await expect(prompt).toBeHidden();
   await page.evaluate(() => {
     const host = (window as any).__clientTest;
     host.emit({
@@ -14204,12 +14221,9 @@ test("the Nightly button shows a building update, then restarts into it", async 
       version: "Nightly 1234567",
     });
   });
-  const prompt = page.getByRole("dialog", {
-    name: "SpotiFlex Nightly 1234567 is available",
-  });
-  await expect(prompt).toBeVisible();
-  // Clicking outside the prompt hides it.
-  await page.mouse.click(4, 4);
+  await expect(
+    page.getByRole("button", { name: "Restart to update" }),
+  ).toBeVisible();
   await expect(prompt).toBeHidden();
   await page.getByRole("button", { name: "Restart to update" }).click();
   await expect
@@ -14260,7 +14274,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   const prompt = page.getByRole("dialog", {
     name: "SpotiFlex Nightly 1234567 is available",
   });
-  await prompt.getByRole("button", { name: "Minimise", exact: true }).click();
+  // It builds by itself, so it shows on the button, not over the app.
   await expect(prompt).toBeHidden();
   await refresh.click();
   await expect(prompt).toBeVisible();
@@ -14314,7 +14328,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
   await expect(
     prompt.getByRole("progressbar", { name: "Building update" }),
   ).toHaveAttribute("aria-valuenow", /^[1-9]/);
-  // Minimised while it builds, it opens again once the build is ready.
+  // Minimised while it builds; once ready the button offers the restart.
   await prompt.getByRole("button", { name: "Minimise", exact: true }).click();
   await expect(prompt).toBeHidden();
   await page.evaluate(() =>
@@ -14325,6 +14339,7 @@ test("a Nightly copy checks for newer Nightly code from the top bar", async ({
     }),
   );
   await expect(
-    prompt.getByRole("button", { name: "Install and restart" }),
+    page.getByRole("button", { name: "Restart to update" }),
   ).toBeVisible();
+  await expect(prompt).toBeHidden();
 });

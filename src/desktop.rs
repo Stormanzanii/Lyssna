@@ -283,6 +283,7 @@ impl Desktop {
         crate::lyric_sources::set_prefer_apple(settings.lyrics_prefer_apple);
         crate::lyric_sources::set_musixmatch_words(!settings.lyrics_musixmatch_lines_only);
         crate::lyric_sources::load_musixmatch_token();
+        updater::set_channel(&settings.update_channel);
         let scanned = app.clone();
         crate::local_files::on_change(move |count| {
             let _ = scanned.emit("spotiflex", json!({"type":"local_files","count":count}));
@@ -1246,6 +1247,21 @@ impl Desktop {
                             snapshot.update_version = None;
                             snapshot.update_notes.clear();
                         }
+                        updater::Event::Nightly => {
+                            snapshot.update_status =
+                                "Nightly builds update when you build them".into();
+                            snapshot.update_version = None;
+                            snapshot.update_notes.clear();
+                            if let Ok(mut available) = pump.available.lock() {
+                                *available = None;
+                            }
+                            if let Ok(mut ready) = pump.ready_update.lock() {
+                                *ready = None;
+                            }
+                        }
+                        // Found before the switch to Nightly.
+                        updater::Event::Available(_)
+                            if snapshot.settings.update_channel == "nightly" => {}
                         updater::Event::Available(update) => {
                             snapshot.update_version = Some(update.manifest.version.clone());
                             snapshot.update_notes = update.manifest.notes.clone();
@@ -2329,6 +2345,10 @@ fn save_settings(
         let mut snapshot = lock(&state.0.snapshot)?;
         let mut settings = settings;
         let output_changed = settings.audio_output != snapshot.settings.audio_output;
+        if !["stable", "nightly"].contains(&settings.update_channel.as_str()) {
+            settings.update_channel = "stable".into();
+        }
+        let channel_changed = settings.update_channel != snapshot.settings.update_channel;
         let local_changed = settings.show_local_files != snapshot.settings.show_local_files
             || settings.local_sources != snapshot.settings.local_sources;
         let sources_changed = settings.lyrics_source_order != snapshot.settings.lyrics_source_order
@@ -2366,6 +2386,13 @@ fn save_settings(
         settings.save()?;
         if local_changed {
             crate::local_files::rescan(&settings);
+        }
+        // A new channel is checked at once.
+        if channel_changed {
+            updater::set_channel(&settings.update_channel);
+            if updater::DISABLED.is_none() {
+                let _ = state.0.update_commands.send(updater::Command::Check);
+            }
         }
         crate::lyric_sources::configure(
             &settings.lyrics_source_order,

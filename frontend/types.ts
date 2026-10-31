@@ -220,6 +220,8 @@ export interface Settings {
   lyric_font?: string;
   volume_percent?: number;
   auto_download_updates: boolean;
+  /** Nightly copies are built from source and never download updates. */
+  update_channel?: "stable" | "nightly";
   keep_playing_on_close?: boolean;
   cinema_lyrics?: boolean;
   crossfade?: boolean;

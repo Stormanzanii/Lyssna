@@ -2,7 +2,10 @@ use std::{
     fs::{self, File},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -70,8 +73,13 @@ pub enum Command {
 }
 pub enum Event {
     Current,
+    /// Nightly is chosen, so nothing is checked or downloaded.
+    Nightly,
     Available(Update),
-    Progress { downloaded: u64, total: u64 },
+    Progress {
+        downloaded: u64,
+        total: u64,
+    },
     Ready(ReadyUpdate),
     Restarted,
     Error(String),
@@ -148,6 +156,14 @@ fn client() -> Result<reqwest::blocking::Client> {
         .timeout(Duration::from_secs(300))
         .redirect(reqwest::redirect::Policy::none())
         .build()?)
+}
+
+/// Nightly copies are built from source and never download updates.
+static NIGHTLY: AtomicBool = AtomicBool::new(false);
+
+/// Follow "stable" or "nightly"; anything else is Stable.
+pub fn set_channel(channel: &str) {
+    NIGHTLY.store(channel == "nightly", Ordering::Relaxed);
 }
 
 fn check(client: &reqwest::blocking::Client) -> Result<Option<Update>> {
@@ -344,6 +360,11 @@ impl Updater {
                 };
                 let result = match command {
                     Command::Shutdown => break,
+                    Command::Check if NIGHTLY.load(Ordering::Relaxed) => {
+                        next_check = Instant::now() + Duration::from_secs(30 * 60);
+                        emit(Event::Nightly);
+                        Ok(())
+                    }
                     Command::Check => {
                         next_check = Instant::now() + Duration::from_secs(30 * 60);
                         match check(&client) {
@@ -396,6 +417,16 @@ impl Drop for Updater {
 mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
+
+    #[test]
+    fn only_nightly_stops_update_checks() {
+        set_channel("nightly");
+        assert!(NIGHTLY.load(Ordering::Relaxed));
+        set_channel("beta");
+        assert!(!NIGHTLY.load(Ordering::Relaxed));
+        set_channel("stable");
+        assert!(!NIGHTLY.load(Ordering::Relaxed));
+    }
 
     fn signed(manifest: &Manifest) -> (Vec<u8>, VerifyingKey) {
         let key = SigningKey::from_bytes(&[7; 32]);

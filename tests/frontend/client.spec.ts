@@ -14039,3 +14039,46 @@ test("a local song has no About the artist card", async ({ page }) => {
   );
   await expect(page.locator(".now-playing .artist-card")).toHaveCount(0);
 });
+
+test("Nightly asks first and lists what building it needs", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Advanced");
+  const version = page.getByRole("combobox", { name: "Version", exact: true });
+  await expect(version.locator("option")).toHaveText(["Stable", "Nightly"]);
+  const channel = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "save_settings")
+          .at(-1)?.args.settings.update_channel,
+    );
+  await version.selectOption("nightly");
+  const prompt = page.getByRole("alertdialog", {
+    name: "Nightly builds come from source",
+  });
+  await expect(prompt).toContainText("Rust, installed with rustup");
+  await expect(prompt.locator("pre")).toContainText(
+    "git clone https://github.com/Stormanzanii/SpotiFlex",
+  );
+  await prompt.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(prompt).toBeHidden();
+  await expect(version).toHaveValue("stable");
+  await expect(
+    page.getByRole("dialog", { name: "SpotiFlex settings" }),
+  ).toBeVisible();
+  await version.selectOption("nightly");
+  await prompt
+    .getByRole("button", { name: "Switch to Nightly", exact: true })
+    .click();
+  await expect.poll(channel).toBe("nightly");
+  await expect(version).toHaveValue("nightly");
+  await openSettings(page, "General");
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("switch", { name: "Download updates automatically" }),
+  ).toHaveCount(0);
+});

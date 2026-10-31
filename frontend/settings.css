@@ -897,3 +897,47 @@
 .marker-colour .settings-select {
   width: 176px;
 }
+
+/* Nightly prompt, over Settings. */
+.nightly-backdrop {
+  inset: 0;
+  z-index: 90;
+}
+.nightly-dialog {
+  width: min(100%, 540px);
+}
+.nightly-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.nightly-dialog ul {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted, #b3b3b3);
+}
+.nightly-dialog pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #ffffff0f;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+.nightly-dialog .nightly-note {
+  margin-bottom: 0;
+  color: var(--muted, #b3b3b3);
+}
+.nightly-dialog code {
+  user-select: text;
+  word-break: break-all;
+}
+.nightly-dialog .inline-actions {
+  flex-wrap: wrap;
+}
+.nightly-dialog .inline-actions .outline {
+  margin-right: auto;
+}

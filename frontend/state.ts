@@ -206,6 +206,7 @@ export const emptyState: AppState = {
     lyric_font: "",
     audio_output: null,
     auto_download_updates: true,
+    update_channel: "stable",
     folders: [],
   },
   native_ready: false,

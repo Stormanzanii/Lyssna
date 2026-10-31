@@ -295,6 +295,8 @@ pub struct Settings {
     pub volume_percent: u8,
     pub audio_output: Option<String>,
     pub auto_download_updates: bool,
+    /// Builds to follow: "stable" or "nightly" (built from source).
+    pub update_channel: String,
     /// The close button hides SpotiFlex to the notification area and music
     /// keeps playing; Quit in the tray menu exits. Off by default. Replaces
     /// an earlier `close_to_tray` that was on by default.
@@ -416,6 +418,7 @@ impl Default for Settings {
             volume_percent: 100,
             audio_output: None,
             auto_download_updates: true,
+            update_channel: "stable".into(),
             keep_playing_on_close: false,
             cinema_lyrics: false,
             crossfade: false,

@@ -218,6 +218,9 @@ export function SettingsWindow({
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [testingOutput, setTestingOutput] = useState(false);
   const [cacheBytes, setCacheBytes] = useState<number | null>(null);
+  // Asked before following Nightly, which is built from source.
+  const [nightlyPrompt, setNightlyPrompt] = useState(false);
+  const nightly = state.settings.update_channel === "nightly";
   // Read from Windows each time Settings opens: Task Manager can change it.
   const [launch, setLaunch] = useState<"off" | "open" | "minimized" | null>(
     null,
@@ -610,7 +613,9 @@ export function SettingsWindow({
           <button
             className="pill outline"
             disabled={
-              IS_MAC || state.update_status.startsWith("Downloading update")
+              IS_MAC ||
+              nightly ||
+              state.update_status.startsWith("Downloading update")
             }
             onClick={() =>
               void onCall("app_update", {
@@ -630,7 +635,7 @@ export function SettingsWindow({
                 : "Check for updates"}
           </button>
         </SettingRow>,
-        !IS_MAC ? (
+        !IS_MAC && !nightly ? (
           <SettingRow
             key="auto-update"
             label="Download updates automatically"
@@ -1481,6 +1486,35 @@ export function SettingsWindow({
     ],
     [
       "Advanced",
+      "Builds",
+      [
+        <SettingRow
+          key="update-channel"
+          label="Version"
+          help={
+            nightly
+              ? "Nightly: the newest changes, built from source on this computer. Automatic updates are off."
+              : "Stable: tested releases that update automatically."
+          }
+          keywords="build version channel stable nightly beta updates source"
+        >
+          <select
+            className="settings-select"
+            aria-label="Version"
+            value={nightly ? "nightly" : "stable"}
+            onChange={(event) => {
+              if (event.target.value === "nightly") setNightlyPrompt(true);
+              else onSettings({ update_channel: "stable" });
+            }}
+          >
+            <option value="stable">Stable</option>
+            <option value="nightly">Nightly</option>
+          </select>
+        </SettingRow>,
+      ],
+    ],
+    [
+      "Advanced",
       "Settings window",
       [
         flag(
@@ -1742,6 +1776,104 @@ export function SettingsWindow({
               {import.meta.env.DEV ? "Development build" : "Release build"}
             </span>
           </footer>
+        </div>
+      </section>
+      {nightlyPrompt && (
+        <NightlyPrompt
+          onOpen={onOpen}
+          onCancel={() => setNightlyPrompt(false)}
+          onConfirm={() => {
+            setNightlyPrompt(false);
+            onSettings({ update_channel: "nightly" });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const REPOSITORY = "https://github.com/Stormanzanii/SpotiFlex";
+
+/** What a Nightly build needs: SpotiFlex built from its source. */
+function NightlyPrompt({
+  onOpen,
+  onCancel,
+  onConfirm,
+}: {
+  onOpen: (url: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const needs = IS_MAC
+    ? [
+        "Xcode Command Line Tools (xcode-select --install)",
+        "Rust, installed with rustup",
+        "Node.js 24",
+        "CMake (brew install cmake)",
+      ]
+    : [
+        "Git",
+        "Rust, installed with rustup",
+        "Node.js 24",
+        "Visual Studio Build Tools with “Desktop development with C++” (includes CMake)",
+        "LLVM, for libclang",
+        "Microsoft Edge WebView2 (already on Windows 11)",
+      ];
+  const commands = [
+    `git clone ${REPOSITORY}`,
+    "cd SpotiFlex",
+    IS_MAC ? "./build.sh" : ".\\build.ps1",
+  ];
+  return (
+    <div
+      className="modal-backdrop nightly-backdrop"
+      onClick={(event) => {
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <section
+        className="dialog nightly-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="nightly-title"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.stopPropagation();
+          onCancel();
+        }}
+      >
+        <h2 id="nightly-title">Nightly builds come from source</h2>
+        <p>
+          Nightly is the newest SpotiFlex, built on this computer from the
+          latest code. It isn't downloaded or tested, and automatic updates turn
+          off. To update, build it again.
+        </p>
+        <h3>You need</h3>
+        <ul>
+          {needs.map((need) => (
+            <li key={need}>{need}</li>
+          ))}
+        </ul>
+        <h3>Then run</h3>
+        <pre>{commands.join("\n")}</pre>
+        {!IS_MAC && (
+          <p className="nightly-note">
+            If PowerShell blocks the script, run{" "}
+            <code>powershell -ExecutionPolicy Bypass -File .\build.ps1</code>
+          </p>
+        )}
+        <div className="inline-actions">
+          <button className="pill outline" onClick={() => onOpen(REPOSITORY)}>
+            Open source code
+          </button>
+          <button className="pill" autoFocus onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="pill primary" onClick={onConfirm}>
+            Switch to Nightly
+          </button>
         </div>
       </section>
     </div>

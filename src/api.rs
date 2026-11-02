@@ -648,6 +648,9 @@ pub enum PlayerAction {
         context: Option<String>,
         /// Songs the listener had queued, added back after loading.
         queued: Vec<String>,
+        /// `uris` is the whole list in the order it was played from (such as
+        /// a Random sort), so the context plays in that order.
+        listed: bool,
     },
     /// Restore a paged DJ session before resuming or advancing its queue.
     RestoreDJ {

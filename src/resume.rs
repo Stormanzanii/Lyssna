@@ -94,12 +94,24 @@ pub fn in_context(
             ..
         } => {
             let (context, queued) = saved_context(account);
+            // The list as it was played, such as a Random sort, keeps its
+            // order instead of reloading the playlist's own.
+            let listed = context.as_ref().and_then(|context| {
+                let order = saved_order(account, context)?;
+                let at = order.iter().position(|uri| Some(uri) == uris.get(offset))?;
+                Some((order, at))
+            });
+            let (uris, offset, listed) = match listed {
+                Some((order, at)) => (order, at, true),
+                None => (uris, offset, false),
+            };
             crate::api::PlayerAction::Resume {
                 uris,
                 offset,
                 position_ms,
                 context,
                 queued: if with_queue { queued } else { Vec::new() },
+                listed,
             }
         }
         action => action,
@@ -194,11 +206,83 @@ pub fn restore_dj_action(
 }
 static QUEUES: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Longest list order kept for a restart.
+const ORDER_LIMIT: usize = 10_000;
+type Orders = HashMap<String, (String, Vec<String>)>;
+static ORDERS: LazyLock<Mutex<Orders>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+/// The order a playlist, album or Liked Songs was started in, when it was
+/// played from its list (any sort, Random included). Kept in its own file,
+/// written only when a list starts, not with every position save.
+fn remember_order(account: &str, order: Option<(String, Vec<String>)>) {
+    let order = order.filter(|(context, uris)| valid_order(context, uris));
+    if let Ok(mut orders) = ORDERS.lock() {
+        if orders.get(account) == order.as_ref() {
+            return;
+        }
+        match &order {
+            Some(order) => orders.insert(account.into(), order.clone()),
+            None => orders.remove(account),
+        };
+    }
+    // Tests keep orders in memory, away from the real application data.
+    let Ok(path) = order_path(account).and_then(|path| {
+        anyhow::ensure!(!cfg!(test), "Not saved in tests");
+        Ok(path)
+    }) else {
+        return;
+    };
+    match order {
+        Some(order) => {
+            let _ = std::fs::create_dir_all(path.parent().unwrap()).and_then(|()| {
+                let temporary = path.with_extension("tmp");
+                std::fs::write(&temporary, serde_json::to_vec(&order)?)?;
+                std::fs::rename(temporary, &path)
+            });
+        }
+        None => {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+fn valid_order(context: &str, uris: &[String]) -> bool {
+    valid_context(context)
+        && !uris.is_empty()
+        && uris.len() <= ORDER_LIMIT
+        && uris.iter().all(|uri| valid_track(uri))
+}
+fn saved_order(account: &str, context: &str) -> Option<Vec<String>> {
+    let cached = ORDERS.lock().ok()?.get(account).cloned();
+    let (saved, order) = match cached {
+        Some(order) => order,
+        None => {
+            let path = order_path(account).ok().filter(|_| !cfg!(test))?;
+            if std::fs::metadata(&path).ok()?.len() > 2_000_000 {
+                return None;
+            }
+            let order: (String, Vec<String>) =
+                serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+            if !valid_order(&order.0, &order.1) {
+                return None;
+            }
+            if let Ok(mut orders) = ORDERS.lock() {
+                orders.insert(account.into(), order.clone());
+            }
+            order
+        }
+    };
+    (saved == context).then_some(order)
+}
 pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
     let queue = match action {
         crate::api::PlayerAction::PlayUris { uris, .. }
         | crate::api::PlayerAction::Resume { uris, .. } => uris.clone(),
         crate::api::PlayerAction::Play(Some(uri)) => vec![uri.clone()],
+        // A list started in its own order forgets an earlier sorted one.
+        crate::api::PlayerAction::PlayContext { .. }
+        | crate::api::PlayerAction::PreparedDJ { .. } => {
+            remember_order(account, None);
+            return;
+        }
         _ => return,
     };
     remember_dj_context(account, "", None);
@@ -206,7 +290,14 @@ pub fn remember_queue(account: &str, action: &crate::api::PlayerAction) {
         crate::api::PlayerAction::PlayUris { context, .. } => context.clone(),
         _ => None,
     };
-    remember_native_context(account, context, Vec::new());
+    remember_native_context(account, context.clone(), Vec::new());
+    match action {
+        crate::api::PlayerAction::PlayUris { uris, .. } => {
+            remember_order(account, context.map(|context| (context, uris.clone())))
+        }
+        crate::api::PlayerAction::Play(Some(_)) => remember_order(account, None),
+        _ => {}
+    }
     if let Ok(mut queues) = QUEUES.lock() {
         queues.insert(account.into(), queue.into_iter().take(100).collect());
     }
@@ -222,6 +313,7 @@ pub fn restore_action(uri: &str, queue: &[String], position_ms: u64) -> crate::a
         position_ms,
         context: None,
         queued: Vec::new(),
+        listed: false,
     }
 }
 /// Next or Previous on a restored, not yet loaded song: start the saved queue
@@ -247,6 +339,7 @@ pub fn skip_action(
         position_ms: 0,
         context: None,
         queued: Vec::new(),
+        listed: false,
     })
 }
 pub fn queue(account: &str) -> Vec<String> {
@@ -267,6 +360,9 @@ fn path(account: &str) -> Result<std::path::PathBuf> {
     Ok(crate::config::data_dir()?
         .join("resume")
         .join(format!("{key}.json")))
+}
+fn order_path(account: &str) -> Result<std::path::PathBuf> {
+    Ok(path(account)?.with_extension("order.json"))
 }
 pub fn load(account: &str) -> Option<LastPlayed> {
     let path = path(account).ok()?;
@@ -500,6 +596,49 @@ mod tests {
         // DJ and unknown contexts are never saved as a playlist.
         remember_native_context(account, Some(crate::home::DJ_URI.into()), vec![]);
         assert!(saved_context(account).0.is_none());
+    }
+    #[test]
+    fn a_restore_keeps_the_order_the_list_was_played_in() {
+        use crate::api::PlayerAction;
+        let account = "order-restore-test";
+        let playlist = "spotify:playlist:0123456789abcdefghijkl";
+        let song = |n: usize| format!("spotify:track:{n:0>22}");
+        // Played from a Random sort: the list order differs from the
+        // playlist's own, and is longer than the saved window.
+        let order: Vec<String> = (0..300).rev().map(song).collect();
+        remember_queue(
+            account,
+            &PlayerAction::PlayUris {
+                uris: order.clone(),
+                offset: 0,
+                context: Some(playlist.into()),
+            },
+        );
+        remember_native_context(account, Some(playlist.into()), vec![]);
+        let window = vec![song(151), song(150), song(149)];
+        let restored = in_context(account, restore_action(&song(150), &window, 5000), true);
+        assert!(matches!(
+            &restored,
+            PlayerAction::Resume { uris, offset, listed: true, context: Some(context), position_ms: 5000, .. }
+                if uris == &order && uris[*offset] == song(150) && context == playlist
+        ));
+        // Starting the playlist in its own order forgets the sorted one.
+        remember_queue(
+            account,
+            &PlayerAction::PlayContext {
+                context: playlist.into(),
+                offset: None,
+            },
+        );
+        let restored = in_context(account, restore_action(&song(150), &window, 5000), true);
+        assert!(matches!(
+            restored,
+            PlayerAction::Resume {
+                listed: false,
+                offset: 1,
+                ..
+            }
+        ));
     }
     #[test]
     fn saved_contexts_are_limited_to_playlists_albums_artists_and_liked_songs() {

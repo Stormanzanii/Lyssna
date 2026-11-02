@@ -1345,6 +1345,25 @@ fn load_request(action: &PlayerAction, modes: &PlayModes) -> Option<LoadRequest>
                 (*offset).min(u32::MAX as usize) as u32
             ))),
         ),
+        // A list played in its own order, such as a Random sort, resumes in
+        // that order under its playlist.
+        PlayerAction::Resume {
+            uris,
+            offset,
+            position_ms,
+            context: Some(context),
+            listed: true,
+            ..
+        } if uris.get(*offset).is_some() => LoadRequest::from_context_uri(
+            context.clone(),
+            LoadRequestOptions {
+                seek_to: (*position_ms).min(u64::from(u32::MAX)) as u32,
+                prepared_context: Some(Box::new(listed_context(context, uris))),
+                ..options(Some(PlayingTrack::Index(
+                    (*offset).min(u32::MAX as usize) as u32
+                )))
+            },
+        ),
         // A restored song carries on through the playlist it came from, as
         // Spotify's own app restores it.
         PlayerAction::Resume {
@@ -2841,6 +2860,7 @@ mod tests {
             position_ms: 77000,
             context: Some("spotify:playlist:0123456789abcdefghijkl".into()),
             queued: Vec::new(),
+            listed: false,
         })
         .unwrap();
         assert_eq!(request.seek_to, 77000);
@@ -2848,6 +2868,27 @@ mod tests {
             &request.playing_track,
             Some(PlayingTrack::Uri(uri)) if *uri == queue[1]
         ));
+        // A list played in its own order resumes in that order.
+        let request = load_request(&PlayerAction::Resume {
+            uris: queue.clone(),
+            offset: 1,
+            position_ms: 77000,
+            context: Some("spotify:playlist:0123456789abcdefghijkl".into()),
+            queued: Vec::new(),
+            listed: true,
+        })
+        .unwrap();
+        assert_eq!(request.seek_to, 77000);
+        assert!(matches!(
+            request.playing_track,
+            Some(PlayingTrack::Index(1))
+        ));
+        let tracks: Vec<_> = request.prepared_context.as_ref().unwrap().pages[0]
+            .tracks
+            .iter()
+            .filter_map(|track| track.uri.clone())
+            .collect();
+        assert_eq!(tracks, queue);
     }
     #[test]
     fn listed_songs_load_under_their_context_without_resolving_it() {
@@ -3043,6 +3084,7 @@ mod tests {
             position_ms: 77000,
             context: None,
             queued: Vec::new(),
+            listed: false,
         };
         let (actual, position) = preload_selection(&action).unwrap();
         assert_eq!(actual.to_uri(), uri);

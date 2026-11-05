@@ -2490,6 +2490,15 @@ fn send_to_jam(
     );
 }
 #[tauri::command]
+fn playback_speed(percent: u32, state: State<'_, Desktop>) -> std::result::Result<u32, String> {
+    if percent != 100 && lock(&state.0.jam_commands).map_err(error)?.is_some() {
+        return Err("Leave the Jam to change the speed".into());
+    }
+    let applied = crate::audio::set_playback_speed(percent);
+    crate::native::diagnostic(&format!("playback speed {applied}%"));
+    Ok(applied)
+}
+#[tauri::command]
 fn retry_audio(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::RetryAudio).map_err(error)
 }
@@ -2911,6 +2920,14 @@ async fn jam(
                 .is_ok_and(|output| output.clear_temporary_volume())
         {
             crate::native::diagnostic("joining a Jam ended a local client's quiet playback");
+        }
+        // Everyone in a Jam hears the song at its own speed.
+        if matches!(action.as_str(), "start" | "join")
+            && matches!(result, Ok(Some(_)))
+            && crate::audio::playback_speed() != 100
+        {
+            crate::audio::set_playback_speed(100);
+            crate::native::diagnostic("joining a Jam returned playback to normal speed");
         }
         result
     })
@@ -4750,6 +4767,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             browse,
             player,
             retry_audio,
+            playback_speed,
             test_audio_output,
             refresh,
             save_item,

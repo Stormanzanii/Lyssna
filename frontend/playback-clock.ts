@@ -14,6 +14,7 @@ export class PlaybackClock {
   private correction = 0;
   private correctionDuration = 600;
   private duration = 0;
+  private rate = 1;
 
   observe(
     playback: Playback,
@@ -22,8 +23,10 @@ export class PlaybackClock {
     time: number,
     wallTime: number,
     native = true,
+    rate = 1,
   ) {
     if (
+      this.rate === rate &&
       this.observedAt === observedAt &&
       this.track === playback.item?.uri &&
       this.playing === playback.is_playing &&
@@ -44,7 +47,10 @@ export class PlaybackClock {
     const desired =
       (playback.progress_ms ?? 0) +
       (playback.is_playing
-        ? Math.min(native ? 500 : Infinity, Math.max(0, wallTime - observedAt))
+        ? Math.min(
+            native ? 500 : Infinity,
+            Math.max(0, wallTime - observedAt),
+          ) * rate
         : 0);
     // Repeat replays a song in place: same track, still playing, no seek.
     // Native reports only snap forward, so treat a jump back to the start
@@ -52,6 +58,7 @@ export class PlaybackClock {
     const restarted =
       native && current - desired > 3000 && (playback.progress_ms ?? 0) < 1500;
     const snap =
+      this.rate !== rate ||
       this.track !== playback.item?.uri ||
       this.playing !== playback.is_playing ||
       this.revision !== revision ||
@@ -62,6 +69,7 @@ export class PlaybackClock {
     this.playing = playback.is_playing;
     this.advancing = playback.is_playing && !repeated;
     this.native = native;
+    this.rate = rate;
     this.revision = revision;
     this.observedAt = observedAt;
     this.observedPosition = playback.progress_ms ?? 0;
@@ -84,7 +92,7 @@ export class PlaybackClock {
       Math.min(
         this.duration,
         this.anchor +
-          elapsed +
+          elapsed * this.rate +
           this.correction * Math.min(1, elapsed / this.correctionDuration),
       ),
     );

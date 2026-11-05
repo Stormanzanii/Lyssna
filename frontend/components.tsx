@@ -459,10 +459,20 @@ export const TrackTitle = memo(function TrackTitle({
 
 export function usePosition(
   state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
-    Partial<Pick<AppState, "local_device_name">>,
+    Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
+) {
+  return usePlaybackClock(state).position;
+}
+
+export function usePlaybackClock(
+  state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
+    Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
 ) {
   const clock = useRef(new PlaybackClock());
   const [time, setTime] = useState(performance.now());
+  const native = state.local_device_name
+    ? state.playback.device.name === state.local_device_name
+    : true;
   const now = performance.now();
   clock.current.observe(
     state.playback,
@@ -470,9 +480,8 @@ export function usePosition(
     state.clock_revision,
     now,
     Date.now(),
-    state.local_device_name
-      ? state.playback.device.name === state.local_device_name
-      : true,
+    native,
+    native ? (state.playback_rate ?? 1) : 1,
   );
   useEffect(() => {
     setTime(performance.now());
@@ -489,7 +498,8 @@ export function usePosition(
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [state.playback.is_playing]);
-  return clock.current.read(Math.max(time, now));
+  const read = useCallback(() => clock.current.read(performance.now()), []);
+  return { position: clock.current.read(Math.max(time, now)), read };
 }
 
 /** Seek Fade-in Compensation from Spicy Lyrics: a clicked lyric starts

@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Copy,
   Download,
   Gauge,
   Pause,
   Play,
+  Plus,
   Redo2,
   RotateCcw,
   Save,
+  Trash2,
+  Type,
   Undo2,
   Wand2,
 } from "lucide-react";
@@ -21,9 +31,11 @@ import {
   clampCursor,
   clearAll,
   clearTiming,
+  editUnit,
   fileName,
   formatTime,
   fromLyrics,
+  insertLines,
   keepTimings,
   lineSpan,
   markEnd,
@@ -34,10 +46,13 @@ import {
   previousCursor,
   problems,
   progress,
+  removeLine,
+  setLineText,
   timed,
   toLyrics,
   toText,
   toTtml,
+  toggleJoin,
   toggleLine,
 } from "./ttml-creator-model";
 import "./ttml-creator.css";
@@ -86,6 +101,16 @@ const meta = (track: Track): SongMeta => ({
   spotifyId: track.id,
   durationMs: track.duration_ms,
 });
+
+function TimePill({ ms, end }: { ms?: number; end?: boolean }) {
+  return (
+    <span
+      className={`ttml-pill${end ? " end" : ""}${ms === undefined ? " empty" : ""}`}
+    >
+      {ms === undefined ? "--:--.---" : formatTime(ms)}
+    </span>
+  );
+}
 
 export function TtmlCreator({
   state,
@@ -195,11 +220,26 @@ export function TtmlCreator({
     });
   }, []);
 
-  const applyText = () => {
+  const [textMode, setTextMode] = useState(false);
+  const [editing, setEditing] = useState<Cursor | null>(null);
+  const [adding, setAdding] = useState<number | null>(null);
+  const applyText = (sync: boolean) => {
     const parsed = keepTimings(lines, parseText(text));
     setLines(parsed);
     setCursor((at) => clampCursor(parsed, at));
-    if (parsed.length) setTab("sync");
+    setTextMode(false);
+    if (sync && parsed.length) setTab("sync");
+  };
+  const openText = () => {
+    setText(toText(lines));
+    setTextMode(true);
+  };
+  const commitWord = (at: Cursor, value: string) => {
+    setEditing(null);
+    const next = editUnit(lines, at, value);
+    if (next === lines) return;
+    setLines(next);
+    setCursor((cursor) => clampCursor(next, cursor));
   };
   const startFromLyrics = () => {
     if (!state.lyrics || !here) return;
@@ -405,7 +445,182 @@ export function TtmlCreator({
         </div>
       )}
 
-      {tab === "write" && (
+      {tab === "write" && !textMode && lines.length > 0 && (
+        <div className="ttml-write">
+          <div className="ttml-write-actions">
+            <p className="ttml-hint">
+              Double-click a word to edit it. Type <kbd>|</kbd> to split it into
+              syllables. Click <kbd>Space</kbd> to join two words.
+            </p>
+            <div className="ttml-row">
+              <button
+                onClick={startFromLyrics}
+                disabled={!here || !state.lyrics?.lines.length}
+                title="Use the lyrics Lyssna found for this song as a start"
+              >
+                <Wand2 size={15} />
+                Start from current lyrics
+              </button>
+              <button onClick={openText}>
+                <Type size={15} />
+                Edit as text
+              </button>
+              <button className="primary" onClick={() => setTab("sync")}>
+                Continue to Sync
+              </button>
+            </div>
+          </div>
+          <div className="ttml-lines">
+            {lines.map((line, lineIndex) => (
+              <div
+                key={lineIndex}
+                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}`}
+              >
+                <span className="ttml-card-number">{lineIndex + 1}</span>
+                <div className="ttml-card-body">
+                  <div className="ttml-chips">
+                    {line.units.map((unit, unitIndex) => {
+                      const at = { line: lineIndex, unit: unitIndex };
+                      const isEditing =
+                        editing?.line === lineIndex &&
+                        editing.unit === unitIndex;
+                      return (
+                        <Fragment key={unitIndex}>
+                          {unitIndex > 0 && !unit.joined && (
+                            <button
+                              className="ttml-space"
+                              title="Join these words"
+                              onClick={() => setLines(toggleJoin(lines, at))}
+                            >
+                              Space
+                            </button>
+                          )}
+                          {isEditing ? (
+                            <input
+                              className="ttml-chip-edit"
+                              aria-label="Edit word"
+                              autoFocus
+                              defaultValue={unit.text}
+                              size={Math.max(2, unit.text.length + 1)}
+                              onBlur={(event) =>
+                                commitWord(at, event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter")
+                                  event.currentTarget.blur();
+                                if (event.key === "Escape") setEditing(null);
+                              }}
+                            />
+                          ) : (
+                            <button
+                              className={`ttml-chip${unit.joined ? " joined" : ""}`}
+                              title={
+                                unit.joined
+                                  ? "Syllable. Click to split it into its own word; double-click to edit."
+                                  : "Double-click to edit"
+                              }
+                              onClick={() =>
+                                unit.joined && setLines(toggleJoin(lines, at))
+                              }
+                              onDoubleClick={() => setEditing(at)}
+                            >
+                              {unit.text}
+                            </button>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                  {(["translation", "romanization"] as const).map((key) => (
+                    <label key={key} className="ttml-card-extra">
+                      {key === "translation" ? "Translation:" : "Romanization:"}
+                      <input
+                        key={line[key] ?? ""}
+                        defaultValue={line[key] ?? ""}
+                        placeholder="None"
+                        spellCheck={false}
+                        onBlur={(event) =>
+                          event.target.value !== (line[key] ?? "") &&
+                          setLines(
+                            setLineText(
+                              lines,
+                              lineIndex,
+                              key,
+                              event.target.value.trim(),
+                            ),
+                          )
+                        }
+                        onKeyDown={(event) =>
+                          event.key === "Enter" && event.currentTarget.blur()
+                        }
+                      />
+                    </label>
+                  ))}
+                  {adding === lineIndex && (
+                    <input
+                      className="ttml-card-add"
+                      aria-label="New line"
+                      placeholder="New line, then Enter"
+                      autoFocus
+                      onBlur={() => setAdding(null)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setAdding(null);
+                        if (event.key !== "Enter") return;
+                        const value = event.currentTarget.value;
+                        setAdding(null);
+                        if (value.trim())
+                          setLines(insertLines(lines, lineIndex, value));
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="ttml-line-tools">
+                  <button
+                    className={line.background ? "active" : ""}
+                    aria-pressed={line.background}
+                    title="Background vocal"
+                    onClick={() =>
+                      setLines(toggleLine(lines, lineIndex, "background"))
+                    }
+                  >
+                    BG
+                  </button>
+                  <button
+                    className={line.opposite ? "active" : ""}
+                    aria-pressed={line.opposite}
+                    title="Second singer"
+                    onClick={() =>
+                      setLines(toggleLine(lines, lineIndex, "opposite"))
+                    }
+                  >
+                    v2
+                  </button>
+                  <button
+                    title="Delete line"
+                    aria-label="Delete line"
+                    onClick={() => {
+                      const next = removeLine(lines, lineIndex);
+                      setLines(next);
+                      setCursor((at) => clampCursor(next, at));
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    title="Add line below"
+                    aria-label="Add line below"
+                    onClick={() => setAdding(lineIndex)}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "write" && (textMode || !lines.length) && (
         <div className="ttml-write">
           <p className="ttml-hint">
             One lyric line per line. Split a word into syllables with{" "}
@@ -434,13 +649,18 @@ export function TtmlCreator({
               <Wand2 size={15} />
               Start from current lyrics
             </button>
-            <button
-              className="primary"
-              onClick={applyText}
-              disabled={!text.trim()}
-            >
-              Continue to Sync
-            </button>
+            <div className="ttml-row">
+              {lines.length > 0 && (
+                <button onClick={() => applyText(false)}>Done</button>
+              )}
+              <button
+                className="primary"
+                onClick={() => applyText(true)}
+                disabled={!text.trim()}
+              >
+                Continue to Sync
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -534,12 +754,10 @@ export function TtmlCreator({
               <div
                 key={lineIndex}
                 data-line={lineIndex}
-                className={`ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}`}
+                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}`}
               >
-                <span className="ttml-line-time">
-                  {lineSpan(line) ? formatTime(lineSpan(line)!.start) : "—"}
-                </span>
-                <div className="ttml-units">
+                <span className="ttml-card-number">{lineIndex + 1}</span>
+                <div className="ttml-cells">
                   {line.units.map((unit, unitIndex) => {
                     const selected =
                       cursor.line === lineIndex && cursor.unit === unitIndex;
@@ -551,11 +769,6 @@ export function TtmlCreator({
                       <button
                         key={unitIndex}
                         className={`ttml-unit${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : unit.start !== undefined ? " started" : ""}${selected ? " selected" : ""}${live ? " live" : ""}`}
-                        title={
-                          unit.start === undefined
-                            ? "Not timed"
-                            : `${formatTime(unit.start)} → ${unit.end === undefined ? "…" : formatTime(unit.end)}`
-                        }
                         onClick={() =>
                           setCursor({ line: lineIndex, unit: unitIndex })
                         }
@@ -563,10 +776,23 @@ export function TtmlCreator({
                           unit.start !== undefined && seek(unit.start - 1000)
                         }
                       >
-                        {unit.text}
+                        <TimePill ms={unit.start} />
+                        <span className="ttml-word">{unit.text}</span>
+                        <TimePill ms={unit.end} end />
                       </button>
                     );
                   })}
+                </div>
+                <div className="ttml-line-side">
+                  <TimePill ms={lineSpan(line)?.start} />
+                  <TimePill
+                    ms={
+                      line.units.some((unit) => unit.end !== undefined)
+                        ? lineSpan(line)?.end
+                        : undefined
+                    }
+                    end
+                  />
                 </div>
                 <div className="ttml-line-tools">
                   <button

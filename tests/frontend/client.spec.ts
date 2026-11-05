@@ -14652,17 +14652,35 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   const creator = page.getByRole("region", { name: "TTML Creator" });
   await expect(creator).toContainText("Come & Go (with Marshmello)");
-  await expect(creator.getByLabel("Lyrics text")).toHaveValue(
-    /^I am just a lyric line number 1\nI am just a lyric line number 2\n/,
+  const card = creator.locator(".ttml-card").first();
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "I am just a lyric line number 1".split(" "),
   );
+  await expect(card.locator(".ttml-space")).toHaveCount(7);
   await creator.getByRole("button", { name: "Continue to Sync" }).click();
-  await expect(creator.locator(".ttml-line").first()).toContainText(
-    "00:10.000",
+  const firstLine = creator.locator(".ttml-line").first();
+  await expect(firstLine.locator(".ttml-line-side")).toHaveText(
+    /00:10\.000\s*00:13\.000/,
+  );
+  await expect(firstLine.locator(".ttml-pill").first()).toHaveText("00:10.000");
+  await expect(firstLine.locator(".ttml-pill.empty").first()).toHaveText(
+    "--:--.---",
   );
   await creator.getByRole("tab", { name: "Lyrics" }).click();
+  await card.locator(".ttml-space").first().click();
+  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
+  await card.getByLabel("Edit word").fill("song");
+  await card.getByLabel("Edit word").press("Enter");
+  await card.getByPlaceholder("None").first().fill("Hola");
+  await card.getByPlaceholder("None").first().press("Enter");
+  await expect(card.getByPlaceholder("None").first()).toHaveValue("Hola");
+  await creator.getByRole("button", { name: "Edit as text" }).click();
+  await expect(creator.getByLabel("Lyrics text")).toHaveValue(
+    /^I\|am just a song line number 1\nI am just a lyric line number 2\n/,
+  );
   await creator.getByLabel("Lyrics text").fill("Hello wor|ld\n(ooh)");
   await creator.getByRole("button", { name: "Continue to Sync" }).click();
-  await expect(creator.locator(".ttml-unit")).toHaveText([
+  await expect(creator.locator(".ttml-word")).toHaveText([
     "Hello",
     "wor",
     "ld",

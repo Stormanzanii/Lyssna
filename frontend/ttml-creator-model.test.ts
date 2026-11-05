@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  editUnit,
   formatTime,
   fromLyrics,
+  insertLines,
   keepTimings,
   markEnd,
   markNext,
@@ -9,9 +11,11 @@ import {
   nextCursor,
   parseText,
   problems,
+  setLineText,
   toLyrics,
   toText,
   toTtml,
+  toggleJoin,
 } from "./ttml-creator-model";
 import type { Lyrics } from "./types";
 
@@ -191,5 +195,37 @@ describe("TTML Creator model", () => {
     expect(problems(parseText("a b"))).toEqual([
       "2 of 2 words have no timing yet.",
     ]);
+  });
+});
+
+describe("TTML Creator card editing", () => {
+  const words = (lines: ReturnType<typeof parseText>) =>
+    lines.map((line) => toText([line]));
+
+  it("edits, splits and deletes words, keeping timing on a plain rename", () => {
+    let lines = timeAll("one two");
+    lines = editUnit(lines, { line: 0, unit: 1 }, "too");
+    expect(lines[0].units[1]).toMatchObject({ text: "too", start: 1400 });
+    lines = editUnit(lines, { line: 0, unit: 1 }, "t|o o");
+    expect(words(lines)).toEqual(["one t|o o"]);
+    expect(lines[0].units[1].start).toBeUndefined();
+    lines = editUnit(lines, { line: 0, unit: 0 }, "");
+    expect(words(lines)).toEqual(["t|o o"]);
+    expect(editUnit(parseText("x"), { line: 0, unit: 0 }, " ")).toEqual([]);
+  });
+
+  it("joins words, inserts lines and exports translations", () => {
+    let lines = toggleJoin(parseText("a b"), { line: 0, unit: 1 });
+    expect(words(lines)).toEqual(["a|b"]);
+    lines = insertLines(timeAll("first\nlast"), 0, "mid one\n(bg)");
+    expect(words(lines)).toEqual(["first", "mid one", "(bg)", "last"]);
+    lines = setLineText(timeAll("hola"), 0, "translation", "hello");
+    lines = setLineText(lines, 0, "romanization", "");
+    expect(lines[0].romanization).toBeUndefined();
+    expect(toTtml(lines, meta)).toContain(
+      '<span ttm:role="x-translation">hello</span></p>',
+    );
+    expect(toLyrics(lines).lines[0].translation).toBe("hello");
+    expect(keepTimings(lines, parseText("hola"))[0].translation).toBe("hello");
   });
 });

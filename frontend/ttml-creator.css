@@ -210,71 +210,179 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+.ttml-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ttml-write-actions .ttml-hint {
+  align-self: center;
+}
 .ttml-lines {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 6px;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 4px 40vh;
+  padding: 2px 2px 40vh;
 }
-.ttml-line {
+.ttml-card {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 8px 10px 8px 0;
+  border: 1px solid #ffffff14;
+  border-left: 3px solid #ffffff2e;
+  border-radius: 8px;
+  background: #ffffff08;
 }
-.ttml-line.current {
-  background: #ffffff0b;
+.ttml-card.ttml-line {
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
 }
-.ttml-line.background .ttml-units {
-  font-size: 13px;
-  opacity: 0.8;
+.ttml-card.current {
+  border-left-color: #1ed760;
+  background: #ffffff0d;
 }
-.ttml-line.opposite .ttml-units {
-  justify-content: flex-end;
+.ttml-card.background {
+  border-left-style: dashed;
 }
-.ttml-line-time {
+.ttml-card-number {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid #ffffff12;
   color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.ttml-units {
+.ttml-card-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.ttml-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 4px;
-  font-size: 16px;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
 }
-.ttml-creator .ttml-unit {
+.ttml-creator .ttml-chip,
+.ttml-chip-edit {
   min-height: 30px;
-  padding: 3px 9px;
-  color: #ffffff99;
-  background: #ffffff0a;
-  font-size: inherit;
-  box-shadow: inset 0 0 0 1px #ffffff14;
+  padding: 4px 9px;
+  border-radius: 7px;
+  color: #fff;
+  background: #ffffff14;
+  font-size: 15px;
 }
-.ttml-creator .ttml-unit.joined {
+.ttml-creator .ttml-chip.joined {
   margin-left: -3px;
   border-top-left-radius: 2px;
   border-bottom-left-radius: 2px;
 }
-.ttml-creator .ttml-unit.started {
-  color: #fff;
-  box-shadow: inset 0 0 0 1px #f5b40080;
+.ttml-chip-edit {
+  border: 1px solid #ffffff59;
+  outline: none;
+  font: inherit;
+  font-size: 15px;
 }
-.ttml-creator .ttml-unit.timed {
-  color: #fff;
-  background: #1ed76026;
-  box-shadow: inset 0 0 0 1px #1ed76055;
+.ttml-creator .ttml-space {
+  min-height: 22px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: #ffffff59;
+  background: #ffffff08;
+  font-size: 11px;
 }
-.ttml-creator .ttml-unit.live {
-  background: #1ed76066;
+.ttml-creator .ttml-space:hover {
+  color: #fff;
+}
+.ttml-card-extra {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+}
+.ttml-card-extra input,
+.ttml-card-add {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  outline: none;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+}
+.ttml-card-extra input:focus,
+.ttml-card-add {
+  border-color: #ffffff2e;
+  color: #f3f3f3;
+  background: #ffffff0a;
+}
+.ttml-card-add {
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.ttml-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.ttml-creator .ttml-unit {
+  flex-direction: column;
+  gap: 3px;
+  min-width: 72px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+}
+.ttml-creator .ttml-unit + .ttml-unit:not(.joined) {
+  border-left: 1px solid #ffffff12;
+  border-radius: 0 6px 6px 0;
 }
 .ttml-creator .ttml-unit.selected {
-  box-shadow:
-    inset 0 0 0 2px #fff,
-    0 0 0 3px #ffffff26;
+  box-shadow: inset 0 0 0 1px #ffffffb3;
+}
+.ttml-creator .ttml-unit.live {
+  background: #1ed76026;
+}
+.ttml-word {
+  color: #ffffff8c;
+  font-size: 17px;
+  line-height: 1.2;
+}
+.ttml-unit.started .ttml-word,
+.ttml-unit.timed .ttml-word {
+  color: #fff;
+}
+.ttml-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #f3f3f3;
+  background: #ffffff1f;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ttml-pill.end {
+  color: #c9f7da;
+  background: #1ed7603d;
+}
+.ttml-pill.empty {
+  color: #ffffff4d;
+  background: #ffffff0a;
+}
+.ttml-line-side {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
 }
 .ttml-line-tools {
   display: flex;

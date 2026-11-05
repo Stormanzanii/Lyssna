@@ -10,6 +10,8 @@ export interface CreatorLine {
   units: CreatorUnit[];
   background: boolean;
   opposite: boolean;
+  translation?: string;
+  romanization?: string;
 }
 export interface Cursor {
   line: number;
@@ -89,6 +91,8 @@ export function keepTimings(
     return match
       ? {
           ...line,
+          translation: match.translation,
+          romanization: match.romanization,
           units: line.units.map((unit, index) => ({
             ...unit,
             start: match.units[index].start,
@@ -128,7 +132,13 @@ export function fromLyrics(lyrics: Lyrics): CreatorLine[] {
         const last = units.length - 1;
         units[last] = { ...units[last], end: line.end_ms };
       }
-      return { units, background: line.background, opposite: line.opposite };
+      return {
+        units,
+        background: line.background,
+        opposite: line.opposite,
+        ...(line.translation && { translation: line.translation }),
+        ...(line.romanization && { romanization: line.romanization }),
+      };
     })
     .filter((line) => line.units.length > 0);
 }
@@ -248,6 +258,71 @@ export function toggleLine(
   );
 }
 
+export function editUnit(
+  lines: CreatorLine[],
+  at: Cursor,
+  text: string,
+): CreatorLine[] {
+  const line = lines[at.line];
+  const unit = line?.units[at.unit];
+  if (!unit) return lines;
+  const parts = parseText(text.replace(/[()]/g, ""))[0]?.units ?? [];
+  if (parts.length === 1 && parts[0].text === unit.text) return lines;
+  const replaced = parts.map((part, index) => ({
+    text: part.text,
+    joined: index === 0 ? unit.joined : part.joined,
+    ...(parts.length === 1 && { start: unit.start, end: unit.end }),
+  }));
+  const units = [
+    ...line.units.slice(0, at.unit),
+    ...replaced,
+    ...line.units.slice(at.unit + 1),
+  ];
+  if (units.length) units[0] = { ...units[0], joined: false };
+  return units.length
+    ? lines.map((each, index) =>
+        index === at.line ? { ...each, units } : each,
+      )
+    : lines.filter((_, index) => index !== at.line);
+}
+
+export function toggleJoin(lines: CreatorLine[], at: Cursor): CreatorLine[] {
+  if (at.unit === 0) return lines;
+  return lines.map((line, index) =>
+    index === at.line
+      ? {
+          ...line,
+          units: line.units.map((unit, position) =>
+            position === at.unit ? { ...unit, joined: !unit.joined } : unit,
+          ),
+        }
+      : line,
+  );
+}
+
+export function insertLines(
+  lines: CreatorLine[],
+  after: number,
+  text: string,
+): CreatorLine[] {
+  const added = parseText(text);
+  return [...lines.slice(0, after + 1), ...added, ...lines.slice(after + 1)];
+}
+
+export const removeLine = (lines: CreatorLine[], index: number) =>
+  lines.filter((_, position) => position !== index);
+
+export function setLineText(
+  lines: CreatorLine[],
+  index: number,
+  key: "translation" | "romanization",
+  value: string,
+): CreatorLine[] {
+  return lines.map((line, position) =>
+    position === index ? { ...line, [key]: value || undefined } : line,
+  );
+}
+
 export function lineSpan(line: CreatorLine) {
   const starts = line.units.flatMap((unit) =>
     unit.start === undefined ? [] : [unit.start],
@@ -299,8 +374,8 @@ export function toLyrics(lines: CreatorLine[]): Lyrics {
       start_ms: span.start,
       end_ms: span.end,
       text: words.map((word) => word.text).join(""),
-      translation: "",
-      romanization: "",
+      translation: line.translation ?? "",
+      romanization: line.romanization ?? "",
       words,
       background: line.background,
       opposite: line.opposite,
@@ -339,6 +414,17 @@ function spans(line: CreatorLine): string {
     .join("");
 }
 
+function extras(line: CreatorLine): string {
+  return [
+    line.translation &&
+      `<span ttm:role="x-translation">${escape(line.translation)}</span>`,
+    line.romanization &&
+      `<span ttm:role="x-roman">${escape(line.romanization)}</span>`,
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
 /**
  * Word-timed TTML in the Apple Music style AMLL and Spicy Lyrics read.
  * Background lines nest inside the lead line sung before them.
@@ -367,7 +453,9 @@ export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
       const agent = (paragraph.lead ?? paragraph.backgrounds[0]).opposite
         ? "v2"
         : "v1";
-      const lead = paragraph.lead ? spans(paragraph.lead) : "";
+      const lead = paragraph.lead
+        ? spans(paragraph.lead) + extras(paragraph.lead)
+        : "";
       const backgrounds = paragraph.backgrounds
         .map((line) => {
           const span = lineSpan(line)!;

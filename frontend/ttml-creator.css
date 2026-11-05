@@ -353,9 +353,7 @@
   position: relative;
   z-index: 1;
   background: #1ed76038;
-  box-shadow:
-    inset 0 0 0 1px #1ed7608c,
-    0 0 18px #1ed76026;
+  box-shadow: inset 0 0 0 1px #1ed7608c;
   transition: none;
   animation: ttml-burst 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -366,9 +364,7 @@
 }
 .ttml-creator .ttml-unit.live.selected {
   background: #1ed7604d;
-  box-shadow:
-    inset 0 0 0 1px #fff,
-    0 0 22px #1ed76033;
+  box-shadow: inset 0 0 0 1px #fff;
 }
 .ttml-creator .ttml-unit.live .ttml-pill {
   background: #0000004d;

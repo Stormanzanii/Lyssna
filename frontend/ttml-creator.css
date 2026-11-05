@@ -282,8 +282,16 @@
 }
 .ttml-creator .ttml-chip.joined {
   margin-left: -3px;
-  border-top-left-radius: 2px;
-  border-bottom-left-radius: 2px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.ttml-creator
+  :is(.ttml-chip-plain, .ttml-chip-stack):has(
+    + :is(.ttml-chip-plain, .ttml-chip-stack) > .ttml-chip.joined
+  )
+  > .ttml-chip {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .ttml-chip-edit {
   border: 1px solid #ffffff59;

@@ -126,7 +126,7 @@ function TimePill({ ms, end }: { ms?: number; end?: boolean }) {
     if (shown.current === ms) return;
     shown.current = ms;
     if (ms === undefined || document.querySelector(".reduce-motion")) return;
-    pill.current?.animate([{ background: "#1ed760", color: "#000" }, {}], {
+    pill.current?.animate([{ background: "#1ed76073", color: "#fff" }, {}], {
       duration: 500,
       easing: "ease-out",
     });
@@ -562,6 +562,33 @@ export function TtmlCreator({
     if (tab === "sync") centre(cursor.line);
   }, [cursor.line, tab, centre]);
 
+  const shownWord = useRef<(Cursor & { start: number }) | null>(null);
+  const liveWord = useMemo(() => {
+    let next: (Cursor & { start: number }) | null = null;
+    lines.forEach((line, lineIndex) =>
+      line.units.forEach((unit, unitIndex) => {
+        if (
+          unit.start !== undefined &&
+          unit.end !== undefined &&
+          position >= unit.start &&
+          position < unit.end
+        )
+          next = { line: lineIndex, unit: unitIndex, start: unit.start };
+      }),
+    );
+    const shown = shownWord.current;
+    const found = next as (Cursor & { start: number }) | null;
+    // The clock can step back a few ms; only a real seek lights an earlier word.
+    if (
+      shown &&
+      found &&
+      found.start < shown.start &&
+      shown.start - position < 250
+    )
+      return shown;
+    shownWord.current = found;
+    return found;
+  }, [lines, position]);
   const playingLine = useMemo(() => {
     let found = -1;
     lines.forEach((line, index) => {
@@ -1033,9 +1060,8 @@ export function TtmlCreator({
                     const selected =
                       cursor.line === lineIndex && cursor.unit === unitIndex;
                     const live =
-                      unit.start !== undefined &&
-                      position >= unit.start &&
-                      position < (unit.end ?? unit.start);
+                      liveWord?.line === lineIndex &&
+                      liveWord.unit === unitIndex;
                     return (
                       <button
                         key={unitIndex}

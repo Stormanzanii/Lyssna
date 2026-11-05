@@ -14744,6 +14744,13 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect(creator.locator(".ttml-progress")).toHaveText("3/4 timed");
   await page.keyboard.press("Control+y");
   await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+  const live = creator.locator(".ttml-unit.live .ttml-word");
+  await at(3510);
+  await expect(live).toHaveText("wor");
+  await at(3490);
+  await expect(live).toHaveText("wor");
+  await at(3000);
+  await expect(live).toHaveText("Hello");
 
   const last = (command: string) =>
     page.evaluate(

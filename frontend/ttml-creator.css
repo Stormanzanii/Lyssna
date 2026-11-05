@@ -352,21 +352,23 @@
 .ttml-creator .ttml-unit.live {
   position: relative;
   z-index: 1;
-  background: #1ed760b8;
-  box-shadow: 0 0 30px #1ed76080;
+  background: #1ed76038;
+  box-shadow:
+    inset 0 0 0 1px #1ed7608c,
+    0 0 18px #1ed76026;
   transition: none;
   animation: ttml-burst 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .ttml-creator .ttml-unit.live .ttml-word {
   color: #fff;
   font-weight: 600;
-  text-shadow: 0 0 18px #ffffffb3;
+  text-shadow: 0 0 12px #ffffff4d;
 }
 .ttml-creator .ttml-unit.live.selected {
-  background: #1ed760e6;
+  background: #1ed7604d;
   box-shadow:
     inset 0 0 0 1px #fff,
-    0 0 36px #1ed760a6;
+    0 0 22px #1ed76033;
 }
 .ttml-creator .ttml-unit.live .ttml-pill {
   background: #0000004d;
@@ -374,10 +376,7 @@
 }
 @keyframes ttml-burst {
   from {
-    box-shadow: 0 0 4px #1ed76066;
-  }
-  to {
-    box-shadow: 0 0 30px #1ed76080;
+    background: #1ed76066;
   }
 }
 .ttml-word {
@@ -556,6 +555,11 @@
     background 0.35s ease,
     box-shadow 0.35s ease,
     border-color 0.35s ease;
+}
+.ttml-creator .ttml-unit {
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .reduce-motion .ttml-card,
 .reduce-motion .ttml-creator .ttml-unit {

@@ -54,6 +54,7 @@ import {
   nextCursor,
   romanizeRequest,
   setUnitRoman,
+  hasWordRoman,
   parseText,
   previousCursor,
   problems,
@@ -93,6 +94,7 @@ const clampSpeed = (value: number) =>
 const DRAFT_PREFIX = "lyssna.ttml-draft.";
 const SPLITS_KEY = "lyssna.ttml-splits";
 const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
+const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
@@ -353,6 +355,9 @@ export function TtmlCreator({
     writeStorage(WORD_ROMAN_KEY, on ? "1" : null);
   };
   const [romanNote, setRomanNote] = useState("");
+  const [syncRoman, setSyncRoman] = useState(
+    () => readStorage(SYNC_ROMAN_KEY) === "1",
+  );
   const romanJob = useRef(0);
   const autoRomanize = async () => {
     const job = ++romanJob.current;
@@ -1269,6 +1274,23 @@ export function TtmlCreator({
               />
               ms
             </label>
+            <button
+              className={`ttml-roman-toggle${syncRoman ? " active" : ""}`}
+              aria-pressed={syncRoman}
+              disabled={!lines.some(hasWordRoman)}
+              onClick={() => {
+                setSyncRoman(!syncRoman);
+                writeStorage(SYNC_ROMAN_KEY, syncRoman ? null : "1");
+              }}
+              title={
+                lines.some(hasWordRoman)
+                  ? "Show each word's romanization instead of its text"
+                  : "Add word romanization on the Lyrics tab first"
+              }
+            >
+              <Languages size={15} />
+              Romanization
+            </button>
             <span className="ttml-progress">
               {done}/{total} timed
             </span>
@@ -1336,7 +1358,14 @@ export function TtmlCreator({
                         }
                       >
                         <TimePill ms={unit.start} />
-                        <span className="ttml-word">{unit.text}</span>
+                        <span
+                          className="ttml-word"
+                          title={
+                            syncRoman && unit.roman ? unit.text : undefined
+                          }
+                        >
+                          {syncRoman && unit.roman ? unit.roman : unit.text}
+                        </span>
                         <TimePill ms={unit.end} end />
                       </button>
                     );

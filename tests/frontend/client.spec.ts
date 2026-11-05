@@ -14910,6 +14910,16 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   await expect(creator.getByRole("status")).toContainText(
     "Nothing to romanize",
   );
+  await creator.getByRole("tab", { name: "Sync" }).click();
+  await creator
+    .getByRole("button", { name: "Romanization", exact: true })
+    .click();
+  await expect(
+    creator.locator(".ttml-word", { hasText: "jasuto" }),
+  ).toHaveCount(1);
+  await expect(
+    creator.locator(".ttml-word", { hasText: "jasuto" }),
+  ).toHaveAttribute("title", "just");
 });
 
 test("TTML Creator Sync follows the playing line", async ({ page }) => {

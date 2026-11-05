@@ -504,6 +504,28 @@ export function TtmlCreator({
       ?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [cursor.line, tab]);
 
+  const playingLine = useMemo(() => {
+    let found = -1;
+    lines.forEach((line, index) => {
+      const span = lineSpan(line);
+      if (span && span.start <= position) found = index;
+    });
+    return found;
+  }, [lines, position]);
+  const scrolledAt = useRef(0);
+  useEffect(() => {
+    if (
+      tab !== "sync" ||
+      playingLine < 0 ||
+      !state.playback.is_playing ||
+      Date.now() - scrolledAt.current < 3000
+    )
+      return;
+    list.current
+      ?.querySelector(`[data-line="${playingLine}"]`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [playingLine, tab, state.playback.is_playing]);
+
   const preview = useMemo(() => toLyrics(lines), [lines]);
   const issues = useMemo(() => problems(lines), [lines]);
   const { done, total } = progress(lines);
@@ -921,12 +943,17 @@ export function TtmlCreator({
             play · <kbd>[</kbd>
             <kbd>]</kbd> speed · <kbd>Del</kbd> clear word
           </p>
-          <div className="ttml-lines" ref={list}>
+          <div
+            className="ttml-lines"
+            ref={list}
+            onWheel={() => (scrolledAt.current = Date.now())}
+            onTouchMove={() => (scrolledAt.current = Date.now())}
+          >
             {lines.map((line, lineIndex) => (
               <div
                 key={lineIndex}
                 data-line={lineIndex}
-                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}`}
+                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex ? " playing" : ""}`}
               >
                 <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-cells">

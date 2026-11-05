@@ -14855,3 +14855,51 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   ).toHaveText("line num ber 1".split(" "));
   await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
 });
+
+test("TTML Creator Sync follows the playing line", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await page.evaluate(() => {
+    (window as any).__clientTest.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: true,
+        progress_ms: 70_500,
+        shuffle_state: false,
+        repeat_state: "track",
+        device: { name: "Lyssna (test)", id: "local-device", is_active: true },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          artists: [
+            { id: "a", name: "Juice WRLD" },
+            { id: "b", name: "Marshmello" },
+          ],
+          album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+          duration_ms: 180000,
+        },
+      },
+    });
+  });
+  const playing = creator.locator(".ttml-line.playing");
+  await expect(playing).toHaveAttribute("data-line", "20");
+  await expect(playing).toBeInViewport();
+  await expect(
+    creator.locator('.ttml-line[data-line="0"]'),
+  ).not.toBeInViewport();
+});

@@ -14867,6 +14867,35 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
   ).toHaveText("line num ber 1".split(" "));
   await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
+
+  await card
+    .getByRole("button", { name: "am", exact: true })
+    .dragTo(card.getByRole("button", { name: "I", exact: true }), {
+      targetPosition: { x: 2, y: 10 },
+    });
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "am I just a ly ric".split(" "),
+  );
+
+  const moved = creator.locator(".ttml-card").nth(1);
+  await moved
+    .locator(".ttml-space")
+    .first()
+    .dragTo(moved.getByRole("button", { name: "ber", exact: true }));
+  await expect(
+    moved.getByRole("button", { name: "num", exact: true }),
+  ).toHaveClass(/joined/);
+  await expect(
+    moved.getByRole("button", { name: "ber", exact: true }),
+  ).not.toHaveClass(/joined/);
+
+  await creator
+    .locator(".ttml-card-number")
+    .nth(2)
+    .dragTo(card, { targetPosition: { x: 20, y: 2 } });
+  await expect(
+    creator.locator(".ttml-card").first().locator(".ttml-chip"),
+  ).toHaveText("I am just a ly ric line number 2".split(" "));
 });
 
 test("TTML Creator Sync follows the playing line", async ({ page }) => {

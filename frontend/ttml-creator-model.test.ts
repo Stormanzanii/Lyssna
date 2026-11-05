@@ -10,6 +10,9 @@ import {
   markEnd,
   markNext,
   markStart,
+  moveLine,
+  moveSpace,
+  moveWord,
   nextCursor,
   parseText,
   problems,
@@ -231,6 +234,32 @@ describe("TTML Creator card editing", () => {
     );
     expect(toLyrics(lines).lines[0].translation).toBe("hello");
     expect(keepTimings(lines, parseText("hola"))[0].translation).toBe("hello");
+  });
+
+  it("moves lines, whole words and spaces", () => {
+    const lines = parseText("a\nb\nc");
+    expect(words(moveLine(lines, 0, 3))).toEqual(["b", "c", "a"]);
+    expect(words(moveLine(lines, 2, 0))).toEqual(["c", "a", "b"]);
+    expect(moveLine(lines, 1, 2)).toBe(lines);
+    const song = parseText("one t|wo three\nfour");
+    expect(
+      words(moveWord(song, { line: 0, unit: 2 }, { line: 0, unit: 4 })),
+    ).toEqual(["one three t|wo", "four"]);
+    expect(
+      words(moveWord(song, { line: 0, unit: 3 }, { line: 0, unit: 0 })),
+    ).toEqual(["three one t|wo", "four"]);
+    expect(
+      words(moveWord(song, { line: 1, unit: 0 }, { line: 0, unit: 1 })),
+    ).toEqual(["one four t|wo three"]);
+    expect(moveWord(song, { line: 0, unit: 1 }, { line: 0, unit: 3 })).toBe(
+      song,
+    );
+    expect(
+      words(moveSpace(song, { line: 0, unit: 1 }, { line: 0, unit: 2 })),
+    ).toEqual(["one|t wo three", "four"]);
+    expect(moveSpace(song, { line: 0, unit: 1 }, { line: 0, unit: 3 })).toBe(
+      song,
+    );
   });
 });
 

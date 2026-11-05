@@ -401,6 +401,84 @@ export function insertLines(
 export const removeLine = (lines: CreatorLine[], index: number) =>
   lines.filter((_, position) => position !== index);
 
+/** `before` counts positions in the list before the move. */
+export function moveLine(lines: CreatorLine[], from: number, before: number) {
+  if (!lines[from] || before === from || before === from + 1) return lines;
+  const rest = lines.filter((_, index) => index !== from);
+  const at = before > from ? before - 1 : before;
+  return [...rest.slice(0, at), lines[from], ...rest.slice(at)];
+}
+
+export function wordBounds(units: CreatorUnit[], index: number) {
+  let start = index;
+  while (start > 0 && units[start].joined) start--;
+  let end = index + 1;
+  while (end < units.length && units[end].joined) end++;
+  return { start, end };
+}
+
+/** `to.unit` is a word boundary in the target line, counted before the move. */
+export function moveWord(
+  lines: CreatorLine[],
+  from: Cursor,
+  to: Cursor,
+): CreatorLine[] {
+  const source = lines[from.line];
+  const target = lines[to.line];
+  if (!source?.units[from.unit] || !target) return lines;
+  const { start, end } = wordBounds(source.units, from.unit);
+  const same = from.line === to.line;
+  if (same && to.unit >= start && to.unit <= end) return lines;
+  const word = source.units
+    .slice(start, end)
+    .map((unit, index) => (index ? unit : { ...unit, joined: false }));
+  const kept = source.units.filter((_, index) => index < start || index >= end);
+  if (kept[0]) kept[0] = { ...kept[0], joined: false };
+  const into = same ? kept : target.units;
+  const at = same && to.unit > start ? to.unit - word.length : to.unit;
+  const placed = [...into.slice(0, at), ...word, ...into.slice(at)];
+  return lines
+    .map((line, index) =>
+      index === to.line
+        ? { ...line, units: placed }
+        : index === from.line
+          ? { ...line, units: kept }
+          : line,
+    )
+    .filter((line) => line.units.length);
+}
+
+/** Moves the gap before `from.unit` to before `to.unit`, a syllable joint. */
+export function moveSpace(
+  lines: CreatorLine[],
+  from: Cursor,
+  to: Cursor,
+): CreatorLine[] {
+  const units = lines[from.line]?.units;
+  if (
+    !units ||
+    from.line !== to.line ||
+    from.unit === 0 ||
+    units[from.unit]?.joined !== false ||
+    !units[to.unit]?.joined
+  )
+    return lines;
+  return lines.map((line, index) =>
+    index === from.line
+      ? {
+          ...line,
+          units: units.map((unit, position) =>
+            position === from.unit
+              ? { ...unit, joined: true }
+              : position === to.unit
+                ? { ...unit, joined: false }
+                : unit,
+          ),
+        }
+      : line,
+  );
+}
+
 export function setLineText(
   lines: CreatorLine[],
   index: number,

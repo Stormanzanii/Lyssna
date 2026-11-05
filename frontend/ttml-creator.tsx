@@ -1,4 +1,5 @@
 import {
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   Fragment,
@@ -45,6 +46,9 @@ import {
   markEnd,
   markNext,
   markStart,
+  moveLine,
+  moveSpace,
+  moveWord,
   nextCursor,
   parseText,
   previousCursor,
@@ -60,6 +64,7 @@ import {
   toTtml,
   toggleJoin,
   toggleLine,
+  wordBounds,
 } from "./ttml-creator-model";
 import { type LearnedSplits, cutAt, suggestSplit } from "./ttml-syllables";
 import {
@@ -85,6 +90,16 @@ const SPLITS_KEY = "lyssna.ttml-splits";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
+
+type Drag =
+  { kind: "line"; line: number } | { kind: "word" | "space"; at: Cursor };
+
+const firstHalf = (event: ReactDragEvent, vertical: boolean) => {
+  const box = event.currentTarget.getBoundingClientRect();
+  return vertical
+    ? event.clientY < box.top + box.height / 2
+    : event.clientX < box.left + box.width / 2;
+};
 
 function readStorage(key: string): string | null {
   try {
@@ -324,6 +339,32 @@ export function TtmlCreator({
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
   };
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [drop, setDrop] = useState("");
+  const endDrag = () => {
+    setDrag(null);
+    setDrop("");
+  };
+  const startDrag = (event: ReactDragEvent, next: Drag) => {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "");
+    setDrag(next);
+  };
+  const over = (event: ReactDragEvent, key: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDrop(key);
+  };
+  const land = (event: ReactDragEvent, next: CreatorLine[]) => {
+    event.preventDefault();
+    event.stopPropagation();
+    endDrag();
+    restructure(next);
+  };
+  const dropClass = (key: string) =>
+    drop.startsWith(`${key}:`) ? ` drop-${drop.slice(key.length + 1)}` : "";
   const toCards = () => {
     setTab("write");
     setTextMode(false);
@@ -746,11 +787,48 @@ export function TtmlCreator({
               </button>
             </div>
           </div>
-          <div className="ttml-lines">
+          <div className="ttml-lines" onDragEnd={endDrag}>
             {lines.map((line, lineIndex) => (
               <div
                 key={lineIndex}
-                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}`}
+                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
+                onPointerDown={(event) => {
+                  event.currentTarget.draggable = !(
+                    event.target as Element
+                  ).closest("button, input");
+                }}
+                onDragStart={(event) =>
+                  event.target === event.currentTarget &&
+                  startDrag(event, { kind: "line", line: lineIndex })
+                }
+                onDragOver={(event) => {
+                  if (drag?.kind === "line")
+                    over(
+                      event,
+                      `line:${lineIndex}:${firstHalf(event, true) ? "before" : "after"}`,
+                    );
+                  else if (drag?.kind === "word")
+                    over(event, `line:${lineIndex}:end`);
+                }}
+                onDrop={(event) => {
+                  if (drag?.kind === "line")
+                    land(
+                      event,
+                      moveLine(
+                        lines,
+                        drag.line,
+                        firstHalf(event, true) ? lineIndex : lineIndex + 1,
+                      ),
+                    );
+                  else if (drag?.kind === "word")
+                    land(
+                      event,
+                      moveWord(lines, drag.at, {
+                        line: lineIndex,
+                        unit: line.units.length,
+                      }),
+                    );
+                }}
               >
                 <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-card-body">
@@ -764,9 +842,24 @@ export function TtmlCreator({
                         <Fragment key={unitIndex}>
                           {unitIndex > 0 && !unit.joined && (
                             <button
-                              className="ttml-space"
-                              title="Join these words"
+                              className={`ttml-space${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
+                              title="Click to join these words; drag onto a syllable to move this space"
+                              draggable
                               onClick={() => setLines(toggleJoin(lines, at))}
+                              onDragStart={(event) =>
+                                startDrag(event, { kind: "space", at })
+                              }
+                              onDragOver={(event) =>
+                                drag?.kind === "word" &&
+                                over(
+                                  event,
+                                  `gap:${lineIndex}:${unitIndex}:word`,
+                                )
+                              }
+                              onDrop={(event) =>
+                                drag?.kind === "word" &&
+                                land(event, moveWord(lines, drag.at, at))
+                              }
                             >
                               Space
                             </button>
@@ -789,12 +882,53 @@ export function TtmlCreator({
                             />
                           ) : (
                             <button
-                              className={`ttml-chip${unit.joined ? " joined" : ""}`}
+                              className={`ttml-chip${unit.joined ? " joined" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
                               title={
                                 unit.joined
                                   ? "Syllable. Click to split it into its own word; double-click to edit."
-                                  : "Double-click to edit"
+                                  : "Double-click to edit; drag to move"
                               }
+                              draggable
+                              onDragStart={(event) =>
+                                startDrag(event, { kind: "word", at })
+                              }
+                              onDragOver={(event) => {
+                                if (drag?.kind === "word")
+                                  over(
+                                    event,
+                                    `unit:${lineIndex}:${unitIndex}:${firstHalf(event, false) ? "before" : "after"}`,
+                                  );
+                                else if (
+                                  drag?.kind === "space" &&
+                                  unit.joined &&
+                                  drag.at.line === lineIndex
+                                )
+                                  over(
+                                    event,
+                                    `unit:${lineIndex}:${unitIndex}:space`,
+                                  );
+                              }}
+                              onDrop={(event) => {
+                                if (drag?.kind === "word") {
+                                  const word = wordBounds(
+                                    line.units,
+                                    unitIndex,
+                                  );
+                                  land(
+                                    event,
+                                    moveWord(lines, drag.at, {
+                                      line: lineIndex,
+                                      unit: firstHalf(event, false)
+                                        ? word.start
+                                        : word.end,
+                                    }),
+                                  );
+                                } else if (
+                                  drag?.kind === "space" &&
+                                  unit.joined
+                                )
+                                  land(event, moveSpace(lines, drag.at, at));
+                              }}
                               onClick={() =>
                                 unit.joined && setLines(toggleJoin(lines, at))
                               }

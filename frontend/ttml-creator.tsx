@@ -75,7 +75,10 @@ interface Draft {
   text: string;
 }
 
-const SPEEDS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5];
+const MIN_SPEED = 0.25;
+const MAX_SPEED = 1.5;
+const clampSpeed = (value: number) =>
+  Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(value * 20) / 20));
 const DRAFT_PREFIX = "lyssna.ttml-draft.";
 const SPLITS_KEY = "lyssna.ttml-splits";
 const GLIDE_MS = 550;
@@ -429,6 +432,18 @@ export function TtmlCreator({
     },
     [onSpeed, notify],
   );
+  const [speedDraft, setSpeedDraft] = useState<number | null>(null);
+  const speedTimer = useRef(0);
+  const slideSpeed = (value: number) => {
+    setSpeedDraft(value);
+    clearTimeout(speedTimer.current);
+    speedTimer.current = window.setTimeout(() => {
+      changeSpeed(value);
+      speedTimer.current = window.setTimeout(() => setSpeedDraft(null), 1000);
+    }, 120);
+  };
+  useEffect(() => () => clearTimeout(speedTimer.current), []);
+  const shownSpeed = speedDraft ?? rate;
 
   const stateRef = useRef({ lines, cursor });
   stateRef.current = { lines, cursor };
@@ -482,12 +497,8 @@ export function TtmlCreator({
         seek(from - 2000);
       } else if (event.key === "Backspace" || event.key === "Delete")
         setLines(clearTiming(lines, cursor));
-      else if (event.key === "[")
-        changeSpeed(SPEEDS[Math.max(0, SPEEDS.indexOf(rate) - 1)] ?? 1);
-      else if (event.key === "]")
-        changeSpeed(
-          SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(rate) + 1)] ?? 1,
-        );
+      else if (event.key === "[") changeSpeed(clampSpeed(rate - 0.05));
+      else if (event.key === "]") changeSpeed(clampSpeed(rate + 0.05));
       else handled = false;
       if (handled) {
         event.preventDefault();
@@ -916,18 +927,28 @@ export function TtmlCreator({
               }
             >
               <Gauge size={15} />
-              <select
+              <input
+                type="range"
                 aria-label="Playback speed"
-                value={rate}
+                min={MIN_SPEED}
+                max={MAX_SPEED}
+                step={0.05}
+                value={shownSpeed}
                 disabled={!native}
-                onChange={(event) => changeSpeed(Number(event.target.value))}
+                style={{
+                  ["--fill" as string]: `${((shownSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100}%`,
+                }}
+                onChange={(event) =>
+                  slideSpeed(clampSpeed(Number(event.target.value)))
+                }
+              />
+              <output
+                className="ttml-speed-value"
+                title="Double-click for normal speed"
+                onDoubleClick={() => native && slideSpeed(1)}
               >
-                {SPEEDS.map((speed) => (
-                  <option key={speed} value={speed}>
-                    {speed}×
-                  </option>
-                ))}
-              </select>
+                {shownSpeed.toFixed(2)}×
+              </output>
             </label>
             <label
               className="ttml-offset"

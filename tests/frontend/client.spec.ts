@@ -14753,9 +14753,10 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
           .at(-1)?.args,
       command,
     );
-  await creator.getByLabel("Playback speed").selectOption("0.5");
+  await creator.getByLabel("Playback speed").fill("0.5");
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 50 });
   await expect(creator.getByLabel("Playback speed")).toHaveValue("0.5");
+  await expect(creator.locator(".ttml-speed-value")).toHaveText("0.50×");
 
   const requests = () =>
     page.evaluate(() =>

@@ -191,7 +191,6 @@
   color: var(--muted);
   font-size: 13px;
 }
-.ttml-speed select,
 .ttml-offset input {
   min-height: 30px;
   padding: 4px 8px;
@@ -533,4 +532,40 @@
 .reduce-motion .ttml-card,
 .reduce-motion .ttml-creator .ttml-unit {
   transition: none;
+}
+.ttml-speed input[type="range"] {
+  width: 140px;
+  height: 4px;
+  margin: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(#fff, #fff) 0 / var(--fill, 0%) 100% no-repeat,
+    #ffffff26;
+  appearance: none;
+  cursor: pointer;
+}
+.ttml-speed input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ttml-speed input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px #0008;
+  appearance: none;
+  transition: transform 0.15s;
+}
+.ttml-speed input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.ttml-speed-value {
+  min-width: 46px;
+  color: #f3f3f3;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
 }

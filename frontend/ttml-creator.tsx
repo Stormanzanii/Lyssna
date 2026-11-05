@@ -865,7 +865,7 @@ export function TtmlCreator({
               <button
                 onClick={() => void autoRomanize()}
                 disabled={romanNote === "Romanizing…"}
-                title="Fill empty word readings for Japanese, Korean, Chinese, Cyrillic and Greek lyrics"
+                title="Fill empty word readings for lyrics in any non-Latin script"
               >
                 <Languages size={15} />
                 Auto romanize

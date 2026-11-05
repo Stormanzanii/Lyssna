@@ -27,6 +27,7 @@ import {
   toTtml,
   toggleJoin,
 } from "./ttml-creator-model";
+import { romanizeLyrics } from "./romanization";
 import type { Lyrics } from "./types";
 
 const meta = { name: "Song & <Co>", artists: ["A", "B"], spotifyId: "abc" };
@@ -272,6 +273,22 @@ describe("TTML Creator card editing", () => {
     expect(applyRomanized(edited, request, result)[0].units[0].roman).toBe(
       undefined,
     );
+  });
+
+  it("auto romanizes words in any non-Latin script", async () => {
+    const lines = parseText(
+      "مرحبا สวัสดี नमस्ते שלום გამარჯობა 안녕 привет hi",
+    );
+    const request = romanizeRequest(lines);
+    const filled = applyRomanized(
+      lines,
+      request,
+      await romanizeLyrics(request),
+    );
+    const readings = filled[0].units.map((unit) => unit.roman);
+    expect(readings.at(-1)).toBeUndefined();
+    for (const reading of readings.slice(0, -1))
+      expect(reading).toMatch(/^[ -~]+$/);
   });
 
   it("moves lines, whole words and spaces", () => {

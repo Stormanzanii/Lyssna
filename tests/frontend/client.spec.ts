@@ -14831,7 +14831,12 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   });
   await menu.getByRole("menuitem", { name: "Split word…" }).click();
   const dialog = page.getByRole("dialog", { name: "Split word" });
-  await dialog.getByRole("button", { name: "Split before letter 3" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "Split before letter 3" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    dialog.getByRole("button", { name: "Syllable split" }),
+  ).toBeDisabled();
   await dialog
     .getByRole("checkbox", { name: "Apply this split to all identical words" })
     .check();

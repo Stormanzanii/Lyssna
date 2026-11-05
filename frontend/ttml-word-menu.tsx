@@ -113,9 +113,14 @@ export function SplitDialog({
   onClose: () => void;
 }) {
   const chars = Array.from(word);
-  const [offsets, setOffsets] = useState<Set<number>>(new Set());
+  const [suggestion] = useState(() => suggestSplit(word, learned));
+  const [offsets, setOffsets] = useState<Set<number>>(
+    () => new Set(suggestion),
+  );
   const [options, setOptions] = useState(loadOptions);
-  const suggestion = suggestSplit(word, learned);
+  const suggested =
+    offsets.size === suggestion.length &&
+    suggestion.every((at) => offsets.has(at));
   const update = (patch: Partial<typeof options>) => {
     const next = { ...options, ...patch };
     setOptions(next);
@@ -182,7 +187,7 @@ export function SplitDialog({
         </div>
         <div className="ttml-dialog-row end">
           <button
-            disabled={!suggestion.length}
+            disabled={!suggestion.length || suggested}
             onClick={() => setOffsets(new Set(suggestion))}
             title={
               suggestion.length

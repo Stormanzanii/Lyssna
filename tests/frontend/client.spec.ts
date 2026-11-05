@@ -620,6 +620,7 @@ async function startClient(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          if (command === "playback_speed") return args.percent;
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
@@ -14633,4 +14634,113 @@ test("panel scrollers keep only the overlay bar after switching pages", async ({
       (element: HTMLElement) => element.offsetWidth - element.clientWidth,
     ),
   ).toBe(0);
+});
+
+test("TTML Creator times words on the playing song, slows it and saves TTML", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const bar = page.locator(".player-extras");
+  await expect(bar.getByTitle("TTML Creator", { exact: true })).toHaveCount(0);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator).toContainText("Come & Go (with Marshmello)");
+  await creator.getByLabel("Lyrics text").fill("Hello wor|ld\n(ooh)");
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await expect(creator.locator(".ttml-unit")).toHaveText([
+    "Hello",
+    "wor",
+    "ld",
+    "ooh",
+  ]);
+
+  const at = (progress_ms: number) =>
+    page.evaluate((progress_ms) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        changed: false,
+        observed_at: Date.now(),
+        playback: {
+          is_playing: false,
+          progress_ms,
+          shuffle_state: false,
+          repeat_state: "off",
+          device: {
+            name: "Lyssna (test)",
+            id: "local-device",
+            is_active: true,
+          },
+          item: {
+            id: "0123456789abcdefghijkl",
+            uri: "spotify:track:0123456789abcdefghijkl",
+            name: "Come & Go (with Marshmello)",
+            artists: [
+              { id: "a", name: "Juice WRLD" },
+              { id: "b", name: "Marshmello" },
+            ],
+            album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+            duration_ms: 180000,
+          },
+        },
+      });
+    }, progress_ms);
+  const taps: [number, string][] = [
+    [3000, "f"],
+    [3500, "g"],
+    [4000, "g"],
+    [4500, "h"],
+    [4600, "f"],
+    [5000, "h"],
+  ];
+  for (const [time, key] of taps) {
+    await at(time);
+    await expect(creator.locator(".ttml-time")).toHaveText(
+      `00:0${Math.floor(time / 1000)}.${String(time % 1000).padStart(3, "0")}`,
+    );
+    await page.keyboard.press(key);
+  }
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+  await page.keyboard.press("Control+z");
+  await expect(creator.locator(".ttml-progress")).toHaveText("3/4 timed");
+  await page.keyboard.press("Control+y");
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+
+  const last = (command: string) =>
+    page.evaluate(
+      (command) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === command)
+          .at(-1)?.args,
+      command,
+    );
+  await creator.getByLabel("Playback speed").selectOption("0.5");
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 50 });
+  await expect(creator.getByLabel("Playback speed")).toHaveValue("0.5");
+
+  await creator.getByRole("tab", { name: "Preview" }).click();
+  await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
+
+  await creator.getByRole("button", { name: "Use for this song" }).click();
+  const saved = await last("import_lyrics");
+  expect(saved).toMatchObject({
+    filename: "Juice WRLD, Marshmello - Come & Go (with Marshmello).ttml",
+    mode: "persistent",
+  });
+  expect(saved.contents).toContain(
+    '<span begin="00:03.000" end="00:03.500">Hello</span> <span begin="00:03.500" end="00:04.000">wor</span><span begin="00:04.000" end="00:04.500">ld</span>',
+  );
+  expect(saved.contents).toContain(
+    '<span ttm:role="x-bg" begin="00:04.600" end="00:05.000"><span begin="00:04.600" end="00:05.000">ooh</span></span>',
+  );
+
+  await bar.getByTitle("Lyrics", { exact: true }).click();
+  await expect(creator).toHaveCount(0);
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
 });

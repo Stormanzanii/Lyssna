@@ -31,3 +31,5 @@ Playback uses [librespot](https://github.com/librespot-org/librespot), published
 Spotify is a trademark of Spotify AB. Lyssna is an independent client and is not affiliated with Spotify AB.
 
 Fullscreen lyrics behavior references the local pixels-spicy-lyrics fork (`src/components/Utils/Fullscreen.ts`, `src/css/CanvasImmersive.css`, `src/css/ContentBox.css`, AGPL-3.0): its 750 ms idle delay, artwork control overlay and Canvas dock movement. Lyssna implements these with its own React controls and CSS. No fork source or assets are copied.
+
+TTML Creator (`frontend/ttml-creator.tsx`, `frontend/ttml-creator-model.ts`) reimplements behaviour read from the local [spicylyrics/ttml-tool](https://github.com/spicylyrics/ttml-tool) fork of the AMLL TTML Tool (0.22.0, AGPL-3.0): the F, G and H tap keys for starting, chaining and ending words, word and syllable timing units, background and second-singer lines, and the word-timed TTML layout with `amll:meta` song details. Pitch-preserving slow playback (`src/time_stretch.rs`) is an independent WSOLA implementation in Lyssna's audio output. No upstream source or assets are copied.

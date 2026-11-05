@@ -406,3 +406,116 @@
   min-height: 0;
   overflow: hidden;
 }
+.ttml-menu {
+  z-index: 46;
+  min-width: 240px;
+}
+.ttml-menu-group + .ttml-menu-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #ffffff14;
+}
+.ttml-creator .ttml-menu button {
+  min-height: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: left;
+}
+.ttml-creator .ttml-menu button:hover:not(:disabled) {
+  background: #ffffff0b;
+}
+.ttml-menu button:disabled {
+  opacity: 0.4;
+}
+.ttml-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: #0009;
+}
+.ttml-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid #ffffff17;
+  border-radius: 14px;
+  background: #1c1c1c;
+  box-shadow: 0 20px 60px #000a;
+}
+.ttml-dialog h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.ttml-dialog-note {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #c9f7da;
+  background: #1ed7601f;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.ttml-dialog-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.ttml-splitter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 22px 12px;
+  border-radius: 10px;
+  background: #ffffff08;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 26px;
+}
+.ttml-split-char {
+  display: inline-flex;
+  align-items: center;
+}
+.ttml-creator .ttml-split-gap {
+  width: 16px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 3px;
+  background: linear-gradient(#ffffff1f, #ffffff1f) center / 1px 60% no-repeat;
+}
+.ttml-creator .ttml-split-gap:hover:not(:disabled) {
+  background: linear-gradient(#ffffff80, #ffffff80) center / 2px 80% no-repeat;
+}
+.ttml-creator .ttml-split-gap.on,
+.ttml-creator .ttml-split-gap.on:hover:not(:disabled) {
+  background: linear-gradient(#1ed760, #1ed760) center / 2px 100% no-repeat;
+}
+.ttml-dialog-row {
+  display: flex;
+  gap: 8px;
+}
+.ttml-dialog-row.end {
+  justify-content: flex-end;
+}
+.ttml-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.ttml-check.off {
+  color: var(--muted);
+}
+.ttml-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #1ed760;
+}

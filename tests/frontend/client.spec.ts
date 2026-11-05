@@ -14798,3 +14798,60 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   });
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
 });
+
+test("TTML Creator word menu splits words and moves them to new lines", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const card = creator.locator(".ttml-card").first();
+  const menu = page.getByRole("menu", { name: "Word actions" });
+
+  await card.getByRole("button", { name: "number", exact: true }).click({
+    button: "right",
+  });
+  await menu.getByRole("menuitem", { name: "Auto-segment word" }).click();
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "I am just a lyric line num ber 1".split(" "),
+  );
+
+  await card.getByRole("button", { name: "lyric", exact: true }).click({
+    button: "right",
+  });
+  await menu.getByRole("menuitem", { name: "Split word…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Split word" });
+  await dialog.getByRole("button", { name: "Split before letter 3" }).click();
+  await dialog
+    .getByRole("checkbox", { name: "Apply this split to all identical words" })
+    .check();
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+  ).toHaveText("I am just a ly ric line number 2".split(" "));
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.ttml-splits")),
+  ).toBe('{"lyric":[2]}');
+
+  await card.getByRole("button", { name: "line", exact: true }).click({
+    button: "right",
+  });
+  await menu
+    .getByRole("menuitem", { name: "Move following words to new line" })
+    .click();
+  await expect(
+    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+  ).toHaveText("line num ber 1".split(" "));
+  await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
+});

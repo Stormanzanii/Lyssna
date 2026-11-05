@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  breakLine,
+  duplicateLine,
   editUnit,
   formatTime,
   fromLyrics,
@@ -12,6 +14,8 @@ import {
   parseText,
   problems,
   setLineText,
+  splitMatching,
+  splitUnit,
   toLyrics,
   toText,
   toTtml,
@@ -227,5 +231,58 @@ describe("TTML Creator card editing", () => {
     );
     expect(toLyrics(lines).lines[0].translation).toBe("hello");
     expect(keepTimings(lines, parseText("hola"))[0].translation).toBe("hello");
+  });
+});
+
+describe("TTML Creator word menu", () => {
+  it("splits a timed word evenly and an untimed one keeps its edges", () => {
+    const lines = splitUnit(timeAll("go now"), { line: 0, unit: 0 }, [
+      "g",
+      "o",
+    ]);
+    expect(
+      lines[0].units.map((unit) => [
+        unit.text,
+        unit.joined,
+        unit.start,
+        unit.end,
+      ]),
+    ).toEqual([
+      ["g", false, 1000, 1200],
+      ["o", true, 1200, 1400],
+      ["now", false, 1400, 1800],
+    ]);
+    const started = markStart(parseText("abc"), { line: 0, unit: 0 }, 50);
+    expect(
+      splitUnit(started, { line: 0, unit: 0 }, ["a", "bc"])[0].units.map(
+        (unit) => [unit.start, unit.end],
+      ),
+    ).toEqual([
+      [50, undefined],
+      [undefined, undefined],
+    ]);
+  });
+
+  it("splits every matching word, optionally ignoring case", () => {
+    const lines = parseText("Baby baby BABY");
+    const cut = (text: string) => [text.slice(0, 2), text.slice(2)];
+    expect(toText(splitMatching(lines, "baby", cut, false))).toBe(
+      "Baby ba|by BABY",
+    );
+    expect(toText(splitMatching(lines, "baby", cut, true))).toBe(
+      "Ba|by ba|by BA|BY",
+    );
+  });
+
+  it("moves words to a new line and duplicates lines", () => {
+    const lines = parseText("(one two|x three)");
+    expect(toText(breakLine(lines, { line: 0, unit: 1 }, false))).toBe(
+      "(one)\n(two|x three)",
+    );
+    expect(toText(breakLine(lines, { line: 0, unit: 3 }, true))).toBe(
+      "(one two|x)\n(three)",
+    );
+    expect(breakLine(lines, { line: 0, unit: 0 }, false)).toBe(lines);
+    expect(toText(duplicateLine(parseText("a\nb"), 0))).toBe("a\na\nb");
   });
 });

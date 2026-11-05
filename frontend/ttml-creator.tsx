@@ -1,4 +1,5 @@
 import {
+  type MouseEvent as ReactMouseEvent,
   Fragment,
   useCallback,
   useEffect,
@@ -28,9 +29,11 @@ import {
   type CreatorLine,
   type Cursor,
   type SongMeta,
+  breakLine,
   clampCursor,
   clearAll,
   clearTiming,
+  duplicateLine,
   editUnit,
   fileName,
   formatTime,
@@ -48,6 +51,8 @@ import {
   progress,
   removeLine,
   setLineText,
+  splitMatching,
+  splitUnit,
   timed,
   toLyrics,
   toText,
@@ -55,6 +60,13 @@ import {
   toggleJoin,
   toggleLine,
 } from "./ttml-creator-model";
+import { type LearnedSplits, cutAt, suggestSplit } from "./ttml-syllables";
+import {
+  type MenuAction,
+  type SplitChoice,
+  SplitDialog,
+  WordMenu,
+} from "./ttml-word-menu";
 import "./ttml-creator.css";
 
 type Tab = "write" | "sync" | "preview";
@@ -65,6 +77,7 @@ interface Draft {
 
 const SPEEDS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5];
 const DRAFT_PREFIX = "lyssna.ttml-draft.";
+const SPLITS_KEY = "lyssna.ttml-splits";
 const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
 
@@ -249,7 +262,9 @@ export function TtmlCreator({
 
   const [textMode, setTextMode] = useState(false);
   const [editing, setEditing] = useState<Cursor | null>(null);
-  const [adding, setAdding] = useState<number | null>(null);
+  const [adding, setAdding] = useState<{ card: number; after: number } | null>(
+    null,
+  );
   const applyText = (sync: boolean) => {
     const parsed = keepTimings(lines, parseText(text));
     setLines(parsed);
@@ -267,6 +282,131 @@ export function TtmlCreator({
     if (next === lines) return;
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
+  };
+
+  const [learned, setLearned] = useState<LearnedSplits>(() => {
+    try {
+      return JSON.parse(readStorage(SPLITS_KEY) ?? "{}") as LearnedSplits;
+    } catch {
+      return {};
+    }
+  });
+  const [menu, setMenu] = useState<{ x: number; y: number; at: Cursor } | null>(
+    null,
+  );
+  const [splitting, setSplitting] = useState<Cursor | null>(null);
+  const openMenu = (event: ReactMouseEvent, at: Cursor) => {
+    event.preventDefault();
+    setCursor(at);
+    setMenu({ x: event.clientX, y: event.clientY, at });
+  };
+  const restructure = (next: CreatorLine[]) => {
+    if (next === lines) return;
+    setLines(next);
+    setCursor((cursor) => clampCursor(next, cursor));
+  };
+  const toCards = () => {
+    setTab("write");
+    setTextMode(false);
+  };
+  const menuGroups = (at: Cursor): MenuAction[][] => {
+    const line = lines[at.line];
+    const unit = line?.units[at.unit];
+    if (!line || !unit) return [];
+    const suggestion = suggestSplit(unit.text, learned);
+    return [
+      [
+        { label: "Split word…", run: () => setSplitting(at) },
+        {
+          label: "Auto-segment word",
+          disabled: !suggestion.length,
+          run: () =>
+            restructure(splitUnit(lines, at, cutAt(unit.text, suggestion))),
+        },
+        {
+          label: "Replace word…",
+          run: () => {
+            toCards();
+            setEditing(at);
+          },
+        },
+        { label: "Delete word", run: () => commitWord(at, "") },
+      ],
+      [
+        {
+          label: "Move following words to new line",
+          disabled: at.unit === 0,
+          run: () => restructure(breakLine(lines, at, false)),
+        },
+        {
+          label: "Move this word to new line",
+          disabled: line.units.length < 2,
+          run: () => restructure(breakLine(lines, at, true)),
+        },
+      ],
+      [
+        {
+          label: "Background line",
+          checked: line.background,
+          run: () => setLines(toggleLine(lines, at.line, "background")),
+        },
+        {
+          label: "Duet line",
+          checked: line.opposite,
+          run: () => setLines(toggleLine(lines, at.line, "opposite")),
+        },
+      ],
+      [
+        {
+          label: "Insert new line before",
+          run: () => {
+            toCards();
+            setAdding({ card: at.line, after: at.line - 1 });
+          },
+        },
+        {
+          label: "Insert new line after",
+          run: () => {
+            toCards();
+            setAdding({ card: at.line, after: at.line });
+          },
+        },
+        {
+          label: "Duplicate line",
+          run: () => restructure(duplicateLine(lines, at.line)),
+        },
+        {
+          label: "Delete line",
+          run: () => restructure(removeLine(lines, at.line)),
+        },
+      ],
+    ];
+  };
+  const confirmSplit = (at: Cursor, choice: SplitChoice) => {
+    const unit = lines[at.line]?.units[at.unit];
+    setSplitting(null);
+    if (!unit) return;
+    if (choice.learned) {
+      const next = { ...learned, [choice.learned.key]: choice.learned.offsets };
+      setLearned(next);
+      writeStorage(SPLITS_KEY, JSON.stringify(next));
+    }
+    restructure(
+      choice.applyAll
+        ? splitMatching(
+            lines,
+            unit.text,
+            (text) =>
+              cutAt(
+                text,
+                text === unit.text
+                  ? choice.offsets
+                  : choice.offsets.filter((at) => at < Array.from(text).length),
+              ),
+            choice.ignoreCase,
+          )
+        : splitUnit(lines, at, cutAt(unit.text, choice.offsets)),
+    );
   };
   const startFromLyrics = () => {
     if (!state.lyrics || !here) return;
@@ -295,6 +435,7 @@ export function TtmlCreator({
     if (tab !== "sync") return;
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (document.querySelector(".ttml-menu, .ttml-dialog")) return;
       if (
         target?.closest("input, textarea, select, [contenteditable=true]") ||
         event.altKey ||
@@ -550,6 +691,7 @@ export function TtmlCreator({
                                 unit.joined && setLines(toggleJoin(lines, at))
                               }
                               onDoubleClick={() => setEditing(at)}
+                              onContextMenu={(event) => openMenu(event, at)}
                             >
                               {unit.text}
                             </button>
@@ -583,7 +725,7 @@ export function TtmlCreator({
                       />
                     </label>
                   ))}
-                  {adding === lineIndex && (
+                  {adding?.card === lineIndex && (
                     <input
                       className="ttml-card-add"
                       aria-label="New line"
@@ -594,9 +736,10 @@ export function TtmlCreator({
                         if (event.key === "Escape") setAdding(null);
                         if (event.key !== "Enter") return;
                         const value = event.currentTarget.value;
+                        const after = adding.after;
                         setAdding(null);
                         if (value.trim())
-                          setLines(insertLines(lines, lineIndex, value));
+                          setLines(insertLines(lines, after, value));
                       }}
                     />
                   )}
@@ -636,7 +779,9 @@ export function TtmlCreator({
                   <button
                     title="Add line below"
                     aria-label="Add line below"
-                    onClick={() => setAdding(lineIndex)}
+                    onClick={() =>
+                      setAdding({ card: lineIndex, after: lineIndex })
+                    }
                   >
                     <Plus size={14} />
                   </button>
@@ -802,6 +947,9 @@ export function TtmlCreator({
                         onDoubleClick={() =>
                           unit.start !== undefined && seek(unit.start - 1000)
                         }
+                        onContextMenu={(event) =>
+                          openMenu(event, { line: lineIndex, unit: unitIndex })
+                        }
                       >
                         <TimePill ms={unit.start} />
                         <span className="ttml-word">{unit.text}</span>
@@ -865,6 +1013,22 @@ export function TtmlCreator({
             <p className="ttml-hint">Time some words to see them here.</p>
           )}
         </div>
+      )}
+      {menu && (
+        <WordMenu
+          x={menu.x}
+          y={menu.y}
+          groups={menuGroups(menu.at)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      {splitting && lines[splitting.line]?.units[splitting.unit] && (
+        <SplitDialog
+          word={lines[splitting.line].units[splitting.unit].text}
+          learned={learned}
+          onClose={() => setSplitting(null)}
+          onConfirm={(choice) => confirmSplit(splitting, choice)}
+        />
       )}
     </section>
   );

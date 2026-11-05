@@ -286,6 +286,95 @@ export function editUnit(
     : lines.filter((_, index) => index !== at.line);
 }
 
+function divided(unit: CreatorUnit, parts: string[]): CreatorUnit[] {
+  const { start, end } = unit;
+  const total = parts.length;
+  let before = 0;
+  return parts.map((text, index) => {
+    const piece: CreatorUnit = { text, joined: index ? true : unit.joined };
+    if (start !== undefined && end !== undefined) {
+      piece.start = Math.round(start + ((end - start) * before) / total);
+      before += 1;
+      piece.end = Math.round(start + ((end - start) * before) / total);
+    } else {
+      if (index === 0 && start !== undefined) piece.start = start;
+      if (index === parts.length - 1 && end !== undefined) piece.end = end;
+    }
+    return piece;
+  });
+}
+
+export function splitUnit(
+  lines: CreatorLine[],
+  at: Cursor,
+  parts: string[],
+): CreatorLine[] {
+  const unit = lines[at.line]?.units[at.unit];
+  const kept = parts.filter(Boolean);
+  if (!unit || kept.length < 2) return lines;
+  return lines.map((line, index) =>
+    index === at.line
+      ? {
+          ...line,
+          units: [
+            ...line.units.slice(0, at.unit),
+            ...divided(unit, kept),
+            ...line.units.slice(at.unit + 1),
+          ],
+        }
+      : line,
+  );
+}
+
+export function splitMatching(
+  lines: CreatorLine[],
+  text: string,
+  cut: (text: string) => string[],
+  ignoreCase: boolean,
+): CreatorLine[] {
+  const same = (other: string) =>
+    ignoreCase ? other.toLowerCase() === text.toLowerCase() : other === text;
+  return lines.map((line) => ({
+    ...line,
+    units: line.units.flatMap((unit) =>
+      same(unit.text) ? divided(unit, cut(unit.text).filter(Boolean)) : [unit],
+    ),
+  }));
+}
+
+export function breakLine(
+  lines: CreatorLine[],
+  at: Cursor,
+  onlyThisWord: boolean,
+): CreatorLine[] {
+  const line = lines[at.line];
+  if (!line?.units[at.unit]) return lines;
+  const moved = onlyThisWord
+    ? [line.units[at.unit]]
+    : line.units.slice(at.unit);
+  const stay = onlyThisWord
+    ? line.units.filter((_, index) => index !== at.unit)
+    : line.units.slice(0, at.unit);
+  if (!stay.length) return lines;
+  const fresh = (units: CreatorUnit[]) =>
+    units.map((unit, index) => (index ? unit : { ...unit, joined: false }));
+  return [
+    ...lines.slice(0, at.line),
+    { ...line, units: fresh(stay) },
+    {
+      units: fresh(moved),
+      background: line.background,
+      opposite: line.opposite,
+    },
+    ...lines.slice(at.line + 1),
+  ];
+}
+
+export const duplicateLine = (lines: CreatorLine[], index: number) =>
+  lines[index]
+    ? [...lines.slice(0, index + 1), lines[index], ...lines.slice(index + 1)]
+    : lines;
+
 export function toggleJoin(lines: CreatorLine[], at: Cursor): CreatorLine[] {
   if (at.unit === 0) return lines;
   return lines.map((line, index) =>

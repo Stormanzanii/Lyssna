@@ -289,12 +289,12 @@
   font-size: 15px;
 }
 .ttml-creator .ttml-space {
-  min-height: 22px;
-  padding: 1px 6px;
-  border-radius: 5px;
+  min-height: 30px;
+  padding: 4px 9px;
+  border-radius: 7px;
   color: #ffffff59;
   background: #ffffff08;
-  font-size: 11px;
+  font-size: 15px;
 }
 .ttml-creator .ttml-space:hover {
   color: #fff;
@@ -305,10 +305,17 @@
   gap: 4px;
   font-size: 11.5px;
 }
-.ttml-card-extra input,
+.ttml-card-extra input {
+  field-sizing: content;
+  min-width: 5ch;
+  max-width: 100%;
+}
 .ttml-card-add {
   flex: 1;
   min-width: 0;
+}
+.ttml-card-extra input,
+.ttml-card-add {
   padding: 1px 4px;
   border: 1px solid transparent;
   border-radius: 4px;

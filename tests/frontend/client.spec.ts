@@ -14912,6 +14912,21 @@ test("TTML Creator Sync follows the playing line", async ({ page }) => {
     .getByTitle("TTML Creator", { exact: true })
     .click();
   const creator = page.getByRole("region", { name: "TTML Creator" });
+  const list = creator.locator(".ttml-lines");
+  const box = (await list.boundingBox())!;
+  const grip = (await creator
+    .locator(".ttml-card-number")
+    .first()
+    .boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 20, grip.y + 30, { steps: 4 });
+  await page.mouse.move(box.x + 100, box.y + box.height - 4, { steps: 4 });
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(200);
+  await page.mouse.up();
+
   await creator.getByRole("button", { name: "Continue to Sync" }).click();
   await page.evaluate(() => {
     (window as any).__clientTest.emit({

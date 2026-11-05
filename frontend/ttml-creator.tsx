@@ -341,9 +341,39 @@ export function TtmlCreator({
   };
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState("");
+  const dragScroll = useRef({ speed: 0, frame: 0 });
+  useEffect(() => {
+    const scroll = dragScroll.current;
+    return () => cancelAnimationFrame(scroll.frame);
+  }, []);
   const endDrag = () => {
     setDrag(null);
     setDrop("");
+    dragScroll.current.speed = 0;
+  };
+  const scrollWhileDragging = (event: ReactDragEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const edge = Math.min(90, box.height / 4);
+    const reach = (distance: number) =>
+      Math.min(1, 1 - distance / edge) ** 2 * 22;
+    const scroll = dragScroll.current;
+    scroll.speed =
+      event.clientY - box.top < edge
+        ? -reach(event.clientY - box.top)
+        : box.bottom - event.clientY < edge
+          ? reach(box.bottom - event.clientY)
+          : 0;
+    if (!scroll.speed || scroll.frame) return;
+    const element = event.currentTarget;
+    const step = () => {
+      if (!scroll.speed) {
+        scroll.frame = 0;
+        return;
+      }
+      element.scrollTop += scroll.speed;
+      scroll.frame = requestAnimationFrame(step);
+    };
+    scroll.frame = requestAnimationFrame(step);
   };
   const startDrag = (event: ReactDragEvent, next: Drag) => {
     event.stopPropagation();
@@ -787,7 +817,11 @@ export function TtmlCreator({
               </button>
             </div>
           </div>
-          <div className="ttml-lines" onDragEnd={endDrag}>
+          <div
+            className="ttml-lines"
+            onDragEnd={endDrag}
+            onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
+          >
             {lines.map((line, lineIndex) => (
               <div
                 key={lineIndex}

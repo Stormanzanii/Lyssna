@@ -639,3 +639,43 @@
 .ttml-creator .ttml-space.drop-word {
   box-shadow: inset 0 0 0 1px #fff;
 }
+.ttml-chip-plain {
+  display: contents;
+}
+.ttml-chip-stack {
+  display: inline-grid;
+  justify-items: stretch;
+  gap: 2px;
+}
+.ttml-chip-stack:has(> .ttml-chip.joined) {
+  margin-left: -3px;
+}
+.ttml-chip-stack > .ttml-chip.joined {
+  margin-left: 0;
+}
+.ttml-chips:has(.ttml-chip-stack) {
+  align-items: flex-start;
+}
+.ttml-roman {
+  field-sizing: content;
+  min-width: 3ch;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  outline: none;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+.ttml-roman:hover,
+.ttml-roman:focus {
+  border-color: #ffffff2e;
+  color: #f3f3f3;
+  background: #ffffff0a;
+}
+.ttml-creator .ttml-row button.active {
+  color: #000;
+  background: #ffffffd9;
+}

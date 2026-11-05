@@ -14896,6 +14896,20 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   await expect(
     creator.locator(".ttml-card").first().locator(".ttml-chip"),
   ).toHaveText("I am just a ly ric line number 2".split(" "));
+
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  const reading = creator
+    .getByRole("textbox", { name: "Romanization of just" })
+    .first();
+  await reading.fill("jasuto");
+  await reading.press("Enter");
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  await expect(reading).toHaveValue("jasuto");
+  await creator.getByRole("button", { name: "Auto romanize" }).click();
+  await expect(creator.getByRole("status")).toContainText(
+    "Nothing to romanize",
+  );
 });
 
 test("TTML Creator Sync follows the playing line", async ({ page }) => {

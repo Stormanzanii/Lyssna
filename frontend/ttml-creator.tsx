@@ -21,6 +21,7 @@ import {
   Save,
   Trash2,
   Type,
+  Languages,
   Undo2,
   Wand2,
 } from "lucide-react";
@@ -49,7 +50,10 @@ import {
   moveLine,
   moveSpace,
   moveWord,
+  applyRomanized,
   nextCursor,
+  romanizeRequest,
+  setUnitRoman,
   parseText,
   previousCursor,
   problems,
@@ -66,6 +70,7 @@ import {
   toggleLine,
   wordBounds,
 } from "./ttml-creator-model";
+import { romanizeAway } from "./romanization";
 import { type LearnedSplits, cutAt, suggestSplit } from "./ttml-syllables";
 import {
   type MenuAction,
@@ -87,6 +92,7 @@ const clampSpeed = (value: number) =>
   Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(value * 20) / 20));
 const DRAFT_PREFIX = "lyssna.ttml-draft.";
 const SPLITS_KEY = "lyssna.ttml-splits";
+const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
@@ -338,6 +344,42 @@ export function TtmlCreator({
     if (next === lines) return;
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
+  };
+  const [wordRoman, setWordRoman] = useState(
+    () => readStorage(WORD_ROMAN_KEY) === "1",
+  );
+  const showWordRoman = (on: boolean) => {
+    setWordRoman(on);
+    writeStorage(WORD_ROMAN_KEY, on ? "1" : null);
+  };
+  const [romanNote, setRomanNote] = useState("");
+  const romanJob = useRef(0);
+  const autoRomanize = async () => {
+    const job = ++romanJob.current;
+    setRomanNote("Romanizing…");
+    const request = romanizeRequest(lines);
+    const result = await romanizeAway(request).catch(() => null);
+    if (job !== romanJob.current) return;
+    if (!result) {
+      setRomanNote("Romanization failed.");
+      return;
+    }
+    // The worker hands back a copy, so compare readings rather than objects.
+    const found = result.lines.some((line, lineIndex) =>
+      line.words.some(
+        (word, index) =>
+          word.text.trim() !==
+          request.lines[lineIndex]?.words[index]?.text.trim(),
+      ),
+    );
+    setRomanNote(
+      found
+        ? ""
+        : "Nothing to romanize: these lyrics are already in Latin letters.",
+    );
+    if (!found) return;
+    setLines((current) => applyRomanized(current, request, result));
+    showWordRoman(true);
   };
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState("");
@@ -812,10 +854,31 @@ export function TtmlCreator({
                 <Type size={15} />
                 Edit as text
               </button>
+              <button
+                className={wordRoman ? "active" : ""}
+                aria-pressed={wordRoman}
+                onClick={() => showWordRoman(!wordRoman)}
+                title="Show a reading under each word"
+              >
+                Word romanization
+              </button>
+              <button
+                onClick={() => void autoRomanize()}
+                disabled={romanNote === "Romanizing…"}
+                title="Fill empty word readings for Japanese, Korean, Chinese, Cyrillic and Greek lyrics"
+              >
+                <Languages size={15} />
+                Auto romanize
+              </button>
               <button className="primary" onClick={() => setTab("sync")}>
                 Continue to Sync
               </button>
             </div>
+            {romanNote && (
+              <p className="ttml-hint" role="status">
+                {romanNote}
+              </p>
+            )}
           </div>
           <div
             className="ttml-lines"
@@ -898,80 +961,105 @@ export function TtmlCreator({
                               Space
                             </button>
                           )}
-                          {isEditing ? (
-                            <input
-                              className="ttml-chip-edit"
-                              aria-label="Edit word"
-                              autoFocus
-                              defaultValue={unit.text}
-                              size={Math.max(2, unit.text.length + 1)}
-                              onBlur={(event) =>
-                                commitWord(at, event.target.value)
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter")
-                                  event.currentTarget.blur();
-                                if (event.key === "Escape") setEditing(null);
-                              }}
-                            />
-                          ) : (
-                            <button
-                              className={`ttml-chip${unit.joined ? " joined" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
-                              title={
-                                unit.joined
-                                  ? "Syllable. Click to split it into its own word; double-click to edit."
-                                  : "Double-click to edit; drag to move"
-                              }
-                              draggable
-                              onDragStart={(event) =>
-                                startDrag(event, { kind: "word", at })
-                              }
-                              onDragOver={(event) => {
-                                if (drag?.kind === "word")
-                                  over(
-                                    event,
-                                    `unit:${lineIndex}:${unitIndex}:${firstHalf(event, false) ? "before" : "after"}`,
-                                  );
-                                else if (
-                                  drag?.kind === "space" &&
-                                  unit.joined &&
-                                  drag.at.line === lineIndex
-                                )
-                                  over(
-                                    event,
-                                    `unit:${lineIndex}:${unitIndex}:space`,
-                                  );
-                              }}
-                              onDrop={(event) => {
-                                if (drag?.kind === "word") {
-                                  const word = wordBounds(
-                                    line.units,
-                                    unitIndex,
-                                  );
-                                  land(
-                                    event,
-                                    moveWord(lines, drag.at, {
-                                      line: lineIndex,
-                                      unit: firstHalf(event, false)
-                                        ? word.start
-                                        : word.end,
-                                    }),
-                                  );
-                                } else if (
-                                  drag?.kind === "space" &&
+                          <span
+                            className={
+                              wordRoman ? "ttml-chip-stack" : "ttml-chip-plain"
+                            }
+                          >
+                            {isEditing ? (
+                              <input
+                                className="ttml-chip-edit"
+                                aria-label="Edit word"
+                                autoFocus
+                                defaultValue={unit.text}
+                                size={Math.max(2, unit.text.length + 1)}
+                                onBlur={(event) =>
+                                  commitWord(at, event.target.value)
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter")
+                                    event.currentTarget.blur();
+                                  if (event.key === "Escape") setEditing(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                className={`ttml-chip${unit.joined ? " joined" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
+                                title={
                                   unit.joined
-                                )
-                                  land(event, moveSpace(lines, drag.at, at));
-                              }}
-                              onClick={() =>
-                                unit.joined && setLines(toggleJoin(lines, at))
-                              }
-                              onDoubleClick={() => setEditing(at)}
-                              onContextMenu={(event) => openMenu(event, at)}
-                            >
-                              {unit.text}
-                            </button>
-                          )}
+                                    ? "Syllable. Click to split it into its own word; double-click to edit."
+                                    : "Double-click to edit; drag to move"
+                                }
+                                draggable
+                                onDragStart={(event) =>
+                                  startDrag(event, { kind: "word", at })
+                                }
+                                onDragOver={(event) => {
+                                  if (drag?.kind === "word")
+                                    over(
+                                      event,
+                                      `unit:${lineIndex}:${unitIndex}:${firstHalf(event, false) ? "before" : "after"}`,
+                                    );
+                                  else if (
+                                    drag?.kind === "space" &&
+                                    unit.joined &&
+                                    drag.at.line === lineIndex
+                                  )
+                                    over(
+                                      event,
+                                      `unit:${lineIndex}:${unitIndex}:space`,
+                                    );
+                                }}
+                                onDrop={(event) => {
+                                  if (drag?.kind === "word") {
+                                    const word = wordBounds(
+                                      line.units,
+                                      unitIndex,
+                                    );
+                                    land(
+                                      event,
+                                      moveWord(lines, drag.at, {
+                                        line: lineIndex,
+                                        unit: firstHalf(event, false)
+                                          ? word.start
+                                          : word.end,
+                                      }),
+                                    );
+                                  } else if (
+                                    drag?.kind === "space" &&
+                                    unit.joined
+                                  )
+                                    land(event, moveSpace(lines, drag.at, at));
+                                }}
+                                onClick={() =>
+                                  unit.joined && setLines(toggleJoin(lines, at))
+                                }
+                                onDoubleClick={() => setEditing(at)}
+                                onContextMenu={(event) => openMenu(event, at)}
+                              >
+                                {unit.text}
+                              </button>
+                            )}
+                            {wordRoman && (
+                              <input
+                                className="ttml-roman"
+                                key={unit.roman ?? ""}
+                                aria-label={`Romanization of ${unit.text}`}
+                                defaultValue={unit.roman ?? ""}
+                                placeholder="–"
+                                spellCheck={false}
+                                onBlur={(event) =>
+                                  setLines(
+                                    setUnitRoman(lines, at, event.target.value),
+                                  )
+                                }
+                                onKeyDown={(event) =>
+                                  event.key === "Enter" &&
+                                  event.currentTarget.blur()
+                                }
+                              />
+                            )}
+                          </span>
                         </Fragment>
                       );
                     })}

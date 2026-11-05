@@ -381,7 +381,7 @@ function settle() {
   }, IDLE_MS);
 }
 /** Converts in the worker when there is one, else on this thread. */
-function romanizeAway(lyrics: Lyrics): Promise<Lyrics> {
+export function romanizeAway(lyrics: Lyrics): Promise<Lyrics> {
   const thread = romanizer();
   if (!thread) return romanizeLyrics(lyrics);
   clearTimeout(idle);

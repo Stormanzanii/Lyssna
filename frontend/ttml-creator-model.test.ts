@@ -16,7 +16,10 @@ import {
   nextCursor,
   parseText,
   problems,
+  applyRomanized,
+  romanizeRequest,
   setLineText,
+  setUnitRoman,
   splitMatching,
   splitUnit,
   toLyrics,
@@ -234,6 +237,41 @@ describe("TTML Creator card editing", () => {
     );
     expect(toLyrics(lines).lines[0].translation).toBe("hello");
     expect(keepTimings(lines, parseText("hola"))[0].translation).toBe("hello");
+  });
+
+  it("keeps word romanization through export, import and auto fill", () => {
+    let lines = timeAll("未完 成");
+    lines = setUnitRoman(lines, { line: 0, unit: 0 }, " mikan ");
+    lines = setUnitRoman(lines, { line: 0, unit: 1 }, "sei");
+    expect(toLyrics(lines).lines[0].romanization).toBe("mikan sei");
+    const ttml = toTtml(lines, meta);
+    expect(ttml).toContain('<text for="L1"><span begin=');
+    expect(ttml).toContain(">mikan</span> <span");
+    expect(ttml).not.toContain("x-roman");
+    expect(
+      fromLyrics(toLyrics(lines))[0].units.map((unit) => unit.roman),
+    ).toEqual(["mikan", "sei"]);
+    expect(keepTimings(lines, parseText("未完 成"))[0].units[1].roman).toBe(
+      "sei",
+    );
+
+    const blank = timeAll("서울 hi 가");
+    const request = romanizeRequest(blank);
+    const result = romanizeRequest(parseText("seoul hi ga"));
+    const filled = applyRomanized(
+      setUnitRoman(blank, { line: 0, unit: 2 }, "mine"),
+      request,
+      result,
+    );
+    expect(filled[0].units.map((unit) => unit.roman)).toEqual([
+      "seoul",
+      undefined,
+      "mine",
+    ]);
+    const edited = editUnit(blank, { line: 0, unit: 0 }, "부산");
+    expect(applyRomanized(edited, request, result)[0].units[0].roman).toBe(
+      undefined,
+    );
   });
 
   it("moves lines, whole words and spaces", () => {

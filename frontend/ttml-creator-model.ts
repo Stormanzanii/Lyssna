@@ -3,6 +3,7 @@ import type { Line, Lyrics, Word } from "./types";
 export interface CreatorUnit {
   text: string;
   joined: boolean;
+  roman?: string;
   start?: number;
   end?: number;
 }
@@ -97,6 +98,9 @@ export function keepTimings(
             ...unit,
             start: match.units[index].start,
             end: match.units[index].end,
+            ...(match.units[index].roman && {
+              roman: match.units[index].roman,
+            }),
           })),
         }
       : line;
@@ -132,12 +136,18 @@ export function fromLyrics(lyrics: Lyrics): CreatorLine[] {
         const last = units.length - 1;
         units[last] = { ...units[last], end: line.end_ms };
       }
+      const readings = line.romanization.trim().split(/\s+/);
+      const perWord =
+        authored && units.length > 1 && readings.length === units.length;
       return {
-        units,
+        units: perWord
+          ? units.map((unit, index) => ({ ...unit, roman: readings[index] }))
+          : units,
         background: line.background,
         opposite: line.opposite,
         ...(line.translation && { translation: line.translation }),
-        ...(line.romanization && { romanization: line.romanization }),
+        ...(line.romanization &&
+          !perWord && { romanization: line.romanization }),
       };
     })
     .filter((line) => line.units.length > 0);
@@ -479,6 +489,29 @@ export function moveSpace(
   );
 }
 
+export function setUnitRoman(
+  lines: CreatorLine[],
+  at: Cursor,
+  value: string,
+): CreatorLine[] {
+  const unit = lines[at.line]?.units[at.unit];
+  const roman = value.trim() || undefined;
+  if (!unit || unit.roman === roman) return lines;
+  return lines.map((line, index) =>
+    index === at.line
+      ? {
+          ...line,
+          units: line.units.map((each, position) =>
+            position === at.unit ? { ...each, roman } : each,
+          ),
+        }
+      : line,
+  );
+}
+
+export const hasWordRoman = (line: CreatorLine) =>
+  line.units.some((unit) => unit.roman);
+
 export function setLineText(
   lines: CreatorLine[],
   index: number,
@@ -542,7 +575,13 @@ export function toLyrics(lines: CreatorLine[]): Lyrics {
       end_ms: span.end,
       text: words.map((word) => word.text).join(""),
       translation: line.translation ?? "",
-      romanization: line.romanization ?? "",
+      // One reading per word lets the lyrics page sing them word by word.
+      romanization: hasWordRoman(line)
+        ? line.units
+            .filter((unit) => unit.start !== undefined)
+            .map((unit) => unit.roman || unit.text)
+            .join(" ")
+        : (line.romanization ?? ""),
       words,
       background: line.background,
       opposite: line.opposite,
@@ -571,11 +610,12 @@ const escape = (text: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-function spans(line: CreatorLine): string {
+function spans(line: CreatorLine, roman = false): string {
   return line.units
     .filter(timed)
     .map((unit, index) => {
-      const span = `<span begin="${formatTime(unit.start!)}" end="${formatTime(Math.max(unit.start!, unit.end!))}">${escape(unit.text)}</span>`;
+      const text = roman ? unit.roman || unit.text : unit.text;
+      const span = `<span begin="${formatTime(unit.start!)}" end="${formatTime(Math.max(unit.start!, unit.end!))}">${escape(text)}</span>`;
       return index > 0 && !unit.joined ? ` ${span}` : span;
     })
     .join("");
@@ -586,6 +626,7 @@ function extras(line: CreatorLine): string {
     line.translation &&
       `<span ttm:role="x-translation">${escape(line.translation)}</span>`,
     line.romanization &&
+      !hasWordRoman(line) &&
       `<span ttm:role="x-roman">${escape(line.romanization)}</span>`,
   ]
     .filter(Boolean)
@@ -608,6 +649,7 @@ export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
   }
   const opposite = lines.some((line) => line.opposite);
   let end = 0;
+  const readings: string[] = [];
   const body = paragraphs
     .map((paragraph, index) => {
       const all = [paragraph.lead, ...paragraph.backgrounds].filter(
@@ -620,6 +662,10 @@ export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
       const agent = (paragraph.lead ?? paragraph.backgrounds[0]).opposite
         ? "v2"
         : "v1";
+      if (paragraph.lead && hasWordRoman(paragraph.lead))
+        readings.push(
+          `<text for="L${index + 1}">${spans(paragraph.lead, true)}</text>`,
+        );
       const lead = paragraph.lead
         ? spans(paragraph.lead) + extras(paragraph.lead)
         : "";
@@ -645,6 +691,9 @@ export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
     meta.spotifyId
       ? `<amll:meta key="spotifyId" value="${escape(meta.spotifyId)}"/>`
       : "",
+    readings.length
+      ? `<iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations><transliteration>${readings.join("")}</transliteration></transliterations></iTunesMetadata>`
+      : "",
   ].join("");
   const duration = Math.max(end, meta.durationMs ?? 0);
   return `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:amll="http://www.example.com/ns/amll" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"><head><metadata>${metadata}</metadata></head><body dur="${formatTime(duration)}"><div begin="${formatTime(paragraphs.length ? Math.min(...paragraphs.map((p) => lineSpan(p.lead ?? p.backgrounds[0])!.start)) : 0)}" end="${formatTime(end)}">${body}</div></body></tt>`;
@@ -658,4 +707,64 @@ export function fileName(meta: SongMeta): string {
     .trim()
     .slice(0, 120);
   return `${base || "lyrics"}.ttml`;
+}
+
+/** Every word, timed or not, so the romanizer sees the whole song. */
+export function romanizeRequest(lines: CreatorLine[]): Lyrics {
+  return {
+    lines: lines.map((line) => {
+      const words = line.units.map((unit, index) => ({
+        start_ms: 0,
+        end_ms: 0,
+        text: index > 0 && !unit.joined ? ` ${unit.text}` : unit.text,
+      }));
+      return {
+        start_ms: 0,
+        end_ms: 0,
+        text: words.map((word) => word.text).join(""),
+        translation: "",
+        romanization: "",
+        words,
+        background: line.background,
+        opposite: line.opposite,
+      };
+    }),
+    source: "TTML Creator",
+    instrumental: false,
+    synced: true,
+  };
+}
+
+/** Fills only empty readings, so hand-typed ones survive. */
+export function applyRomanized(
+  lines: CreatorLine[],
+  request: Lyrics,
+  romanized: Lyrics,
+): CreatorLine[] {
+  let changed = false;
+  const next = lines.map((line, lineIndex) => {
+    const words = romanized.lines[lineIndex]?.words;
+    const asked = request.lines[lineIndex]?.words;
+    if (
+      words?.length !== line.units.length ||
+      asked?.length !== line.units.length
+    )
+      return line;
+    const units = line.units.map((unit, index) => {
+      const reading = words[index].text.trim();
+      if (
+        unit.roman ||
+        !reading ||
+        reading === unit.text ||
+        asked[index].text.trim() !== unit.text
+      )
+        return unit;
+      changed = true;
+      return { ...unit, roman: reading };
+    });
+    return units.some((unit, index) => unit !== line.units[index])
+      ? { ...line, units }
+      : line;
+  });
+  return changed ? next : lines;
 }

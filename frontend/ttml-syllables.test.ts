@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cutAt, learnFrom, suggestSplit } from "./ttml-syllables";
+import { cutAt, learnFrom, suggestSplit, symbolPieces } from "./ttml-syllables";
 
 const split = (word: string, learned = {}) =>
   cutAt(word, suggestSplit(word, learned));
@@ -23,5 +23,21 @@ describe("TTML syllable splitting", () => {
     expect(rule).toEqual({ key: "hamburger", offsets: [3, 6] });
     const learned = { [rule.key]: rule.offsets };
     expect(split('"HAMBURGER!"', learned)).toEqual(['"HAM', "BUR", 'GER!"']);
+  });
+});
+
+describe("symbol splitting", () => {
+  it("splits every non-Latin symbol and keeps Latin words whole", () => {
+    expect(symbolPieces("「你好」")).toEqual(["「你", "好」"]);
+    expect(symbolPieces("ちょっと")).toEqual(["ちょっ", "と"]);
+    expect(symbolPieces("ラーメン、")).toEqual(["ラー", "メ", "ン、"]);
+    expect(symbolPieces("사랑해!")).toEqual(["사", "랑", "해!"]);
+    expect(symbolPieces("AI가")).toEqual(["AI", "가"]);
+    expect(symbolPieces("नमस्ते")).toEqual(["न", "म", "स्ते"]);
+    expect(symbolPieces("สวัสดี")).toEqual(["ส", "วั", "ส", "ดี"]);
+    expect(symbolPieces("привет,")).toEqual(["привет,"]);
+    expect(symbolPieces("مرحبا")).toEqual(["مرحبا"]);
+    expect(symbolPieces("don't")).toEqual(["don't"]);
+    expect(symbolPieces("...")).toEqual(["..."]);
   });
 });

@@ -134,3 +134,51 @@ export function learnFrom(text: string, offsets: number[]) {
       .sort((a, b) => a - b),
   };
 }
+
+// As in amll-ttml-tool's segmentation (GPL-3.0): Latin, Cyrillic and Greek
+// stay whole words; Han, kana and Hangul split per character, and so does
+// every other script. Lyssna splits by grapheme so Thai and Indic marks stay
+// on their letter, keeps small kana and ー with their mora, and leans
+// punctuation on its neighbour. Cursive scripts stay whole: split letters
+// would render in their isolated forms.
+const WORDLIKE =
+  /[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Nko}\p{Script=Mongolian}\d]/u;
+const LETTER = /[\p{L}\p{N}]/u;
+const MORA_TAIL =
+  /^[ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰ-ㇿーｧ-ｯｰ]$/u;
+const OPENING = /^[([{<「『（【《〈〔｢“‘«‹¿¡]$/u;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+export function symbolPieces(text: string): string[] {
+  const pieces: string[] = [];
+  let run = "";
+  let carry = "";
+  const flush = () => {
+    if (run) pieces.push(carry + run);
+    else if (carry) pieces.push(carry);
+    run = "";
+    carry = "";
+  };
+  for (const { segment } of graphemes.segment(text)) {
+    if (!LETTER.test(segment)) {
+      if (OPENING.test(segment) && !run) carry += segment;
+      else if (OPENING.test(segment)) {
+        flush();
+        carry = segment;
+      } else if (run) run += segment;
+      else if (pieces.length) pieces[pieces.length - 1] += segment;
+      else carry += segment;
+    } else if (WORDLIKE.test(segment)) {
+      run += segment;
+    } else if (MORA_TAIL.test(segment) && (run || pieces.length)) {
+      if (run) run += segment;
+      else pieces[pieces.length - 1] += segment;
+    } else {
+      if (run) flush();
+      run = segment;
+      flush();
+    }
+  }
+  flush();
+  return pieces.length ? pieces : [text];
+}

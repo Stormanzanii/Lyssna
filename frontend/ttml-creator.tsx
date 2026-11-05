@@ -120,8 +120,20 @@ const meta = (track: Track): SongMeta => ({
 });
 
 function TimePill({ ms, end }: { ms?: number; end?: boolean }) {
+  const pill = useRef<HTMLSpanElement>(null);
+  const shown = useRef(ms);
+  useEffect(() => {
+    if (shown.current === ms) return;
+    shown.current = ms;
+    if (ms === undefined || document.querySelector(".reduce-motion")) return;
+    pill.current?.animate([{ background: "#1ed760", color: "#000" }, {}], {
+      duration: 500,
+      easing: "ease-out",
+    });
+  }, [ms]);
   return (
     <span
+      ref={pill}
       className={`ttml-pill${end ? " end" : ""}${ms === undefined ? " empty" : ""}`}
     >
       {ms === undefined ? "--:--.---" : formatTime(ms)}

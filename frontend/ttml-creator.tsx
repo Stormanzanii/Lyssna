@@ -78,6 +78,7 @@ interface Draft {
 const SPEEDS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5];
 const DRAFT_PREFIX = "lyssna.ttml-draft.";
 const SPLITS_KEY = "lyssna.ttml-splits";
+const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
 
@@ -498,11 +499,45 @@ export function TtmlCreator({
   }, [tab, here, tap, read, seek, undo, redo, setLines, changeSpeed, rate]);
 
   const list = useRef<HTMLDivElement>(null);
+  const glide = useRef(0);
+  const reduceMotion = !!state.settings.reduce_motion;
+  const centre = useCallback(
+    (index: number) => {
+      const container = list.current;
+      const line = container?.querySelector<HTMLElement>(
+        `[data-line="${index}"]`,
+      );
+      if (!container || !line) return;
+      cancelAnimationFrame(glide.current);
+      const box = container.getBoundingClientRect();
+      const row = line.getBoundingClientRect();
+      const from = container.scrollTop;
+      const to = Math.max(
+        0,
+        Math.min(
+          container.scrollHeight - container.clientHeight,
+          from + row.top - box.top - (box.height - row.height) / 2,
+        ),
+      );
+      if (reduceMotion || Math.abs(to - from) < 1) {
+        container.scrollTop = to;
+        return;
+      }
+      const start = performance.now();
+      const step = (time: number) => {
+        const t = Math.min(1, (time - start) / GLIDE_MS);
+        const eased = 1 - Math.pow(1 - t, 3);
+        container.scrollTop = from + (to - from) * eased;
+        if (t < 1) glide.current = requestAnimationFrame(step);
+      };
+      glide.current = requestAnimationFrame(step);
+    },
+    [reduceMotion],
+  );
+  useEffect(() => () => cancelAnimationFrame(glide.current), []);
   useEffect(() => {
-    list.current
-      ?.querySelector(`[data-line="${cursor.line}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [cursor.line, tab]);
+    if (tab === "sync") centre(cursor.line);
+  }, [cursor.line, tab, centre]);
 
   const playingLine = useMemo(() => {
     let found = -1;
@@ -521,10 +556,8 @@ export function TtmlCreator({
       Date.now() - scrolledAt.current < 3000
     )
       return;
-    list.current
-      ?.querySelector(`[data-line="${playingLine}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [playingLine, tab, state.playback.is_playing]);
+    centre(playingLine);
+  }, [playingLine, tab, state.playback.is_playing, centre]);
 
   const preview = useMemo(() => toLyrics(lines), [lines]);
   const issues = useMemo(() => problems(lines), [lines]);
@@ -946,8 +979,14 @@ export function TtmlCreator({
           <div
             className="ttml-lines"
             ref={list}
-            onWheel={() => (scrolledAt.current = Date.now())}
-            onTouchMove={() => (scrolledAt.current = Date.now())}
+            onWheel={() => {
+              scrolledAt.current = Date.now();
+              cancelAnimationFrame(glide.current);
+            }}
+            onTouchMove={() => {
+              scrolledAt.current = Date.now();
+              cancelAnimationFrame(glide.current);
+            }}
           >
             {lines.map((line, lineIndex) => (
               <div

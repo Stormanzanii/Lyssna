@@ -14652,6 +14652,14 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   const creator = page.getByRole("region", { name: "TTML Creator" });
   await expect(creator).toContainText("Come & Go (with Marshmello)");
+  await expect(creator.getByLabel("Lyrics text")).toHaveValue(
+    /^I am just a lyric line number 1\nI am just a lyric line number 2\n/,
+  );
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await expect(creator.locator(".ttml-line").first()).toContainText(
+    "00:10.000",
+  );
+  await creator.getByRole("tab", { name: "Lyrics" }).click();
   await creator.getByLabel("Lyrics text").fill("Hello wor|ld\n(ooh)");
   await creator.getByRole("button", { name: "Continue to Sync" }).click();
   await expect(creator.locator(".ttml-unit")).toHaveText([

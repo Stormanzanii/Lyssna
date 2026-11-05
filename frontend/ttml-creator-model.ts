@@ -117,6 +117,17 @@ export function fromLyrics(lyrics: Lyrics): CreatorLine[] {
               end: word.end_ms,
             }))
         : (parseText(line.text.replace(/\|/g, ""))[0]?.units ?? []);
+      if (
+        !authored &&
+        lyrics.synced &&
+        !lyrics.estimated_lines &&
+        units.length &&
+        line.end_ms > line.start_ms
+      ) {
+        units[0] = { ...units[0], start: line.start_ms };
+        const last = units.length - 1;
+        units[last] = { ...units[last], end: line.end_ms };
+      }
       return { units, background: line.background, opposite: line.opposite };
     })
     .filter((line) => line.units.length > 0);

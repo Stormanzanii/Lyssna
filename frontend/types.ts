@@ -355,6 +355,7 @@ export interface Snapshot {
   login_pending: boolean;
   can_follow: boolean;
   lyrics?: Lyrics;
+  lyrics_uri?: string;
   lyric_error: string;
   details: PlayingDetails;
   route: string;

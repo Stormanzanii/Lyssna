@@ -147,10 +147,43 @@ describe("TTML Creator model", () => {
       ["lo", true, 400],
       ["world", false, 500],
     ]);
-    expect(lines[1].units.map((unit) => unit.start)).toEqual([
-      undefined,
-      undefined,
+    expect(lines[1].units.map((unit) => [unit.start, unit.end])).toEqual([
+      [900, undefined],
+      [undefined, 1500],
     ]);
+  });
+
+  it("keeps real line times on a line's edges and leaves static lyrics untimed", () => {
+    const line = {
+      start_ms: 2000,
+      end_ms: 3500,
+      text: "line synced words",
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: [],
+    };
+    const edges = (lyrics: Lyrics) =>
+      fromLyrics(lyrics)[0].units.map((unit) => [unit.start, unit.end]);
+    const lyrics: Lyrics = {
+      source: "x",
+      instrumental: false,
+      synced: true,
+      lines: [line],
+    };
+    expect(edges(lyrics)).toEqual([
+      [2000, undefined],
+      [undefined, undefined],
+      [undefined, 3500],
+    ]);
+    const untimed = [
+      [undefined, undefined],
+      [undefined, undefined],
+      [undefined, undefined],
+    ];
+    expect(edges({ ...lyrics, synced: false })).toEqual(untimed);
+    expect(edges({ ...lyrics, estimated_lines: true })).toEqual(untimed);
   });
 
   it("formats times and reports untimed words", () => {

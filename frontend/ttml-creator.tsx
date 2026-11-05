@@ -134,6 +134,25 @@ export function TtmlCreator({
     setTab(draft?.lines.length ? "sync" : "write");
   }, [track]);
 
+  const editedFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const lyrics = state.lyrics;
+    if (
+      !track ||
+      !here ||
+      editedFor.current === track.uri ||
+      state.lyrics_uri !== track.uri ||
+      !lyrics?.lines.length ||
+      lyrics.instrumental
+    )
+      return;
+    if (lines.length || text.trim() || loadDraft(track.uri)) return;
+    const seeded = fromLyrics(lyrics);
+    if (!seeded.length) return;
+    setLinesRaw(seeded);
+    setText(toText(seeded));
+  }, [track, here, state.lyrics, state.lyrics_uri, lines.length, text]);
+
   useEffect(() => {
     if (!track) return;
     writeStorage(
@@ -401,7 +420,10 @@ export function TtmlCreator({
             placeholder={
               "First line of the song\n(background vocal)\nv2: a line the other singer takes"
             }
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              editedFor.current = track?.uri;
+              setText(event.target.value);
+            }}
           />
           <div className="ttml-write-actions">
             <button

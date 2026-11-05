@@ -751,7 +751,12 @@ export function reducer(state: AppState, action: Action): AppState {
         : state;
     case "lyrics":
       return action.uri === state.playback.item?.uri
-        ? { ...state, lyrics: action.lyrics, lyric_error: "" }
+        ? {
+            ...state,
+            lyrics: action.lyrics,
+            lyrics_uri: action.uri,
+            lyric_error: "",
+          }
         : state;
     case "lyric_error":
       return action.uri === state.playback.item?.uri

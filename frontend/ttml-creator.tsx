@@ -1,5 +1,6 @@
 import {
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   Fragment,
   useCallback,
   useEffect,
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 import { LyricsDisplay, usePlaybackClock } from "./components";
 import type { AppState } from "./state";
-import type { PlayerRequest, Track } from "./types";
+import type { Lyrics, PlayerRequest, Track } from "./types";
 import {
   type CreatorLine,
   type Cursor,
@@ -148,6 +149,7 @@ export function TtmlCreator({
   onSpeed,
   onApply,
   notify,
+  renderPreview,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
@@ -155,6 +157,7 @@ export function TtmlCreator({
   onSpeed: (rate: number) => Promise<void>;
   onApply: (filename: string, ttml: string) => Promise<boolean>;
   notify: (message: string, error?: boolean) => void;
+  renderPreview?: (lyrics: Lyrics) => ReactNode;
 }) {
   const playing = state.playback.item;
   const [track, setTrack] = useState<Track | undefined>(playing);
@@ -1128,12 +1131,16 @@ export function TtmlCreator({
       {tab === "preview" && (
         <div className="ttml-preview">
           {preview.lines.length ? (
-            <LyricsDisplay
-              lyrics={preview}
-              positionMs={position}
-              settings={state.settings}
-              onSeek={seek}
-            />
+            renderPreview ? (
+              renderPreview(preview)
+            ) : (
+              <LyricsDisplay
+                lyrics={preview}
+                positionMs={position}
+                settings={state.settings}
+                onSeek={seek}
+              />
+            )
           ) : (
             <p className="ttml-hint">Time some words to see them here.</p>
           )}

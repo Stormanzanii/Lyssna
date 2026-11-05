@@ -17,7 +17,7 @@
   margin: 0;
   color: #fff;
 }
-.ttml-creator button {
+.ttml-creator button:not(:where(.ttml-preview *)) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -34,10 +34,10 @@
     background 0.15s,
     box-shadow 0.15s;
 }
-.ttml-creator button:hover:not(:disabled) {
+.ttml-creator button:hover:not(:disabled, :where(.ttml-preview *)) {
   background: #ffffff21;
 }
-.ttml-creator button:disabled {
+.ttml-creator button:disabled:not(:where(.ttml-preview *)) {
   opacity: 0.4;
   cursor: default;
 }
@@ -427,6 +427,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  border-radius: 12px;
 }
 .ttml-menu {
   z-index: 46;

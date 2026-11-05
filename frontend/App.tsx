@@ -3195,6 +3195,19 @@ function App() {
               onPlayer={play}
               onToggle={toggle}
               onSpeed={setSpeed}
+              renderPreview={(lyrics) => (
+                <LyricsPage
+                  state={{ ...state, lyrics, lyric_error: "" }}
+                  onCanvasActive={setCanvasInLyrics}
+                  immersive={immersive}
+                  onPlayer={play}
+                  onAlbum={openAlbum}
+                  onArtist={openArtist}
+                  onImport={() => {}}
+                  onRetry={() => {}}
+                  onSave={save}
+                />
+              )}
               notify={notify}
               onApply={(filename, contents) =>
                 rpc("import_lyrics", {

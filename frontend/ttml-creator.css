@@ -274,6 +274,8 @@
 .ttml-creator .ttml-chip,
 .ttml-chip-edit {
   min-height: 30px;
+  line-height: 20px;
+  height: 30px;
   padding: 4px 9px;
   border-radius: 7px;
   color: #fff;
@@ -301,6 +303,8 @@
 }
 .ttml-creator .ttml-space {
   min-height: 30px;
+  line-height: 20px;
+  height: 30px;
   padding: 4px 9px;
   border-radius: 7px;
   color: #ffffff59;

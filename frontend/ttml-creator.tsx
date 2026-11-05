@@ -188,6 +188,33 @@ export function TtmlCreator({
 
   useEffect(() => () => void onSpeed(1), [onSpeed]);
 
+  const repeatRef = useRef(state.playback.repeat_state);
+  repeatRef.current = state.playback.repeat_state;
+  const playerRef = useRef(onPlayer);
+  playerRef.current = onPlayer;
+  useEffect(() => {
+    if (!here) return;
+    const before = repeatRef.current ?? "off";
+    if (before === "track") return;
+    playerRef.current({ command: "repeat", repeat: "track" });
+    return () => playerRef.current({ command: "repeat", repeat: before });
+  }, [here]);
+
+  const lastPosition = useRef(0);
+  useEffect(() => {
+    const duration = track?.duration_ms ?? 0;
+    const wrapped =
+      here &&
+      state.playback.is_playing &&
+      duration > 5000 &&
+      lastPosition.current > duration - 2500 &&
+      position < 2000;
+    lastPosition.current = position;
+    if (!wrapped) return;
+    onPlayer({ command: "pause" });
+    onPlayer({ command: "seek", positionMs: 0 });
+  }, [position, here, state.playback.is_playing, track, onPlayer]);
+
   const setLines = useCallback(
     (next: CreatorLine[] | ((previous: CreatorLine[]) => CreatorLine[])) =>
       setLinesRaw((previous) => {

@@ -14687,36 +14687,43 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     "ooh",
   ]);
 
-  const at = (progress_ms: number) =>
-    page.evaluate((progress_ms) => {
-      (window as any).__clientTest.emit({
-        type: "playback",
-        changed: false,
-        observed_at: Date.now(),
-        playback: {
-          is_playing: false,
-          progress_ms,
-          shuffle_state: false,
-          repeat_state: "off",
-          device: {
-            name: "Lyssna (test)",
-            id: "local-device",
-            is_active: true,
+  const at = (progress_ms: number, is_playing = false) =>
+    page.evaluate(
+      ([progress_ms, is_playing]) => {
+        (window as any).__clientTest.emit({
+          type: "playback",
+          changed: false,
+          observed_at: Date.now(),
+          playback: {
+            is_playing,
+            progress_ms,
+            shuffle_state: false,
+            repeat_state: "off",
+            device: {
+              name: "Lyssna (test)",
+              id: "local-device",
+              is_active: true,
+            },
+            item: {
+              id: "0123456789abcdefghijkl",
+              uri: "spotify:track:0123456789abcdefghijkl",
+              name: "Come & Go (with Marshmello)",
+              artists: [
+                { id: "a", name: "Juice WRLD" },
+                { id: "b", name: "Marshmello" },
+              ],
+              album: {
+                id: "0123456789abcdefghijkl",
+                name: "Album",
+                images: [],
+              },
+              duration_ms: 180000,
+            },
           },
-          item: {
-            id: "0123456789abcdefghijkl",
-            uri: "spotify:track:0123456789abcdefghijkl",
-            name: "Come & Go (with Marshmello)",
-            artists: [
-              { id: "a", name: "Juice WRLD" },
-              { id: "b", name: "Marshmello" },
-            ],
-            album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
-            duration_ms: 180000,
-          },
-        },
-      });
-    }, progress_ms);
+        });
+      },
+      [progress_ms, is_playing] as const,
+    );
   const taps: [number, string][] = [
     [3000, "f"],
     [3500, "g"],
@@ -14750,6 +14757,23 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 50 });
   await expect(creator.getByLabel("Playback speed")).toHaveValue("0.5");
 
+  const requests = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request),
+    );
+  expect(await requests()).toContainEqual({
+    command: "repeat",
+    repeat: "track",
+  });
+  const before = (await requests()).length;
+  await at(179_000, true);
+  await at(400, true);
+  await expect
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([{ command: "pause" }, { command: "seek", positionMs: 0 }]);
+
   await creator.getByRole("tab", { name: "Preview" }).click();
   await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
 
@@ -14768,5 +14792,9 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
 
   await bar.getByTitle("Lyrics", { exact: true }).click();
   await expect(creator).toHaveCount(0);
+  expect((await requests()).at(-1)).toEqual({
+    command: "repeat",
+    repeat: "off",
+  });
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
 });

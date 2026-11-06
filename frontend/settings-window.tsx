@@ -872,6 +872,18 @@ export function SettingsWindow({
     ],
     [
       "Lyrics",
+      "TTML Creator",
+      [
+        flag(
+          "ttml_creator",
+          "TTML Creator",
+          "Add a button beside Lyrics in the playback bar that turns the lyrics page into a word-by-word TTML maker for the playing song. No download needed, and it can slow the song down while you time it.",
+          "ttml creator maker editor sync timing word by word karaoke amll make lyrics",
+        ),
+      ],
+    ],
+    [
+      "Lyrics",
       "Look",
       [
         <SettingRow
@@ -985,18 +997,6 @@ export function SettingsWindow({
             <option value="right">Right</option>
           </select>
         </SettingRow>,
-      ],
-    ],
-    [
-      "Lyrics",
-      "TTML Creator",
-      [
-        flag(
-          "ttml_creator",
-          "TTML Creator",
-          "Add a button beside Lyrics in the playback bar that turns the lyrics page into a word-by-word TTML maker for the playing song. No download needed, and it can slow the song down while you time it.",
-          "ttml creator maker editor sync timing word by word karaoke amll make lyrics",
-        ),
       ],
     ],
     [

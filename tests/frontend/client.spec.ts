@@ -14984,3 +14984,46 @@ test("TTML Creator Sync follows the playing line", async ({ page }) => {
     creator.locator('.ttml-line[data-line="0"]'),
   ).not.toBeInViewport();
 });
+
+test("TTML Creator saves drafts with a time and keeps versions", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const card = creator.locator(".ttml-card").first();
+  await expect(card.locator(".ttml-chip").first()).toHaveText("I");
+  await expect(creator.locator(".ttml-saved")).toHaveText("Not saved yet");
+  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
+  await card.getByLabel("Edit word").fill("song");
+  await card.getByLabel("Edit word").press("Enter");
+  await expect(creator.locator(".ttml-saved")).toHaveText(/^Saved \d/);
+
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(creator).toHaveCount(0);
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(creator.getByRole("tab", { name: "Sync" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(creator.locator(".ttml-word", { hasText: "song" })).toHaveCount(
+    1,
+  );
+  await expect(creator.locator(".ttml-saved")).toHaveText(/^Saved \d/);
+
+  await creator.getByTitle("Saves and earlier versions").click();
+  const saves = page.getByRole("dialog", { name: "TTML saves" });
+  await expect(saves.locator("li")).toHaveCount(2);
+  await expect(saves).toContainText("Come & Go (with Marshmello)");
+  await saves.getByRole("button", { name: "Restore" }).click();
+  await expect(saves).toHaveCount(0);
+  await expect(page.getByText(/Restored the save from/)).toBeVisible();
+});

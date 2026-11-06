@@ -695,3 +695,66 @@
   color: #000;
   background: #ffffffd9;
 }
+.ttml-saved {
+  align-self: center;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ttml-saves {
+  max-height: min(640px, calc(100vh - 64px));
+  overflow-y: auto;
+}
+.ttml-saves header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ttml-saves section {
+  display: grid;
+  gap: 8px;
+}
+.ttml-saves h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ttml-saves ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ttml-saves li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #ffffff08;
+}
+.ttml-saves li.current {
+  box-shadow: inset 0 0 0 1px #1ed76055;
+}
+.ttml-saves li > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ttml-saves li strong,
+.ttml-saves li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ttml-saves li small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ttml-creator .ttml-saves button.danger:hover {
+  background: #e9142940;
+}

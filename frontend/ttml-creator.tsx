@@ -13,6 +13,7 @@ import {
   Copy,
   Download,
   Gauge,
+  History,
   Pause,
   Play,
   Plus,
@@ -24,6 +25,7 @@ import {
   Languages,
   Undo2,
   Wand2,
+  X,
 } from "lucide-react";
 import { LyricsDisplay, usePlaybackClock } from "./components";
 import type { AppState } from "./state";
@@ -72,6 +74,18 @@ import {
   wordBounds,
 } from "./ttml-creator-model";
 import { romanizeAway } from "./romanization";
+import {
+  type DraftVersion,
+  type SavedSong,
+  addVersion,
+  deleteSaves,
+  listDrafts,
+  listVersions,
+  loadDraft,
+  newVersionDue,
+  savedLabel,
+  writeDraft,
+} from "./ttml-saves";
 import { type LearnedSplits, cutAt, suggestSplit } from "./ttml-syllables";
 import {
   type MenuAction,
@@ -82,16 +96,11 @@ import {
 import "./ttml-creator.css";
 
 type Tab = "write" | "sync" | "preview";
-interface Draft {
-  lines: CreatorLine[];
-  text: string;
-}
 
 const MIN_SPEED = 0.25;
 const MAX_SPEED = 1.5;
 const clampSpeed = (value: number) =>
   Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(value * 20) / 20));
-const DRAFT_PREFIX = "lyssna.ttml-draft.";
 const SPLITS_KEY = "lyssna.ttml-splits";
 const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
@@ -121,17 +130,7 @@ function writeStorage(key: string, value: string | null) {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
   } catch {
-    // Private storage is a convenience; the draft still lives in memory.
-  }
-}
-function loadDraft(uri: string): Draft | null {
-  const raw = readStorage(DRAFT_PREFIX + uri);
-  if (!raw) return null;
-  try {
-    const draft = JSON.parse(raw) as Draft;
-    return Array.isArray(draft.lines) ? draft : null;
-  } catch {
-    return null;
+    // Private storage is a convenience; settings still apply this session.
   }
 }
 
@@ -204,15 +203,53 @@ export function TtmlCreator({
   const here = !!track && playing?.uri === track.uri;
   const rate = state.playback_rate ?? 1;
 
+  const [savedAt, setSavedAt] = useState<number | undefined>();
+  // The content last written for `uri`, so loading or seeding a song is not
+  // mistaken for an edit and only real changes get a new save time.
+  const saved = useRef({ uri: "", content: "", loading: false });
+  const current = useRef({ uri: "", lines, text });
+  const versions = useRef<{ at?: number; changed: boolean }>({
+    changed: false,
+  });
+  const snapshot = useCallback((leaving: boolean) => {
+    const { uri, lines, text } = current.current;
+    const now = Date.now();
+    if (
+      !uri ||
+      !versions.current.changed ||
+      !newVersionDue(versions.current.at, now, leaving)
+    )
+      return;
+    versions.current = { at: now, changed: false };
+    void addVersion({ uri, savedAt: now, lines, text }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!track) return;
     const draft = loadDraft(track.uri);
     setLinesRaw(draft?.lines ?? []);
     setText(draft?.text ?? "");
+    setSavedAt(draft?.savedAt);
+    saved.current = {
+      uri: track.uri,
+      content: JSON.stringify({
+        lines: draft?.lines ?? [],
+        text: draft?.text ?? "",
+      }),
+      loading: true,
+    };
+    versions.current = { changed: false };
     setCursor({ line: 0, unit: 0 });
     history.current = { past: [], future: [] };
     setTab(draft?.lines.length ? "sync" : "write");
-  }, [track]);
+    return () => snapshot(true);
+  }, [track, snapshot]);
+
+  useEffect(() => {
+    const leave = () => snapshot(true);
+    window.addEventListener("pagehide", leave);
+    return () => window.removeEventListener("pagehide", leave);
+  }, [snapshot]);
 
   const editedFor = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -231,15 +268,35 @@ export function TtmlCreator({
     if (!seeded.length) return;
     setLinesRaw(seeded);
     setText(toText(seeded));
+    saved.current.content = JSON.stringify({
+      lines: seeded,
+      text: toText(seeded),
+    });
   }, [track, here, state.lyrics, state.lyrics_uri, lines.length, text]);
 
   useEffect(() => {
     if (!track) return;
-    writeStorage(
-      DRAFT_PREFIX + track.uri,
-      lines.length || text.trim() ? JSON.stringify({ lines, text }) : null,
-    );
-  }, [track, lines, text]);
+    current.current = { uri: track.uri, lines, text };
+    // The load above ran in this same commit; these are the previous song's.
+    if (saved.current.loading) {
+      saved.current.loading = false;
+      return;
+    }
+    const content = JSON.stringify({ lines, text });
+    if (saved.current.uri !== track.uri || saved.current.content === content)
+      return;
+    saved.current.content = content;
+    versions.current.changed = true;
+    if (!lines.length && !text.trim()) {
+      writeDraft(track.uri, null);
+      setSavedAt(undefined);
+      return;
+    }
+    const now = Date.now();
+    writeDraft(track.uri, { lines, text, savedAt: now, song: track });
+    setSavedAt(now);
+    snapshot(false);
+  }, [track, lines, text, snapshot]);
 
   useEffect(() => () => void onSpeed(1), [onSpeed]);
 
@@ -755,12 +812,142 @@ export function TtmlCreator({
     void onApply(fileName(meta(track)), ttml());
   };
 
+  const [saves, setSaves] = useState<{
+    songs: SavedSong[];
+    versions: DraftVersion[];
+  } | null>(null);
+  const openSaves = () => {
+    setSaves({ songs: listDrafts(), versions: [] });
+    if (track)
+      void listVersions(track.uri).then(
+        (versions) => setSaves((open) => open && { ...open, versions }),
+        () => {},
+      );
+  };
+  const restore = (version: DraftVersion) => {
+    setLines(version.lines);
+    setText(version.text);
+    setCursor({ line: 0, unit: 0 });
+    setSaves(null);
+    notify(`Restored the save from ${savedLabel(version.savedAt)}.`);
+  };
+  const forget = (song: SavedSong) => {
+    void deleteSaves(song.uri).finally(() =>
+      setSaves(
+        (open) =>
+          open && {
+            songs: open.songs.filter((saved) => saved.uri !== song.uri),
+            versions: song.uri === track?.uri ? [] : open.versions,
+          },
+      ),
+    );
+    if (song.uri === track?.uri) setSavedAt(undefined);
+  };
+  const savesDialog = saves && (
+    <div className="ttml-dialog-backdrop" onClick={() => setSaves(null)}>
+      <div
+        className="ttml-dialog ttml-saves"
+        role="dialog"
+        aria-label="TTML saves"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h3>Saves</h3>
+          <button onClick={() => setSaves(null)} aria-label="Close saves">
+            <X size={16} />
+          </button>
+        </header>
+        <p className="ttml-hint">
+          Drafts save on every change. A dated version is kept every 10 minutes
+          and whenever you leave a song, up to 10 per song.
+        </p>
+        {track && (
+          <section>
+            <h4>Versions of {track.name}</h4>
+            {saves.versions.length ? (
+              <ul>
+                {saves.versions.map((version) => (
+                  <li key={version.id ?? version.savedAt}>
+                    <span>
+                      <strong>{savedLabel(version.savedAt)}</strong>
+                      <small>
+                        {version.lines.length} line
+                        {version.lines.length === 1 ? "" : "s"}
+                      </small>
+                    </span>
+                    <button onClick={() => restore(version)}>Restore</button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="ttml-hint">No earlier versions yet.</p>
+            )}
+          </section>
+        )}
+        <section>
+          <h4>Saved songs</h4>
+          {saves.songs.length ? (
+            <ul>
+              {saves.songs.map((saved) => (
+                <li
+                  key={saved.uri}
+                  className={saved.uri === track?.uri ? "current" : ""}
+                >
+                  <span>
+                    <strong>{saved.song?.name ?? saved.uri}</strong>
+                    <small>
+                      {saved.song &&
+                        `${saved.song.artists.map((artist) => artist.name).join(", ")} · `}
+                      {saved.savedAt
+                        ? `Saved ${savedLabel(saved.savedAt)}`
+                        : "Saved before save times were kept"}
+                    </small>
+                  </span>
+                  {saved.uri !== track?.uri && (
+                    <button
+                      disabled={!saved.song}
+                      title={
+                        saved.song
+                          ? undefined
+                          : "Play this song to open its draft"
+                      }
+                      onClick={() => {
+                        if (saved.song) setTrack(saved.song);
+                        setSaves(null);
+                      }}
+                    >
+                      Open
+                    </button>
+                  )}
+                  <button
+                    className="danger"
+                    onClick={() => forget(saved)}
+                    aria-label={`Delete saves for ${saved.song?.name ?? saved.uri}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="ttml-hint">Nothing saved yet.</p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+
   if (!track)
     return (
       <section className="ttml-creator empty" aria-label="TTML Creator">
         <Wand2 size={32} />
         <h2>TTML Creator</h2>
         <p>Play a song, then come back here to time its lyrics.</p>
+        <button onClick={openSaves}>
+          <History size={15} />
+          Saves
+        </button>
+        {savesDialog}
       </section>
     );
 
@@ -793,6 +980,12 @@ export function TtmlCreator({
           ))}
         </div>
         <div className="ttml-actions">
+          <span className="ttml-saved">
+            {savedAt ? `Saved ${savedLabel(savedAt)}` : "Not saved yet"}
+          </span>
+          <button onClick={openSaves} title="Saves and earlier versions">
+            <History size={15} />
+          </button>
           <button onClick={copy} disabled={!done} title="Copy TTML">
             <Copy size={15} />
           </button>
@@ -1447,6 +1640,7 @@ export function TtmlCreator({
           onConfirm={(choice) => confirmSplit(splitting, choice)}
         />
       )}
+      {savesDialog}
     </section>
   );
 }

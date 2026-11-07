@@ -13739,6 +13739,50 @@ test("a line keeps its size as it becomes the active line", async ({
   expect(Math.abs((await busy()) - before)).toBeLessThan(0.005);
 });
 
+test("a line sync turns past as soon as the next line takes over", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const line = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+      translation: "",
+      romanization: "",
+      background: false,
+      opposite: false,
+      words: [],
+    });
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Spotify",
+        synced: true,
+        instrumental: false,
+        lines: [line("First", 1000, 4000), line("Second", 4000, 7000)],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 3900,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const first = page
+    .locator(".lyrics-page .lyric-line")
+    .filter({ hasText: "First" });
+  await expect(
+    page.locator(".lyrics-page .lyric-line").filter({ hasText: "Second" }),
+  ).toHaveClass(/active/);
+  await expect(first).toHaveClass(/past/);
+});
+
 test("split words keep their size as their line finishes", async ({ page }) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();

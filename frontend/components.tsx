@@ -898,7 +898,7 @@ export function LyricsDisplay({
                 line={line}
                 action={lineActions[index]}
                 playing={playing}
-                past={!playing && positionMs >= vocalEnd(line)}
+                past={!playing && scrollTime >= vocalEnd(line)}
                 blur={compact || playing ? 0 : lineBlur(distance)}
                 synced={lyrics.synced}
                 highlighter={highlighter}

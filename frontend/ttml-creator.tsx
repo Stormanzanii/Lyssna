@@ -658,16 +658,25 @@ export function TtmlCreator({
       else if (event.key === "ArrowLeft" && event.shiftKey) seek(read() - 3000);
       else if (event.key === "ArrowRight" && event.shiftKey)
         seek(read() + 3000);
-      else if (event.key === "ArrowLeft")
+      else if (event.key === "ArrowLeft" || key === "a")
         setCursor(previousCursor(lines, cursor) ?? cursor);
-      else if (event.key === "ArrowRight")
+      else if (event.key === "ArrowRight" || key === "d")
         setCursor(nextCursor(lines, cursor) ?? cursor);
-      else if (event.key === "ArrowUp")
+      else if (event.key === "ArrowUp" || key === "w")
         setCursor(clampCursor(lines, { line: cursor.line - 1, unit: 0 }));
-      else if (event.key === "ArrowDown")
+      else if (event.key === "ArrowDown" || key === "s")
         setCursor(clampCursor(lines, { line: cursor.line + 1, unit: 0 }));
+      else if (key === "'") changeSpeed(1);
       else if (!here || !lines.length) handled = false;
-      else if (event.repeat && "fgh".includes(key)) handled = true;
+      else if (key === "r" || key === "y") {
+        const to =
+          (key === "r"
+            ? previousCursor(lines, cursor)
+            : nextCursor(lines, cursor)) ?? cursor;
+        setCursor(to);
+        const start = lines[to.line]?.units[to.unit]?.start;
+        if (start !== undefined) seek(start);
+      } else if (event.repeat && "fgh".includes(key)) handled = true;
       else if (key === "f") setLines(markStart(lines, cursor, tap()));
       else if (key === "g") {
         const result = markNext(lines, cursor, tap());
@@ -677,7 +686,7 @@ export function TtmlCreator({
         const result = markEnd(lines, cursor, tap());
         setLines(result.lines);
         setCursor(result.cursor);
-      } else if (key === "r") {
+      } else if (key === "t") {
         const line = lines[cursor.line];
         const before = lines[cursor.line - 1];
         const from =
@@ -1528,10 +1537,13 @@ export function TtmlCreator({
           <p className="ttml-keys">
             <kbd>F</kbd> start word · <kbd>G</kbd> end and start next ·{" "}
             <kbd>H</kbd> end word · <kbd>←</kbd>
-            <kbd>→</kbd> move · <kbd>Shift</kbd>+<kbd>←</kbd>
-            <kbd>→</kbd> seek 3s · <kbd>R</kbd> replay line · <kbd>Space</kbd>{" "}
+            <kbd>→</kbd> or <kbd>A</kbd>
+            <kbd>D</kbd> move · <kbd>R</kbd>
+            <kbd>Y</kbd> jump to word · <kbd>Shift</kbd>+<kbd>←</kbd>
+            <kbd>→</kbd> seek 3s · <kbd>T</kbd> replay line · <kbd>Space</kbd>{" "}
             play · <kbd>[</kbd>
-            <kbd>]</kbd> speed · <kbd>Del</kbd> clear word
+            <kbd>]</kbd> speed · <kbd>'</kbd> normal speed · <kbd>Del</kbd>{" "}
+            clear word
           </p>
           <div
             className="ttml-lines"

@@ -14782,6 +14782,20 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     .poll(async () => (await requests()).slice(before))
     .toEqual([{ command: "pause" }, { command: "seek", positionMs: 0 }]);
 
+  await creator.getByLabel("Playback speed").blur();
+  await page.keyboard.press("'");
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+  for (const [key, positionMs] of [
+    ["r", 4000],
+    ["r", 3500],
+    ["y", 4000],
+  ] as const) {
+    await page.keyboard.press(key);
+    await expect
+      .poll(async () => (await requests()).at(-1))
+      .toEqual({ command: "seek", positionMs });
+  }
+
   await creator.getByRole("tab", { name: "Preview" }).click();
   await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
 

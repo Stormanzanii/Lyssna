@@ -390,21 +390,25 @@ describe("TTML Creator metadata", () => {
       entries.find((entry) => entry.key === key)?.values;
     expect(values("musicName")).toEqual(["Song & <Co>"]);
     expect(values("artists")).toEqual(["A", "B"]);
-    expect(values("songwriters")).toEqual(["W"]);
+    expect(values("songwriters")).toBeUndefined();
     expect(values("ttmlAuthorGithubLogin")).toEqual(["someone"]);
     expect(values("isrc")).toEqual([]);
   });
 
   it("exports every filled value, custom keys and songwriters", () => {
-    const ttml = toTtml(timeAll("Hi"), meta, [
-      { key: "musicName", values: ["Song", "曲", " ", "Song"] },
-      { key: "isrc", values: ["USUM71703861", "GBUM71703861"] },
-      { key: "qqMusicId", values: [""] },
-      { key: "songwriters", values: ["Ann", "Bo"] },
-      { key: "custom", values: ['x"y'] },
-      { key: "spotifyId", values: ["edited"] },
-      { key: "album", values: ["edited"] },
-    ]);
+    const ttml = toTtml(
+      timeAll("Hi"),
+      { ...meta, songwriters: ["Ann", "Bo"] },
+      [
+        { key: "musicName", values: ["Song", "曲", " ", "Song"] },
+        { key: "isrc", values: ["USUM71703861", "GBUM71703861"] },
+        { key: "qqMusicId", values: [""] },
+        { key: "songwriters", values: ["edited"] },
+        { key: "custom", values: ['x"y'] },
+        { key: "spotifyId", values: ["edited"] },
+        { key: "album", values: ["edited"] },
+      ],
+    );
     expect(ttml).not.toContain("edited");
     expect(ttml).toContain('<amll:meta key="spotifyId" value="abc"/>');
     expect(ttml).toContain(

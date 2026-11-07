@@ -16,7 +16,6 @@ const LABELS: Record<
     hint: "Add other titles too, like the name in its original script.",
   },
   artists: { label: "Artist" },
-  songwriters: { label: "Songwriter" },
   isrc: {
     label: "ISRC",
     hint: "One per region if the song has several.",
@@ -42,7 +41,7 @@ const LABELS: Record<
 };
 
 const GROUPS: [string, string[]][] = [
-  ["Song", ["musicName", "artists", "songwriters"]],
+  ["Song", ["musicName", "artists"]],
   ["Identifiers", ["isrc", "appleMusicId", "ncmMusicId", "qqMusicId"]],
   ["You", ["ttmlAuthorGithub", "ttmlAuthorGithubLogin"]],
 ];

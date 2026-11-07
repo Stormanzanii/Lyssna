@@ -1337,7 +1337,7 @@
 .ttml-bar-wave {
   flex: 1;
   min-width: 0;
-  height: 44px;
+  height: 56px;
   border-radius: 6px;
   background: #ffffff08;
   cursor: pointer;

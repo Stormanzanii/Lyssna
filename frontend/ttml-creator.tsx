@@ -1248,7 +1248,9 @@ export function TtmlCreator({
     () =>
       lines.flatMap((line, index) => {
         const span = lineSpan(line);
-        return span ? [{ ...span, current: index === cursor.line }] : [];
+        return span
+          ? [{ ...span, current: index === cursor.line, label: index + 1 }]
+          : [];
       }),
     [lines, cursor.line],
   );

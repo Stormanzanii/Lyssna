@@ -6,6 +6,7 @@ export interface BarSpan {
   start: number;
   end: number;
   current: boolean;
+  label: number;
 }
 
 export function TtmlBar({
@@ -54,20 +55,41 @@ export function TtmlBar({
     context.clearRect(0, 0, width, height);
     const span = Math.max(1, duration);
     const x = (ms: number) => (Math.min(span, Math.max(0, ms)) / span) * width;
+    // Timed lines sit in their own lane above the waveform, numbered when
+    // there is room, so each block reads apart from its neighbours.
+    const lane = 18;
+    const font = getComputedStyle(element).fontFamily;
+    context.font = `600 10px ${font}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    const current = spans.find((line) => line.current);
     for (const line of spans) {
-      context.fillStyle = line.current ? "#1ed76040" : "#ffffff17";
+      const left = x(line.start) + 0.5;
+      const span = Math.max(2, x(line.end) - x(line.start) - 1);
+      context.fillStyle = line.current ? "#1ed760" : "#ffffff40";
+      context.beginPath();
+      context.roundRect(left, 2, span, lane - 4, 3);
+      context.fill();
+      if (span >= 18) {
+        context.fillStyle = line.current ? "#000" : "#ffffffd9";
+        context.fillText(String(line.label), left + span / 2, lane / 2 + 0.5);
+      }
+    }
+    if (current) {
+      context.fillStyle = "#1ed76014";
       context.fillRect(
-        x(line.start),
-        0,
-        Math.max(1, x(line.end) - x(line.start)),
-        height,
+        x(current.start),
+        lane,
+        Math.max(1, x(current.end) - x(current.start)),
+        height - lane,
       );
     }
     const played = x(shown);
-    const middle = height / 2;
-    const step = 2;
+    const middle = lane + (height - lane) / 2;
+    const reach = (height - lane) / 2 - 3;
+    const step = 3;
     for (let left = 0; left < width; left += step) {
-      let loud = 0.02;
+      let loud = 0.03;
       if (peaks?.length) {
         const from = Math.floor((left / width) * peaks.length);
         const to = Math.max(
@@ -77,9 +99,9 @@ export function TtmlBar({
         for (let index = from; index < to && index < peaks.length; index++)
           loud = Math.max(loud, peaks[index] / 255);
       }
-      const half = Math.max(0.5, loud * (middle - 2));
-      context.fillStyle = left < played ? "#ffffffcc" : "#ffffff4d";
-      context.fillRect(left, middle - half, step - 0.5, half * 2);
+      const half = Math.max(1, loud * reach);
+      context.fillStyle = left < played ? "#ffffffd9" : "#ffffff38";
+      context.fillRect(left, middle - half, step - 1, half * 2);
     }
     context.fillStyle = "#fff";
     context.fillRect(Math.round(played) - 1, 0, 2, height);

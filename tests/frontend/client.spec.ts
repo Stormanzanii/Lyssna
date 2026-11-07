@@ -15047,6 +15047,33 @@ test("TTML Creator swaps the player bar for a waveform bar", async ({
         .at(-1).args.request.positionMs,
   );
   expect(Math.abs(sought - 90_000)).toBeLessThan(1000);
+  await page.getByRole("button", { name: "Playback controls" }).click();
+  const controls = page.getByRole("dialog", { name: "Playback controls" });
+  await expect(controls).toContainText("Come & Go (with Marshmello)");
+  await controls.getByRole("button", { name: "0.75×" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "playback_speed")
+            .at(-1)?.args,
+      ),
+    )
+    .toEqual({ percent: 75 });
+  await controls.getByRole("slider", { name: "Volume" }).fill("30");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toEqual({ command: "volume", volume: 30 });
+  await page.keyboard.press("Escape");
+  await expect(controls).toHaveCount(0);
   await page.getByRole("button", { name: "Show the player bar" }).click();
   await expect(page.locator(".player-song")).toHaveCount(1);
   await page

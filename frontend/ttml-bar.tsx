@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronUp, FilePenLine, Pause, Play } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronUp, FilePenLine, Music2, Pause, Play } from "lucide-react";
 import { formatTime } from "./ttml-creator-model";
 
 export interface BarSpan {
@@ -19,6 +19,14 @@ export function TtmlBar({
   onSeek,
   onShowPlayer,
   onClose,
+  speed,
+  minSpeed,
+  maxSpeed,
+  speedEnabled,
+  onSpeed,
+  volume,
+  onVolume,
+  song,
 }: {
   position: number;
   duration: number;
@@ -29,7 +37,36 @@ export function TtmlBar({
   onSeek: (ms: number) => void;
   onShowPlayer: () => void;
   onClose?: () => void;
+  speed: number;
+  minSpeed: number;
+  maxSpeed: number;
+  speedEnabled: boolean;
+  onSpeed: (speed: number) => void;
+  volume: number;
+  onVolume: (percent: number) => void;
+  song: ReactNode;
 }) {
+  const [panel, setPanel] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!panel) return;
+    const away = (event: PointerEvent) =>
+      !root.current?.contains(event.target as Node) && setPanel(false);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setPanel(false);
+    };
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("keydown", escape, true);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("keydown", escape, true);
+    };
+  }, [panel]);
+  const fill = (value: number, min: number, max: number) => ({
+    ["--fill" as string]: `${((value - min) / (max - min)) * 100}%`,
+  });
   const canvas = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState<number | null>(null);
@@ -115,7 +152,69 @@ export function TtmlBar({
     );
   };
   return (
-    <div className="ttml-bar">
+    <div className="ttml-bar" ref={root}>
+      {panel && (
+        <div
+          className="ttml-bar-panel"
+          role="dialog"
+          aria-label="Playback controls"
+        >
+          <div className="ttml-bar-panel-row">
+            <strong>Playback speed</strong>
+            <output>{speed.toFixed(2)}×</output>
+          </div>
+          <div className="ttml-bar-presets">
+            {[0.5, 0.75, 1, 1.25].map((preset) => (
+              <button
+                key={preset}
+                className={Math.abs(speed - preset) < 0.001 ? "active" : ""}
+                disabled={!speedEnabled}
+                onClick={() => onSpeed(preset)}
+              >
+                {preset}×
+              </button>
+            ))}
+          </div>
+          <input
+            type="range"
+            aria-label="Playback speed"
+            min={minSpeed}
+            max={maxSpeed}
+            step={0.05}
+            value={speed}
+            disabled={!speedEnabled}
+            style={fill(speed, minSpeed, maxSpeed)}
+            onChange={(event) => onSpeed(Number(event.target.value))}
+          />
+          {!speedEnabled && (
+            <small>Speed works when playing on this computer.</small>
+          )}
+          <div className="ttml-bar-panel-row">
+            <strong>Volume</strong>
+            <output>{Math.round(volume)}%</output>
+          </div>
+          <input
+            type="range"
+            aria-label="Volume"
+            min={0}
+            max={100}
+            step={1}
+            value={volume}
+            style={fill(volume, 0, 100)}
+            onChange={(event) => onVolume(Number(event.target.value))}
+          />
+          <div className="ttml-bar-song">{song}</div>
+        </div>
+      )}
+      <button
+        className={`ttml-bar-round${panel ? " active" : ""}`}
+        aria-label="Playback controls"
+        aria-expanded={panel}
+        title="Speed and volume"
+        onClick={() => setPanel(!panel)}
+      >
+        <Music2 size={16} />
+      </button>
       <button
         className="ttml-bar-play"
         onClick={onToggle}

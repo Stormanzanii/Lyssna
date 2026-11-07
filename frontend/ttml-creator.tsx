@@ -31,7 +31,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { LyricsDisplay, usePlaybackClock } from "./components";
+import { Cover, LyricsDisplay, usePlaybackClock } from "./components";
 import type { AppState } from "./state";
 import type { Lyrics, PlayerRequest, Track } from "./types";
 import {
@@ -1045,6 +1045,22 @@ export function TtmlCreator({
   };
   useEffect(() => () => clearTimeout(speedTimer.current), []);
   const shownSpeed = speedDraft ?? rate;
+  const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
+  const volumeTimer = useRef(0);
+  const changeVolume = (percent: number) => {
+    setVolumeDraft(percent);
+    clearTimeout(volumeTimer.current);
+    volumeTimer.current = window.setTimeout(() => {
+      onPlayer({ command: "volume", volume: Math.round(percent) });
+      volumeTimer.current = window.setTimeout(() => setVolumeDraft(null), 1500);
+    }, 80);
+  };
+  useEffect(() => () => clearTimeout(volumeTimer.current), []);
+  const barVolume =
+    volumeDraft ??
+    state.playback.device.volume_percent ??
+    state.settings.volume_percent ??
+    70;
 
   const [keys, setKeys] = useState<KeyMap>(loadKeys);
   const keysRef = useRef(keys);
@@ -2364,6 +2380,24 @@ export function TtmlCreator({
             onSeek={seek}
             onShowPlayer={() => onShowPlayer?.()}
             onClose={onClose}
+            speed={shownSpeed}
+            minSpeed={MIN_SPEED}
+            maxSpeed={MAX_SPEED}
+            speedEnabled={native}
+            onSpeed={(value) => slideSpeed(clampSpeed(value))}
+            volume={barVolume}
+            onVolume={changeVolume}
+            song={
+              <>
+                <Cover images={track.album.images} />
+                <span>
+                  <strong title={track.name}>{track.name}</strong>
+                  <small>
+                    {formatTime(track.duration_ms).replace(/\.\d+$/, "")}
+                  </small>
+                </span>
+              </>
+            }
           />,
           barSlot,
         )}

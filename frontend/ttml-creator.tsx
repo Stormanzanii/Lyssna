@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  ChevronDown,
   Copy,
   Download,
   Gauge,
@@ -1143,7 +1144,9 @@ export function TtmlCreator({
     songs: SavedSong[];
     versions: DraftVersion[];
   } | null>(null);
+  const [olderSaves, setOlderSaves] = useState(false);
   const openSaves = () => {
+    setOlderSaves(false);
     setSaves({ songs: listDrafts(), versions: [] });
     if (track)
       void listVersions(track.uri).then(
@@ -1194,18 +1197,36 @@ export function TtmlCreator({
             <h4>Versions of {track.name}</h4>
             {saves.versions.length ? (
               <ul>
-                {saves.versions.map((version) => (
-                  <li key={version.id ?? version.savedAt}>
-                    <span>
-                      <strong>{savedLabel(version.savedAt)}</strong>
-                      <small>
-                        {version.lines.length} line
-                        {version.lines.length === 1 ? "" : "s"}
-                      </small>
-                    </span>
-                    <button onClick={() => restore(version)}>Restore</button>
+                {saves.versions
+                  .slice(0, olderSaves ? undefined : 2)
+                  .map((version) => (
+                    <li key={version.id ?? version.savedAt}>
+                      <span>
+                        <strong>{savedLabel(version.savedAt)}</strong>
+                        <small>
+                          {version.lines.length} line
+                          {version.lines.length === 1 ? "" : "s"}
+                        </small>
+                      </span>
+                      <button onClick={() => restore(version)}>Restore</button>
+                    </li>
+                  ))}
+                {saves.versions.length > 2 && (
+                  <li className="ttml-saves-more">
+                    <button
+                      aria-expanded={olderSaves}
+                      onClick={() => setOlderSaves(!olderSaves)}
+                    >
+                      {olderSaves
+                        ? "Hide older versions"
+                        : `${saves.versions.length - 2} older version${saves.versions.length === 3 ? "" : "s"}`}
+                      <ChevronDown
+                        size={15}
+                        className={olderSaves ? "open" : ""}
+                      />
+                    </button>
                   </li>
-                ))}
+                )}
               </ul>
             ) : (
               <p className="ttml-hint">No earlier versions yet.</p>

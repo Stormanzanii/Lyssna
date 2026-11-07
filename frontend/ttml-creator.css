@@ -755,6 +755,29 @@
   color: var(--muted);
   font-size: 12px;
 }
+.ttml-saves li.ttml-saves-more {
+  padding: 0;
+  background: none;
+}
+.ttml-creator .ttml-saves-more button {
+  flex: 1;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px dashed #ffffff1f;
+  color: var(--muted);
+  background: transparent;
+}
+.ttml-creator .ttml-saves-more button:hover {
+  color: #f3f3f3;
+  background: #ffffff0a;
+}
+.ttml-saves-more svg {
+  transition: transform 0.15s;
+}
+.ttml-saves-more svg.open {
+  transform: rotate(180deg);
+}
 .ttml-creator .ttml-saves button.danger:hover {
   background: #e9142940;
 }

@@ -18,7 +18,7 @@ const LABELS: Record<
   artists: { label: "Artist" },
   songwriters: {
     label: "Songwriter",
-    hint: "Added to the songwriters from the song's credits.",
+    hint: "Filled from the song's credits when Spotify names any.",
   },
   isrc: {
     label: "ISRC",

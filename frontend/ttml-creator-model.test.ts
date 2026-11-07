@@ -6,6 +6,7 @@ import {
   setLineFlag,
   shiftLines,
   defaultMetadata,
+  withSongwriters,
   metaProblem,
   duplicateLine,
   editUnit,
@@ -390,7 +391,7 @@ describe("TTML Creator metadata", () => {
       entries.find((entry) => entry.key === key)?.values;
     expect(values("musicName")).toEqual(["Song & <Co>"]);
     expect(values("artists")).toEqual(["A", "B"]);
-    expect(values("songwriters")).toBeUndefined();
+    expect(values("songwriters")).toEqual(["W"]);
     expect(values("ttmlAuthorGithubLogin")).toEqual(["someone"]);
     expect(values("isrc")).toEqual([]);
   });
@@ -417,8 +418,30 @@ describe("TTML Creator metadata", () => {
     expect(ttml).not.toContain("qqMusicId");
     expect(ttml).not.toContain('key="artists"');
     expect(ttml).toContain(
-      "<songwriters><songwriter>Ann</songwriter><songwriter>Bo</songwriter><songwriter>Cy</songwriter></songwriters>",
+      "<songwriters><songwriter>Bo</songwriter><songwriter>Cy</songwriter></songwriters>",
     );
+  });
+
+  it("fills songwriters from credits once, keeping a cleared row cleared", () => {
+    const credited = { ...meta, songwriters: ["Ann"] };
+    const filledIn = withSongwriters(
+      [
+        { key: "musicName", values: [] },
+        { key: "artists", values: [] },
+        { key: "isrc", values: [] },
+      ],
+      credited,
+    );
+    expect(filledIn.map((entry) => entry.key)).toEqual([
+      "musicName",
+      "artists",
+      "songwriters",
+      "isrc",
+    ]);
+    expect(filledIn[2].values).toEqual(["Ann"]);
+    const cleared = [{ key: "songwriters", values: [] }];
+    expect(withSongwriters(cleared, credited)).toBe(cleared);
+    expect(withSongwriters([], meta)).toEqual([]);
   });
 
   it("flags values the AMLL TTML DB would reject", () => {

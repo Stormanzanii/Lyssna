@@ -41,6 +41,7 @@ import {
   type SongMeta,
   AUTHOR_KEYS,
   defaultMetadata,
+  withSongwriters,
   breakLine,
   clampCursor,
   clearAll,
@@ -1067,7 +1068,12 @@ export function TtmlCreator({
   const issues = useMemo(() => problems(lines), [lines]);
   const { done, total } = progress(lines);
   const entries = useMemo(
-    () => metadata ?? (track ? defaultMetadata(meta(track), loadAuthor()) : []),
+    () =>
+      track
+        ? metadata
+          ? withSongwriters(metadata, meta(track))
+          : defaultMetadata(meta(track), loadAuthor())
+        : (metadata ?? []),
     [metadata, track],
   );
   const ttml = () => (track ? toTtml(lines, meta(track), entries) : "");

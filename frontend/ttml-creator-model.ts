@@ -32,9 +32,8 @@ export interface MetaEntry {
   values: string[];
 }
 
-// Key names as the AMLL TTML DB stores them. Songwriters come from the
-// song's credits plus any added by hand, and go to iTunesMetadata instead
-// of an amll:meta tag.
+// Key names as the AMLL TTML DB stores them. Songwriters go to
+// iTunesMetadata instead of an amll:meta tag.
 export const META_KEYS = [
   "musicName",
   "artists",
@@ -59,7 +58,28 @@ export function defaultMetadata(
   };
   for (const entry of author)
     if (AUTHOR_KEYS.includes(entry.key)) known[entry.key] = entry.values;
-  return META_KEYS.map((key) => ({ key, values: [...(known[key] ?? [])] }));
+  return withSongwriters(
+    META_KEYS.map((key) => ({ key, values: [...(known[key] ?? [])] })),
+    meta,
+  );
+}
+
+/** Fills Songwriter from the song's credits unless the entries already
+ *  have one, even an emptied one the person cleared on purpose. */
+export function withSongwriters(
+  entries: MetaEntry[],
+  meta: SongMeta,
+): MetaEntry[] {
+  const names = filled(meta.songwriters ?? []);
+  if (!names.length || entries.some((entry) => entry.key === "songwriters"))
+    return entries;
+  const after = entries.findIndex((entry) => entry.key === "artists") + 1;
+  const at = after > 0 ? after : entries.length;
+  return [
+    ...entries.slice(0, at),
+    { key: "songwriters", values: names },
+    ...entries.slice(at),
+  ];
 }
 
 export function metaProblem(key: string, value: string): string | null {
@@ -798,12 +818,11 @@ export function toTtml(
       return `<p begin="${formatTime(begin)}" end="${formatTime(finish)}" ttm:agent="${agent}" itunes:key="L${index + 1}">${lead}${backgrounds}</p>`;
     })
     .join("");
-  const songwriters = filled([
-    ...(meta.songwriters ?? []),
-    ...entries
+  const songwriters = filled(
+    entries
       .filter((entry) => entry.key.trim() === "songwriters")
       .flatMap((entry) => entry.values),
-  ]);
+  );
   const metadata = [
     `<ttm:agent type="person" xml:id="v1"/>`,
     opposite ? `<ttm:agent type="other" xml:id="v2"/>` : "",

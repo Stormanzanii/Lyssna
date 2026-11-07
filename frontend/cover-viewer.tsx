@@ -11,7 +11,6 @@ export function CoverViewer({
   title: string;
   onClose: () => void;
 }) {
-  const close = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const dismiss = () => setClosing(true);
@@ -25,7 +24,7 @@ export function CoverViewer({
       onClose();
   }, [closing, onClose]);
   useEffect(() => {
-    close.current?.focus();
+    root.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -43,6 +42,7 @@ export function CoverViewer({
       role="dialog"
       aria-modal="true"
       aria-label={`${title} cover`}
+      tabIndex={-1}
       onClick={dismiss}
       onAnimationEnd={(event) =>
         closing && event.target === event.currentTarget && onClose()
@@ -56,9 +56,6 @@ export function CoverViewer({
           onClick={(event) => event.stopPropagation()}
         />
       )}
-      <button ref={close} className="cover-viewer-close" onClick={dismiss}>
-        Close
-      </button>
     </div>,
     document.body,
   );

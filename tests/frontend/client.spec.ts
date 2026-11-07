@@ -2166,6 +2166,7 @@ test("album cover opens large over a grey app and closes", async ({
   await cover.click();
   const viewer = page.getByRole("dialog", { name: "Test album cover" });
   await expect(viewer.locator("img")).toBeVisible();
+  await expect(viewer.getByRole("button")).toHaveCount(0);
   await expect(viewer).toHaveCSS("backdrop-filter", /grayscale\(1\)/);
   const small = await viewer.locator("img").boundingBox();
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -2177,9 +2178,6 @@ test("album cover opens large over a grey app and closes", async ({
   await expect(viewer).toHaveCount(0);
   await cover.click();
   await page.keyboard.press("Escape");
-  await expect(viewer).toHaveCount(0);
-  await cover.click();
-  await viewer.getByRole("button", { name: "Close" }).click();
   await expect(viewer).toHaveCount(0);
 });
 

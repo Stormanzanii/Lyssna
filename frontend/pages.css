@@ -1433,13 +1433,12 @@
   inset: 0;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
   padding: 32px;
   background: #00000099;
   backdrop-filter: grayscale(1) brightness(0.7);
+  outline: none;
   animation: cover-viewer-in 0.18s ease-out;
 }
 .cover-viewer img {
@@ -1448,15 +1447,6 @@
   object-fit: cover;
   box-shadow: 0 16px 60px #000a;
   animation: cover-viewer-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-}
-.cover-viewer-close {
-  padding: 4px 8px;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 700;
-}
-.cover-viewer-close:hover {
-  text-decoration: underline;
 }
 .cover-viewer.closing {
   animation: cover-viewer-out 0.18s ease-in forwards;

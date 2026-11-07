@@ -699,6 +699,14 @@ export function TtmlCreator({
             setEditing(at);
           },
         },
+        ...(unit.joined
+          ? [
+              {
+                label: "Space before this syllable",
+                run: () => setLines(toggleJoin(lines, at)),
+              },
+            ]
+          : []),
         { label: "Delete word", run: () => commitWord(at, "") },
       ],
       [
@@ -1506,7 +1514,7 @@ export function TtmlCreator({
                                 className={`ttml-chip${unit.joined ? " joined" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
                                 title={
                                   unit.joined
-                                    ? "Syllable. Click to split it into its own word; double-click to edit."
+                                    ? "Syllable. Double-click to edit; right-click to make it its own word."
                                     : "Double-click to edit; drag to move"
                                 }
                                 draggable
@@ -1550,9 +1558,6 @@ export function TtmlCreator({
                                   )
                                     land(event, moveSpace(lines, drag.at, at));
                                 }}
-                                onClick={() =>
-                                  unit.joined && setLines(toggleJoin(lines, at))
-                                }
                                 onDoubleClick={() => setEditing(at)}
                                 onContextMenu={(event) => openMenu(event, at)}
                               >

@@ -15175,6 +15175,12 @@ test("TTML Creator imports and exports other lyric formats", async ({
   const cards = creator.locator(".ttml-card");
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(1)).toHaveClass(/\bbackground\b/);
+  const spaces = cards.first().locator(".ttml-space");
+  await expect(spaces).toHaveCount(1);
+  await cards.first().locator(".ttml-chip.joined").dblclick();
+  await expect(creator.getByLabel("Edit word")).toHaveValue("er");
+  await page.keyboard.press("Escape");
+  await expect(spaces).toHaveCount(1);
   await creator.getByRole("tab", { name: "Sync" }).click();
   await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
 

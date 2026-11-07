@@ -317,7 +317,8 @@ describe("TTML Creator card editing", () => {
     const next = appendWords(lines, 0, " two th|ree");
     expect(words(next)).toEqual(["one two th|ree"]);
     expect(next[0].units[0].start).toBe(lines[0].units[0].start);
-    expect(words(appendWords(lines, 0, "ly"))).toEqual(["one|ly"]);
+    expect(words(appendWords(lines, 0, "so"))).toEqual(["one so"]);
+    expect(words(appendWords(lines, 0, "|ly"))).toEqual(["one|ly"]);
     const spaced = appendWords(lines, 0, " ");
     expect(spaced[0].spaceAfter).toBe(true);
     expect(appendWords(spaced, 0, " ")).toBe(spaced);

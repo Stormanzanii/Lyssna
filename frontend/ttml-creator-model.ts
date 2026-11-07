@@ -442,11 +442,11 @@ export function appendWords(
   const spaceAfter = /\s$/.test(clean);
   if (!line || (!added.length && (!spaceAfter || line.spaceAfter)))
     return lines;
-  // Like AMLL, text typed without a space before it continues the last word.
+  // A leading | continues the last word as a syllable.
   if (added.length)
     added[0] = {
       ...added[0],
-      joined: !!line.units.length && !line.spaceAfter && !/^\s/.test(clean),
+      joined: !!line.units.length && !line.spaceAfter && /^\|/.test(clean),
     };
   const { spaceAfter: _, ...rest } = line;
   const next: CreatorLine = { ...rest, units: [...line.units, ...added] };

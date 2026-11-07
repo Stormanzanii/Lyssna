@@ -15037,7 +15037,10 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await expect(spaces).toHaveCount(before + 2);
   await expect(first.locator(".ttml-chip").last()).toHaveText("rds");
   await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
-  await add.pressSequentially("y");
+  await add.pressSequentially("so");
+  await add.press("Enter");
+  await expect(first.locator(".ttml-chip").last()).not.toHaveClass(/joined/);
+  await add.pressSequentially("|y");
   await add.press("Enter");
   await expect(first.locator(".ttml-chip").last()).toHaveClass(/joined/);
   // The plus adds a blank line holding only Type word here.
@@ -15118,7 +15121,8 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await page.keyboard.press("Backspace");
   await expect(spaces).toHaveCount(count - 2);
   await expect(card.locator(".ttml-chip").nth(1)).toHaveClass(/joined/);
-  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/); // A picked space plus a picked word drags as that word.
+  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/);
+  // A picked space plus a picked word drags as that word.
   const last = creator.locator(".ttml-card").nth(1);
   const lastWord = (name: string) =>
     last.getByRole("button", { name, exact: true });

@@ -4061,6 +4061,11 @@ input[type="range"]:hover {
   height: 37px;
   color: #b3b3b3;
 }
+/* The pen glyph leaves empty space on its right, so pull the microphone
+   in to match the microphone-to-queue gap. */
+.player-extras .ttml-button {
+  margin-right: -1.5px;
+}
 .player-extras .icon-button:hover {
   color: #fff;
   background: none;

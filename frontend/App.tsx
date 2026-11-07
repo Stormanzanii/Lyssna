@@ -5971,7 +5971,7 @@ function PlayerBar({
         )}
         {onTtml && (
           <button
-            className={`icon-button ${ttmlActive ? "active" : ""}`}
+            className={`icon-button ttml-button ${ttmlActive ? "active" : ""}`}
             title="TTML Creator"
             onClick={onTtml}
           >

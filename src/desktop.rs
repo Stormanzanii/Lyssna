@@ -2826,6 +2826,21 @@ fn send_to_jam(
     );
 }
 #[tauri::command]
+async fn track_waveform(
+    uri: String,
+    buckets: usize,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Vec<u8>, String> {
+    let controls = state.0.controls.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = controls.session()?;
+        crate::waveform::track_peaks(&session, &uri, buckets).map(|peaks| peaks.to_vec())
+    })
+    .await
+    .map_err(|_| "Waveform worker unavailable".to_owned())?
+    .map_err(error)
+}
+#[tauri::command]
 fn playback_speed(percent: u32, state: State<'_, Desktop>) -> std::result::Result<u32, String> {
     if percent != 100 && lock(&state.0.jam_commands).map_err(error)?.is_some() {
         return Err("Leave the Jam to change the speed".into());
@@ -5353,6 +5368,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             player,
             retry_audio,
             playback_speed,
+            track_waveform,
             test_audio_output,
             refresh,
             save_item,

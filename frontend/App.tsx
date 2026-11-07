@@ -33,6 +33,7 @@ import {
   LoaderCircle,
   Maximize2,
   PanelRight,
+  AudioWaveform,
   CirclePlus,
   CircleCheck,
   Mic2,
@@ -566,6 +567,11 @@ function App() {
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
   const [coverView, setCoverView] = useState(false);
+  // The TTML Creator swaps the player bar for its waveform bar, unless asked
+  // to show the player bar instead.
+  const [ttmlPlayerBar, setTtmlPlayerBar] = useState(false);
+  const [ttmlBarSlot, setTtmlBarSlot] = useState<HTMLElement | null>(null);
+  const ttmlBar = center === "ttml" && !ttmlPlayerBar;
   const closeCoverView = useCallback(() => setCoverView(false), []);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
@@ -3217,6 +3223,9 @@ function App() {
               onPlayer={play}
               onToggle={toggle}
               onSpeed={setSpeed}
+              barSlot={ttmlBar ? ttmlBarSlot : null}
+              onShowPlayer={() => setTtmlPlayerBar(true)}
+              onClose={() => setCenter("lyrics")}
               renderPreview={(lyrics) => (
                 <LyricsPage
                   state={{ ...state, lyrics, lyric_error: "" }}
@@ -4655,44 +4664,55 @@ function App() {
           }
         />
       )}
-      <PlayerBar
-        state={state}
-        onPlayer={play}
-        onDJRequest={() => setDJRequest(true)}
-        onToggle={toggle}
-        onAlbum={openAlbum}
-        onArtist={openArtist}
-        onSave={save}
-        onLyrics={() => setCenter(center === "lyrics" ? "browse" : "lyrics")}
-        onTtml={
-          state.settings.ttml_creator
-            ? () => setCenter(center === "ttml" ? "lyrics" : "ttml")
-            : undefined
-        }
-        ttmlActive={center === "ttml"}
-        onQueue={toggleQueue}
-        onDevices={() => {
-          setDeviceMenu(!deviceMenu);
-          if (!deviceMenu) void call("refresh");
-        }}
-        onSidebar={() =>
-          animateLayout(
-            () => {
-              if (sidebar && panel === "queue") setPanel("now");
-              else {
-                setSidebar(!sidebar);
-                setPanel("now");
-              }
-            },
-            "panels",
-            state.settings.reduce_motion,
-          )
-        }
-        onFullscreen={() => void fullscreen()}
-        lyricsActive={center === "lyrics"}
-        queueActive={sidebar && panel === "queue"}
-        sidebarActive={sidebar && panel === "now"}
-      />
+      {ttmlBar ? (
+        <footer
+          className="player-bar ttml-player-bar"
+          ref={setTtmlBarSlot}
+          inert={!state.profile}
+        />
+      ) : (
+        <PlayerBar
+          state={state}
+          onPlayer={play}
+          onDJRequest={() => setDJRequest(true)}
+          onTtmlBar={
+            center === "ttml" ? () => setTtmlPlayerBar(false) : undefined
+          }
+          onToggle={toggle}
+          onAlbum={openAlbum}
+          onArtist={openArtist}
+          onSave={save}
+          onLyrics={() => setCenter(center === "lyrics" ? "browse" : "lyrics")}
+          onTtml={
+            state.settings.ttml_creator
+              ? () => setCenter(center === "ttml" ? "lyrics" : "ttml")
+              : undefined
+          }
+          ttmlActive={center === "ttml"}
+          onQueue={toggleQueue}
+          onDevices={() => {
+            setDeviceMenu(!deviceMenu);
+            if (!deviceMenu) void call("refresh");
+          }}
+          onSidebar={() =>
+            animateLayout(
+              () => {
+                if (sidebar && panel === "queue") setPanel("now");
+                else {
+                  setSidebar(!sidebar);
+                  setPanel("now");
+                }
+              },
+              "panels",
+              state.settings.reduce_motion,
+            )
+          }
+          onFullscreen={() => void fullscreen()}
+          lyricsActive={center === "lyrics"}
+          queueActive={sidebar && panel === "queue"}
+          sidebarActive={sidebar && panel === "now"}
+        />
+      )}
       {deviceMenu && (
         <div className="device-menu popover">
           <h3>Connect to a device</h3>
@@ -5813,6 +5833,7 @@ function PlayerBar({
   state,
   onPlayer,
   onDJRequest,
+  onTtmlBar,
   onToggle,
   onAlbum,
   onArtist,
@@ -5831,6 +5852,7 @@ function PlayerBar({
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onDJRequest: () => void;
+  onTtmlBar?: () => void;
   onToggle: () => void;
   onAlbum: (album: Album) => void;
   onArtist: (artist: Artist) => void;
@@ -6009,6 +6031,15 @@ function PlayerBar({
             onRefresh={() => onPlayer({ command: "dj" })}
             onHold={onDJRequest}
           />
+        )}
+        {onTtmlBar && (
+          <button
+            className="icon-button"
+            title="Show the TTML bar"
+            onClick={onTtmlBar}
+          >
+            <AudioWaveform size={19} />
+          </button>
         )}
         {onTtml && (
           <button

@@ -91,6 +91,9 @@ import {
 } from "./ttml-creator-model";
 import { romanizeAway } from "./romanization";
 import { MetadataDialog } from "./ttml-metadata";
+import { TtmlBar } from "./ttml-bar";
+import { createPortal } from "react-dom";
+import { rpc } from "./bridge";
 import {
   type ExportFormat,
   type WordFormat,
@@ -233,6 +236,9 @@ export function TtmlCreator({
   onParse,
   notify,
   renderPreview,
+  barSlot,
+  onShowPlayer,
+  onClose,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
@@ -246,6 +252,10 @@ export function TtmlCreator({
   ) => Promise<Lyrics>;
   notify: (message: string, error?: boolean) => void;
   renderPreview?: (lyrics: Lyrics) => ReactNode;
+  /** Where the creator's own bar replaces the player bar. */
+  barSlot?: HTMLElement | null;
+  onShowPlayer?: () => void;
+  onClose?: () => void;
 }) {
   const playing = state.playback.item;
   const [track, setTrack] = useState<Track | undefined>(playing);
@@ -1213,6 +1223,34 @@ export function TtmlCreator({
   const liveWords = useMemo(
     () => singingAt(lines, position),
     [lines, position],
+  );
+  const [peaks, setPeaks] = useState<{
+    uri: string;
+    values: Uint8Array;
+  } | null>(null);
+  const trackUri = track?.uri;
+  useEffect(() => {
+    if (!barSlot || !trackUri || peaks?.uri === trackUri) return;
+    let current = true;
+    rpc<number[]>("track_waveform", { uri: trackUri, buckets: 2400 })
+      .then(
+        (values) =>
+          current &&
+          Array.isArray(values) &&
+          setPeaks({ uri: trackUri, values: Uint8Array.from(values) }),
+      )
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [barSlot, trackUri, peaks?.uri]);
+  const barSpans = useMemo(
+    () =>
+      lines.flatMap((line, index) => {
+        const span = lineSpan(line);
+        return span ? [{ ...span, current: index === cursor.line }] : [];
+      }),
+    [lines, cursor.line],
   );
   const playingLine = useMemo(() => {
     let found = -1;
@@ -2312,6 +2350,21 @@ export function TtmlCreator({
           onClose={() => setEditingMeta(false)}
         />
       )}
+      {barSlot &&
+        createPortal(
+          <TtmlBar
+            position={position}
+            duration={track.duration_ms}
+            playing={state.playback.is_playing}
+            peaks={peaks?.uri === track.uri ? peaks.values : null}
+            spans={barSpans}
+            onToggle={onToggle}
+            onSeek={seek}
+            onShowPlayer={() => onShowPlayer?.()}
+            onClose={onClose}
+          />,
+          barSlot,
+        )}
     </section>
   );
 }

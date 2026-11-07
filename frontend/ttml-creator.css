@@ -1302,3 +1302,62 @@
 .ttml-preview .lyric-source {
   display: none;
 }
+.player-bar.ttml-player-bar {
+  display: flex;
+  align-items: stretch;
+}
+.ttml-bar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ttml-bar-play {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  color: #000;
+  background: #fff;
+  transition: scale 0.1s;
+}
+.ttml-bar-play:hover {
+  scale: 1.06;
+}
+.ttml-bar-time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ttml-bar-wave {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border-radius: 6px;
+  background: #ffffff08;
+  cursor: pointer;
+  touch-action: none;
+}
+.ttml-bar-wave:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.ttml-bar-wave.loading {
+  animation: ttml-bar-loading 1.4s ease-in-out infinite;
+}
+@keyframes ttml-bar-loading {
+  50% {
+    opacity: 0.55;
+  }
+}
+.ttml-bar-extras {
+  flex-shrink: 0;
+}
+.reduce-motion .ttml-bar-wave.loading {
+  animation: none;
+}

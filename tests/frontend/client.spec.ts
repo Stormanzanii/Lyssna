@@ -621,6 +621,11 @@ async function startClient(
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
           if (command === "playback_speed") return args.percent;
+          if (command === "track_waveform")
+            return Array.from(
+              { length: args.buckets },
+              (_, index) => (index * 37) % 256,
+            );
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
@@ -14986,6 +14991,7 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     '<span ttm:role="x-bg" begin="00:04.600" end="00:05.000"><span begin="00:04.600" end="00:05.000">ooh</span></span>',
   );
 
+  await page.getByRole("button", { name: "Show the player bar" }).click();
   await bar.getByTitle("Lyrics", { exact: true }).click();
   await expect(creator).toHaveCount(0);
   expect((await requests()).at(-1)).toEqual({
@@ -14993,6 +14999,69 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     repeat: "off",
   });
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+});
+
+test("TTML Creator swaps the player bar for a waveform bar", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const wave = page.getByRole("slider", { name: "Song position" });
+  await expect(wave).toBeVisible();
+  await expect(page.locator(".player-song")).toHaveCount(0);
+  await expect(wave).not.toHaveClass(/loading/);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.find(
+          (entry: any) => entry.command === "track_waveform",
+        )?.args,
+    ),
+  ).toEqual({ uri: "spotify:track:0123456789abcdefghijkl", buckets: 2400 });
+  const box = (await wave.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({ command: "seek" });
+  const sought = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .at(-1).args.request.positionMs,
+  );
+  expect(Math.abs(sought - 90_000)).toBeLessThan(1000);
+  await page.getByRole("button", { name: "Show the player bar" }).click();
+  await expect(page.locator(".player-song")).toHaveCount(1);
+  await page
+    .locator(".player-extras")
+    .getByTitle("Show the TTML bar", { exact: true })
+    .click();
+  await expect(wave).toBeVisible();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  await expect(page.getByRole("region", { name: "TTML Creator" })).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".player-song")).toHaveCount(1);
 });
 
 test("TTML Creator offers Type word here on the active or hovered line", async ({
@@ -15279,6 +15348,7 @@ test("Now playing lyrics card folds while the TTML Creator is open", async ({
   // The creator closes Now playing and compacts the library.
   await expect(page.locator(".now-playing")).toHaveCount(0);
   await expect(page.locator(".library-panel")).toHaveClass(/compact-library/);
+  await page.getByRole("button", { name: "Show the player bar" }).click();
   await npvButton.click();
   await expect(card).toHaveClass(/\bcollapsed\b/);
   await card.getByTitle("Show lyrics").click();

@@ -15011,6 +15011,10 @@ test("TTML Creator selects a Sync line by its blank space and centres it in Lyri
 
   await creator.getByRole("tab", { name: "Lyrics" }).click();
   await expect(creator.locator('.ttml-card[data-line="20"]')).toBeInViewport();
+  await expect(creator.locator('.ttml-card[data-line="20"]')).toHaveClass(
+    /\bcurrent\b/,
+  );
+  await expect(creator.locator(".ttml-card.current")).toHaveCount(1);
   await expect(
     creator.locator('.ttml-card[data-line="0"]'),
   ).not.toBeInViewport();

@@ -987,11 +987,12 @@ export function TtmlCreator({
               className={tab === value ? "active" : ""}
               disabled={value !== "write" && !lines.length}
               onClick={() => {
-                if (tab === "sync" && value === "write")
-                  centreOnLyrics.current =
-                    state.playback.is_playing && liveWord
-                      ? liveWord.line
-                      : cursor.line;
+                if (tab === "sync" && value === "write") {
+                  const at =
+                    state.playback.is_playing && liveWord ? liveWord : cursor;
+                  setCursor(clampCursor(lines, at));
+                  centreOnLyrics.current = at.line;
+                }
                 setTab(value);
               }}
             >
@@ -1108,7 +1109,7 @@ export function TtmlCreator({
               <div
                 key={lineIndex}
                 data-line={lineIndex}
-                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
+                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onPointerDown={(event) => {
                   event.currentTarget.draggable = !(
                     event.target as Element

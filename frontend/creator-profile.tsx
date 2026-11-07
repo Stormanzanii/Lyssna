@@ -9,6 +9,9 @@ import type { Contributor } from "./types";
 import { rpc } from "./bridge";
 const CreatorContext = createContext<(person: Contributor) => void>(() => {});
 export const useCreatorProfile = () => useContext(CreatorContext);
+// spicylyrics.org retired the embedded profile view; the window code stays
+// in case it returns.
+export const PROFILE_WINDOW = false;
 export function creatorEmbed(username: string) {
   const name = username.trim().replace(/^@+/, "");
   return name &&

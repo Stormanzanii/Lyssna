@@ -65,7 +65,11 @@ import { activeLines, endsOnRight, formatTime } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
 import { CreditsDialog } from "./credits-dialog";
-import { useCreatorProfile } from "./creator-profile";
+import {
+  PROFILE_WINDOW,
+  creatorEmbed,
+  useCreatorProfile,
+} from "./creator-profile";
 import {
   stepScroll,
   vocalGaps,
@@ -996,6 +1000,22 @@ const LyricCredits = memo(function LyricCredits({
       } as Record<string, string>
     )[lyrics.source] ?? lyrics.source;
   const openCreator = useCreatorProfile();
+  // Where a name links to, if anywhere. Without the in-app window, names
+  // only link when profiles open in the browser.
+  const linkOf = (person: Contributor, url?: string) =>
+    PROFILE_WINDOW
+      ? person.id || url
+        ? () =>
+            person.id && !(browser && url)
+              ? openCreator(person)
+              : void rpc("open_link", { url }).catch(() => {})
+        : undefined
+      : browser && (url ?? creatorEmbed(nameOf(person)))
+        ? () =>
+            void rpc("open_link", {
+              url: url ?? creatorEmbed(nameOf(person)),
+            }).catch(() => {})
+        : undefined;
   const profileUrl = (url?: string) => {
     try {
       const parsed = new URL(url ?? "");
@@ -1043,14 +1063,10 @@ const LyricCredits = memo(function LyricCredits({
             <span key={role} className="community-person">
               <span className="community-dot"> · </span>
               {label}{" "}
-              {person.id || url ? (
+              {linkOf(person, url) ? (
                 <button
                   className="community-profile"
-                  onClick={() =>
-                    person.id && !(browser && url)
-                      ? openCreator(person)
-                      : void rpc("open_link", { url }).catch(() => {})
-                  }
+                  onClick={linkOf(person, url)}
                 >
                   {name}
                 </button>
@@ -1096,15 +1112,8 @@ const LyricCredits = memo(function LyricCredits({
             <span key={role}>
               {" "}
               · {label}{" "}
-              {person.id || url ? (
-                <button
-                  className="text-link"
-                  onClick={() =>
-                    person.id && !(browser && url)
-                      ? openCreator(person)
-                      : void rpc("open_link", { url }).catch(() => {})
-                  }
-                >
+              {linkOf(person, url) ? (
+                <button className="text-link" onClick={linkOf(person, url)}>
                   {expanded ? "@" : ""}
                   {nameOf(person)}
                 </button>

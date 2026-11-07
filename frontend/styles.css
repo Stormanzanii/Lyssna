@@ -5867,12 +5867,14 @@ input[type="range"]:hover {
   object-fit: cover;
 }
 .community-credits .community-name {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
   /* A shade brighter than its label, like the songwriter names. */
   color: #fff;
   opacity: 0.8;
   transition: opacity 0.2s;
+}
+button.community-profile .community-name {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 .community-credits
   .community-profile:is(:hover, :focus-visible)

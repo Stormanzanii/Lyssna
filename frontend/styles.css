@@ -2088,6 +2088,9 @@ small {
   padding: 0 24px 30px;
 }
 .album-grid .album-tile {
+  /* A button centres its content, so a two-line title would push the
+     cover below its neighbours'. */
+  align-self: start;
   padding: 0;
 }
 .album-grid .album-tile:hover {

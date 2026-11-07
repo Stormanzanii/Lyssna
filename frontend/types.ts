@@ -170,6 +170,7 @@ export interface Settings {
   lyrics_hide_artwork?: boolean;
   lyrics_artwork_right?: boolean;
   lyrics_compact?: boolean;
+  ttml_creator?: boolean;
   lyrics_toolbar_bottom?: boolean;
   lyrics_right_align?: boolean;
   lyrics_flip_duet?: boolean;
@@ -359,6 +360,7 @@ export interface Snapshot {
   login_pending: boolean;
   can_follow: boolean;
   lyrics?: Lyrics;
+  lyrics_uri?: string;
   lyric_error: string;
   details: PlayingDetails;
   route: string;

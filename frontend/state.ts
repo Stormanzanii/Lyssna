@@ -111,6 +111,7 @@ export interface AppState extends Snapshot {
   pending?: { uri: string; at: number };
   pageError: string;
   clock_revision: number;
+  playback_rate?: number;
   pages: Record<string, CachedPage>;
   /** DJ was just started and its narration has not been confirmed yet. The
    * DJ view shows meanwhile, so the first queued song cannot flash up. */
@@ -174,6 +175,7 @@ export const emptyState: AppState = {
     lyrics_hide_artwork: false,
     lyrics_artwork_right: false,
     lyrics_compact: false,
+    ttml_creator: false,
     lyrics_toolbar_bottom: false,
     lyrics_right_align: false,
     lyrics_flip_duet: false,
@@ -273,6 +275,7 @@ export type Action =
   | { type: "page_loading"; generation: number }
   | { type: "toast_clear" }
   | { type: "dj_requested" }
+  | { type: "playback_rate"; rate: number }
   /** A song left the open playlist; drop that row before Spotify confirms. */
   | { type: "track_removed"; key: string; index: number }
   /** A song was dragged within the open playlist. */
@@ -764,7 +767,12 @@ export function reducer(state: AppState, action: Action): AppState {
         : state;
     case "lyrics":
       return action.uri === state.playback.item?.uri
-        ? { ...state, lyrics: action.lyrics, lyric_error: "" }
+        ? {
+            ...state,
+            lyrics: action.lyrics,
+            lyrics_uri: action.uri,
+            lyric_error: "",
+          }
         : state;
     case "lyric_error":
       return action.uri === state.playback.item?.uri
@@ -840,6 +848,8 @@ export function reducer(state: AppState, action: Action): AppState {
           serial: Date.now(),
         },
       };
+    case "playback_rate":
+      return { ...state, playback_rate: action.rate };
     case "notice":
       return {
         ...state,

@@ -620,6 +620,7 @@ async function startClient(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          if (command === "playback_speed") return args.percent;
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
           if (command === "artist_liked_count")
@@ -697,7 +698,7 @@ async function startClient(
           if (command === "saved_lyrics")
             return host.__clientTest.savedLyrics ?? [];
           if (command === "saved_lyrics_file")
-            return ["Artist - Saved song.ttml", "<tt/>"];
+            return ["Saved song - Artist.ttml", "<tt/>"];
           if (command === "audio_cache_size")
             return host.__clientTest.cacheBytes ?? 0;
           if (command === "clear_audio_cache") {
@@ -8215,7 +8216,7 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   await database
     .getByRole("button", { name: "Download lyrics for Saved song" })
     .click();
-  expect((await download).suggestedFilename()).toBe("Artist - Saved song.ttml");
+  expect((await download).suggestedFilename()).toBe("Saved song - Artist.ttml");
   await page.evaluate(() =>
     document.querySelector(".application")!.classList.add("liquid-glass"),
   );
@@ -14682,4 +14683,615 @@ test("Soloist greys out playback settings it cannot honour", async ({
       ),
     )
     .toBe("abc123");
+});
+
+test("TTML Creator times words on the playing song, slows it and saves TTML", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const bar = page.locator(".player-extras");
+  await expect(bar.getByTitle("TTML Creator", { exact: true })).toHaveCount(0);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator).toContainText("Come & Go (with Marshmello)");
+  const card = creator.locator(".ttml-card").first();
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "I am just a lyric line number 1".split(" "),
+  );
+  await expect(card.locator(".ttml-space")).toHaveCount(7);
+  await creator.getByRole("button", { name: "Lyrics settings" }).click();
+  const lyricSettings = page.getByRole("dialog", { name: "Lyrics settings" });
+  await expect(lyricSettings).toContainText("Split a word into syllables");
+  await expect(lyricSettings).not.toContainText("Start word");
+  await lyricSettings.getByRole("button", { name: "Close settings" }).click();
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  const firstLine = creator.locator(".ttml-line").first();
+  await expect(firstLine.locator(".ttml-line-side")).toHaveText(
+    /00:10\.000\s*00:13\.000/,
+  );
+  await expect(firstLine.locator(".ttml-pill").first()).toHaveText("00:10.000");
+  await expect(firstLine.locator(".ttml-pill.empty").first()).toHaveText(
+    "--:--.---",
+  );
+  await creator.getByRole("tab", { name: "Lyrics" }).click();
+  await card.locator(".ttml-space").first().click();
+  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
+  await card.getByLabel("Edit word").fill("song");
+  await card.getByLabel("Edit word").press("Enter");
+  await card.getByPlaceholder("None").first().fill("Hola");
+  await card.getByPlaceholder("None").first().press("Enter");
+  await expect(card.getByPlaceholder("None").first()).toHaveValue("Hola");
+  await creator.getByRole("button", { name: "Edit as text" }).click();
+  await expect(creator.getByLabel("Lyrics text")).toHaveValue(
+    /^I\|am just a song line number 1\nI am just a lyric line number 2\n/,
+  );
+  await creator.getByLabel("Lyrics text").fill("Hello wor|ld\n(ooh)");
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await expect(creator.locator(".ttml-word")).toHaveText([
+    "Hello",
+    "wor",
+    "ld",
+    "ooh",
+  ]);
+
+  const at = (progress_ms: number, is_playing = false) =>
+    page.evaluate(
+      ([progress_ms, is_playing]) => {
+        (window as any).__clientTest.emit({
+          type: "playback",
+          changed: false,
+          observed_at: Date.now(),
+          playback: {
+            is_playing,
+            progress_ms,
+            shuffle_state: false,
+            repeat_state: "off",
+            device: {
+              name: "Lyssna (test)",
+              id: "local-device",
+              is_active: true,
+            },
+            item: {
+              id: "0123456789abcdefghijkl",
+              uri: "spotify:track:0123456789abcdefghijkl",
+              name: "Come & Go (with Marshmello)",
+              artists: [
+                { id: "a", name: "Juice WRLD" },
+                { id: "b", name: "Marshmello" },
+              ],
+              album: {
+                id: "0123456789abcdefghijkl",
+                name: "Album",
+                images: [],
+              },
+              duration_ms: 180000,
+            },
+          },
+        });
+      },
+      [progress_ms, is_playing] as const,
+    );
+  const taps: [number, string][] = [
+    [3000, "f"],
+    [3500, "g"],
+    [4000, "g"],
+    [4500, "h"],
+    [4600, "f"],
+    [5000, "h"],
+  ];
+  for (const [time, key] of taps) {
+    await at(time);
+    await expect(creator.locator(".ttml-time")).toHaveText(
+      `00:0${Math.floor(time / 1000)}.${String(time % 1000).padStart(3, "0")}`,
+    );
+    await page.keyboard.press(key);
+  }
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+  await page.keyboard.press("Control+z");
+  await expect(creator.locator(".ttml-progress")).toHaveText("3/4 timed");
+  await page.keyboard.press("Control+y");
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+  const live = creator.locator(".ttml-unit.live .ttml-word");
+  await at(3510);
+  await expect(live).toHaveText("wor");
+  await at(3490);
+  await expect(live).toHaveText("wor");
+  await at(3000);
+  await expect(live).toHaveText("Hello");
+
+  const last = (command: string) =>
+    page.evaluate(
+      (command) =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === command)
+          .at(-1)?.args,
+      command,
+    );
+  await creator.getByLabel("Playback speed").fill("0.5");
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 50 });
+  await expect(creator.getByLabel("Playback speed")).toHaveValue("0.5");
+  await expect(creator.locator(".ttml-speed-value")).toHaveText("0.50×");
+
+  const requests = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request),
+    );
+  expect(await requests()).toContainEqual({
+    command: "repeat",
+    repeat: "track",
+  });
+  const before = (await requests()).length;
+  await at(179_000, true);
+  await at(400, true);
+  await expect
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([{ command: "pause" }, { command: "seek", positionMs: 0 }]);
+
+  await creator.getByLabel("Playback speed").blur();
+  await page.keyboard.press("'");
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+  for (const [key, positionMs] of [
+    ["r", 4000],
+    ["r", 3500],
+    ["y", 4000],
+  ] as const) {
+    await page.keyboard.press(key);
+    await expect
+      .poll(async () => (await requests()).at(-1))
+      .toEqual({ command: "seek", positionMs });
+  }
+  await creator.getByRole("button", { name: "Sync settings" }).click();
+  const keys = page.getByRole("dialog", { name: "Sync settings" });
+  await keys.getByRole("button", { name: "Jump to previous word key" }).click();
+  await page.keyboard.press("q");
+  await expect(
+    keys.getByRole("button", { name: "Jump to previous word key" }),
+  ).toHaveText("Q");
+  await keys.getByRole("button", { name: "Close settings" }).click();
+  await page.keyboard.press("q");
+  await expect
+    .poll(async () => (await requests()).at(-1))
+    .toEqual({ command: "seek", positionMs: 3500 });
+
+  await creator.getByRole("tab", { name: "Preview" }).click();
+  await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
+
+  await creator.getByTitle("Metadata").click();
+  const metadata = page.getByRole("dialog", { name: "Song metadata" });
+  await expect(metadata.getByLabel("Song title", { exact: true })).toHaveValue(
+    "Come & Go (with Marshmello)",
+  );
+  for (const field of ["ISRC", "Your GitHub username"]) {
+    await metadata.getByRole("button", { name: "Add field" }).click();
+    await metadata.getByRole("menuitem", { name: field }).click();
+  }
+  await metadata.getByLabel("ISRC", { exact: true }).fill("bad");
+  await expect(metadata.getByRole("alert")).toContainText("12 characters");
+  await metadata.getByLabel("ISRC", { exact: true }).fill("USUM71703861");
+  await expect(metadata.getByRole("alert")).toHaveCount(0);
+  await metadata
+    .getByLabel("Your GitHub username", { exact: true })
+    .fill("someone");
+  await metadata.getByRole("button", { name: "Close metadata" }).click();
+  await expect(metadata).toHaveCount(0);
+
+  await creator.getByRole("button", { name: "Use for this song" }).click();
+  const saved = await last("import_lyrics");
+  expect(saved.contents).toContain(
+    '<amll:meta key="isrc" value="USUM71703861"/>',
+  );
+  expect(saved.contents).toContain(
+    '<amll:meta key="album" value="Album"/><amll:meta key="spotifyId" value="0123456789abcdefghijkl"/>',
+  );
+  expect(saved.contents).toContain(
+    '<amll:meta key="ttmlAuthorGithubLogin" value="someone"/>',
+  );
+  expect(saved).toMatchObject({
+    filename: "Come & Go (with Marshmello) - Juice WRLD, Marshmello.ttml",
+    mode: "persistent",
+  });
+  expect(saved.contents).toContain(
+    '<span begin="00:03.000" end="00:03.500">Hello</span> <span begin="00:03.500" end="00:04.000">wor</span><span begin="00:04.000" end="00:04.500">ld</span>',
+  );
+  expect(saved.contents).toContain(
+    '<span ttm:role="x-bg" begin="00:04.600" end="00:05.000"><span begin="00:04.600" end="00:05.000">ooh</span></span>',
+  );
+
+  await bar.getByTitle("Lyrics", { exact: true }).click();
+  await expect(creator).toHaveCount(0);
+  expect((await requests()).at(-1)).toEqual({
+    command: "repeat",
+    repeat: "off",
+  });
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+});
+
+test("TTML Creator word menu splits words and moves them to new lines", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const card = creator.locator(".ttml-card").first();
+  const menu = page.getByRole("menu", { name: "Word actions" });
+
+  await card.getByRole("button", { name: "number", exact: true }).click({
+    button: "right",
+  });
+  await menu.getByRole("menuitem", { name: "Auto-segment word" }).click();
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "I am just a lyric line num ber 1".split(" "),
+  );
+
+  await card.getByRole("button", { name: "lyric", exact: true }).click({
+    button: "right",
+  });
+  await menu.getByRole("menuitem", { name: "Split word…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Split word" });
+  await expect(
+    dialog.getByRole("button", { name: "Split before letter 3" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    dialog.getByRole("button", { name: "Syllable split" }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole("checkbox", { name: "Apply this split to all identical words" })
+    .check();
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+  ).toHaveText("I am just a ly ric line number 2".split(" "));
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.ttml-splits")),
+  ).toBe('{"lyric":[2]}');
+
+  await card.getByRole("button", { name: "line", exact: true }).click({
+    button: "right",
+  });
+  await menu
+    .getByRole("menuitem", { name: "Move following words to new line" })
+    .click();
+  await expect(
+    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+  ).toHaveText("line num ber 1".split(" "));
+  await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
+
+  await card
+    .getByRole("button", { name: "am", exact: true })
+    .dragTo(card.getByRole("button", { name: "I", exact: true }), {
+      targetPosition: { x: 2, y: 10 },
+    });
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "am I just a ly ric".split(" "),
+  );
+
+  const moved = creator.locator(".ttml-card").nth(1);
+  await moved
+    .locator(".ttml-space")
+    .first()
+    .dragTo(moved.getByRole("button", { name: "ber", exact: true }));
+  await expect(
+    moved.getByRole("button", { name: "num", exact: true }),
+  ).toHaveClass(/joined/);
+  await expect(
+    moved.getByRole("button", { name: "ber", exact: true }),
+  ).not.toHaveClass(/joined/);
+
+  await creator
+    .locator(".ttml-card-number")
+    .nth(2)
+    .dragTo(card, { targetPosition: { x: 20, y: 2 } });
+  await expect(
+    creator.locator(".ttml-card").first().locator(".ttml-chip"),
+  ).toHaveText("I am just a ly ric line number 2".split(" "));
+
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  const reading = creator
+    .getByRole("textbox", { name: "Romanization of just" })
+    .first();
+  await reading.fill("jasuto");
+  await reading.press("Enter");
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  await creator.getByRole("button", { name: "Word romanization" }).click();
+  await expect(reading).toHaveValue("jasuto");
+  await creator.getByRole("button", { name: "Auto romanize" }).click();
+  await expect(creator.getByRole("status")).toContainText(
+    "Nothing to romanize",
+  );
+  await creator.getByRole("tab", { name: "Sync" }).click();
+  await creator
+    .getByRole("button", { name: "Romanization", exact: true })
+    .click();
+  await expect(
+    creator.locator(".ttml-word", { hasText: "jasuto" }),
+  ).toHaveCount(1);
+  await expect(
+    creator.locator(".ttml-word", { hasText: "jasuto" }),
+  ).toHaveAttribute("title", "just");
+});
+
+test("Now playing lyrics card folds while the TTML Creator is open", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const card = page.locator(".now-playing .lyric-preview");
+  await expect(card).not.toHaveClass(/\bcollapsed\b/);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const creator = page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true });
+  await creator.click();
+  await expect(card).toHaveClass(/\bcollapsed\b/);
+  await card.getByTitle("Show lyrics").click();
+  await expect(card).not.toHaveClass(/\bcollapsed\b/);
+  await card.getByTitle("Hide lyrics").click();
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.npv-lyrics-card")),
+  ).not.toContain('"open":false');
+});
+
+test("TTML Creator Sync follows the playing line", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const list = creator.locator(".ttml-lines");
+  const box = (await list.boundingBox())!;
+  const grip = (await creator
+    .locator(".ttml-card-number")
+    .first()
+    .boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 20, grip.y + 30, { steps: 4 });
+  await page.mouse.move(box.x + 100, box.y + box.height - 4, { steps: 4 });
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(200);
+  await page.mouse.up();
+
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await page.evaluate(() => {
+    (window as any).__clientTest.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: true,
+        progress_ms: 70_500,
+        shuffle_state: false,
+        repeat_state: "track",
+        device: { name: "Lyssna (test)", id: "local-device", is_active: true },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          artists: [
+            { id: "a", name: "Juice WRLD" },
+            { id: "b", name: "Marshmello" },
+          ],
+          album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+          duration_ms: 180000,
+        },
+      },
+    });
+  });
+  const playing = creator.locator(".ttml-line.playing");
+  await expect(playing).toHaveAttribute("data-line", "20");
+  await expect(playing).toBeInViewport();
+  await expect(
+    creator.locator('.ttml-line[data-line="0"]'),
+  ).not.toBeInViewport();
+});
+
+test("TTML Creator selects a Sync line by its blank space and centres it in Lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  const row = creator.locator('.ttml-line[data-line="20"]');
+  await row.scrollIntoViewIfNeeded();
+  const cells = (await row.locator(".ttml-cells").boundingBox())!;
+  const list = creator.locator(".ttml-lines");
+  const scrolled = await list.evaluate((element) => element.scrollTop);
+  await page.mouse.click(cells.x + cells.width - 4, cells.y + 4);
+  await expect(row).toHaveClass(/\bcurrent\b/);
+  await expect(row.locator(".ttml-unit").first()).toHaveClass(/\bselected\b/);
+  const word = creator.locator('.ttml-line[data-line="21"] .ttml-unit').first();
+  await word.click();
+  await expect(word).toHaveClass(/\bselected\b/);
+  await page.waitForTimeout(500);
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(scrolled);
+
+  await creator.getByRole("tab", { name: "Lyrics" }).click();
+  await expect(creator.locator('.ttml-card[data-line="21"]')).toBeInViewport();
+  await expect(creator.locator('.ttml-card[data-line="21"]')).toHaveClass(
+    /\bcurrent\b/,
+  );
+  await expect(creator.locator(".ttml-card.current")).toHaveCount(1);
+  await expect(
+    creator.locator('.ttml-card[data-line="0"]'),
+  ).not.toBeInViewport();
+});
+
+test("TTML Creator changes several selected lines at once", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-card");
+  const total = await cards.count();
+  const number = (index: number) =>
+    cards.nth(index).locator(".ttml-card-number");
+  await number(1).click({ modifiers: ["Control"] });
+  await number(3).click({ modifiers: ["Shift"] });
+  const bar = creator.getByRole("toolbar", { name: "Selected lines" });
+  await expect(bar).toContainText("3 lines selected");
+  await number(5).click({ modifiers: ["Control"] });
+  await expect(bar).toContainText("4 lines selected");
+  await number(5).click({ modifiers: ["Control"] });
+  await expect(bar).toContainText("3 lines selected");
+  await expect(cards.nth(2)).toHaveClass(/\bpicked\b/);
+  await bar.getByRole("button", { name: "Background" }).click();
+  for (const index of [1, 2, 3])
+    await expect(cards.nth(index)).toHaveClass(/\bbackground\b/);
+  await expect(cards.nth(0)).not.toHaveClass(/\bbackground\b/);
+  await expect(cards.nth(4)).not.toHaveClass(/\bbackground\b/);
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(cards).toHaveCount(total - 3);
+  await expect(bar).toHaveCount(0);
+});
+
+test("TTML Creator imports and exports other lyric formats", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.qrc",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      "[1000,900]For (1000,300)ev(1300,200)er(1500,400)\n[2000,600](ooh)(2000,600)",
+    ),
+  });
+  const cards = creator.locator(".ttml-card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(1)).toHaveClass(/\bbackground\b/);
+  const spaces = cards.first().locator(".ttml-space");
+  await expect(spaces).toHaveCount(1);
+  await cards.first().locator(".ttml-chip.joined").dblclick();
+  await expect(creator.getByLabel("Edit word")).toHaveValue("er");
+  await page.keyboard.press("Escape");
+  await expect(spaces).toHaveCount(1);
+  const chips = cards.first().locator(".ttml-chip");
+  await chips.nth(1).click();
+  await expect(chips.nth(1)).toHaveClass(/\bchosen\b/);
+  await page.keyboard.press("Delete");
+  await expect(chips).toHaveText(["For", "er"]);
+  await expect(chips.nth(1)).not.toHaveClass(/\bjoined\b/);
+  await expect(chips.nth(1)).toHaveClass(/\bchosen\b/);
+  await page.keyboard.press("Control+z");
+  await expect(chips).toHaveText(["For", "ev", "er"]);
+  await creator.getByRole("tab", { name: "Sync" }).click();
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+
+  await creator.getByTitle("Save lyrics file").click();
+  const saved = page.waitForEvent("download");
+  await creator.getByRole("menuitem", { name: "Lyricify Syllable" }).click();
+  const download = await saved;
+  expect(download.suggestedFilename()).toBe(
+    "Come & Go (with Marshmello) - Juice WRLD, Marshmello.lys",
+  );
+});
+
+test("TTML Creator saves drafts with a time and keeps versions", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const card = creator.locator(".ttml-card").first();
+  await expect(card.locator(".ttml-chip").first()).toHaveText("I");
+  await expect(creator.locator(".ttml-saved")).toHaveText("Not saved yet");
+  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
+  await card.getByLabel("Edit word").fill("song");
+  await card.getByLabel("Edit word").press("Enter");
+  await expect(creator.locator(".ttml-saved")).toHaveText(/^Saved \d/);
+
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(creator).toHaveCount(0);
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(creator.getByRole("tab", { name: "Sync" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(creator.locator(".ttml-word", { hasText: "song" })).toHaveCount(
+    1,
+  );
+  await expect(creator.locator(".ttml-saved")).toHaveText(/^Saved \d/);
+
+  await creator.getByTitle("Saves and earlier versions").click();
+  const saves = page.getByRole("dialog", { name: "TTML saves" });
+  await expect(saves.locator("li")).toHaveCount(2);
+  await expect(saves).toContainText("Come & Go (with Marshmello)");
+  await saves.getByRole("button", { name: "Restore" }).click();
+  await expect(saves).toHaveCount(0);
+  await expect(page.getByText(/Restored the save from/)).toBeVisible();
 });

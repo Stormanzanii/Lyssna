@@ -62,6 +62,7 @@ import {
   Copy,
   Plus,
   Users,
+  FilePenLine,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { isJamLink } from "./jam-link";
@@ -109,6 +110,7 @@ import type {
   HomeItem,
   AppEvent,
   Profile,
+  Lyrics,
 } from "./types";
 import {
   Ambience,
@@ -209,6 +211,7 @@ import {
 import { useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
+import { TtmlCreator } from "./ttml-creator";
 import { libraryTree, type LibraryEntry } from "./library-tree";
 import {
   entryAdded,
@@ -245,7 +248,7 @@ const isTextInput = (target: EventTarget | null) =>
   (!!target.closest('textarea,select,[contenteditable="true"]') ||
     (target instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(target.type)));
 
-type Center = "browse" | "lyrics" | "profile";
+type Center = "browse" | "lyrics" | "profile" | "ttml";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
   id: string;
@@ -634,6 +637,15 @@ function App() {
       dispatch({ type: "notice", message, error }),
     [],
   );
+  useEffect(() => {
+    if (center === "ttml" && !state.settings.ttml_creator) setCenter("lyrics");
+  }, [center, state.settings.ttml_creator]);
+  const setSpeed = useCallback(async (rate: number) => {
+    const percent = await rpc<number>("playback_speed", {
+      percent: Math.round(rate * 100),
+    });
+    dispatch({ type: "playback_rate", rate: percent / 100 });
+  }, []);
   const djReminder = useMemo(
     () =>
       createDJReminder({
@@ -3179,7 +3191,51 @@ function App() {
         <main
           className={`center-panel ${center === "lyrics" ? "showing-lyrics" : ""}`}
         >
-          {center === "lyrics" ? (
+          {center === "ttml" ? (
+            <TtmlCreator
+              state={state}
+              onPlayer={play}
+              onToggle={toggle}
+              onSpeed={setSpeed}
+              renderPreview={(lyrics) => (
+                <LyricsPage
+                  state={{ ...state, lyrics, lyric_error: "" }}
+                  onCanvasActive={setCanvasInLyrics}
+                  immersive={immersive}
+                  onPlayer={play}
+                  onAlbum={openAlbum}
+                  onArtist={openArtist}
+                  onImport={() => {}}
+                  onRetry={() => {}}
+                  onSave={save}
+                />
+              )}
+              notify={notify}
+              onParse={(filename, contents, durationMs) =>
+                rpc<Lyrics>("parse_lyric_file", {
+                  filename,
+                  contents,
+                  durationMs,
+                })
+              }
+              onApply={(filename, contents) =>
+                rpc("import_lyrics", {
+                  filename,
+                  contents,
+                  mode: "persistent",
+                }).then(
+                  () => {
+                    notify("Lyrics saved for this song.");
+                    return true;
+                  },
+                  (error) => {
+                    notify(String(error), true);
+                    return false;
+                  },
+                )
+              }
+            />
+          ) : center === "lyrics" ? (
             <LyricsPage
               state={state}
               onCanvasActive={setCanvasInLyrics}
@@ -4538,6 +4594,7 @@ function App() {
                 onQueue={() => setPanel("queue")}
                 onFollow={follow}
                 onSave={save}
+                foldLyrics={center === "ttml"}
                 showLyricsPreview={
                   center !== "lyrics" &&
                   !state.settings.lyrics_hide_npv &&
@@ -4575,6 +4632,12 @@ function App() {
         onArtist={openArtist}
         onSave={save}
         onLyrics={() => setCenter(center === "lyrics" ? "browse" : "lyrics")}
+        onTtml={
+          state.settings.ttml_creator
+            ? () => setCenter(center === "ttml" ? "lyrics" : "ttml")
+            : undefined
+        }
+        ttmlActive={center === "ttml"}
         onQueue={toggleQueue}
         onDevices={() => {
           setDeviceMenu(!deviceMenu);
@@ -5723,6 +5786,8 @@ function PlayerBar({
   onArtist,
   onSave,
   onLyrics,
+  onTtml,
+  ttmlActive,
   onQueue,
   onDevices,
   onSidebar,
@@ -5739,6 +5804,8 @@ function PlayerBar({
   onArtist: (artist: Artist) => void;
   onSave: (track: Track) => void;
   onLyrics: () => void;
+  onTtml?: () => void;
+  ttmlActive: boolean;
   onQueue: () => void;
   onDevices: () => void;
   onSidebar: () => void;
@@ -5910,6 +5977,15 @@ function PlayerBar({
             onRefresh={() => onPlayer({ command: "dj" })}
             onHold={onDJRequest}
           />
+        )}
+        {onTtml && (
+          <button
+            className={`icon-button ttml-button ${ttmlActive ? "active" : ""}`}
+            title="TTML Creator"
+            onClick={onTtml}
+          >
+            <FilePenLine size={19} />
+          </button>
         )}
         <button
           className={`icon-button ${lyricsActive ? "active" : ""}`}

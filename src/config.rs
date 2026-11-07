@@ -215,6 +215,7 @@ pub struct Settings {
     pub lyrics_hide_artwork: bool,
     pub lyrics_artwork_right: bool,
     pub lyrics_compact: bool,
+    pub ttml_creator: bool,
     /// The lyrics toolbar sits at the bottom of the page instead of the top.
     pub lyrics_toolbar_bottom: bool,
     /// Lyrics display options from Spicy Lyrics' settings panel.
@@ -374,6 +375,7 @@ impl Default for Settings {
             lyrics_hide_artwork: false,
             lyrics_artwork_right: false,
             lyrics_compact: false,
+            ttml_creator: false,
             lyrics_toolbar_bottom: false,
             lyrics_right_align: false,
             lyrics_flip_duet: false,

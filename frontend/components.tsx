@@ -459,10 +459,20 @@ export const TrackTitle = memo(function TrackTitle({
 
 export function usePosition(
   state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
-    Partial<Pick<AppState, "local_device_name">>,
+    Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
+) {
+  return usePlaybackClock(state).position;
+}
+
+export function usePlaybackClock(
+  state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
+    Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
 ) {
   const clock = useRef(new PlaybackClock());
   const [time, setTime] = useState(performance.now());
+  const native = state.local_device_name
+    ? state.playback.device.name === state.local_device_name
+    : true;
   const now = performance.now();
   clock.current.observe(
     state.playback,
@@ -470,9 +480,8 @@ export function usePosition(
     state.clock_revision,
     now,
     Date.now(),
-    state.local_device_name
-      ? state.playback.device.name === state.local_device_name
-      : true,
+    native,
+    native ? (state.playback_rate ?? 1) : 1,
   );
   useEffect(() => {
     setTime(performance.now());
@@ -489,7 +498,8 @@ export function usePosition(
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [state.playback.is_playing]);
-  return clock.current.read(Math.max(time, now));
+  const read = useCallback(() => clock.current.read(performance.now()), []);
+  return { position: clock.current.read(Math.max(time, now)), read };
 }
 
 /** Seek Fade-in Compensation from Spicy Lyrics: a clicked lyric starts
@@ -1229,21 +1239,33 @@ function LyricsCard({
   onPlayer,
   onLyrics,
   onExpand,
+  folded = false,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onLyrics: () => void;
   onExpand: (expanded: boolean) => void;
+  folded?: boolean;
 }) {
-  const [view, setView] = useState(savedCardView);
+  const [saved, setSaved] = useState(savedCardView);
+  // While the TTML Creator is open the card folds without forgetting the
+  // layout the listener chose; changes made meanwhile last until it closes.
+  const [visit, setVisit] = useState<LyricsCardView | null>(
+    folded ? { open: false, expanded: false } : null,
+  );
+  useEffect(() => {
+    setVisit(folded ? { open: false, expanded: false } : null);
+  }, [folded]);
+  const view = visit ?? saved;
+  const setView = visit ? setVisit : setSaved;
   const expanded = view.open && view.expanded;
   useEffect(() => {
     try {
-      localStorage.setItem(LYRICS_CARD_KEY, JSON.stringify(view));
+      localStorage.setItem(LYRICS_CARD_KEY, JSON.stringify(saved));
     } catch {
       // A remembered layout is a convenience; the card works without it.
     }
-  }, [view]);
+  }, [saved]);
   useEffect(() => {
     onExpand(expanded);
     return () => onExpand(false);
@@ -2134,6 +2156,7 @@ export function NowPlaying({
   onFollow,
   onSave,
   showLyricsPreview,
+  foldLyrics,
   canvasInLyrics = false,
 }: {
   state: AppState;
@@ -2143,6 +2166,7 @@ export function NowPlaying({
   onFollow: (artist: Artist) => void;
   onSave: (track: Track) => void;
   showLyricsPreview: boolean;
+  foldLyrics?: boolean;
   canvasInLyrics?: boolean;
 } & Links) {
   const track = state.playback.item;
@@ -2294,6 +2318,7 @@ export function NowPlaying({
                 onPlayer={onPlayer}
                 onLyrics={onLyrics}
                 onExpand={setLyricsExpanded}
+                folded={foldLyrics}
               />
             )}
             {artist && (

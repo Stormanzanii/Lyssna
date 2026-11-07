@@ -51,6 +51,7 @@ pub mod search;
 pub mod soloist;
 pub mod soloist_link;
 pub mod spotify;
+mod time_stretch;
 pub mod track_facts;
 #[cfg(feature = "legacy-ui")]
 pub mod ui;

@@ -21,6 +21,14 @@ const SAMPLE_RATE: u32 = 44_100;
 const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000;
 /// How long a playing output may take no samples before it counts as stuck.
 const OUTPUT_STALL: Duration = Duration::from_secs(2);
+pub(crate) fn set_playback_speed(percent: u32) -> u32 {
+    let percent = percent.clamp(25, 200);
+    librespot_playback::player::PLAYBACK_RATE_PERCENT.store(percent, Ordering::Relaxed);
+    percent
+}
+pub(crate) fn playback_speed() -> u32 {
+    librespot_playback::player::PLAYBACK_RATE_PERCENT.load(Ordering::Relaxed)
+}
 
 #[derive(Clone, Default)]
 pub struct AudioBuffer {
@@ -82,8 +90,9 @@ impl AudioBuffer {
     pub fn narrating(&self) -> bool {
         self.narration.load(Ordering::Acquire)
     }
+    // Queued samples play at the current speed, so they hold more song time.
     pub fn latency_ms(&self) -> u64 {
-        (self.queued.load(Ordering::Relaxed) as u64) * 1000
+        (self.queued.load(Ordering::Relaxed) as u64) * 10 * u64::from(playback_speed())
             / (u64::from(SAMPLE_RATE) * u64::from(CHANNELS))
     }
 }
@@ -101,6 +110,7 @@ pub struct AudioSink {
     generation: usize,
     track_uri: Option<String>,
     crossfade: Crossfade,
+    stretch: crate::time_stretch::TimeStretch,
 }
 /// The end of one song, held back and mixed into the start of the next.
 #[derive(Default)]
@@ -147,6 +157,7 @@ impl AudioSink {
             generation: buffer.generation.load(Ordering::Acquire),
             track_uri: None,
             crossfade: Crossfade::default(),
+            stretch: crate::time_stretch::TimeStretch::new(),
             buffer: buffer.clone(),
             mixer: None,
             stream: None,
@@ -195,6 +206,7 @@ impl AudioSink {
         {
             sink.stop();
             self.crossfade.clear();
+            self.stretch.reset();
             if let Some(generation) = self.buffer.select_track(self.track_uri.as_deref()) {
                 self.generation = generation;
             }
@@ -226,6 +238,7 @@ impl Sink for AudioSink {
         self.crossfade.tail.clear();
         self.crossfade.mixed = 0;
         self.crossfade.remaining_ms = None;
+        self.stretch.reset();
         #[cfg(not(test))]
         if !self.crossfade.fading.is_empty() {
             let ms = self.crossfade.fading.len() as u64 * 1000
@@ -253,6 +266,7 @@ impl Sink for AudioSink {
             sink.stop();
         }
         self.crossfade.clear();
+        self.stretch.reset();
         Ok(())
     }
     fn pause(&mut self) -> SinkResult<()> {
@@ -306,6 +320,17 @@ impl Sink for AudioSink {
 
 impl AudioSink {
     fn append(&mut self, samples: Vec<f32>, narration: bool) -> SinkResult<()> {
+        let rate = f64::from(playback_speed()) / 100.0;
+        let samples = if rate == 1.0 {
+            if self.stretch.rate() != 1.0 {
+                self.stretch.reset();
+                self.stretch.set_rate(1.0);
+            }
+            samples
+        } else {
+            self.stretch.set_rate(rate);
+            self.stretch.process(&samples)
+        };
         let sink = self
             .sink
             .as_ref()

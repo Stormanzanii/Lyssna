@@ -55,6 +55,17 @@ const LOAD_HANDLES_POISON_MSG: &str = "load handles mutex should not be poisoned
 
 pub type PlayerResult = Result<(), Error>;
 
+/// Output speed in percent, set by a sink that time-stretches; slowed audio is not lag.
+pub static PLAYBACK_RATE_PERCENT: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(100);
+fn playback_rate() -> f64 {
+    f64::from(
+        PLAYBACK_RATE_PERCENT
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .clamp(25, 200),
+    ) / 100.0
+}
+
 #[path = "audio_analysis.rs"]
 mod audio_analysis;
 pub use audio_analysis::{AudioEnvelope, audio_envelope};
@@ -1723,6 +1734,9 @@ impl Future for PlayerInternal {
                                                             .checked_duration_since(
                                                                 reported_nominal_start_time,
                                                             )
+                                                            .map(|elapsed| {
+                                                                elapsed.mul_f64(playback_rate())
+                                                            })
                                                         {
                                                             if let Some(lag) =
                                                                 lag.checked_sub(new_stream_position)
@@ -1737,8 +1751,9 @@ impl Future for PlayerInternal {
                                                 };
 
                                             if notify_about_position {
-                                                *reported_nominal_start_time =
-                                                    now.checked_sub(new_stream_position);
+                                                *reported_nominal_start_time = now.checked_sub(
+                                                    new_stream_position.div_f64(playback_rate()),
+                                                );
                                                 self.send_event(PlayerEvent::PositionCorrection {
                                                     play_request_id,
                                                     track_id: track_id.clone(),

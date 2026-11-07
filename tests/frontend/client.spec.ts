@@ -15040,6 +15040,18 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await add.pressSequentially("y");
   await add.press("Enter");
   await expect(first.locator(".ttml-chip").last()).toHaveClass(/joined/);
+  // The plus adds a blank line holding only Type word here.
+  const count = await creator.locator(".ttml-card").count();
+  await first.getByRole("button", { name: "Add line below" }).click();
+  await expect(creator.locator(".ttml-card")).toHaveCount(count + 1);
+  const blank = creator.locator(".ttml-card").nth(1);
+  await expect(blank.locator(".ttml-chip")).toHaveCount(0);
+  await expect(creator.getByPlaceholder("New line, then Enter")).toHaveCount(0);
+  const blankAdd = blank.getByPlaceholder("Type word here");
+  await expect(blankAdd).toBeFocused();
+  await blankAdd.fill("fresh");
+  await blankAdd.press("Enter");
+  await expect(blank.locator(".ttml-chip")).toHaveText(["fresh"]);
 });
 
 test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
@@ -15076,6 +15088,23 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await word("I").click();
   await word("a").click({ modifiers: ["Shift"] });
   await expect(card.locator(".ttml-chip.chosen")).toHaveText(["I", "am", "a"]);
+  await expect(card.locator(".ttml-space.chosen")).toHaveCount(2);
+  await word("I").click();
+  await word("am").click({ modifiers: ["Control"] });
+  await card
+    .locator(".ttml-space")
+    .nth(3)
+    .click({ modifiers: ["Control"] });
+  await page.keyboard.press("Delete");
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "just lyric a line number 1".split(" "),
+  );
+  await page.keyboard.press("Control+z");
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "just lyric I am a line number 1".split(" "),
+  );
+  await word("I").click();
+  await word("a").click({ modifiers: ["Shift"] });
   await word("I").dragTo(word("1"));
   await expect(card.locator(".ttml-chip")).toHaveText(
     "just lyric line number I am a 1".split(" "),

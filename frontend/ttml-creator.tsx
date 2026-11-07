@@ -52,7 +52,7 @@ import {
   fileName,
   formatTime,
   fromLyrics,
-  insertLines,
+  insertBlankLine,
   keepTimings,
   lineSpan,
   markEnd,
@@ -62,7 +62,7 @@ import {
   moveSpace,
   moveWord,
   moveWords,
-  removeSpaces,
+  deletePicked,
   applyRomanized,
   nextCursor,
   romanizeRequest,
@@ -447,6 +447,8 @@ export function TtmlCreator({
   chosenRef.current = chosen;
   // Word starts picked with Ctrl or Shift, dragged as one bunch.
   const [group, setGroup] = useState<Cursor[]>([]);
+  const groupRef = useRef(group);
+  groupRef.current = group;
   // Picked Space blocks, each named by the word after it.
   const [spaces, setSpaces] = useState<Cursor[]>([]);
   const spacesRef = useRef(spaces);
@@ -499,6 +501,7 @@ export function TtmlCreator({
           picked.push({ line, unit: index });
         });
       setGroup(picked);
+      setSpaces(picked.slice(1).filter((at) => at.unit > 0));
       return;
     }
     const has = base.some(
@@ -520,9 +523,22 @@ export function TtmlCreator({
     dragged.group
       ? moveWords(lines, dragged.group, to)
       : moveWord(lines, dragged.at, to);
-  const [adding, setAdding] = useState<{ card: number; after: number } | null>(
-    null,
-  );
+  // A new blank line's Type word here box takes focus once it renders.
+  const [focusLine, setFocusLine] = useState<number | null>(null);
+  const addBlankLine = (after: number) => {
+    setLines(insertBlankLine(lines, after));
+    setCursor({ line: after + 1, unit: 0 });
+    setFocusLine(after + 1);
+  };
+  useEffect(() => {
+    if (focusLine === null) return;
+    list.current
+      ?.querySelector<HTMLInputElement>(
+        `[data-line="${focusLine}"] .ttml-chip-add`,
+      )
+      ?.focus();
+    setFocusLine(null);
+  }, [focusLine, lines]);
   const applyText = (sync: boolean) => {
     const parsed = keepTimings(lines, parseText(text));
     setLines(parsed);
@@ -560,14 +576,19 @@ export function TtmlCreator({
         return;
       }
       const gaps = spacesRef.current;
+      const picked = groupRef.current;
       if (
-        gaps.length &&
+        (gaps.length || picked.length) &&
         !event.ctrlKey &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();
-        setLines(removeSpaces(stateRef.current.lines, gaps));
+        const next = deletePicked(stateRef.current.lines, picked, gaps);
+        setLines(next);
+        setCursor((cursor) => clampCursor(next, cursor));
+        setChosen(null);
         setSpaces([]);
+        setGroup([]);
         return;
       }
       if (!at || event.ctrlKey || event.altKey || event.metaKey) return;
@@ -916,14 +937,14 @@ export function TtmlCreator({
           label: "Insert new line before",
           run: () => {
             toCards();
-            setAdding({ card: at.line, after: at.line - 1 });
+            addBlankLine(at.line - 1);
           },
         },
         {
           label: "Insert new line after",
           run: () => {
             toCards();
-            setAdding({ card: at.line, after: at.line });
+            addBlankLine(at.line);
           },
         },
         {
@@ -1627,7 +1648,7 @@ export function TtmlCreator({
                 key={lineIndex}
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
-                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
+                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${line.units.length ? "" : " empty"}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onClick={() =>
                   setCursor((at) =>
                     at.line === lineIndex ? at : { line: lineIndex, unit: 0 },
@@ -1885,24 +1906,6 @@ export function TtmlCreator({
                       />
                     </label>
                   ))}
-                  {adding?.card === lineIndex && (
-                    <input
-                      className="ttml-card-add"
-                      aria-label="New line"
-                      placeholder="New line, then Enter"
-                      autoFocus
-                      onBlur={() => setAdding(null)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") setAdding(null);
-                        if (event.key !== "Enter") return;
-                        const value = event.currentTarget.value;
-                        const after = adding.after;
-                        setAdding(null);
-                        if (value.trim())
-                          setLines(insertLines(lines, after, value));
-                      }}
-                    />
-                  )}
                 </div>
                 <div className="ttml-line-tools">
                   <button
@@ -1939,9 +1942,7 @@ export function TtmlCreator({
                   <button
                     title="Add line below"
                     aria-label="Add line below"
-                    onClick={() =>
-                      setAdding({ card: lineIndex, after: lineIndex })
-                    }
+                    onClick={() => addBlankLine(lineIndex)}
                   >
                     <Plus size={14} />
                   </button>

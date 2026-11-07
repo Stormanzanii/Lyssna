@@ -597,6 +597,46 @@ export function insertLines(
   return [...lines.slice(0, after + 1), ...added, ...lines.slice(after + 1)];
 }
 
+/** Deletes the picked words and Space blocks in one go. */
+export function deletePicked(
+  lines: CreatorLine[],
+  words: Cursor[],
+  gaps: Cursor[],
+): CreatorLine[] {
+  const gone = new Set<CreatorUnit>();
+  for (const at of words) {
+    const units = lines[at.line]?.units ?? [];
+    const { start, end } = wordBounds(units, at.unit);
+    units.slice(start, end).forEach((unit) => gone.add(unit));
+  }
+  const joins = new Set(
+    gaps.flatMap((gap) => lines[gap.line]?.units[gap.unit] ?? []),
+  );
+  return lines
+    .map((line, index): CreatorLine => {
+      const { spaceAfter, ...rest } = line;
+      const units = line.units
+        .filter((unit) => !gone.has(unit))
+        .map((unit, position) =>
+          position && joins.has(unit) ? { ...unit, joined: true } : unit,
+        );
+      if (units[0]?.joined) units[0] = { ...units[0], joined: false };
+      const next: CreatorLine = { ...rest, units };
+      const trailing = gaps.some(
+        (gap) => gap.line === index && gap.unit === line.units.length,
+      );
+      if (spaceAfter && !trailing) next.spaceAfter = true;
+      return next;
+    })
+    .filter((line, index) => line.units.length || !lines[index].units.length);
+}
+
+export const insertBlankLine = (lines: CreatorLine[], after: number) => [
+  ...lines.slice(0, after + 1),
+  { units: [], background: false, opposite: false },
+  ...lines.slice(after + 1),
+];
+
 export const removeLine = (lines: CreatorLine[], index: number) =>
   lines.filter((_, position) => position !== index);
 

@@ -24,6 +24,8 @@ import {
   moveWord,
   moveWords,
   removeSpaces,
+  insertBlankLine,
+  deletePicked,
   nextCursor,
   parseText,
   problems,
@@ -284,6 +286,30 @@ describe("TTML Creator card editing", () => {
     expect(removeSpaces(lines, [{ line: 0, unit: 1 }])[0].spaceAfter).toBe(
       true,
     );
+  });
+
+  it("adds a blank line that takes typed words and stays out of exports", () => {
+    const lines = insertBlankLine(timeAll("one\ntwo"), 0);
+    expect(lines[1].units).toEqual([]);
+    expect(toLyrics(lines).lines).toHaveLength(2);
+    expect(words(appendWords(lines, 1, "new"))[1]).toBe("new");
+  });
+
+  it("deletes picked words and spaces together", () => {
+    const lines = parseText("yo when are\nlast");
+    expect(
+      words(
+        deletePicked(lines, [{ line: 0, unit: 0 }], [{ line: 0, unit: 1 }]),
+      ),
+    ).toEqual(["when are", "last"]);
+    expect(
+      words(
+        deletePicked(lines, [{ line: 0, unit: 0 }], [{ line: 0, unit: 2 }]),
+      ),
+    ).toEqual(["when|are", "last"]);
+    expect(words(deletePicked(lines, [{ line: 1, unit: 0 }], []))).toEqual([
+      "yo when are",
+    ]);
   });
 
   it("adds typed words to the end of a line", () => {

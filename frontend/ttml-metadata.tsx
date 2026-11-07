@@ -182,7 +182,11 @@ export function MetadataDialog({
         aria-label="Song metadata"
         onClick={(event) => {
           event.stopPropagation();
-          if (!(event.target as Element).closest(".ttml-meta-add"))
+          if (
+            !(event.target as Element).closest(
+              ".ttml-meta-add, .ttml-meta-picker",
+            )
+          )
             setAdding(false);
         }}
         onKeyDown={(event) => event.key === "Escape" && onClose()}
@@ -223,6 +227,41 @@ export function MetadataDialog({
             </div>
           )}
         </div>
+        {adding && (
+          <div
+            className="ttml-meta-picker"
+            role="menu"
+            aria-label="Add a field"
+          >
+            {GROUPS.map(([title, keys]) => (
+              <div key={title} className="ttml-meta-picker-group">
+                <span>{title}</span>
+                <div>
+                  {keys.map((key) => (
+                    <button
+                      key={key}
+                      role="menuitem"
+                      title={key}
+                      onClick={() => addField(key)}
+                    >
+                      <Plus size={13} />
+                      {LABELS[key]?.label ?? key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="ttml-meta-picker-group">
+              <span>Other</span>
+              <div>
+                <button role="menuitem" onClick={() => addField("")}>
+                  <Plus size={13} />
+                  Custom key
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <footer className="ttml-meta-actions">
           <span className="ttml-meta-add">
             <button
@@ -232,25 +271,13 @@ export function MetadataDialog({
             >
               <Plus size={14} />
               Add field
-              <ChevronDown size={14} />
+              <ChevronDown
+                size={14}
+                className={
+                  adding ? "ttml-meta-chevron open" : "ttml-meta-chevron"
+                }
+              />
             </button>
-            {adding && (
-              <div className="ttml-meta-menu" role="menu">
-                {META_KEYS.map((key) => (
-                  <button
-                    key={key}
-                    role="menuitem"
-                    onClick={() => addField(key)}
-                  >
-                    {LABELS[key]?.label ?? key}
-                    <code>{key}</code>
-                  </button>
-                ))}
-                <button role="menuitem" onClick={() => addField("")}>
-                  Custom key…
-                </button>
-              </div>
-            )}
           </span>
           <button onClick={addStandard}>Add all standard fields</button>
           <span className="ttml-meta-spacer" />

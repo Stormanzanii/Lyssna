@@ -196,8 +196,8 @@ export function MetadataDialog({
             <h3>Metadata</h3>
             <p>
               {filled
-                ? `${filled} field${filled === 1 ? "" : "s"} · saved into the TTML for the AMLL TTML DB`
-                : "Saved into the TTML for the AMLL TTML DB"}
+                ? `${filled} field${filled === 1 ? "" : "s"} · saved into the TTML file`
+                : "Saved into the TTML file"}
             </p>
           </div>
           <button

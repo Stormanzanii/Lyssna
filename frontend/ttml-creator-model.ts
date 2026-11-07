@@ -25,6 +25,7 @@ export interface SongMeta {
   album?: string;
   spotifyId?: string;
   durationMs?: number;
+  songwriters?: string[];
 }
 export interface MetaEntry {
   key: string;
@@ -55,6 +56,7 @@ export function defaultMetadata(
   const known: Record<string, string[]> = {
     musicName: meta.name ? [meta.name] : [],
     artists: meta.artists,
+    songwriters: meta.songwriters ?? [],
   };
   for (const entry of author)
     if (AUTHOR_KEYS.includes(entry.key)) known[entry.key] = entry.values;

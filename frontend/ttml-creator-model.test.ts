@@ -382,7 +382,7 @@ describe("TTML Creator word menu", () => {
 
 describe("TTML Creator metadata", () => {
   it("starts from the song and the remembered author", () => {
-    const entries = defaultMetadata(meta, [
+    const entries = defaultMetadata({ ...meta, songwriters: ["W"] }, [
       { key: "ttmlAuthorGithubLogin", values: ["someone"] },
       { key: "isrc", values: ["ignored"] },
     ]);
@@ -390,6 +390,7 @@ describe("TTML Creator metadata", () => {
       entries.find((entry) => entry.key === key)?.values;
     expect(values("musicName")).toEqual(["Song & <Co>"]);
     expect(values("artists")).toEqual(["A", "B"]);
+    expect(values("songwriters")).toEqual(["W"]);
     expect(values("ttmlAuthorGithubLogin")).toEqual(["someone"]);
     expect(values("isrc")).toEqual([]);
   });

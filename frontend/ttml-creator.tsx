@@ -193,6 +193,7 @@ const meta = (track: Track): SongMeta => ({
   album: track.album?.name,
   spotifyId: track.id,
   durationMs: track.duration_ms,
+  songwriters: track.songwriters,
 });
 
 function TimePill({ ms, end }: { ms?: number; end?: boolean }) {

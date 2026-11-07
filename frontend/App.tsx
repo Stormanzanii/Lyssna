@@ -110,6 +110,7 @@ import type {
   HomeItem,
   AppEvent,
   Profile,
+  Lyrics,
 } from "./types";
 import {
   Ambience,
@@ -3209,6 +3210,13 @@ function App() {
                 />
               )}
               notify={notify}
+              onParse={(filename, contents, durationMs) =>
+                rpc<Lyrics>("parse_lyric_file", {
+                  filename,
+                  contents,
+                  durationMs,
+                })
+              }
               onApply={(filename, contents) =>
                 rpc("import_lyrics", {
                   filename,

@@ -15108,6 +15108,44 @@ test("TTML Creator changes several selected lines at once", async ({
   await expect(bar).toHaveCount(0);
 });
 
+test("TTML Creator imports and exports other lyric formats", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.qrc",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      "[1000,900]For (1000,300)ev(1300,200)er(1500,400)\n[2000,600](ooh)(2000,600)",
+    ),
+  });
+  const cards = creator.locator(".ttml-card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(1)).toHaveClass(/\bbackground\b/);
+  await creator.getByRole("tab", { name: "Sync" }).click();
+  await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
+
+  await creator.getByTitle("Save lyrics file").click();
+  const saved = page.waitForEvent("download");
+  await creator.getByRole("menuitem", { name: "Lyricify Syllable" }).click();
+  const download = await saved;
+  expect(download.suggestedFilename()).toBe(
+    "Juice WRLD, Marshmello - Come & Go (with Marshmello).lys",
+  );
+});
+
 test("TTML Creator saves drafts with a time and keeps versions", async ({
   page,
 }) => {

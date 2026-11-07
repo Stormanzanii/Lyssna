@@ -962,3 +962,29 @@
   color: #1ed760;
   font-size: 12px;
 }
+.ttml-import {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: #f3f3f3;
+  background: #ffffff12;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ttml-import:hover {
+  background: #ffffff21;
+}
+.ttml-export {
+  position: relative;
+}
+.ttml-export .ttml-meta-menu {
+  top: calc(100% + 6px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  min-width: 220px;
+}

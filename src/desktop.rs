@@ -2782,6 +2782,23 @@ fn import_lyrics(
         })
         .map_err(error)
 }
+#[tauri::command]
+fn parse_lyric_file(
+    filename: String,
+    contents: String,
+    duration_ms: u64,
+) -> std::result::Result<crate::lyrics::Lyrics, String> {
+    if contents.len() > 2_000_000 {
+        return Err("Lyric file exceeds 2 MB".into());
+    }
+    let lower = filename.to_ascii_lowercase();
+    if lower.ends_with(".lrc") {
+        crate::lyrics::parse_lrc(&contents, duration_ms)
+    } else {
+        crate::lyrics::parse_ttml(&contents, duration_ms)
+    }
+    .map_err(|problem| format!("{problem:#}"))
+}
 /// Drop any imported lyrics for the playing song and load the provider's.
 #[tauri::command]
 fn reset_lyrics(state: State<'_, Desktop>) -> std::result::Result<(), String> {
@@ -4874,6 +4891,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             save_musixmatch_token,
             renew_musixmatch_token,
             import_lyrics,
+            parse_lyric_file,
             reset_lyrics,
             saved_lyrics,
             saved_lyrics_file,
@@ -5128,6 +5146,20 @@ mod tests {
             uri("https://example.com/track/4uLU6hMCjMI75M1A2tKUQC"),
             None
         );
+    }
+    #[test]
+    fn lyric_files_parse_by_extension_for_the_ttml_creator() {
+        let lrc = parse_lyric_file("song.LRC".into(), "[00:01.00]Hello".into(), 5000).unwrap();
+        assert_eq!(lrc.lines[0].text, "Hello");
+        assert_eq!(lrc.lines[0].start_ms, 1000);
+        let ttml = parse_lyric_file(
+            "song.ttml".into(),
+            r#"<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:02.000" end="00:03.000">Hi</p></div></body></tt>"#.into(),
+            5000,
+        )
+        .unwrap();
+        assert_eq!(ttml.lines[0].start_ms, 2000);
+        assert!(parse_lyric_file("song.ttml".into(), "not xml".into(), 5000).is_err());
     }
     #[test]
     fn creator_profiles_carry_the_app_typeface() {

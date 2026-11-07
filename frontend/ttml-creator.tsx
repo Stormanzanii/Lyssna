@@ -23,6 +23,7 @@ import {
   Tags,
   Trash2,
   Type,
+  Upload,
   Languages,
   Undo2,
   Wand2,
@@ -83,6 +84,24 @@ import {
 } from "./ttml-creator-model";
 import { romanizeAway } from "./romanization";
 import { MetadataDialog } from "./ttml-metadata";
+import {
+  type ExportFormat,
+  type WordFormat,
+  EXPORT_FORMATS,
+  WORD_FORMATS,
+  exportLyrics,
+  formatOf,
+  parseWordFormat,
+} from "./ttml-formats";
+
+const FORMAT_NAMES: Record<ExportFormat | "ttml", string> = {
+  ttml: "TTML",
+  lrc: "LRC (lines only)",
+  qrc: "QRC",
+  yrc: "YRC",
+  lys: "Lyricify Syllable",
+  eslrc: "ESLyric",
+};
 import {
   type KeyAction,
   type KeyMap,
@@ -204,6 +223,7 @@ export function TtmlCreator({
   onToggle,
   onSpeed,
   onApply,
+  onParse,
   notify,
   renderPreview,
 }: {
@@ -212,6 +232,11 @@ export function TtmlCreator({
   onToggle: () => void;
   onSpeed: (rate: number) => Promise<void>;
   onApply: (filename: string, ttml: string) => Promise<boolean>;
+  onParse: (
+    filename: string,
+    contents: string,
+    durationMs: number,
+  ) => Promise<Lyrics>;
   notify: (message: string, error?: boolean) => void;
   renderPreview?: (lyrics: Lyrics) => ReactNode;
 }) {
@@ -987,16 +1012,53 @@ export function TtmlCreator({
     if (author.length) writeStorage(AUTHOR_KEY, JSON.stringify(author));
   };
 
-  const download = () => {
+  const [exporting, setExporting] = useState(false);
+  const download = (format: ExportFormat | "ttml" = "ttml") => {
     if (!track) return;
+    setExporting(false);
     const link = document.createElement("a");
     link.href = URL.createObjectURL(
-      new Blob([ttml()], { type: "application/ttml+xml" }),
+      new Blob([format === "ttml" ? ttml() : exportLyrics(format, lines)], {
+        type: format === "ttml" ? "application/ttml+xml" : "text/plain",
+      }),
     );
-    link.download = fileName(meta(track));
+    link.download = fileName(meta(track)).replace(/\.ttml$/, `.${format}`);
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
   };
+  const importFile = async (file: File) => {
+    if (file.size > 2_000_000) return notify("Lyric file exceeds 2 MB", true);
+    const format = formatOf(file.name);
+    const source = await file.text();
+    try {
+      const parsed = (WORD_FORMATS as readonly string[]).includes(format)
+        ? parseWordFormat(format as WordFormat, source)
+        : fromLyrics(await onParse(file.name, source, track?.duration_ms ?? 0));
+      if (!parsed.length)
+        return notify(`No lyrics found in ${file.name}.`, true);
+      setLines(parsed);
+      setText(toText(parsed));
+      setCursor({ line: 0, unit: 0 });
+      notify(
+        `Imported ${parsed.length} line${parsed.length === 1 ? "" : "s"} from ${file.name}. Ctrl+Z undoes it.`,
+      );
+    } catch (error) {
+      notify(`Couldn't read ${file.name}: ${String(error)}`, true);
+    }
+  };
+  const importInput = (
+    <input
+      type="file"
+      hidden
+      accept=".ttml,.xml,.lrc,.qrc,.yrc,.lys,.eslrc"
+      aria-label="Lyric file to import"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) void importFile(file);
+      }}
+    />
+  );
   const copy = () =>
     void navigator.clipboard.writeText(ttml()).then(
       () => notify("TTML copied."),
@@ -1196,9 +1258,30 @@ export function TtmlCreator({
           <button onClick={copy} disabled={!done} title="Copy TTML">
             <Copy size={15} />
           </button>
-          <button onClick={download} disabled={!done} title="Save TTML file">
-            <Download size={15} />
-          </button>
+          <span className="ttml-export">
+            <button
+              onClick={() => setExporting(!exporting)}
+              disabled={!done}
+              title="Save lyrics file"
+              aria-expanded={exporting}
+            >
+              <Download size={15} />
+            </button>
+            {exporting && (
+              <div className="ttml-meta-menu" role="menu">
+                {(["ttml", ...EXPORT_FORMATS] as const).map((format) => (
+                  <button
+                    key={format}
+                    role="menuitem"
+                    onClick={() => download(format)}
+                  >
+                    {FORMAT_NAMES[format]}
+                    <code>.{format}</code>
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
           <button
             className="primary"
             onClick={apply}
@@ -1259,6 +1342,14 @@ export function TtmlCreator({
                 <Type size={15} />
                 Edit as text
               </button>
+              <label
+                className="ttml-import"
+                title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
+              >
+                <Upload size={15} />
+                Import file
+                {importInput}
+              </label>
               <button
                 className={wordRoman ? "active" : ""}
                 aria-pressed={wordRoman}
@@ -1596,6 +1687,14 @@ export function TtmlCreator({
               <Wand2 size={15} />
               Start from current lyrics
             </button>
+            <label
+              className="ttml-import"
+              title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
+            >
+              <Upload size={15} />
+              Import file
+              {importInput}
+            </label>
             <div className="ttml-row">
               {lines.length > 0 && (
                 <button onClick={() => applyText(false)}>Done</button>

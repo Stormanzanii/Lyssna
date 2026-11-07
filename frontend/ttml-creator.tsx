@@ -938,7 +938,14 @@ export function TtmlCreator({
     [reduceMotion],
   );
   useEffect(() => () => cancelAnimationFrame(glide.current), []);
+  // A line picked with the mouse is already in view; scrolling it to the
+  // middle would move the word away from the pointer.
+  const clickedLine = useRef(false);
   useEffect(() => {
+    if (clickedLine.current) {
+      clickedLine.current = false;
+      return;
+    }
     if (tab === "sync") centre(cursor.line);
   }, [cursor.line, tab, centre]);
   const centreOnLyrics = useRef<number | null>(null);
@@ -1873,8 +1880,10 @@ export function TtmlCreator({
                   if (
                     cursor.line !== lineIndex &&
                     !(event.target as Element).closest("button, input")
-                  )
+                  ) {
+                    clickedLine.current = true;
                     setCursor(clampCursor(lines, { line: lineIndex, unit: 0 }));
+                  }
                 }}
               >
                 <span className="ttml-card-number">{lineIndex + 1}</span>
@@ -1889,9 +1898,11 @@ export function TtmlCreator({
                       <button
                         key={unitIndex}
                         className={`ttml-unit${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : unit.start !== undefined ? " started" : ""}${selected ? " selected" : ""}${live ? " live" : ""}`}
-                        onClick={() =>
-                          setCursor({ line: lineIndex, unit: unitIndex })
-                        }
+                        onClick={() => {
+                          if (lineIndex !== cursor.line)
+                            clickedLine.current = true;
+                          setCursor({ line: lineIndex, unit: unitIndex });
+                        }}
                         onDoubleClick={() => {
                           if (unit.start === undefined) return;
                           holdLine.current = lineIndex;

@@ -15062,13 +15062,20 @@ test("TTML Creator selects a Sync line by its blank space and centres it in Lyri
   const row = creator.locator('.ttml-line[data-line="20"]');
   await row.scrollIntoViewIfNeeded();
   const cells = (await row.locator(".ttml-cells").boundingBox())!;
+  const list = creator.locator(".ttml-lines");
+  const scrolled = await list.evaluate((element) => element.scrollTop);
   await page.mouse.click(cells.x + cells.width - 4, cells.y + 4);
   await expect(row).toHaveClass(/\bcurrent\b/);
   await expect(row.locator(".ttml-unit").first()).toHaveClass(/\bselected\b/);
+  const word = creator.locator('.ttml-line[data-line="21"] .ttml-unit').first();
+  await word.click();
+  await expect(word).toHaveClass(/\bselected\b/);
+  await page.waitForTimeout(500);
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(scrolled);
 
   await creator.getByRole("tab", { name: "Lyrics" }).click();
-  await expect(creator.locator('.ttml-card[data-line="20"]')).toBeInViewport();
-  await expect(creator.locator('.ttml-card[data-line="20"]')).toHaveClass(
+  await expect(creator.locator('.ttml-card[data-line="21"]')).toBeInViewport();
+  await expect(creator.locator('.ttml-card[data-line="21"]')).toHaveClass(
     /\bcurrent\b/,
   );
   await expect(creator.locator(".ttml-card.current")).toHaveCount(1);

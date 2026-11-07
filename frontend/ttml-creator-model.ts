@@ -33,7 +33,8 @@ export interface MetaEntry {
 }
 
 // Key names as the AMLL TTML DB stores them. Songwriters come from the
-// song's credits and go to iTunesMetadata instead of an amll:meta tag.
+// song's credits plus any added by hand, and go to iTunesMetadata instead
+// of an amll:meta tag.
 export const META_KEYS = [
   "musicName",
   "artists",
@@ -46,7 +47,7 @@ export const META_KEYS = [
 ] as const;
 export const AUTHOR_KEYS = ["ttmlAuthorGithub", "ttmlAuthorGithubLogin"];
 /** Always the song's own; not editable. */
-export const SONG_KEYS = ["album", "spotifyId", "songwriters"];
+export const SONG_KEYS = ["album", "spotifyId"];
 
 export function defaultMetadata(
   meta: SongMeta,
@@ -797,7 +798,12 @@ export function toTtml(
       return `<p begin="${formatTime(begin)}" end="${formatTime(finish)}" ttm:agent="${agent}" itunes:key="L${index + 1}">${lead}${backgrounds}</p>`;
     })
     .join("");
-  const songwriters = filled(meta.songwriters ?? []);
+  const songwriters = filled([
+    ...(meta.songwriters ?? []),
+    ...entries
+      .filter((entry) => entry.key.trim() === "songwriters")
+      .flatMap((entry) => entry.values),
+  ]);
   const metadata = [
     `<ttm:agent type="person" xml:id="v1"/>`,
     opposite ? `<ttm:agent type="other" xml:id="v2"/>` : "",

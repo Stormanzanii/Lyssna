@@ -16,6 +16,10 @@ const LABELS: Record<
     hint: "Add other titles too, like the name in its original script.",
   },
   artists: { label: "Artist" },
+  songwriters: {
+    label: "Songwriter",
+    hint: "Added to the songwriters from the song's credits.",
+  },
   isrc: {
     label: "ISRC",
     hint: "One per region if the song has several.",
@@ -41,13 +45,12 @@ const LABELS: Record<
 };
 
 const GROUPS: [string, string[]][] = [
-  ["Song", ["musicName", "artists"]],
+  ["Song", ["musicName", "artists", "songwriters"]],
   ["Identifiers", ["isrc", "appleMusicId", "ncmMusicId", "qqMusicId"]],
   ["You", ["ttmlAuthorGithub", "ttmlAuthorGithubLogin"]],
 ];
 
-const isPreset = (key: string) =>
-  (META_KEYS as readonly string[]).includes(key);
+const isPreset = (key: string) => key in LABELS;
 
 export function MetadataDialog({
   entries,

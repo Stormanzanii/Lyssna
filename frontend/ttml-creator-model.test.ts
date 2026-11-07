@@ -403,7 +403,7 @@ describe("TTML Creator metadata", () => {
         { key: "musicName", values: ["Song", "曲", " ", "Song"] },
         { key: "isrc", values: ["USUM71703861", "GBUM71703861"] },
         { key: "qqMusicId", values: [""] },
-        { key: "songwriters", values: ["edited"] },
+        { key: "songwriters", values: ["Bo", "Cy"] },
         { key: "custom", values: ['x"y'] },
         { key: "spotifyId", values: ["edited"] },
         { key: "album", values: ["edited"] },
@@ -417,7 +417,7 @@ describe("TTML Creator metadata", () => {
     expect(ttml).not.toContain("qqMusicId");
     expect(ttml).not.toContain('key="artists"');
     expect(ttml).toContain(
-      "<songwriters><songwriter>Ann</songwriter><songwriter>Bo</songwriter></songwriters>",
+      "<songwriters><songwriter>Ann</songwriter><songwriter>Bo</songwriter><songwriter>Cy</songwriter></songwriters>",
     );
   });
 

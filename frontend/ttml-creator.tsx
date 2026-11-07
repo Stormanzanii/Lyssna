@@ -950,10 +950,13 @@ export function TtmlCreator({
   const [editingMeta, setEditingMeta] = useState(false);
   const changeMetadata = (next: MetaEntry[]) => {
     setMetadata(next);
-    writeStorage(
-      AUTHOR_KEY,
-      JSON.stringify(next.filter((entry) => AUTHOR_KEYS.includes(entry.key))),
+    const author = next.filter(
+      (entry) =>
+        AUTHOR_KEYS.includes(entry.key) &&
+        entry.values.some((value) => value.trim()),
     );
+    // Clearing one song's fields keeps the author for the next song.
+    if (author.length) writeStorage(AUTHOR_KEY, JSON.stringify(author));
   };
 
   const download = () => {

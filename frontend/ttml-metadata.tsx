@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ChevronDown, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { type MetaEntry, META_KEYS, metaProblem } from "./ttml-creator-model";
 
 const LABELS: Record<string, { label: string; hint?: string }> = {
@@ -7,9 +7,9 @@ const LABELS: Record<string, { label: string; hint?: string }> = {
     label: "Song title",
     hint: "Add other titles too, like the name in its original script.",
   },
-  artists: { label: "Artists" },
+  artists: { label: "Artist" },
   album: { label: "Album" },
-  songwriters: { label: "Songwriters" },
+  songwriters: { label: "Songwriter" },
   isrc: { label: "ISRC", hint: "One per region if the song has several." },
   spotifyId: { label: "Spotify ID" },
   appleMusicId: {
@@ -28,6 +28,9 @@ const LABELS: Record<string, { label: string; hint?: string }> = {
   },
 };
 
+const isPreset = (key: string) =>
+  (META_KEYS as readonly string[]).includes(key);
+
 export function MetadataDialog({
   entries,
   onChange,
@@ -39,27 +42,49 @@ export function MetadataDialog({
   onReset: () => void;
   onClose: () => void;
 }) {
-  const [newKey, setNewKey] = useState("");
-  const update = (index: number, entry: MetaEntry | null) =>
+  const [adding, setAdding] = useState(false);
+  const setValues = (index: number, values: string[]) =>
     onChange(
-      entry
-        ? entries.map((old, at) => (at === index ? entry : old))
-        : entries.filter((_, at) => at !== index),
+      entries
+        .map((entry, at) => (at === index ? { ...entry, values } : entry))
+        .filter((entry) => entry.values.length || isPreset(entry.key)),
     );
-  const key = newKey.trim();
-  const taken = entries.some((entry) => entry.key === key);
-  const addKey = () => {
-    if (!key || taken) return;
-    onChange([...entries, { key, values: [""] }]);
-    setNewKey("");
+  const addField = (key: string) => {
+    const index = key ? entries.findIndex((entry) => entry.key === key) : -1;
+    onChange(
+      index >= 0
+        ? entries.map((entry, at) =>
+            at === index ? { ...entry, values: [...entry.values, ""] } : entry,
+          )
+        : [...entries, { key, values: [""] }],
+    );
+    setAdding(false);
   };
+  const addStandard = () =>
+    onChange([
+      ...entries.map((entry) =>
+        isPreset(entry.key) && !entry.values.length
+          ? { ...entry, values: [""] }
+          : entry,
+      ),
+      ...META_KEYS.filter(
+        (key) => !entries.some((entry) => entry.key === key),
+      ).map((key) => ({ key, values: [""] })),
+    ]);
+  const rows = entries.flatMap((entry, index) =>
+    entry.values.map((value, at) => ({ entry, index, value, at })),
+  );
   return (
     <div className="ttml-dialog-backdrop" onClick={onClose}>
       <div
-        className="ttml-dialog ttml-saves ttml-metadata"
+        className="ttml-dialog ttml-metadata"
         role="dialog"
         aria-label="Song metadata"
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!(event.target as Element).closest(".ttml-meta-add"))
+            setAdding(false);
+        }}
         onKeyDown={(event) => event.key === "Escape" && onClose()}
       >
         <header>
@@ -68,113 +93,112 @@ export function MetadataDialog({
             <X size={16} />
           </button>
         </header>
-        <p className="ttml-hint">
-          Saved into the TTML the way the AMLL TTML DB reads it. Empty fields
-          are left out.
-        </p>
-        {entries.map((entry, index) => {
-          const preset = (META_KEYS as readonly string[]).includes(entry.key);
-          const info = LABELS[entry.key];
-          const values = entry.values.length ? entry.values : [""];
-          return (
-            <section key={preset ? entry.key : index} className="ttml-meta">
-              <h4>
-                {preset ? (
-                  <>
-                    {info?.label ?? entry.key} <code>{entry.key}</code>
-                  </>
-                ) : (
-                  <input
-                    aria-label="Key name"
-                    value={entry.key}
-                    onChange={(event) =>
-                      update(index, { ...entry, key: event.target.value })
-                    }
-                  />
-                )}
-              </h4>
-              {values.map((value, at) => {
-                const problem = metaProblem(entry.key, value);
-                return (
-                  <div key={at} className="ttml-meta-value">
+        <div className="ttml-meta-table">
+          <div className="ttml-meta-head">
+            <span>Key</span>
+            <span>Value</span>
+          </div>
+          {rows.length ? (
+            rows.map(({ entry, index, value, at }) => {
+              const info = LABELS[entry.key];
+              const name = info?.label ?? (entry.key || "Custom key");
+              const count = entry.values.length > 1 ? ` ${at + 1}` : "";
+              const problem = metaProblem(entry.key, value);
+              return (
+                <div key={`${index}:${at}`} className="ttml-meta-row">
+                  <div className="ttml-meta-key">
+                    {isPreset(entry.key) ? (
+                      <>
+                        <strong>{info?.label ?? entry.key}</strong>
+                        <code>{entry.key}</code>
+                      </>
+                    ) : (
+                      <input
+                        aria-label={`Key name ${index + 1}`}
+                        placeholder="Key name"
+                        value={entry.key}
+                        onChange={(event) =>
+                          onChange(
+                            entries.map((old, i) =>
+                              i === index
+                                ? { ...old, key: event.target.value }
+                                : old,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </div>
+                  <div className="ttml-meta-value">
                     <input
-                      aria-label={`${info?.label ?? entry.key} ${at + 1}`}
+                      aria-label={`${name}${count}`}
                       aria-invalid={!!problem}
+                      title={info?.hint}
                       value={value}
                       onChange={(event) =>
-                        update(index, {
-                          ...entry,
-                          values: values.map((old, i) =>
+                        setValues(
+                          index,
+                          entry.values.map((old, i) =>
                             i === at ? event.target.value : old,
                           ),
-                        })
+                        )
                       }
                     />
-                    {(values.length > 1 || value) && (
-                      <button
-                        aria-label={`Remove ${info?.label ?? entry.key} ${at + 1}`}
-                        onClick={() =>
-                          update(index, {
-                            ...entry,
-                            values: values.filter((_, i) => i !== at),
-                          })
-                        }
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
                     {problem && <small role="alert">{problem}</small>}
                   </div>
-                );
-              })}
-              <div className="ttml-row">
-                <button
-                  onClick={() =>
-                    update(index, { ...entry, values: [...values, ""] })
-                  }
-                >
-                  <Plus size={14} />
-                  Add another
-                </button>
-                {!preset && (
                   <button
-                    className="danger"
-                    aria-label={`Remove key ${entry.key}`}
-                    onClick={() => update(index, null)}
+                    aria-label={`Remove ${name}${count}`}
+                    onClick={() =>
+                      setValues(
+                        index,
+                        entry.values.filter((_, i) => i !== at),
+                      )
+                    }
                   >
-                    <Trash2 size={14} />
+                    <X size={14} />
                   </button>
-                )}
-              </div>
-              {info?.hint && <small className="ttml-hint">{info.hint}</small>}
-            </section>
-          );
-        })}
-        <section className="ttml-meta">
-          <h4>Other key</h4>
-          <div className="ttml-meta-value">
-            <input
-              aria-label="New key name"
-              placeholder="Key name"
-              value={newKey}
-              onChange={(event) => setNewKey(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && addKey()}
-            />
-            <button onClick={addKey} disabled={!key || taken}>
+                </div>
+              );
+            })
+          ) : (
+            <p className="ttml-meta-empty">No metadata</p>
+          )}
+        </div>
+        <footer className="ttml-meta-actions">
+          <span className="ttml-meta-add">
+            <button aria-expanded={adding} onClick={() => setAdding(!adding)}>
               <Plus size={14} />
-              Add key
+              Add field
+              <ChevronDown size={14} />
             </button>
-          </div>
-        </section>
-        <div className="ttml-dialog-row end">
+            {adding && (
+              <div className="ttml-meta-menu" role="menu">
+                {META_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    role="menuitem"
+                    onClick={() => addField(key)}
+                  >
+                    {LABELS[key]?.label ?? key}
+                    <code>{key}</code>
+                  </button>
+                ))}
+                <button role="menuitem" onClick={() => addField("")}>
+                  Custom key…
+                </button>
+              </div>
+            )}
+          </span>
+          <button onClick={addStandard}>Add all standard fields</button>
           <button onClick={onReset} title="Fill the song's details in again">
             <RotateCcw size={14} />
             Reset to song
           </button>
-          <button className="primary" onClick={onClose}>
-            Done
+          <button className="danger" onClick={() => onChange([])}>
+            <Trash2 size={14} />
+            Clear
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );

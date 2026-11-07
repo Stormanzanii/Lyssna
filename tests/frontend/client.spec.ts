@@ -14801,14 +14801,20 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
 
   await creator.getByTitle("Metadata").click();
   const metadata = page.getByRole("dialog", { name: "Song metadata" });
-  await metadata.getByLabel("ISRC 1", { exact: true }).fill("bad");
+  await expect(metadata.getByLabel("Song title", { exact: true })).toHaveValue(
+    "Come & Go (with Marshmello)",
+  );
+  for (const field of ["ISRC", "Your GitHub username"]) {
+    await metadata.getByRole("button", { name: "Add field" }).click();
+    await metadata.getByRole("menuitem", { name: field }).click();
+  }
+  await metadata.getByLabel("ISRC", { exact: true }).fill("bad");
   await expect(metadata.getByRole("alert")).toContainText("12 characters");
-  await metadata.getByLabel("ISRC 1", { exact: true }).fill("USUM71703861");
-  await expect(metadata.getByRole("alert")).toHaveCount(0);
-  await metadata
-    .getByLabel("Your GitHub username 1", { exact: true })
+  await metadata.getByLabel("ISRC", { exact: true }).fill("USUM71703861");
+  await expect(metadata.getByRole("alert")).toHaveCount(0);  await metadata
+    .getByLabel("Your GitHub username", { exact: true })
     .fill("someone");
-  await metadata.getByRole("button", { name: "Done" }).click();
+  await metadata.getByRole("button", { name: "Close metadata" }).click();
   await expect(metadata).toHaveCount(0);
 
   await creator.getByRole("button", { name: "Use for this song" }).click();

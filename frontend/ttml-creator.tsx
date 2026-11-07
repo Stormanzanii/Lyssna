@@ -20,6 +20,7 @@ import {
   Redo2,
   RotateCcw,
   Save,
+  Settings,
   Tags,
   Trash2,
   Type,
@@ -105,10 +106,8 @@ const FORMAT_NAMES: Record<ExportFormat | "ttml", string> = {
 import {
   type KeyAction,
   type KeyMap,
-  KEY_ACTIONS,
   KeysDialog,
   actionFor,
-  keyLabel,
   loadKeys,
   saveKeys,
 } from "./ttml-keys";
@@ -1323,6 +1322,9 @@ export function TtmlCreator({
           <button onClick={openSaves} title="Saves and earlier versions">
             <History size={15} />
           </button>
+          <button onClick={() => setEditingKeys(true)} title="Settings">
+            <Settings size={15} />
+          </button>
           <button onClick={() => setEditingMeta(true)} title="Metadata">
             <Tags size={15} />
           </button>
@@ -1396,12 +1398,6 @@ export function TtmlCreator({
       {tab === "write" && !textMode && lines.length > 0 && (
         <div className="ttml-write">
           <div className="ttml-write-actions">
-            <p className="ttml-hint">
-              Click a word to select it, <kbd>Del</kbd> deletes it. Double-click
-              to edit it. Type <kbd>|</kbd> to split it into syllables. Click{" "}
-              <kbd>Space</kbd> to join two words. <kbd>Ctrl</kbd>- or{" "}
-              <kbd>Shift</kbd>-click lines to change several at once.
-            </p>
             <div className="ttml-row">
               <button
                 onClick={startFromLyrics}
@@ -1439,16 +1435,16 @@ export function TtmlCreator({
                 <Languages size={15} />
                 Auto romanize
               </button>
-              <button className="primary" onClick={() => setTab("sync")}>
-                Continue to Sync
-              </button>
             </div>
-            {romanNote && (
-              <p className="ttml-hint" role="status">
-                {romanNote}
-              </p>
-            )}
+            <button className="primary" onClick={() => setTab("sync")}>
+              Continue to Sync
+            </button>
           </div>
+          {romanNote && (
+            <p className="ttml-hint" role="status">
+              {romanNote}
+            </p>
+          )}
           {pickBar}
           <div
             className="ttml-lines"
@@ -1887,32 +1883,6 @@ export function TtmlCreator({
               <RotateCcw size={15} />
             </button>
           </div>
-          <p className="ttml-keys">
-            {KEY_ACTIONS.map(([action, label]) => (
-              <span key={action}>
-                <kbd>{keyLabel(keys[action])}</kbd> {label.toLowerCase()}
-              </span>
-            ))}
-            <span>
-              <kbd>←</kbd>
-              <kbd>→</kbd>
-              <kbd>↑</kbd>
-              <kbd>↓</kbd> move
-            </span>
-            <span>
-              <kbd>Shift</kbd>+<kbd>←</kbd>
-              <kbd>→</kbd> seek 3s
-            </span>
-            <span>
-              <kbd>Space</kbd> play
-            </span>
-            <button
-              className="ttml-keys-edit"
-              onClick={() => setEditingKeys(true)}
-            >
-              Change keys
-            </button>
-          </p>
           {pickBar}
           <div
             className="ttml-lines"

@@ -114,7 +114,6 @@
   flex: 1 1 260px;
 }
 .ttml-hint,
-.ttml-keys,
 .ttml-issues {
   margin: 0;
   color: var(--muted);
@@ -159,6 +158,8 @@
 }
 .ttml-write-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -216,9 +217,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.ttml-write-actions .ttml-hint {
-  align-self: center;
 }
 .ttml-lines {
   display: flex;
@@ -1025,22 +1023,38 @@
 .ttml-creator .ttml-pick-bar button.danger:hover {
   background: #e9142940;
 }
-.ttml-keys {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 14px;
-}
-.ttml-keys kbd + kbd {
-  margin-left: 2px;
-}
-.ttml-creator .ttml-keys .ttml-keys-edit {
-  min-height: 0;
-  padding: 1px 8px;
-  font-size: 12px;
-}
 .ttml-keys-dialog {
-  width: min(460px, calc(100vw - 32px));
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.ttml-settings-body {
+  display: grid;
+  gap: 22px;
+  min-height: 0;
+  overflow-y: auto;
+  margin-right: -8px;
+  padding-right: 8px;
+}
+.ttml-settings-body section {
+  display: grid;
+  gap: 10px;
+}
+.ttml-settings-body h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ttml-fixed-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
 }
 .ttml-keys-dialog header {
   display: flex;

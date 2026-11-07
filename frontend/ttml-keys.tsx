@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { RotateCcw, X } from "lucide-react";
 
 export const KEY_ACTIONS = [
@@ -90,6 +90,46 @@ export function rebind(keys: KeyMap, action: KeyAction, key: string): KeyMap {
 export const keyLabel = (key: string) =>
   key === "delete" ? "Del" : key.length === 1 ? key.toUpperCase() : key;
 
+const FIXED_KEYS: [string, ReactNode][] = [
+  ["Play or pause", <kbd>Space</kbd>],
+  [
+    "Move between words and lines",
+    <>
+      <kbd>←</kbd>
+      <kbd>→</kbd>
+      <kbd>↑</kbd>
+      <kbd>↓</kbd>
+    </>,
+  ],
+  [
+    "Seek 3 seconds",
+    <>
+      <kbd>Shift</kbd>+<kbd>←</kbd>
+      <kbd>→</kbd>
+    </>,
+  ],
+  [
+    "Undo, redo",
+    <>
+      <kbd>Ctrl</kbd>+<kbd>Z</kbd> <kbd>Ctrl</kbd>+<kbd>Y</kbd>
+    </>,
+  ],
+];
+
+const LYRIC_TIPS: [string, ReactNode][] = [
+  ["Select a word", "Click"],
+  ["Edit a word", "Double-click"],
+  ["Delete the selected word", <kbd>Del</kbd>],
+  ["Split a word into syllables", <kbd>|</kbd>],
+  ["Join two words", "Click the space between them"],
+  [
+    "Change several lines",
+    <>
+      <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click
+    </>,
+  ],
+];
+
 export function KeysDialog({
   keys,
   onChange,
@@ -120,45 +160,67 @@ export function KeysDialog({
       <div
         className="ttml-dialog ttml-keys-dialog"
         role="dialog"
-        aria-label="Timing keys"
+        aria-label="Settings"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.key === "Escape" && !listening && onClose()}
       >
         <header>
-          <h3>Timing keys</h3>
-          <button onClick={onClose} aria-label="Close timing keys">
+          <h3>Settings</h3>
+          <button onClick={onClose} aria-label="Close settings">
             <X size={16} />
           </button>
         </header>
-        <p className="ttml-hint">
-          Click a key, then press the new one. A key already in use swaps over.
-          Arrows, Space, Backspace and Ctrl shortcuts stay fixed.
-        </p>
-        <div className="ttml-keys-grid">
-          {KEY_ACTIONS.map(([action, label]) => (
-            <Fragment key={action}>
-              <span>{label}</span>
-              <button
-                className={listening === action ? "active" : ""}
-                aria-label={`${label} key`}
-                onClick={() =>
-                  setListening(listening === action ? null : action)
-                }
-              >
-                {listening === action ? (
-                  "Press a key…"
-                ) : (
-                  <kbd>{keyLabel(keys[action])}</kbd>
-                )}
+        <div className="ttml-settings-body">
+          <section>
+            <h4>Sync keys</h4>
+            <p className="ttml-hint">
+              Click a key, then press the new one. A key already in use swaps
+              over.
+            </p>
+            <div className="ttml-keys-grid">
+              {KEY_ACTIONS.map(([action, label]) => (
+                <Fragment key={action}>
+                  <span>{label}</span>
+                  <button
+                    className={listening === action ? "active" : ""}
+                    aria-label={`${label} key`}
+                    onClick={() =>
+                      setListening(listening === action ? null : action)
+                    }
+                  >
+                    {listening === action ? (
+                      "Press a key…"
+                    ) : (
+                      <kbd>{keyLabel(keys[action])}</kbd>
+                    )}
+                  </button>
+                </Fragment>
+              ))}
+              {FIXED_KEYS.map(([label, combo]) => (
+                <Fragment key={label}>
+                  <span>{label}</span>
+                  <span className="ttml-fixed-key">{combo}</span>
+                </Fragment>
+              ))}
+            </div>
+            <div className="ttml-dialog-row end">
+              <button onClick={() => onChange({ ...DEFAULT_KEYS })}>
+                <RotateCcw size={14} />
+                Reset keys
               </button>
-            </Fragment>
-          ))}
-        </div>
-        <div className="ttml-dialog-row end">
-          <button onClick={() => onChange({ ...DEFAULT_KEYS })}>
-            <RotateCcw size={14} />
-            Reset to AMLL keys
-          </button>
+            </div>
+          </section>
+          <section>
+            <h4>Editing lyrics</h4>
+            <div className="ttml-keys-grid">
+              {LYRIC_TIPS.map(([label, combo]) => (
+                <Fragment key={label}>
+                  <span>{label}</span>
+                  <span className="ttml-fixed-key">{combo}</span>
+                </Fragment>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </div>

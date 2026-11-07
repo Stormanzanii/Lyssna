@@ -14985,6 +14985,37 @@ test("TTML Creator Sync follows the playing line", async ({ page }) => {
   ).not.toBeInViewport();
 });
 
+test("TTML Creator selects a Sync line by its blank space and centres it in Lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  const row = creator.locator('.ttml-line[data-line="20"]');
+  await row.scrollIntoViewIfNeeded();
+  const cells = (await row.locator(".ttml-cells").boundingBox())!;
+  await page.mouse.click(cells.x + cells.width - 4, cells.y + 4);
+  await expect(row).toHaveClass(/\bcurrent\b/);
+  await expect(row.locator(".ttml-unit").first()).toHaveClass(/\bselected\b/);
+
+  await creator.getByRole("tab", { name: "Lyrics" }).click();
+  await expect(creator.locator('.ttml-card[data-line="20"]')).toBeInViewport();
+  await expect(
+    creator.locator('.ttml-card[data-line="0"]'),
+  ).not.toBeInViewport();
+});
+
 test("TTML Creator saves drafts with a time and keeps versions", async ({
   page,
 }) => {

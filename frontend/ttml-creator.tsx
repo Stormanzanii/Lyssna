@@ -703,7 +703,7 @@ export function TtmlCreator({
   const glide = useRef(0);
   const reduceMotion = !!state.settings.reduce_motion;
   const centre = useCallback(
-    (index: number) => {
+    (index: number, instant = false) => {
       const container = list.current;
       const line = container?.querySelector<HTMLElement>(
         `[data-line="${index}"]`,
@@ -720,7 +720,7 @@ export function TtmlCreator({
           from + row.top - box.top - (box.height - row.height) / 2,
         ),
       );
-      if (reduceMotion || Math.abs(to - from) < 1) {
+      if (instant || reduceMotion || Math.abs(to - from) < 1) {
         container.scrollTop = to;
         return;
       }
@@ -739,6 +739,12 @@ export function TtmlCreator({
   useEffect(() => {
     if (tab === "sync") centre(cursor.line);
   }, [cursor.line, tab, centre]);
+  const centreOnLyrics = useRef<number | null>(null);
+  useEffect(() => {
+    if (tab !== "write" || centreOnLyrics.current === null) return;
+    centre(centreOnLyrics.current, true);
+    centreOnLyrics.current = null;
+  }, [tab, centre]);
 
   const shownWord = useRef<(Cursor & { start: number }) | null>(null);
   const liveWord = useMemo(() => {
@@ -973,7 +979,14 @@ export function TtmlCreator({
               aria-selected={tab === value}
               className={tab === value ? "active" : ""}
               disabled={value !== "write" && !lines.length}
-              onClick={() => setTab(value)}
+              onClick={() => {
+                if (tab === "sync" && value === "write")
+                  centreOnLyrics.current =
+                    state.playback.is_playing && liveWord
+                      ? liveWord.line
+                      : cursor.line;
+                setTab(value);
+              }}
             >
               {label}
             </button>
@@ -1080,12 +1093,14 @@ export function TtmlCreator({
           </div>
           <div
             className="ttml-lines"
+            ref={list}
             onDragEnd={endDrag}
             onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
           >
             {lines.map((line, lineIndex) => (
               <div
                 key={lineIndex}
+                data-line={lineIndex}
                 className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onPointerDown={(event) => {
                   event.currentTarget.draggable = !(
@@ -1527,6 +1542,13 @@ export function TtmlCreator({
                 key={lineIndex}
                 data-line={lineIndex}
                 className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex ? " playing" : ""}`}
+                onClick={(event) => {
+                  if (
+                    cursor.line !== lineIndex &&
+                    !(event.target as Element).closest("button")
+                  )
+                    setCursor(clampCursor(lines, { line: lineIndex, unit: 0 }));
+                }}
               >
                 <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-cells">

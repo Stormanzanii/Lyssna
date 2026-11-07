@@ -14899,10 +14899,14 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
           .at(-1)?.args,
       command,
     );
-  await creator.getByLabel("Playback speed").fill("0.5");
+  await page.getByRole("button", { name: "Playback controls" }).click();
+  const controls = page.getByRole("dialog", { name: "Playback controls" });
+  await controls.getByLabel("Playback speed").fill("0.5");
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 50 });
-  await expect(creator.getByLabel("Playback speed")).toHaveValue("0.5");
-  await expect(creator.locator(".ttml-speed-value")).toHaveText("0.50×");
+  await expect(controls.getByLabel("Playback speed")).toHaveValue("0.5");
+  await expect(controls.locator("output").first()).toHaveText("0.50×");
+  await page.getByRole("button", { name: "Playback controls" }).click();
+  await expect(controls).toHaveCount(0);
 
   const requests = () =>
     page.evaluate(() =>
@@ -14916,12 +14920,12 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   });
   const before = (await requests()).length;
   await at(179_000, true);
+  await expect(creator.locator(".ttml-time")).toContainText("02:59");
   await at(400, true);
   await expect
     .poll(async () => (await requests()).slice(before))
     .toEqual([{ command: "pause" }, { command: "seek", positionMs: 0 }]);
 
-  await creator.getByLabel("Playback speed").blur();
   await page.keyboard.press("'");
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
   for (const [key, positionMs] of [

@@ -6,7 +6,6 @@ export interface BarSpan {
   start: number;
   end: number;
   current: boolean;
-  label: number;
 }
 
 export function TtmlBar({
@@ -86,45 +85,29 @@ export function TtmlBar({
     if (!element || !context || !width) return;
     const scale = devicePixelRatio;
     const height = element.clientHeight;
-    element.width = Math.round(width * scale);
-    element.height = Math.round(height * scale);
+    // Resizing the backing store every frame is costly; only on change.
+    if (element.width !== Math.round(width * scale))
+      element.width = Math.round(width * scale);
+    if (element.height !== Math.round(height * scale))
+      element.height = Math.round(height * scale);
     context.setTransform(scale, 0, 0, scale, 0, 0);
     context.clearRect(0, 0, width, height);
     const span = Math.max(1, duration);
     const x = (ms: number) => (Math.min(span, Math.max(0, ms)) / span) * width;
-    // Timed lines sit in their own lane above the waveform, numbered when
-    // there is room, so each block reads apart from its neighbours.
-    const lane = 18;
-    const font = getComputedStyle(element).fontFamily;
-    context.font = `600 10px ${font}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    const current = spans.find((line) => line.current);
-    for (const line of spans) {
-      const left = x(line.start) + 0.5;
-      const span = Math.max(2, x(line.end) - x(line.start) - 1);
-      context.fillStyle = line.current ? "#1ed760" : "#ffffff40";
-      context.beginPath();
-      context.roundRect(left, 2, span, lane - 4, 3);
-      context.fill();
-      if (span >= 18) {
-        context.fillStyle = line.current ? "#000" : "#ffffffd9";
-        context.fillText(String(line.label), left + span / 2, lane / 2 + 0.5);
-      }
-    }
-    if (current) {
-      context.fillStyle = "#1ed76014";
-      context.fillRect(
-        x(current.start),
-        lane,
-        Math.max(1, x(current.end) - x(current.start)),
-        height - lane,
-      );
-    }
+    // Like AMLL: each timed line shades the waveform full height, with a
+    // hairline at its edges so neighbouring lines stay apart.
+    const regions = spans
+      .map((line) => ({
+        left: x(line.start),
+        right: Math.max(x(line.start) + 1, x(line.end)),
+        current: line.current,
+      }))
+      .sort((a, b) => a.left - b.left);
     const played = x(shown);
-    const middle = lane + (height - lane) / 2;
-    const reach = (height - lane) / 2 - 3;
+    const middle = height / 2;
+    const reach = middle - 3;
     const step = 3;
+    let region = 0;
     for (let left = 0; left < width; left += step) {
       let loud = 0.03;
       if (peaks?.length) {
@@ -136,9 +119,19 @@ export function TtmlBar({
         for (let index = from; index < to && index < peaks.length; index++)
           loud = Math.max(loud, peaks[index] / 255);
       }
+      while (region < regions.length && regions[region].right <= left) region++;
+      const inside = region < regions.length && regions[region].left <= left;
       const half = Math.max(1, loud * reach);
-      context.fillStyle = left < played ? "#ffffffd9" : "#ffffff38";
+      context.fillStyle =
+        left < played ? "#ffffffe6" : inside ? "#ffffff99" : "#ffffff33";
       context.fillRect(left, middle - half, step - 1, half * 2);
+    }
+    for (const region of regions) {
+      context.fillStyle = region.current ? "#1ed76033" : "#ffffff1a";
+      context.fillRect(region.left, 0, region.right - region.left, height);
+      context.fillStyle = region.current ? "#1ed760" : "#ffffffa6";
+      context.fillRect(region.left, 0, 1, height);
+      context.fillRect(region.right - 1, 0, 1, height);
     }
     context.fillStyle = "#fff";
     context.fillRect(Math.round(played) - 1, 0, 2, height);

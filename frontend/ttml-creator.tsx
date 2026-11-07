@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Copy,
   Download,
-  Gauge,
   History,
   Pause,
   Play,
@@ -1264,9 +1263,7 @@ export function TtmlCreator({
     () =>
       lines.flatMap((line, index) => {
         const span = lineSpan(line);
-        return span
-          ? [{ ...span, current: index === cursor.line, label: index + 1 }]
-          : [];
+        return span ? [{ ...span, current: index === cursor.line }] : [];
       }),
     [lines, cursor.line],
   );
@@ -2115,38 +2112,6 @@ export function TtmlCreator({
               )}
             </button>
             <span className="ttml-time">{formatTime(position)}</span>
-            <label
-              className="ttml-speed"
-              title={
-                native
-                  ? "Playback speed. Pitch stays the same."
-                  : "Speed works when playing on this computer."
-              }
-            >
-              <Gauge size={15} />
-              <input
-                type="range"
-                aria-label="Playback speed"
-                min={MIN_SPEED}
-                max={MAX_SPEED}
-                step={0.05}
-                value={shownSpeed}
-                disabled={!native}
-                style={{
-                  ["--fill" as string]: `${((shownSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100}%`,
-                }}
-                onChange={(event) =>
-                  slideSpeed(clampSpeed(Number(event.target.value)))
-                }
-              />
-              <output
-                className="ttml-speed-value"
-                title="Double-click for normal speed"
-                onDoubleClick={() => native && slideSpeed(1)}
-              >
-                {shownSpeed.toFixed(2)}×
-              </output>
-            </label>
             <label
               className="ttml-offset"
               title="Shift every tap by this much. Negative taps earlier."

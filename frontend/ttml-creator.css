@@ -761,7 +761,7 @@
 .ttml-metadata {
   width: min(680px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 64px));
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -970,6 +970,59 @@
 .ttml-meta-add {
   position: relative;
 }
+.ttml-meta-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px 22px 16px;
+  border-top: 1px solid #ffffff0f;
+  background: #ffffff05;
+  animation: ttml-picker-in 0.16s ease-out;
+}
+@keyframes ttml-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.ttml-meta-picker-group {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+.ttml-meta-picker-group > span {
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ttml-meta-picker-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ttml-creator .ttml-meta-picker button {
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 12px 4px 9px;
+  border: 1px solid #ffffff17;
+  border-radius: 999px;
+  background: #ffffff0a;
+  font-size: 12.5px;
+}
+.ttml-creator .ttml-meta-picker button:hover {
+  border-color: #1ed76066;
+  color: #1ed760;
+  background: #1ed76014;
+}
+.ttml-meta-chevron {
+  transition: transform 0.15s;
+}
+.ttml-meta-chevron.open {
+  transform: rotate(180deg);
+}
 .ttml-meta-menu {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1029,9 +1082,6 @@
 .ttml-settings.lyrics {
   width: min(460px, calc(100vw - 32px));
 }
-.ttml-settings.lyrics .ttml-settings-body {
-  columns: auto;
-}
 .ttml-settings-body {
   columns: auto;
 }
@@ -1061,15 +1111,17 @@
   box-shadow: 0 1px 2px #0006;
 }
 .ttml-settings-body {
-  display: block;
-  columns: 2 280px;
-  column-gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.ttml-settings-col {
+  display: grid;
+  gap: 18px;
 }
 .ttml-settings-group {
   display: grid;
   gap: 8px;
-  margin-bottom: 18px;
-  break-inside: avoid;
 }
 .ttml-settings-group h4 {
   margin: 0;

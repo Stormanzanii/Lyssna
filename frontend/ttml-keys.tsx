@@ -90,22 +90,19 @@ export function rebind(keys: KeyMap, action: KeyAction, key: string): KeyMap {
 export const keyLabel = (key: string) =>
   key === "delete" ? "Del" : key.length === 1 ? key.toUpperCase() : key;
 
-const GROUPS: [string, KeyAction[]][] = [
-  ["Timing", ["start", "next", "end", "clear"]],
-  [
-    "Moving",
-    [
-      "previous",
-      "following",
-      "lineUp",
-      "lineDown",
-      "jumpBack",
-      "jumpForward",
-      "replay",
-    ],
+const GROUPS: Record<string, KeyAction[]> = {
+  Timing: ["start", "next", "end", "clear"],
+  Moving: [
+    "previous",
+    "following",
+    "lineUp",
+    "lineDown",
+    "jumpBack",
+    "jumpForward",
+    "replay",
   ],
-  ["Speed", ["slower", "faster", "normalSpeed"]],
-];
+  Speed: ["slower", "faster", "normalSpeed"],
+};
 const LABELS = Object.fromEntries(KEY_ACTIONS) as Record<KeyAction, string>;
 
 const caps = (...names: string[]) =>
@@ -213,32 +210,44 @@ export function KeysDialog({
         </header>
         <div className="ttml-meta-body ttml-settings-body">
           {mode === "sync" ? (
-            <>
-              {GROUPS.map(([title, actions]) => (
-                <Rows
-                  key={title}
-                  title={title}
-                  rows={actions.map((action) => (
-                    <div key={action} className="ttml-settings-row">
-                      <span>{LABELS[action]}</span>
-                      <button
-                        className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
-                        aria-label={`${LABELS[action]} key`}
-                        title="Click, then press a new key"
-                        onClick={() =>
-                          setListening(listening === action ? null : action)
-                        }
-                      >
-                        {listening === action
-                          ? "Press a key"
-                          : keyLabel(keys[action])}
-                      </button>
-                    </div>
-                  ))}
-                />
-              ))}
-              <Rows title="Always" rows={comboRows(FIXED_KEYS)} />
-            </>
+            [
+              ["Timing", "Always"],
+              ["Moving", "Speed"],
+            ].map((column) => (
+              <div key={column[0]} className="ttml-settings-col">
+                {column.map((title) =>
+                  title === "Always" ? (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={comboRows(FIXED_KEYS)}
+                    />
+                  ) : (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={GROUPS[title].map((action) => (
+                        <div key={action} className="ttml-settings-row">
+                          <span>{LABELS[action]}</span>
+                          <button
+                            className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
+                            aria-label={`${LABELS[action]} key`}
+                            title="Click, then press a new key"
+                            onClick={() =>
+                              setListening(listening === action ? null : action)
+                            }
+                          >
+                            {listening === action
+                              ? "Press a key"
+                              : keyLabel(keys[action])}
+                          </button>
+                        </div>
+                      ))}
+                    />
+                  ),
+                )}
+              </div>
+            ))
           ) : (
             <Rows title="Lyrics tab" rows={comboRows(LYRIC_TIPS)} />
           )}

@@ -1552,7 +1552,6 @@ export function TtmlCreator({
                           {unitIndex > 0 && !unit.joined && (
                             <button
                               className={`ttml-space${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
-                              title="Click to join these words; drag onto a syllable to move this space"
                               draggable
                               onClick={() => setLines(toggleJoin(lines, at))}
                               onDragStart={(event) =>
@@ -1676,7 +1675,6 @@ export function TtmlCreator({
                     {line.spaceAfter && (
                       <button
                         className="ttml-space"
-                        title="Click to remove this space"
                         onClick={() =>
                           setLines(dropTrailingSpace(lines, lineIndex))
                         }

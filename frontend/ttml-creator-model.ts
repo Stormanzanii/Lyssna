@@ -830,7 +830,7 @@ export function toTtml(
 }
 
 export function fileName(meta: SongMeta): string {
-  const base = [meta.artists.join(", "), meta.name]
+  const base = [meta.name, meta.artists.join(", ")]
     .filter(Boolean)
     .join(" - ")
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")

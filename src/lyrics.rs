@@ -649,14 +649,14 @@ pub fn saved_file(key: &str) -> Result<(String, String)> {
     Ok((download_name(&meta, kind), contents))
 }
 
-/// "Artists - Song.ttml", kept valid as a Windows file name.
+/// "Song - Artists.ttml", kept valid as a Windows file name.
 fn download_name(meta: &SavedLyrics, kind: &str) -> String {
     let title = if meta.name.is_empty() {
         meta.key.chars().take(12).collect()
     } else if meta.artists.is_empty() {
         meta.name.clone()
     } else {
-        format!("{} - {}", meta.artists, meta.name)
+        format!("{} - {}", meta.name, meta.artists)
     };
     let safe: String = title
         .chars()
@@ -1233,7 +1233,7 @@ mod tests {
         let found = saved.iter().find(|item| item.name == "Found song").unwrap();
         assert_eq!(found.artists, "Artist");
         assert_eq!(found.image, "https://i.scdn.co/image/small");
-        assert_eq!(download_name(found, "ttml"), "Artist - Found song.ttml");
+        assert_eq!(download_name(found, "ttml"), "Found song - Artist.ttml");
         let tricky = SavedLyrics {
             name: "What? / Why: \"Now\"".into(),
             ..SavedLyrics::default()

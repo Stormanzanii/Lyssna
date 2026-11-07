@@ -698,7 +698,7 @@ async function startClient(
           if (command === "saved_lyrics")
             return host.__clientTest.savedLyrics ?? [];
           if (command === "saved_lyrics_file")
-            return ["Artist - Saved song.ttml", "<tt/>"];
+            return ["Saved song - Artist.ttml", "<tt/>"];
           if (command === "audio_cache_size")
             return host.__clientTest.cacheBytes ?? 0;
           if (command === "clear_audio_cache") {
@@ -8216,7 +8216,7 @@ test("TTML Database lists covers and plays, downloads and filters saved lyrics",
   await database
     .getByRole("button", { name: "Download lyrics for Saved song" })
     .click();
-  expect((await download).suggestedFilename()).toBe("Artist - Saved song.ttml");
+  expect((await download).suggestedFilename()).toBe("Saved song - Artist.ttml");
   await page.evaluate(() =>
     document.querySelector(".application")!.classList.add("liquid-glass"),
   );
@@ -14842,7 +14842,7 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     '<amll:meta key="ttmlAuthorGithubLogin" value="someone"/>',
   );
   expect(saved).toMatchObject({
-    filename: "Juice WRLD, Marshmello - Come & Go (with Marshmello).ttml",
+    filename: "Come & Go (with Marshmello) - Juice WRLD, Marshmello.ttml",
     mode: "persistent",
   });
   expect(saved.contents).toContain(
@@ -15195,7 +15195,7 @@ test("TTML Creator imports and exports other lyric formats", async ({
   await creator.getByRole("menuitem", { name: "Lyricify Syllable" }).click();
   const download = await saved;
   expect(download.suggestedFilename()).toBe(
-    "Juice WRLD, Marshmello - Come & Go (with Marshmello).lys",
+    "Come & Go (with Marshmello) - Juice WRLD, Marshmello.lys",
   );
 });
 

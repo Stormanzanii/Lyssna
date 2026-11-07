@@ -14811,7 +14811,8 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await metadata.getByLabel("ISRC", { exact: true }).fill("bad");
   await expect(metadata.getByRole("alert")).toContainText("12 characters");
   await metadata.getByLabel("ISRC", { exact: true }).fill("USUM71703861");
-  await expect(metadata.getByRole("alert")).toHaveCount(0);  await metadata
+  await expect(metadata.getByRole("alert")).toHaveCount(0);
+  await metadata
     .getByLabel("Your GitHub username", { exact: true })
     .fill("someone");
   await metadata.getByRole("button", { name: "Close metadata" }).click();

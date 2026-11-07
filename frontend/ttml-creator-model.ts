@@ -564,6 +564,30 @@ export function toggleJoin(lines: CreatorLine[], at: Cursor): CreatorLine[] {
   );
 }
 
+/** Removes the Space blocks before each `unit`; past the last word, the
+ * trailing space. */
+export function removeSpaces(
+  lines: CreatorLine[],
+  gaps: Cursor[],
+): CreatorLine[] {
+  return lines.map((line, index): CreatorLine => {
+    const here = gaps.filter((gap) => gap.line === index);
+    if (!here.length) return line;
+    const { spaceAfter, ...rest } = line;
+    const next: CreatorLine = {
+      ...rest,
+      units: line.units.map((unit, position) =>
+        position && here.some((gap) => gap.unit === position)
+          ? { ...unit, joined: true }
+          : unit,
+      ),
+    };
+    if (spaceAfter && !here.some((gap) => gap.unit === line.units.length))
+      next.spaceAfter = true;
+    return next;
+  });
+}
+
 export function insertLines(
   lines: CreatorLine[],
   after: number,

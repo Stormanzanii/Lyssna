@@ -23,6 +23,7 @@ import {
   moveSpace,
   moveWord,
   moveWords,
+  removeSpaces,
   nextCursor,
   parseText,
   problems,
@@ -269,6 +270,19 @@ describe("TTML Creator card editing", () => {
     expect(words(gone)).toEqual(["e f a b|c d"]);
     expect(moveWords(lines, [{ line: 0, unit: 1 }], { line: 0, unit: 2 })).toBe(
       lines,
+    );
+  });
+
+  it("removes picked Space blocks, the trailing one included", () => {
+    const lines = appendWords(parseText("a b c"), 0, " ");
+    const next = removeSpaces(lines, [
+      { line: 0, unit: 2 },
+      { line: 0, unit: 3 },
+    ]);
+    expect(words(next)).toEqual(["a b|c"]);
+    expect(next[0].spaceAfter).toBeUndefined();
+    expect(removeSpaces(lines, [{ line: 0, unit: 1 }])[0].spaceAfter).toBe(
+      true,
     );
   });
 

@@ -49,7 +49,6 @@ import {
   duplicateLine,
   editUnit,
   appendWords,
-  dropTrailingSpace,
   fileName,
   formatTime,
   fromLyrics,
@@ -63,6 +62,7 @@ import {
   moveSpace,
   moveWord,
   moveWords,
+  removeSpaces,
   applyRomanized,
   nextCursor,
   romanizeRequest,
@@ -447,7 +447,29 @@ export function TtmlCreator({
   chosenRef.current = chosen;
   // Word starts picked with Ctrl or Shift, dragged as one bunch.
   const [group, setGroup] = useState<Cursor[]>([]);
-  useEffect(() => setGroup([]), [lines, tab]);
+  // Picked Space blocks, each named by the word after it.
+  const [spaces, setSpaces] = useState<Cursor[]>([]);
+  const spacesRef = useRef(spaces);
+  spacesRef.current = spaces;
+  useEffect(() => {
+    setGroup([]);
+    setSpaces([]);
+  }, [lines, tab]);
+  const isSpace = (at: Cursor) =>
+    spaces.some((each) => each.line === at.line && each.unit === at.unit);
+  const pickSpace = (event: ReactMouseEvent, at: Cursor) => {
+    if (event.shiftKey || event.ctrlKey || event.metaKey)
+      return setSpaces(
+        isSpace(at)
+          ? spaces.filter(
+              (each) => each.line !== at.line || each.unit !== at.unit,
+            )
+          : [...spaces, at],
+      );
+    setSpaces([at]);
+    setGroup([]);
+    setChosen(null);
+  };
   const wordStart = (at: Cursor) => ({
     line: at.line,
     unit: wordBounds(lines[at.line]?.units ?? [], at.unit).start,
@@ -537,6 +559,17 @@ export function TtmlCreator({
         event.preventDefault();
         return;
       }
+      const gaps = spacesRef.current;
+      if (
+        gaps.length &&
+        !event.ctrlKey &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        setLines(removeSpaces(stateRef.current.lines, gaps));
+        setSpaces([]);
+        return;
+      }
       if (!at || event.ctrlKey || event.altKey || event.metaKey) return;
       const { lines } = stateRef.current;
       if (event.key === "Delete" || event.key === "Backspace") {
@@ -553,6 +586,7 @@ export function TtmlCreator({
       } else if (event.key === "Escape") {
         setChosen(null);
         setGroup([]);
+        setSpaces([]);
       } else if (event.key === "Enter") setEditing(at);
       else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         const move = event.key === "ArrowLeft" ? previousCursor : nextCursor;
@@ -604,7 +638,7 @@ export function TtmlCreator({
     onClickCapture: (event: ReactMouseEvent) => {
       if (
         (event.shiftKey || event.ctrlKey || event.metaKey) &&
-        !(event.target as Element).closest(".ttml-chip")
+        !(event.target as Element).closest(".ttml-chip, .ttml-space")
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -1544,9 +1578,11 @@ export function TtmlCreator({
             className="ttml-lines"
             ref={list}
             onClick={(event) => {
-              if ((event.target as Element).closest(".ttml-chip")) return;
+              if ((event.target as Element).closest(".ttml-chip, .ttml-space"))
+                return;
               setChosen(null);
               setGroup([]);
+              setSpaces([]);
             }}
             onDragEnd={endDrag}
             onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
@@ -1612,9 +1648,9 @@ export function TtmlCreator({
                         <Fragment key={unitIndex}>
                           {unitIndex > 0 && !unit.joined && (
                             <button
-                              className={`ttml-space${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
+                              className={`ttml-space${isSpace(at) ? " chosen" : ""}${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
                               draggable
-                              onClick={() => setLines(toggleJoin(lines, at))}
+                              onClick={(event) => pickSpace(event, at)}
                               onDragStart={(event) =>
                                 startDrag(event, { kind: "space", at })
                               }
@@ -1716,6 +1752,7 @@ export function TtmlCreator({
                                   )
                                     return pickWord(at, event.shiftKey);
                                   setGroup([]);
+                                  setSpaces([]);
                                   setChosen(at);
                                 }}
                                 onDoubleClick={() => setEditing(at)}
@@ -1749,9 +1786,12 @@ export function TtmlCreator({
                     })}
                     {line.spaceAfter && (
                       <button
-                        className="ttml-space"
-                        onClick={() =>
-                          setLines(dropTrailingSpace(lines, lineIndex))
+                        className={`ttml-space${isSpace({ line: lineIndex, unit: line.units.length }) ? " chosen" : ""}`}
+                        onClick={(event) =>
+                          pickSpace(event, {
+                            line: lineIndex,
+                            unit: line.units.length,
+                          })
                         }
                       >
                         Space

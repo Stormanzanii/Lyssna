@@ -14800,6 +14800,8 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   );
   await creator.getByRole("tab", { name: "Lyrics" }).click();
   await card.locator(".ttml-space").first().click();
+  await expect(card.locator(".ttml-space").first()).toHaveClass(/chosen/);
+  await page.keyboard.press("Delete");
   await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
   await card.getByLabel("Edit word").fill("song");
   await card.getByLabel("Edit word").press("Enter");
@@ -15078,6 +15080,16 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await expect(card.locator(".ttml-chip")).toHaveText(
     "just lyric line number I am a 1".split(" "),
   );
+  const spaces = card.locator(".ttml-space");
+  const count = await spaces.count();
+  await spaces.nth(0).click();
+  await spaces.nth(1).click({ modifiers: ["Control"] });
+  await expect(card.locator(".ttml-space.chosen")).toHaveCount(2);
+  await expect(spaces).toHaveCount(count);
+  await page.keyboard.press("Backspace");
+  await expect(spaces).toHaveCount(count - 2);
+  await expect(card.locator(".ttml-chip").nth(1)).toHaveClass(/joined/);
+  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/);
 });
 
 test("TTML Creator word menu splits words and moves them to new lines", async ({

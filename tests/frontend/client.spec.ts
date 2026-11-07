@@ -14979,6 +14979,32 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   ).toHaveAttribute("title", "just");
 });
 
+test("Now playing lyrics card folds while the TTML Creator is open", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const card = page.locator(".now-playing .lyric-preview");
+  await expect(card).not.toHaveClass(/\bcollapsed\b/);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const creator = page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true });
+  await creator.click();
+  await expect(card).toHaveClass(/\bcollapsed\b/);
+  await card.getByTitle("Show lyrics").click();
+  await expect(card).not.toHaveClass(/\bcollapsed\b/);
+  await card.getByTitle("Hide lyrics").click();
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.npv-lyrics-card")),
+  ).not.toContain('"open":false');
+});
+
 test("TTML Creator Sync follows the playing line", async ({ page }) => {
   await startClient(page);
   await playLyricTrack(page, false);

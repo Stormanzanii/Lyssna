@@ -4593,6 +4593,7 @@ function App() {
                 onQueue={() => setPanel("queue")}
                 onFollow={follow}
                 onSave={save}
+                foldLyrics={center === "ttml"}
                 showLyricsPreview={
                   center !== "lyrics" &&
                   !state.settings.lyrics_hide_npv &&

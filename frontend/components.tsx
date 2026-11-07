@@ -1239,21 +1239,33 @@ function LyricsCard({
   onPlayer,
   onLyrics,
   onExpand,
+  folded = false,
 }: {
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
   onLyrics: () => void;
   onExpand: (expanded: boolean) => void;
+  folded?: boolean;
 }) {
-  const [view, setView] = useState(savedCardView);
+  const [saved, setSaved] = useState(savedCardView);
+  // While the TTML Creator is open the card folds without forgetting the
+  // layout the listener chose; changes made meanwhile last until it closes.
+  const [visit, setVisit] = useState<LyricsCardView | null>(
+    folded ? { open: false, expanded: false } : null,
+  );
+  useEffect(() => {
+    setVisit(folded ? { open: false, expanded: false } : null);
+  }, [folded]);
+  const view = visit ?? saved;
+  const setView = visit ? setVisit : setSaved;
   const expanded = view.open && view.expanded;
   useEffect(() => {
     try {
-      localStorage.setItem(LYRICS_CARD_KEY, JSON.stringify(view));
+      localStorage.setItem(LYRICS_CARD_KEY, JSON.stringify(saved));
     } catch {
       // A remembered layout is a convenience; the card works without it.
     }
-  }, [view]);
+  }, [saved]);
   useEffect(() => {
     onExpand(expanded);
     return () => onExpand(false);
@@ -2131,6 +2143,7 @@ export function NowPlaying({
   onFollow,
   onSave,
   showLyricsPreview,
+  foldLyrics,
   canvasInLyrics = false,
 }: {
   state: AppState;
@@ -2140,6 +2153,7 @@ export function NowPlaying({
   onFollow: (artist: Artist) => void;
   onSave: (track: Track) => void;
   showLyricsPreview: boolean;
+  foldLyrics?: boolean;
   canvasInLyrics?: boolean;
 } & Links) {
   const track = state.playback.item;
@@ -2291,6 +2305,7 @@ export function NowPlaying({
                 onPlayer={onPlayer}
                 onLyrics={onLyrics}
                 onExpand={setLyricsExpanded}
+                folded={foldLyrics}
               />
             )}
             {artist && (

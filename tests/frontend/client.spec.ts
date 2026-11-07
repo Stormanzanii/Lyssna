@@ -15022,12 +15022,22 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await page.mouse.move(0, 0);
   await expect(second.getByPlaceholder("Type word here")).toBeVisible();
   await first.locator(".ttml-card-number").click();
-  await add.fill("extra wo|rds");
+  const spaces = first.locator(".ttml-space");
+  const before = await spaces.count();
+  await add.pressSequentially(" ");
+  await expect(add).toHaveValue(" ");
   await add.press("Enter");
-  await expect(first.locator(".ttml-chip").last()).toHaveText("rds");
-  await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
+  await expect(spaces).toHaveCount(before + 1);
   await expect(add).toHaveValue("");
   await expect(add).toBeFocused();
+  await add.pressSequentially("extra wo|rds");
+  await add.press("Enter");
+  await expect(spaces).toHaveCount(before + 2);
+  await expect(first.locator(".ttml-chip").last()).toHaveText("rds");
+  await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
+  await add.pressSequentially("y");
+  await add.press("Enter");
+  await expect(first.locator(".ttml-chip").last()).toHaveClass(/joined/);
 });
 
 test("TTML Creator word menu splits words and moves them to new lines", async ({

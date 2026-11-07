@@ -14,6 +14,8 @@ export interface CreatorLine {
   opposite: boolean;
   translation?: string;
   romanization?: string;
+  /** A space typed after the last word, waiting for the next one. */
+  spaceAfter?: boolean;
 }
 export interface Cursor {
   line: number;
@@ -434,13 +436,30 @@ export function appendWords(
   lineIndex: number,
   text: string,
 ): CreatorLine[] {
-  const added = parseText(text.replace(/[()]/g, ""))[0]?.units ?? [];
-  if (!added.length || !lines[lineIndex]) return lines;
-  added[0] = { ...added[0], joined: false };
-  return lines.map((line, index) =>
-    index === lineIndex ? { ...line, units: [...line.units, ...added] } : line,
-  );
+  const line = lines[lineIndex];
+  const clean = text.replace(/[()]/g, "");
+  const added = parseText(clean)[0]?.units ?? [];
+  const spaceAfter = /\s$/.test(clean);
+  if (!line || (!added.length && (!spaceAfter || line.spaceAfter)))
+    return lines;
+  // Like AMLL, text typed without a space before it continues the last word.
+  if (added.length)
+    added[0] = {
+      ...added[0],
+      joined: !!line.units.length && !line.spaceAfter && !/^\s/.test(clean),
+    };
+  const { spaceAfter: _, ...rest } = line;
+  const next: CreatorLine = { ...rest, units: [...line.units, ...added] };
+  if (spaceAfter || (!added.length && line.spaceAfter)) next.spaceAfter = true;
+  return lines.map((each, index) => (index === lineIndex ? next : each));
 }
+
+export const dropTrailingSpace = (lines: CreatorLine[], lineIndex: number) =>
+  lines.map((line, index): CreatorLine => {
+    if (index !== lineIndex) return line;
+    const { spaceAfter: _, ...rest } = line;
+    return rest;
+  });
 
 function divided(unit: CreatorUnit, parts: string[]): CreatorUnit[] {
   const { start, end } = unit;

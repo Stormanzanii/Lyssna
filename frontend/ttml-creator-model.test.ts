@@ -11,6 +11,7 @@ import {
   duplicateLine,
   editUnit,
   appendWords,
+  dropTrailingSpace,
   formatTime,
   fromLyrics,
   insertLines,
@@ -235,10 +236,19 @@ describe("TTML Creator card editing", () => {
 
   it("adds typed words to the end of a line", () => {
     const lines = timeAll("one");
-    const next = appendWords(lines, 0, "two th|ree");
+    const next = appendWords(lines, 0, " two th|ree");
     expect(words(next)).toEqual(["one two th|ree"]);
     expect(next[0].units[0].start).toBe(lines[0].units[0].start);
-    expect(appendWords(lines, 0, "  ")).toBe(lines);
+    expect(words(appendWords(lines, 0, "ly"))).toEqual(["one|ly"]);
+    const spaced = appendWords(lines, 0, " ");
+    expect(spaced[0].spaceAfter).toBe(true);
+    expect(appendWords(spaced, 0, " ")).toBe(spaced);
+    const word = appendWords(spaced, 0, "two");
+    expect(words(word)).toEqual(["one two"]);
+    expect(word[0].spaceAfter).toBeUndefined();
+    expect(appendWords(lines, 0, "two ")[0].spaceAfter).toBe(true);
+    expect(dropTrailingSpace(spaced, 0)[0].spaceAfter).toBeUndefined();
+    expect(appendWords(lines, 0, "")).toBe(lines);
   });
 
   it("joins words, inserts lines and exports translations", () => {

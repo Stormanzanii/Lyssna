@@ -49,6 +49,7 @@ import {
   duplicateLine,
   editUnit,
   appendWords,
+  dropTrailingSpace,
   fileName,
   formatTime,
   fromLyrics,
@@ -1672,6 +1673,17 @@ export function TtmlCreator({
                         </Fragment>
                       );
                     })}
+                    {line.spaceAfter && (
+                      <button
+                        className="ttml-space"
+                        title="Click to remove this space"
+                        onClick={() =>
+                          setLines(dropTrailingSpace(lines, lineIndex))
+                        }
+                      >
+                        Space
+                      </button>
+                    )}
                     <input
                       className="ttml-chip-add"
                       aria-label={`Add words to line ${lineIndex + 1}`}
@@ -1687,6 +1699,8 @@ export function TtmlCreator({
                       onKeyDown={(event) => {
                         if (event.key === "Escape") event.currentTarget.blur();
                         if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        event.stopPropagation();
                         const next = appendWords(
                           lines,
                           lineIndex,

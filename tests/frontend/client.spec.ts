@@ -15439,6 +15439,13 @@ test("TTML Creator changes several selected lines at once", async ({
   await bar.getByRole("button", { name: "Delete" }).click();
   await expect(cards).toHaveCount(total - 3);
   await expect(bar).toHaveCount(0);
+  // A plain click selects one whole line; Delete removes it.
+  const second = await cards.nth(1).locator(".ttml-chip").allTextContents();
+  await number(0).click();
+  await expect(bar).toContainText("1 line selected");
+  await page.keyboard.press("Delete");
+  await expect(cards).toHaveCount(total - 4);
+  await expect(cards.nth(0).locator(".ttml-chip")).toHaveText(second);
 });
 
 test("TTML Creator imports and exports other lyric formats", async ({

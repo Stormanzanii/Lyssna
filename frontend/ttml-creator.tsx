@@ -575,6 +575,22 @@ export function TtmlCreator({
         event.preventDefault();
         return;
       }
+      const lineSet = pickedRef.current;
+      if (
+        lineSet.size &&
+        !at &&
+        !spacesRef.current.length &&
+        !groupRef.current.length &&
+        !event.ctrlKey &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        const next = removeLines(stateRef.current.lines, lineSet);
+        setLines(next);
+        setCursor((cursor) => clampCursor(next, cursor));
+        setPicked(new Set());
+        return;
+      }
       const gaps = spacesRef.current;
       const picked = groupRef.current;
       if (
@@ -636,6 +652,8 @@ export function TtmlCreator({
     setMenu({ x: event.clientX, y: event.clientY, at });
   };
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
   const pickedFrom = useRef(0);
   useEffect(() => setPicked(new Set()), [lines.length, track]);
   const pick = (index: number, range: boolean) => {
@@ -1649,11 +1667,23 @@ export function TtmlCreator({
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
                 className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${line.units.length ? "" : " empty"}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
-                onClick={() =>
+                onClick={(event) => {
                   setCursor((at) =>
                     at.line === lineIndex ? at : { line: lineIndex, unit: 0 },
-                  )
-                }
+                  );
+                  // A plain click on the card itself selects the whole line.
+                  if (
+                    !event.shiftKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !(event.target as Element).closest(
+                      ".ttml-chip, .ttml-space, button, input, label",
+                    )
+                  ) {
+                    pickedFrom.current = lineIndex;
+                    setPicked(new Set([lineIndex]));
+                  }
+                }}
                 onPointerDown={(event) => {
                   event.currentTarget.draggable = !(
                     event.target as Element
@@ -1810,6 +1840,7 @@ export function TtmlCreator({
                                     return pickWord(at, event.shiftKey);
                                   setGroup([]);
                                   setSpaces([]);
+                                  setPicked(new Set());
                                   setChosen(at);
                                 }}
                                 onDoubleClick={() => setEditing(at)}

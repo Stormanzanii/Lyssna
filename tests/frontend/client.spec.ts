@@ -15052,6 +15052,40 @@ test("TTML Creator selects a Sync line by its blank space and centres it in Lyri
   ).not.toBeInViewport();
 });
 
+test("TTML Creator changes several selected lines at once", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-card");
+  const total = await cards.count();
+  await creator.getByLabel("Select line 2", { exact: true }).check();
+  await creator
+    .getByLabel("Select line 4", { exact: true })
+    .click({ modifiers: ["Shift"] });
+  const bar = creator.getByRole("toolbar", { name: "Selected lines" });
+  await expect(bar).toContainText("3 lines selected");
+  await bar.getByRole("button", { name: "Background" }).click();
+  for (const index of [1, 2, 3])
+    await expect(cards.nth(index)).toHaveClass(/\bbackground\b/);
+  await expect(cards.nth(0)).not.toHaveClass(/\bbackground\b/);
+  await expect(cards.nth(4)).not.toHaveClass(/\bbackground\b/);
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(cards).toHaveCount(total - 3);
+  await expect(bar).toHaveCount(0);
+});
+
 test("TTML Creator saves drafts with a time and keeps versions", async ({
   page,
 }) => {

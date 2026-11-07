@@ -327,6 +327,61 @@ export function toggleLine(
   );
 }
 
+export function setLineFlag(
+  lines: CreatorLine[],
+  picked: ReadonlySet<number>,
+  key: "background" | "opposite",
+  on: boolean,
+): CreatorLine[] {
+  return lines.map((line, index) =>
+    picked.has(index) ? { ...line, [key]: on } : line,
+  );
+}
+
+export function shiftLines(
+  lines: CreatorLine[],
+  picked: ReadonlySet<number>,
+  ms: number,
+): CreatorLine[] {
+  const move = (time?: number) =>
+    time === undefined ? undefined : Math.max(0, time + ms);
+  return lines.map((line, index) =>
+    picked.has(index)
+      ? {
+          ...line,
+          units: line.units.map((unit) => ({
+            ...unit,
+            start: move(unit.start),
+            end: move(unit.end),
+          })),
+        }
+      : line,
+  );
+}
+
+export function clearLines(
+  lines: CreatorLine[],
+  picked: ReadonlySet<number>,
+): CreatorLine[] {
+  return lines.map((line, index) =>
+    picked.has(index)
+      ? {
+          ...line,
+          units: line.units.map((unit) => ({
+            ...unit,
+            start: undefined,
+            end: undefined,
+          })),
+        }
+      : line,
+  );
+}
+
+export const removeLines = (
+  lines: CreatorLine[],
+  picked: ReadonlySet<number>,
+) => lines.filter((_, index) => !picked.has(index));
+
 export function editUnit(
   lines: CreatorLine[],
   at: Cursor,

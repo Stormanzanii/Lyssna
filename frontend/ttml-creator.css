@@ -801,3 +801,36 @@
   color: #ff8a95;
   font-size: 12px;
 }
+.ttml-card-number {
+  align-content: center;
+  gap: 6px;
+}
+.ttml-pick {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #1ed760;
+  cursor: pointer;
+}
+.ttml-pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #1ed76014;
+  box-shadow: inset 0 0 0 1px #1ed76040;
+  font-size: 13px;
+}
+.ttml-pick-bar strong {
+  margin-right: 6px;
+}
+.ttml-pick-end {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.ttml-creator .ttml-pick-bar button.danger:hover {
+  background: #e9142940;
+}

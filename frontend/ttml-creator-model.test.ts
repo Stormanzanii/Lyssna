@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   breakLine,
+  clearLines,
+  removeLines,
+  setLineFlag,
+  shiftLines,
   defaultMetadata,
   metaProblem,
   duplicateLine,
@@ -415,5 +419,23 @@ describe("TTML Creator metadata", () => {
     expect(metaProblem("appleMusicId", "album/1440841766")).not.toBeNull();
     expect(metaProblem("ttmlAuthorGithubLogin", "bad name")).not.toBeNull();
     expect(metaProblem("anything", "")).toBeNull();
+  });
+});
+
+describe("TTML Creator line selection", () => {
+  it("changes only the selected lines", () => {
+    const lines = timeAll(["one", "two", "three"].join("\n"));
+    const picked = new Set([0, 2]);
+    expect(
+      setLineFlag(lines, picked, "background", true).map((l) => l.background),
+    ).toEqual([true, false, true]);
+    const shifted = shiftLines(lines, picked, -1500);
+    expect(shifted[0].units[0]).toMatchObject({ start: 0, end: 0 });
+    expect(shifted[1].units[0].start).toBe(lines[1].units[0].start);
+    expect(shifted[2].units[0].start).toBe(lines[2].units[0].start! - 1500);
+    const cleared = clearLines(lines, picked);
+    expect(cleared[0].units[0].start).toBeUndefined();
+    expect(cleared[1].units[0].start).toBeDefined();
+    expect(removeLines(lines, picked)).toEqual([lines[1]]);
   });
 });

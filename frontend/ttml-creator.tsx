@@ -76,6 +76,10 @@ import {
   toggleJoin,
   toggleLine,
   wordBounds,
+  setLineFlag,
+  shiftLines,
+  clearLines,
+  removeLines,
 } from "./ttml-creator-model";
 import { romanizeAway } from "./romanization";
 import { MetadataDialog } from "./ttml-metadata";
@@ -435,6 +439,96 @@ export function TtmlCreator({
     setCursor(at);
     setMenu({ x: event.clientX, y: event.clientY, at });
   };
+  const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  const pickedFrom = useRef(0);
+  useEffect(() => setPicked(new Set()), [lines.length, track]);
+  const pick = (index: number, range: boolean) => {
+    const [from, to] = [pickedFrom.current, index].sort((a, b) => a - b);
+    pickedFrom.current = index;
+    setPicked((old) => {
+      const next = new Set(old);
+      if (range) for (let at = from; at <= to; at++) next.add(at);
+      else if (!next.delete(index)) next.add(index);
+      return next;
+    });
+  };
+  const pickBox = (index: number) => (
+    <input
+      type="checkbox"
+      className="ttml-pick"
+      aria-label={`Select line ${index + 1}`}
+      checked={picked.has(index)}
+      onChange={() => {}}
+      onClick={(event) => pick(index, event.shiftKey)}
+    />
+  );
+  const [shiftBy, setShiftBy] = useState(0);
+  const allPicked = (key: "background" | "opposite") =>
+    [...picked].every((index) => lines[index]?.[key]);
+  const pickBar = picked.size > 0 && (
+    <div className="ttml-pick-bar" role="toolbar" aria-label="Selected lines">
+      <strong>
+        {picked.size} line{picked.size === 1 ? "" : "s"} selected
+      </strong>
+      <button
+        className={allPicked("background") ? "active" : ""}
+        aria-pressed={allPicked("background")}
+        onClick={() =>
+          setLines(
+            setLineFlag(lines, picked, "background", !allPicked("background")),
+          )
+        }
+      >
+        Background
+      </button>
+      <button
+        className={allPicked("opposite") ? "active" : ""}
+        aria-pressed={allPicked("opposite")}
+        onClick={() =>
+          setLines(
+            setLineFlag(lines, picked, "opposite", !allPicked("opposite")),
+          )
+        }
+      >
+        Second singer
+      </button>
+      <label className="ttml-offset">
+        Shift
+        <input
+          type="number"
+          step={10}
+          value={shiftBy}
+          aria-label="Shift selected lines by milliseconds"
+          onChange={(event) => setShiftBy(Number(event.target.value) || 0)}
+        />
+        ms
+      </label>
+      <button
+        disabled={!shiftBy}
+        onClick={() => setLines(shiftLines(lines, picked, shiftBy))}
+      >
+        Shift timing
+      </button>
+      <button onClick={() => setLines(clearLines(lines, picked))}>
+        Clear timing
+      </button>
+      <button
+        className="danger"
+        onClick={() => restructure(removeLines(lines, picked))}
+      >
+        <Trash2 size={14} />
+        Delete
+      </button>
+      <span className="ttml-pick-end">
+        <button
+          onClick={() => setPicked(new Set(lines.map((_, index) => index)))}
+        >
+          Select all
+        </button>
+        <button onClick={() => setPicked(new Set())}>Deselect</button>
+      </span>
+    </div>
+  );
   const restructure = (next: CreatorLine[]) => {
     if (next === lines) return;
     setLines(next);
@@ -1160,6 +1254,7 @@ export function TtmlCreator({
               </p>
             )}
           </div>
+          {pickBar}
           <div
             className="ttml-lines"
             ref={list}
@@ -1209,7 +1304,10 @@ export function TtmlCreator({
                     );
                 }}
               >
-                <span className="ttml-card-number">{lineIndex + 1}</span>
+                <span className="ttml-card-number">
+                  {pickBox(lineIndex)}
+                  {lineIndex + 1}
+                </span>
                 <div className="ttml-card-body">
                   <div className="ttml-chips">
                     {line.units.map((unit, unitIndex) => {
@@ -1597,6 +1695,7 @@ export function TtmlCreator({
             <kbd>]</kbd> speed · <kbd>'</kbd> normal speed · <kbd>Del</kbd>{" "}
             clear word
           </p>
+          {pickBar}
           <div
             className="ttml-lines"
             ref={list}
@@ -1617,12 +1716,15 @@ export function TtmlCreator({
                 onClick={(event) => {
                   if (
                     cursor.line !== lineIndex &&
-                    !(event.target as Element).closest("button")
+                    !(event.target as Element).closest("button, input")
                   )
                     setCursor(clampCursor(lines, { line: lineIndex, unit: 0 }));
                 }}
               >
-                <span className="ttml-card-number">{lineIndex + 1}</span>
+                <span className="ttml-card-number">
+                  {pickBox(lineIndex)}
+                  {lineIndex + 1}
+                </span>
                 <div className="ttml-cells">
                   {line.units.map((unit, unitIndex) => {
                     const selected =

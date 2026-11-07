@@ -86,6 +86,7 @@ import {
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
+import { CoverViewer } from "./cover-viewer";
 import { Logo, MicLoader } from "./brand";
 import { playingRoute } from "./playing-context";
 import {
@@ -564,6 +565,8 @@ function App() {
   const [albumFilter, setAlbumFilter] = useState("all");
   const [allAlbums, setAllAlbums] = useState(false);
   const [popularMore, setPopularMore] = useState(false);
+  const [coverView, setCoverView] = useState(false);
+  const closeCoverView = useCallback(() => setCoverView(false), []);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
   // The Lyssna settings window and the tab it opened on.
@@ -710,6 +713,7 @@ function App() {
       setAlbumFilter("all");
       setAllAlbums(false);
       setPopularMore(false);
+      setCoverView(false);
       setSongMenu(null);
       setSelected(new Set());
       selectAnchor.current = null;
@@ -3550,13 +3554,25 @@ function App() {
                         (!!entity?.images.length ||
                           !!playlist?.images.length) &&
                         !artistPage && (
-                          <Cover
-                            images={heroImages}
-                            className="hero-cover"
-                            contextRoute={state.route}
-                            contextName={title}
-                          />
+                          <button
+                            className="hero-cover hero-cover-zoom"
+                            aria-label="View cover"
+                            onClick={() => setCoverView(true)}
+                          >
+                            <Cover
+                              images={heroImages}
+                              contextRoute={state.route}
+                              contextName={title}
+                            />
+                          </button>
                         )
+                      )}
+                      {coverView && heroImages?.length && (
+                        <CoverViewer
+                          images={heroImages}
+                          title={title}
+                          onClose={closeCoverView}
+                        />
                       )}
                       <div className="hero-copy">
                         {!artistPage && (

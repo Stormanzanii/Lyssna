@@ -2137,6 +2137,48 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
+test("album cover opens large over a grey app and closes", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.locator(".album-link").first().click();
+  await page.evaluate((track) => {
+    const host = (window as any).__clientTest;
+    const command = host.commands
+      .filter((call: any) => call.command === "browse")
+      .at(-1);
+    host.emit({
+      type: "browse_info",
+      generation: command.args.generation,
+      info: {
+        key: command.args.key,
+        title: "Test album",
+        subtitle: "Test artist",
+        images: track.album.images,
+        album: { ...track.album, artists: track.artists },
+        albums: [],
+      },
+    });
+  }, track);
+  const cover = page.getByRole("button", { name: "View cover" });
+  await expect(cover).not.toHaveAttribute("title", /./);
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await cover.click();
+  const viewer = page.getByRole("dialog", { name: "Test album cover" });
+  await expect(viewer.locator("img")).toBeVisible();
+  await expect(viewer).toHaveCSS("backdrop-filter", /grayscale\(1\)/);
+  const small = await viewer.locator("img").boundingBox();
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await expect
+    .poll(async () => (await viewer.locator("img").boundingBox())!.width)
+    .toBeGreaterThan(small!.width);
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await cover.click();
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(viewer).toHaveCount(0);
+});
+
 test("Now playing ambience follows its own Canvas, not the lyrics page's", async ({
   page,
 }) => {

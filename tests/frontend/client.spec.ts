@@ -2172,6 +2172,10 @@ test("album cover opens large over a grey app and closes", async ({
   await expect
     .poll(async () => (await viewer.locator("img").boundingBox())!.width)
     .toBeGreaterThan(small!.width);
+  await page.mouse.click(10, 10);
+  await expect(viewer).toHaveClass(/closing/);
+  await expect(viewer).toHaveCount(0);
+  await cover.click();
   await page.keyboard.press("Escape");
   await expect(viewer).toHaveCount(0);
   await cover.click();

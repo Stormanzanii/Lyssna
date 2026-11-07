@@ -1262,10 +1262,11 @@ export function TtmlCreator({
   const barSpans = useMemo(
     () =>
       lines.flatMap((line, index) => {
+        if (index !== cursor.line && !picked.has(index)) return [];
         const span = lineSpan(line);
-        return span ? [{ ...span, current: index === cursor.line }] : [];
+        return span ? [{ ...span, current: true }] : [];
       }),
-    [lines, cursor.line],
+    [lines, cursor.line, picked],
   );
   const playingLine = useMemo(() => {
     let found = -1;

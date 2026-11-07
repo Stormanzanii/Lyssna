@@ -5877,9 +5877,12 @@ button.community-profile .community-name {
   text-underline-offset: 0.15em;
 }
 .community-credits
-  .community-profile:is(:hover, :focus-visible)
+  button.community-profile:is(:hover, :focus-visible)
   .community-name {
   opacity: 1;
+}
+.community-credits span.community-profile {
+  cursor: default;
 }
 .lyric-source.community-credits.expanded > span {
   display: inline;

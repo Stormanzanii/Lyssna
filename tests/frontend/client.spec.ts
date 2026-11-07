@@ -2776,6 +2776,9 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.getByRole("button", { name: "@Uploader", exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.locator(".lyrics-page span.community-profile").first(),
+  ).toHaveCSS("cursor", "default");
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page

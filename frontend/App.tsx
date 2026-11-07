@@ -882,6 +882,22 @@ function App() {
     },
     [call],
   );
+  // The TTML Creator takes the room of Now playing and a full library, and
+  // gives back whatever layout was there before it opened.
+  const layoutBeforeTtml = useRef<Partial<Settings> | null>(null);
+  useEffect(() => {
+    const settings = stateRef.current.settings;
+    if (center === "ttml" && !layoutBeforeTtml.current) {
+      layoutBeforeTtml.current = {
+        now_playing_open: settings.now_playing_open !== false,
+        compact_library: !!settings.compact_library,
+      };
+      updateSettings({ now_playing_open: false, compact_library: true });
+    } else if (center !== "ttml" && layoutBeforeTtml.current) {
+      updateSettings(layoutBeforeTtml.current);
+      layoutBeforeTtml.current = null;
+    }
+  }, [center, updateSettings]);
   // Styles that differ between animator presets key off the root.
   const cacheAction = state.settings.lyrics_cache_action ?? "song";
   useEffect(() => {

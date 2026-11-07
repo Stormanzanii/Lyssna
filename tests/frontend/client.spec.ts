@@ -15171,7 +15171,17 @@ test("Now playing lyrics card folds while the TTML Creator is open", async ({
   const creator = page
     .locator(".player-extras")
     .getByTitle("TTML Creator", { exact: true });
+  const npvButton = page
+    .locator(".player-extras")
+    .getByTitle("Now playing", { exact: true });
+  await expect(page.locator(".library-panel")).not.toHaveClass(
+    /compact-library/,
+  );
   await creator.click();
+  // The creator closes Now playing and compacts the library.
+  await expect(page.locator(".now-playing")).toHaveCount(0);
+  await expect(page.locator(".library-panel")).toHaveClass(/compact-library/);
+  await npvButton.click();
   await expect(card).toHaveClass(/\bcollapsed\b/);
   await card.getByTitle("Show lyrics").click();
   await expect(card).not.toHaveClass(/\bcollapsed\b/);
@@ -15179,6 +15189,14 @@ test("Now playing lyrics card folds while the TTML Creator is open", async ({
   expect(
     await page.evaluate(() => localStorage.getItem("lyssna.npv-lyrics-card")),
   ).not.toContain('"open":false');
+  // Closing it gives back the layout from before.
+  await npvButton.click();
+  await expect(page.locator(".now-playing")).toHaveCount(0);
+  await creator.click();
+  await expect(page.locator(".now-playing")).toHaveCount(1);
+  await expect(page.locator(".library-panel")).not.toHaveClass(
+    /compact-library/,
+  );
 });
 
 test("TTML Creator Sync follows the playing line", async ({ page }) => {

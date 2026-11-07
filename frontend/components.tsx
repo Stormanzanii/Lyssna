@@ -975,6 +975,9 @@ export function LyricsDisplay({
   );
 }
 
+// Their profiles link to the browser even with "Open profiles in browser" off.
+const ALWAYS_LINKED = new Set(["ipixelgalaxy", "jevk", "arimodu"]);
+
 const LyricCredits = memo(function LyricCredits({
   lyrics,
   expanded = false,
@@ -1010,7 +1013,8 @@ const LyricCredits = memo(function LyricCredits({
               ? openCreator(person)
               : void rpc("open_link", { url }).catch(() => {})
         : undefined
-      : browser && (url ?? creatorEmbed(nameOf(person)))
+      : (browser || ALWAYS_LINKED.has(person.username.toLowerCase())) &&
+          (url ?? creatorEmbed(nameOf(person)))
         ? () =>
             void rpc("open_link", {
               url: url ?? creatorEmbed(nameOf(person)),

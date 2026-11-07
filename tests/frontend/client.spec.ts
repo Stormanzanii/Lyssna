@@ -11651,6 +11651,58 @@ test("community profiles can open in the browser", async ({ page }) => {
     .toEqual([["open_link", "https://spicylyrics.org/profile/Maker"]]);
 });
 
+test("whitelisted community profiles open in the browser with the setting off", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "spicy_lyrics",
+        synced: true,
+        instrumental: false,
+        attribution: {
+          maker: {
+            username: "Jevk",
+            id: "284347537568301056",
+          },
+          uploader: { username: "Someone", id: "2" },
+        },
+        lines: [
+          {
+            text: "Hello",
+            start_ms: 1000,
+            end_ms: 2000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [],
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  await expect(
+    page.getByRole("button", { name: "@Someone", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "@Jevk", exact: true }).click();
+  const calls = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((call: any) =>
+          ["open_link", "open_creator_profile"].includes(call.command),
+        )
+        .map((call: any) => [call.command, call.args?.url ?? null]),
+    );
+  await expect
+    .poll(calls)
+    .toEqual([["open_link", "https://spicylyrics.org/Jevk"]]);
+});
+
 test("Escape can leave the lyrics page as well as full screen", async ({
   page,
 }) => {

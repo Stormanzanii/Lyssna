@@ -15028,6 +15028,12 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
   await expect(add).toHaveValue("");
   await expect(add).toBeFocused();
+  await add.pressSequentially("one two");
+  await expect(first.locator(".ttml-chip").last()).toHaveText("one");
+  await expect(add).toHaveValue("two");
+  await add.press("Space");
+  await expect(first.locator(".ttml-chip").last()).toHaveText("two");
+  await expect(add).toHaveValue("");
 });
 
 test("TTML Creator word menu splits words and moves them to new lines", async ({

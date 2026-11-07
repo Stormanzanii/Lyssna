@@ -1686,7 +1686,8 @@ export function TtmlCreator({
                       }
                       onKeyDown={(event) => {
                         if (event.key === "Escape") event.currentTarget.blur();
-                        if (event.key !== "Enter") return;
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
                         const next = appendWords(
                           lines,
                           lineIndex,

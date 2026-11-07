@@ -1322,9 +1322,14 @@ export function TtmlCreator({
           <button onClick={openSaves} title="Saves and earlier versions">
             <History size={15} />
           </button>
-          <button onClick={() => setEditingKeys(true)} title="Settings">
-            <Settings size={15} />
-          </button>
+          {tab !== "preview" && (
+            <button
+              onClick={() => setEditingKeys(true)}
+              title={tab === "sync" ? "Sync settings" : "Lyrics settings"}
+            >
+              <Settings size={15} />
+            </button>
+          )}
           <button onClick={() => setEditingMeta(true)} title="Metadata">
             <Tags size={15} />
           </button>
@@ -2031,6 +2036,7 @@ export function TtmlCreator({
       {savesDialog}
       {editingKeys && (
         <KeysDialog
+          mode={tab === "sync" ? "sync" : "lyrics"}
           keys={keys}
           onChange={changeKeys}
           onClose={() => setEditingKeys(false)}

@@ -14657,6 +14657,11 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     "I am just a lyric line number 1".split(" "),
   );
   await expect(card.locator(".ttml-space")).toHaveCount(7);
+  await creator.getByRole("button", { name: "Lyrics settings" }).click();
+  const lyricSettings = page.getByRole("dialog", { name: "Lyrics settings" });
+  await expect(lyricSettings).toContainText("Split a word into syllables");
+  await expect(lyricSettings).not.toContainText("Start word");
+  await lyricSettings.getByRole("button", { name: "Close settings" }).click();
   await creator.getByRole("button", { name: "Continue to Sync" }).click();
   const firstLine = creator.locator(".ttml-line").first();
   await expect(firstLine.locator(".ttml-line-side")).toHaveText(
@@ -14795,8 +14800,8 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
       .poll(async () => (await requests()).at(-1))
       .toEqual({ command: "seek", positionMs });
   }
-  await creator.getByRole("button", { name: "Settings" }).click();
-  const keys = page.getByRole("dialog", { name: "Settings" });
+  await creator.getByRole("button", { name: "Sync settings" }).click();
+  const keys = page.getByRole("dialog", { name: "Sync settings" });
   await keys.getByRole("button", { name: "Jump to previous word key" }).click();
   await page.keyboard.press("q");
   await expect(

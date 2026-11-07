@@ -1023,59 +1023,150 @@
 .ttml-creator .ttml-pick-bar button.danger:hover {
   background: #e9142940;
 }
-.ttml-keys-dialog {
-  width: min(480px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
-  grid-template-rows: auto minmax(0, 1fr);
+.ttml-settings {
+  width: min(720px, calc(100vw - 32px));
+}
+.ttml-settings.lyrics {
+  width: min(460px, calc(100vw - 32px));
+}
+.ttml-settings.lyrics .ttml-settings-body {
+  columns: auto;
 }
 .ttml-settings-body {
-  display: grid;
-  gap: 22px;
-  min-height: 0;
-  overflow-y: auto;
-  margin-right: -8px;
-  padding-right: 8px;
+  columns: auto;
 }
-.ttml-settings-body section {
-  display: grid;
-  gap: 10px;
+.ttml-settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 22px 0;
+  padding: 4px;
+  border-radius: 10px;
+  background: #00000040;
 }
-.ttml-settings-body h4 {
-  margin: 0;
+.ttml-creator .ttml-settings-tabs button {
+  flex: 1;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 7px;
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  background: transparent;
+  font-weight: 600;
+}
+.ttml-creator .ttml-settings-tabs button:hover {
+  color: #f3f3f3;
+}
+.ttml-creator .ttml-settings-tabs button.active {
+  color: #f3f3f3;
+  background: #ffffff17;
+  box-shadow: 0 1px 2px #0006;
+}
+.ttml-settings-body {
+  display: block;
+  columns: 2 280px;
+  column-gap: 16px;
+}
+.ttml-settings-group {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  break-inside: avoid;
+}
+.ttml-settings-group h4 {
+  margin: 0;
+  padding-left: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.ttml-fixed-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: var(--muted);
-  font-size: 12.5px;
-  text-align: center;
+.ttml-settings-rows {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  background: #ffffff05;
 }
-.ttml-keys-dialog header {
+.ttml-settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.ttml-keys-grid {
-  display: grid;
-  grid-template-columns: 1fr 130px;
-  align-items: center;
-  gap: 6px 12px;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 8px 6px 14px;
   font-size: 13.5px;
+  transition: background 0.15s;
 }
-.ttml-creator .ttml-keys-grid button {
-  justify-content: center;
-  min-height: 30px;
+.ttml-settings-row + .ttml-settings-row {
+  border-top: 1px solid #ffffff0d;
 }
-.ttml-creator .ttml-keys-grid button.active {
-  box-shadow: inset 0 0 0 1px #1ed760;
-  color: #1ed760;
+.ttml-settings-row:hover {
+  background: #ffffff08;
+}
+.ttml-settings-combo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-right: 4px;
+}
+.ttml-settings-combo i,
+.ttml-settings-combo em {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-style: normal;
+}
+.ttml-creator .ttml-settings kbd,
+.ttml-creator .ttml-keycap {
+  display: inline-grid;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0 7px;
+  border: 1px solid #ffffff1f;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  color: #f3f3f3;
+  background: linear-gradient(#ffffff14, #ffffff08);
+  font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
+  line-height: 1;
+}
+.ttml-creator .ttml-keycap {
+  display: inline-flex;
+  min-width: 44px;
+  height: 30px;
+  min-height: 0;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+.ttml-creator .ttml-keycap:hover {
+  border-color: #ffffff40;
+  background: linear-gradient(#ffffff1f, #ffffff0d);
+}
+.ttml-creator .ttml-keycap.custom {
+  color: #1ed760;
+}
+.ttml-creator .ttml-keycap.listening {
+  border-color: #1ed760;
+  color: #1ed760;
+  background: #1ed7601a;
+  font-family: inherit;
+  animation: ttml-keycap-listen 1.2s ease-in-out infinite;
+}
+@keyframes ttml-keycap-listen {
+  50% {
+    box-shadow: 0 0 0 4px #1ed76026;
+  }
+}
+.ttml-settings-note {
+  color: var(--muted);
+  font-size: 12.5px;
 }
 .ttml-import {
   display: inline-flex;

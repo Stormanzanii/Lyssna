@@ -395,11 +395,11 @@ export function editUnit(
     joined: index === 0 ? unit.joined : part.joined,
     ...(parts.length === 1 && { start: unit.start, end: unit.end }),
   }));
-  const units = [
-    ...line.units.slice(0, at.unit),
-    ...replaced,
-    ...line.units.slice(at.unit + 1),
-  ];
+  const after = line.units.slice(at.unit + 1);
+  // Deleting a word's first syllable makes the next syllable start the word.
+  if (!replaced.length && !unit.joined && after[0]?.joined)
+    after[0] = { ...after[0], joined: false };
+  const units = [...line.units.slice(0, at.unit), ...replaced, ...after];
   if (units.length) units[0] = { ...units[0], joined: false };
   return units.length
     ? lines.map((each, index) =>

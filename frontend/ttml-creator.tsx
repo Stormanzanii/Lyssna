@@ -436,6 +436,9 @@ export function TtmlCreator({
 
   const [textMode, setTextMode] = useState(false);
   const [editing, setEditing] = useState<Cursor | null>(null);
+  const [chosen, setChosen] = useState<Cursor | null>(null);
+  const chosenRef = useRef(chosen);
+  chosenRef.current = chosen;
   const [adding, setAdding] = useState<{ card: number; after: number } | null>(
     null,
   );
@@ -457,6 +460,48 @@ export function TtmlCreator({
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
   };
+
+  useEffect(() => {
+    if (tab !== "write") return setChosen(null);
+    const onKey = (event: KeyboardEvent) => {
+      const at = chosenRef.current;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, select, [contenteditable=true]") ||
+        document.querySelector(".ttml-menu, .ttml-dialog")
+      )
+        return;
+      const key = event.key.toLowerCase();
+      if (event.ctrlKey && key === "z") (event.shiftKey ? redo : undo)();
+      else if (event.ctrlKey && key === "y") redo();
+      if (event.ctrlKey && (key === "z" || key === "y")) {
+        event.preventDefault();
+        return;
+      }
+      if (!at || event.ctrlKey || event.altKey || event.metaKey) return;
+      const { lines } = stateRef.current;
+      if (event.key === "Delete" || event.key === "Backspace") {
+        const next = editUnit(lines, at, "");
+        setLines(next);
+        setCursor((cursor) => clampCursor(next, cursor));
+        // The next word or syllable takes its place, for deleting in a row.
+        const line = next[at.line];
+        setChosen(
+          line && line.units.length && next.length === lines.length
+            ? { line: at.line, unit: Math.min(at.unit, line.units.length - 1) }
+            : null,
+        );
+      } else if (event.key === "Escape") setChosen(null);
+      else if (event.key === "Enter") setEditing(at);
+      else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        const move = event.key === "ArrowLeft" ? previousCursor : nextCursor;
+        setChosen(move(lines, at) ?? at);
+      } else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab, setLines, undo, redo]);
 
   const [learned, setLearned] = useState<LearnedSplits>(() => {
     try {
@@ -1351,10 +1396,10 @@ export function TtmlCreator({
         <div className="ttml-write">
           <div className="ttml-write-actions">
             <p className="ttml-hint">
-              Double-click a word to edit it. Type <kbd>|</kbd> to split it into
-              syllables. Click <kbd>Space</kbd> to join two words.{" "}
-              <kbd>Ctrl</kbd>- or <kbd>Shift</kbd>-click lines to change several
-              at once.
+              Click a word to select it, <kbd>Del</kbd> deletes it. Double-click
+              to edit it. Type <kbd>|</kbd> to split it into syllables. Click{" "}
+              <kbd>Space</kbd> to join two words. <kbd>Ctrl</kbd>- or{" "}
+              <kbd>Shift</kbd>-click lines to change several at once.
             </p>
             <div className="ttml-row">
               <button
@@ -1407,6 +1452,10 @@ export function TtmlCreator({
           <div
             className="ttml-lines"
             ref={list}
+            onClick={(event) =>
+              !(event.target as Element).closest(".ttml-chip") &&
+              setChosen(null)
+            }
             onDragEnd={endDrag}
             onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
           >
@@ -1511,7 +1560,7 @@ export function TtmlCreator({
                               />
                             ) : (
                               <button
-                                className={`ttml-chip${unit.joined ? " joined" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
+                                className={`ttml-chip${unit.joined ? " joined" : ""}${chosen?.line === lineIndex && chosen.unit === unitIndex ? " chosen" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
                                 title={
                                   unit.joined
                                     ? "Syllable. Double-click to edit; right-click to make it its own word."
@@ -1558,6 +1607,7 @@ export function TtmlCreator({
                                   )
                                     land(event, moveSpace(lines, drag.at, at));
                                 }}
+                                onClick={() => setChosen(at)}
                                 onDoubleClick={() => setEditing(at)}
                                 onContextMenu={(event) => openMenu(event, at)}
                               >

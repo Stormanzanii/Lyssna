@@ -443,3 +443,19 @@ describe("TTML Creator line selection", () => {
     expect(removeLines(lines, picked)).toEqual([lines[1]]);
   });
 });
+
+describe("TTML Creator deleting", () => {
+  it("lets the next syllable start the word when the first one goes", () => {
+    const lines = parseText("go ev|er");
+    const units = editUnit(lines, { line: 0, unit: 1 }, "")[0].units;
+    expect(units.map((unit) => [unit.text, unit.joined])).toEqual([
+      ["go", false],
+      ["er", false],
+    ]);
+    const middle = editUnit(parseText("a|b|c"), { line: 0, unit: 1 }, "")[0];
+    expect(middle.units.map((unit) => [unit.text, unit.joined])).toEqual([
+      ["a", false],
+      ["c", true],
+    ]);
+  });
+});

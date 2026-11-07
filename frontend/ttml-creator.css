@@ -1089,3 +1089,9 @@
   left: auto;
   min-width: 220px;
 }
+.ttml-creator .ttml-chip.chosen {
+  position: relative;
+  z-index: 1;
+  background: #ffffff2e;
+  box-shadow: inset 0 0 0 1.5px #fff;
+}

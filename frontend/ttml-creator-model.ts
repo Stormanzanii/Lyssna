@@ -429,6 +429,19 @@ export function editUnit(
     : lines.filter((_, index) => index !== at.line);
 }
 
+export function appendWords(
+  lines: CreatorLine[],
+  lineIndex: number,
+  text: string,
+): CreatorLine[] {
+  const added = parseText(text.replace(/[()]/g, ""))[0]?.units ?? [];
+  if (!added.length || !lines[lineIndex]) return lines;
+  added[0] = { ...added[0], joined: false };
+  return lines.map((line, index) =>
+    index === lineIndex ? { ...line, units: [...line.units, ...added] } : line,
+  );
+}
+
 function divided(unit: CreatorUnit, parts: string[]): CreatorUnit[] {
   const { start, end } = unit;
   const total = parts.length;

@@ -294,6 +294,32 @@
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
+.ttml-creator .ttml-chip-add {
+  width: 15ch;
+  height: 30px;
+  padding: 4px 9px;
+  border: 1px dashed #ffffff26;
+  border-radius: 7px;
+  outline: none;
+  color: #fff;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.ttml-creator .ttml-chip-add::placeholder {
+  color: #ffffff59;
+}
+.ttml-creator .ttml-chip-add:focus {
+  border: 1px solid #ffffff59;
+  background: #ffffff0d;
+}
+/* Only the active or hovered line offers it, unless it holds typing. */
+.ttml-card:not(.current, :hover) .ttml-chip-add:placeholder-shown:not(:focus) {
+  display: none;
+}
 .ttml-chip-edit {
   border: 1px solid #ffffff59;
   outline: none;

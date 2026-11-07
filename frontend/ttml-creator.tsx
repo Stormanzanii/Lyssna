@@ -48,6 +48,7 @@ import {
   clearTiming,
   duplicateLine,
   editUnit,
+  appendWords,
   fileName,
   formatTime,
   fromLyrics,
@@ -1666,6 +1667,30 @@ export function TtmlCreator({
                         </Fragment>
                       );
                     })}
+                    <input
+                      className="ttml-chip-add"
+                      aria-label={`Add words to line ${lineIndex + 1}`}
+                      placeholder="Type word here"
+                      spellCheck={false}
+                      onFocus={() =>
+                        setCursor((at) =>
+                          at.line === lineIndex
+                            ? at
+                            : { line: lineIndex, unit: 0 },
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") event.currentTarget.blur();
+                        if (event.key !== "Enter") return;
+                        const next = appendWords(
+                          lines,
+                          lineIndex,
+                          event.currentTarget.value,
+                        );
+                        event.currentTarget.value = "";
+                        if (next !== lines) setLines(next);
+                      }}
+                    />
                   </div>
                   {(["translation", "romanization"] as const).map((key) => (
                     <label key={key} className="ttml-card-extra">

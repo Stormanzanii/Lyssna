@@ -10,6 +10,7 @@ import {
   metaProblem,
   duplicateLine,
   editUnit,
+  appendWords,
   formatTime,
   fromLyrics,
   insertLines,
@@ -230,6 +231,14 @@ describe("TTML Creator card editing", () => {
     lines = editUnit(lines, { line: 0, unit: 0 }, "");
     expect(words(lines)).toEqual(["t|o o"]);
     expect(editUnit(parseText("x"), { line: 0, unit: 0 }, " ")).toEqual([]);
+  });
+
+  it("adds typed words to the end of a line", () => {
+    const lines = timeAll("one");
+    const next = appendWords(lines, 0, "two th|ree");
+    expect(words(next)).toEqual(["one two th|ree"]);
+    expect(next[0].units[0].start).toBe(lines[0].units[0].start);
+    expect(appendWords(lines, 0, "  ")).toBe(lines);
   });
 
   it("joins words, inserts lines and exports translations", () => {

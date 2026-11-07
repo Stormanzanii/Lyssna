@@ -2137,9 +2137,7 @@ test("album pages retain play counts, release date and licensing", async ({
   await expect(page.locator(".album-release-details")).toContainText("2026");
 });
 
-test("album cover opens large over a grey app and closes", async ({
-  page,
-}) => {
+test("album cover opens large over a grey app and closes", async ({ page }) => {
   await startClient(page);
   await page.locator(".album-link").first().click();
   await page.evaluate((track) => {
@@ -14993,6 +14991,37 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     repeat: "off",
   });
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+});
+
+test("TTML Creator offers Type word here on the active or hovered line", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const first = creator.locator(".ttml-card").nth(0);
+  const second = creator.locator(".ttml-card").nth(1);
+  const add = first.getByPlaceholder("Type word here");
+  await expect(add).toBeVisible();
+  await expect(second.getByPlaceholder("Type word here")).toBeHidden();
+  await second.locator(".ttml-card-number").hover();
+  await expect(second.getByPlaceholder("Type word here")).toBeVisible();
+  await add.fill("extra wo|rds");
+  await add.press("Enter");
+  await expect(first.locator(".ttml-chip").last()).toHaveText("rds");
+  await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
+  await expect(add).toHaveValue("");
+  await expect(add).toBeFocused();
 });
 
 test("TTML Creator word menu splits words and moves them to new lines", async ({

@@ -801,7 +801,42 @@ export function TtmlCreator({
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", "");
+    if (next.kind === "word") {
+      // Shows every word being moved, not just the block under the pointer.
+      const text = [...(next.group ?? [next.at])]
+        .sort((a, b) => a.line - b.line || a.unit - b.unit)
+        .map((at) => {
+          const units = lines[at.line]?.units ?? [];
+          const { start, end } = wordBounds(units, at.unit);
+          return units
+            .slice(start, end)
+            .map((unit) => unit.text)
+            .join("");
+        })
+        .join(" ");
+      const ghost = document.createElement("div");
+      ghost.className = "ttml-drag-ghost";
+      ghost.textContent = text;
+      document.body.append(ghost);
+      event.dataTransfer.setDragImage(ghost, 12, 16);
+      setTimeout(() => ghost.remove());
+    }
     setDrag(next);
+  };
+  // The picked words, or the selected word when none are picked.
+  const pickedWords = () =>
+    group.length ? group : chosen ? [wordStart(chosen)] : [];
+  const dragWords = (event: ReactDragEvent, at: Cursor) => {
+    const words = pickedWords();
+    const carry = words.some(
+      (each) => each.line === at.line && each.unit === wordStart(at).unit,
+    );
+    startDrag(
+      event,
+      carry && words.length > 1
+        ? { kind: "word", at, group: words }
+        : { kind: "word", at },
+    );
   };
   const over = (event: ReactDragEvent, key: string) => {
     event.preventDefault();
@@ -1651,9 +1686,17 @@ export function TtmlCreator({
                               className={`ttml-space${isSpace(at) ? " chosen" : ""}${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
                               draggable
                               onClick={(event) => pickSpace(event, at)}
-                              onDragStart={(event) =>
-                                startDrag(event, { kind: "space", at })
-                              }
+                              onDragStart={(event) => {
+                                // A picked space drags the picked words with it.
+                                const words = pickedWords();
+                                if (isSpace(at) && words.length)
+                                  startDrag(event, {
+                                    kind: "word",
+                                    at: words[0],
+                                    ...(words.length > 1 && { group: words }),
+                                  });
+                                else startDrag(event, { kind: "space", at });
+                              }}
                               onDragOver={(event) =>
                                 drag?.kind === "word" &&
                                 over(
@@ -1699,14 +1742,7 @@ export function TtmlCreator({
                                     : "Double-click to edit; drag to move"
                                 }
                                 draggable
-                                onDragStart={(event) =>
-                                  startDrag(event, {
-                                    kind: "word",
-                                    at,
-                                    ...(group.length > 1 &&
-                                      inGroup(at) && { group }),
-                                  })
-                                }
+                                onDragStart={(event) => dragWords(event, at)}
                                 onDragOver={(event) => {
                                   if (drag?.kind === "word")
                                     over(

@@ -15089,7 +15089,20 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await page.keyboard.press("Backspace");
   await expect(spaces).toHaveCount(count - 2);
   await expect(card.locator(".ttml-chip").nth(1)).toHaveClass(/joined/);
-  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/);
+  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/); // A picked space plus a picked word drags as that word.
+  const last = creator.locator(".ttml-card").nth(1);
+  const lastWord = (name: string) =>
+    last.getByRole("button", { name, exact: true });
+  const before = (await last.locator(".ttml-chip").allTextContents()).join(" ");
+  const tail = before.split(" ").at(-1)!;
+  await last.locator(".ttml-space").last().click();
+  await lastWord(tail).click({ modifiers: ["Control"] });
+  await last
+    .locator(".ttml-space.chosen")
+    .dragTo(last.locator(".ttml-chip").first(), {
+      targetPosition: { x: 2, y: 10 },
+    });
+  await expect(last.locator(".ttml-chip").first()).toHaveText(tail);
 });
 
 test("TTML Creator word menu splits words and moves them to new lines", async ({

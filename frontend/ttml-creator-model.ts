@@ -26,6 +26,63 @@ export interface SongMeta {
   spotifyId?: string;
   durationMs?: number;
 }
+export interface MetaEntry {
+  key: string;
+  values: string[];
+}
+
+// Key names as the AMLL TTML DB stores them; songwriters go to
+// iTunesMetadata instead of an amll:meta tag.
+export const META_KEYS = [
+  "musicName",
+  "artists",
+  "album",
+  "songwriters",
+  "isrc",
+  "spotifyId",
+  "appleMusicId",
+  "ncmMusicId",
+  "qqMusicId",
+  "ttmlAuthorGithub",
+  "ttmlAuthorGithubLogin",
+] as const;
+export const AUTHOR_KEYS = ["ttmlAuthorGithub", "ttmlAuthorGithubLogin"];
+
+export function defaultMetadata(
+  meta: SongMeta,
+  author: MetaEntry[] = [],
+): MetaEntry[] {
+  const known: Record<string, string[]> = {
+    musicName: meta.name ? [meta.name] : [],
+    artists: meta.artists,
+    album: meta.album ? [meta.album] : [],
+    spotifyId: meta.spotifyId ? [meta.spotifyId] : [],
+  };
+  for (const entry of author)
+    if (AUTHOR_KEYS.includes(entry.key)) known[entry.key] = entry.values;
+  return META_KEYS.map((key) => ({ key, values: [...(known[key] ?? [])] }));
+}
+
+export function metaProblem(key: string, value: string): string | null {
+  const text = value.trim();
+  if (!text) return null;
+  if (key === "isrc" && !/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(text))
+    return "An ISRC is 12 characters, like USUM71703861.";
+  if (
+    (key === "appleMusicId" ||
+      key === "ncmMusicId" ||
+      key === "ttmlAuthorGithub") &&
+    !/^\d+$/.test(text)
+  )
+    return "Use digits only.";
+  if (key === "spotifyId" && !/^[A-Za-z0-9]{22}$/.test(text))
+    return "A Spotify ID is 22 letters and digits.";
+  if (key === "qqMusicId" && !/^[A-Za-z0-9]+$/.test(text))
+    return "Use letters and digits only.";
+  if (key === "ttmlAuthorGithubLogin" && !/^[A-Za-z0-9-]{1,39}$/.test(text))
+    return "That isn't a GitHub username.";
+  return null;
+}
 
 const OPPOSITE_PREFIX = "v2:";
 
@@ -605,6 +662,9 @@ export function formatTime(ms: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
 }
 
+const filled = (values: string[]) => [
+  ...new Set(values.map((value) => value.trim()).filter(Boolean)),
+];
 const escape = (text: string) =>
   text
     .replace(/&/g, "&amp;")
@@ -639,7 +699,11 @@ function extras(line: CreatorLine): string {
  * Word-timed TTML in the Apple Music style AMLL and Spicy Lyrics read.
  * Background lines nest inside the lead line sung before them.
  */
-export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
+export function toTtml(
+  lines: CreatorLine[],
+  meta: SongMeta,
+  entries: MetaEntry[] = defaultMetadata(meta),
+): string {
   type Paragraph = { lead?: CreatorLine; backgrounds: CreatorLine[] };
   const paragraphs: Paragraph[] = [];
   for (const line of lines) {
@@ -680,21 +744,30 @@ export function toTtml(lines: CreatorLine[], meta: SongMeta): string {
       return `<p begin="${formatTime(begin)}" end="${formatTime(finish)}" ttm:agent="${agent}" itunes:key="L${index + 1}">${lead}${backgrounds}</p>`;
     })
     .join("");
+  const songwriters = filled(
+    entries.find((entry) => entry.key === "songwriters")?.values ?? [],
+  );
   const metadata = [
     `<ttm:agent type="person" xml:id="v1"/>`,
     opposite ? `<ttm:agent type="other" xml:id="v2"/>` : "",
-    meta.name
-      ? `<amll:meta key="musicName" value="${escape(meta.name)}"/>`
-      : "",
-    ...meta.artists.map(
-      (artist) => `<amll:meta key="artists" value="${escape(artist)}"/>`,
-    ),
-    meta.album ? `<amll:meta key="album" value="${escape(meta.album)}"/>` : "",
-    meta.spotifyId
-      ? `<amll:meta key="spotifyId" value="${escape(meta.spotifyId)}"/>`
-      : "",
-    readings.length
-      ? `<iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations><transliteration>${readings.join("")}</transliteration></transliterations></iTunesMetadata>`
+    ...entries
+      .filter((entry) => entry.key.trim() && entry.key !== "songwriters")
+      .flatMap((entry) =>
+        filled(entry.values).map(
+          (value) =>
+            `<amll:meta key="${escape(entry.key.trim())}" value="${escape(value)}"/>`,
+        ),
+      ),
+    songwriters.length || readings.length
+      ? `<iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">${
+          songwriters.length
+            ? `<songwriters>${songwriters.map((name) => `<songwriter>${escape(name)}</songwriter>`).join("")}</songwriters>`
+            : ""
+        }${
+          readings.length
+            ? `<transliterations><transliteration>${readings.join("")}</transliteration></transliterations>`
+            : ""
+        }</iTunesMetadata>`
       : "",
   ].join("");
   const duration = Math.max(end, meta.durationMs ?? 0);

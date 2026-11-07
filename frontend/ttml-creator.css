@@ -759,3 +759,45 @@
 .ttml-creator .ttml-saves button.danger:hover {
   background: #e9142940;
 }
+.ttml-metadata {
+  width: min(620px, calc(100vw - 32px));
+}
+.ttml-meta h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ttml-meta h4 code {
+  color: #ffffff59;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ttml-meta-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ttml-meta input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #ffffff1a;
+  border-radius: 7px;
+  color: #f3f3f3;
+  background: #141414;
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ttml-meta input[aria-invalid="true"] {
+  border-color: #e91429aa;
+}
+.ttml-meta-value small {
+  flex-basis: 100%;
+  color: #ff8a95;
+  font-size: 12px;
+}

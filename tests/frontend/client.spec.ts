@@ -14799,8 +14799,26 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await creator.getByRole("tab", { name: "Preview" }).click();
   await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
 
+  await creator.getByTitle("Metadata").click();
+  const metadata = page.getByRole("dialog", { name: "Song metadata" });
+  await metadata.getByLabel("ISRC 1", { exact: true }).fill("bad");
+  await expect(metadata.getByRole("alert")).toContainText("12 characters");
+  await metadata.getByLabel("ISRC 1", { exact: true }).fill("USUM71703861");
+  await expect(metadata.getByRole("alert")).toHaveCount(0);
+  await metadata
+    .getByLabel("Your GitHub username 1", { exact: true })
+    .fill("someone");
+  await metadata.getByRole("button", { name: "Done" }).click();
+  await expect(metadata).toHaveCount(0);
+
   await creator.getByRole("button", { name: "Use for this song" }).click();
   const saved = await last("import_lyrics");
+  expect(saved.contents).toContain(
+    '<amll:meta key="isrc" value="USUM71703861"/><amll:meta key="spotifyId"',
+  );
+  expect(saved.contents).toContain(
+    '<amll:meta key="ttmlAuthorGithubLogin" value="someone"/>',
+  );
   expect(saved).toMatchObject({
     filename: "Juice WRLD, Marshmello - Come & Go (with Marshmello).ttml",
     mode: "persistent",

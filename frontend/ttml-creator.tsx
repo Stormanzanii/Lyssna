@@ -20,6 +20,7 @@ import {
   Redo2,
   RotateCcw,
   Save,
+  Tags,
   Trash2,
   Type,
   Languages,
@@ -33,7 +34,10 @@ import type { Lyrics, PlayerRequest, Track } from "./types";
 import {
   type CreatorLine,
   type Cursor,
+  type MetaEntry,
   type SongMeta,
+  AUTHOR_KEYS,
+  defaultMetadata,
   breakLine,
   clampCursor,
   clearAll,
@@ -74,6 +78,7 @@ import {
   wordBounds,
 } from "./ttml-creator-model";
 import { romanizeAway } from "./romanization";
+import { MetadataDialog } from "./ttml-metadata";
 import {
   type DraftVersion,
   type SavedSong,
@@ -133,6 +138,21 @@ function writeStorage(key: string, value: string | null) {
     // Private storage is a convenience; settings still apply this session.
   }
 }
+
+const AUTHOR_KEY = "lyssna.ttml-author";
+const loadAuthor = (): MetaEntry[] => {
+  try {
+    const author = JSON.parse(readStorage(AUTHOR_KEY) ?? "[]");
+    return Array.isArray(author) ? author : [];
+  } catch {
+    return [];
+  }
+};
+const contentOf = (
+  lines: CreatorLine[],
+  text: string,
+  metadata: MetaEntry[] | undefined,
+) => JSON.stringify({ lines, text, metadata });
 
 const meta = (track: Track): SongMeta => ({
   name: track.name,
@@ -206,13 +226,14 @@ export function TtmlCreator({
   const [savedAt, setSavedAt] = useState<number | undefined>();
   // The content last written for `uri`, so loading or seeding a song is not
   // mistaken for an edit and only real changes get a new save time.
+  const [metadata, setMetadata] = useState<MetaEntry[] | undefined>();
   const saved = useRef({ uri: "", content: "", loading: false });
-  const current = useRef({ uri: "", lines, text });
+  const current = useRef({ uri: "", lines, text, metadata });
   const versions = useRef<{ at?: number; changed: boolean }>({
     changed: false,
   });
   const snapshot = useCallback((leaving: boolean) => {
-    const { uri, lines, text } = current.current;
+    const { uri, lines, text, metadata } = current.current;
     const now = Date.now();
     if (
       !uri ||
@@ -221,7 +242,9 @@ export function TtmlCreator({
     )
       return;
     versions.current = { at: now, changed: false };
-    void addVersion({ uri, savedAt: now, lines, text }).catch(() => {});
+    void addVersion({ uri, savedAt: now, lines, text, metadata }).catch(
+      () => {},
+    );
   }, []);
 
   useEffect(() => {
@@ -229,13 +252,15 @@ export function TtmlCreator({
     const draft = loadDraft(track.uri);
     setLinesRaw(draft?.lines ?? []);
     setText(draft?.text ?? "");
+    setMetadata(draft?.metadata);
     setSavedAt(draft?.savedAt);
     saved.current = {
       uri: track.uri,
-      content: JSON.stringify({
-        lines: draft?.lines ?? [],
-        text: draft?.text ?? "",
-      }),
+      content: contentOf(
+        draft?.lines ?? [],
+        draft?.text ?? "",
+        draft?.metadata,
+      ),
       loading: true,
     };
     versions.current = { changed: false };
@@ -268,21 +293,26 @@ export function TtmlCreator({
     if (!seeded.length) return;
     setLinesRaw(seeded);
     setText(toText(seeded));
-    saved.current.content = JSON.stringify({
-      lines: seeded,
-      text: toText(seeded),
-    });
-  }, [track, here, state.lyrics, state.lyrics_uri, lines.length, text]);
+    saved.current.content = contentOf(seeded, toText(seeded), metadata);
+  }, [
+    track,
+    here,
+    state.lyrics,
+    state.lyrics_uri,
+    lines.length,
+    text,
+    metadata,
+  ]);
 
   useEffect(() => {
     if (!track) return;
-    current.current = { uri: track.uri, lines, text };
+    current.current = { uri: track.uri, lines, text, metadata };
     // The load above ran in this same commit; these are the previous song's.
     if (saved.current.loading) {
       saved.current.loading = false;
       return;
     }
-    const content = JSON.stringify({ lines, text });
+    const content = contentOf(lines, text, metadata);
     if (saved.current.uri !== track.uri || saved.current.content === content)
       return;
     saved.current.content = content;
@@ -293,10 +323,16 @@ export function TtmlCreator({
       return;
     }
     const now = Date.now();
-    writeDraft(track.uri, { lines, text, savedAt: now, song: track });
+    writeDraft(track.uri, {
+      lines,
+      text,
+      metadata,
+      savedAt: now,
+      song: track,
+    });
     setSavedAt(now);
     snapshot(false);
-  }, [track, lines, text, snapshot]);
+  }, [track, lines, text, metadata, snapshot]);
 
   useEffect(() => () => void onSpeed(1), [onSpeed]);
 
@@ -812,7 +848,19 @@ export function TtmlCreator({
   const preview = useMemo(() => toLyrics(lines), [lines]);
   const issues = useMemo(() => problems(lines), [lines]);
   const { done, total } = progress(lines);
-  const ttml = () => (track ? toTtml(lines, meta(track)) : "");
+  const entries = useMemo(
+    () => metadata ?? (track ? defaultMetadata(meta(track), loadAuthor()) : []),
+    [metadata, track],
+  );
+  const ttml = () => (track ? toTtml(lines, meta(track), entries) : "");
+  const [editingMeta, setEditingMeta] = useState(false);
+  const changeMetadata = (next: MetaEntry[]) => {
+    setMetadata(next);
+    writeStorage(
+      AUTHOR_KEY,
+      JSON.stringify(next.filter((entry) => AUTHOR_KEYS.includes(entry.key))),
+    );
+  };
 
   const download = () => {
     if (!track) return;
@@ -849,6 +897,7 @@ export function TtmlCreator({
   const restore = (version: DraftVersion) => {
     setLines(version.lines);
     setText(version.text);
+    if (version.metadata) setMetadata(version.metadata);
     setCursor({ line: 0, unit: 0 });
     setSaves(null);
     notify(`Restored the save from ${savedLabel(version.savedAt)}.`);
@@ -1015,6 +1064,9 @@ export function TtmlCreator({
           </span>
           <button onClick={openSaves} title="Saves and earlier versions">
             <History size={15} />
+          </button>
+          <button onClick={() => setEditingMeta(true)} title="Metadata">
+            <Tags size={15} />
           </button>
           <button onClick={copy} disabled={!done} title="Copy TTML">
             <Copy size={15} />
@@ -1685,6 +1737,14 @@ export function TtmlCreator({
         />
       )}
       {savesDialog}
+      {editingMeta && (
+        <MetadataDialog
+          entries={entries}
+          onChange={changeMetadata}
+          onReset={() => setMetadata(undefined)}
+          onClose={() => setEditingMeta(false)}
+        />
+      )}
     </section>
   );
 }

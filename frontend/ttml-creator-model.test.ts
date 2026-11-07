@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   breakLine,
+  defaultMetadata,
+  metaProblem,
   duplicateLine,
   editUnit,
   formatTime,
@@ -371,5 +373,47 @@ describe("TTML Creator word menu", () => {
     );
     expect(breakLine(lines, { line: 0, unit: 0 }, false)).toBe(lines);
     expect(toText(duplicateLine(parseText("a\nb"), 0))).toBe("a\na\nb");
+  });
+});
+
+describe("TTML Creator metadata", () => {
+  it("starts from the song and the remembered author", () => {
+    const entries = defaultMetadata(meta, [
+      { key: "ttmlAuthorGithubLogin", values: ["someone"] },
+      { key: "isrc", values: ["ignored"] },
+    ]);
+    const values = (key: string) =>
+      entries.find((entry) => entry.key === key)?.values;
+    expect(values("musicName")).toEqual(["Song & <Co>"]);
+    expect(values("artists")).toEqual(["A", "B"]);
+    expect(values("ttmlAuthorGithubLogin")).toEqual(["someone"]);
+    expect(values("isrc")).toEqual([]);
+  });
+
+  it("exports every filled value, custom keys and songwriters", () => {
+    const ttml = toTtml(timeAll("Hi"), meta, [
+      { key: "musicName", values: ["Song", "曲", " ", "Song"] },
+      { key: "isrc", values: ["USUM71703861", "GBUM71703861"] },
+      { key: "qqMusicId", values: [""] },
+      { key: "songwriters", values: ["Ann", "Bo"] },
+      { key: "custom", values: ['x"y'] },
+    ]);
+    expect(ttml).toContain(
+      '<amll:meta key="musicName" value="Song"/><amll:meta key="musicName" value="曲"/><amll:meta key="isrc" value="USUM71703861"/><amll:meta key="isrc" value="GBUM71703861"/><amll:meta key="custom" value="x&quot;y"/>',
+    );
+    expect(ttml).not.toContain("qqMusicId");
+    expect(ttml).not.toContain('key="artists"');
+    expect(ttml).toContain(
+      "<songwriters><songwriter>Ann</songwriter><songwriter>Bo</songwriter></songwriters>",
+    );
+  });
+
+  it("flags values the AMLL TTML DB would reject", () => {
+    expect(metaProblem("isrc", "USUM71703861")).toBeNull();
+    expect(metaProblem("isrc", "usum7170")).not.toBeNull();
+    expect(metaProblem("appleMusicId", "1440841766")).toBeNull();
+    expect(metaProblem("appleMusicId", "album/1440841766")).not.toBeNull();
+    expect(metaProblem("ttmlAuthorGithubLogin", "bad name")).not.toBeNull();
+    expect(metaProblem("anything", "")).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import type { CreatorLine } from "./ttml-creator-model";
+import type { CreatorLine, MetaEntry } from "./ttml-creator-model";
 import type { Track } from "./types";
 
 // Like amll-ttml-tool's autosave: the latest state per song plus a few dated
@@ -11,6 +11,7 @@ export const VERSION_INTERVAL_MS = 10 * 60_000;
 export interface Draft {
   lines: CreatorLine[];
   text: string;
+  metadata?: MetaEntry[];
   savedAt?: number;
   song?: Track;
 }
@@ -26,6 +27,7 @@ export interface DraftVersion {
   savedAt: number;
   lines: CreatorLine[];
   text: string;
+  metadata?: MetaEntry[];
 }
 
 function readStorage(key: string): string | null {

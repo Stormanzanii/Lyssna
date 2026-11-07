@@ -782,6 +782,9 @@ export function TtmlCreator({
     return found;
   }, [lines, position]);
   const scrolledAt = useRef(0);
+  // A double-click replays from just before a word, which can start in the
+  // line above; the view stays put until playback reaches the word's line.
+  const holdLine = useRef<number | null>(null);
   useEffect(() => {
     if (
       tab !== "sync" ||
@@ -790,6 +793,10 @@ export function TtmlCreator({
       Date.now() - scrolledAt.current < 3000
     )
       return;
+    if (holdLine.current !== null) {
+      if (playingLine < holdLine.current) return;
+      holdLine.current = null;
+    }
     centre(playingLine);
   }, [playingLine, tab, state.playback.is_playing, centre]);
 
@@ -1565,9 +1572,11 @@ export function TtmlCreator({
                         onClick={() =>
                           setCursor({ line: lineIndex, unit: unitIndex })
                         }
-                        onDoubleClick={() =>
-                          unit.start !== undefined && seek(unit.start - 1000)
-                        }
+                        onDoubleClick={() => {
+                          if (unit.start === undefined) return;
+                          holdLine.current = lineIndex;
+                          seek(unit.start - 1000);
+                        }}
                         onContextMenu={(event) =>
                           openMenu(event, { line: lineIndex, unit: unitIndex })
                         }

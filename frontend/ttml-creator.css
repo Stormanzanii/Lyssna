@@ -621,7 +621,8 @@
   font-variant-numeric: tabular-nums;
   cursor: default;
 }
-.ttml-creator .ttml-cells .ttml-unit {
+.ttml-creator .ttml-cells .ttml-unit,
+.ttml-creator .ttml-cells .ttml-unit + .ttml-unit:not(.joined) {
   border-radius: 0;
 }
 .ttml-card[draggable="true"] {

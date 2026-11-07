@@ -1121,13 +1121,9 @@ small {
 .artist-top .track-row {
   grid-template-columns: 28px minmax(130px, 1.8fr) minmax(85px, 0.8fr) 68px;
 }
-/* You Liked and Artist pick side by side, as in Spotify, wrapping when
-   there is no room. */
 .artist-liked {
   display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  column-gap: 48px;
+  flex-direction: column;
   padding: 24px 28px 16px 0;
 }
 .artist-aside-block {

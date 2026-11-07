@@ -7042,6 +7042,9 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
   await expect(page.locator(".artist-liked-row small")).toHaveText(
     "By Test artist",
   );
+  const likedBox = await page.locator(".artist-liked-row").boundingBox();
+  const pickBox = await page.locator(".artist-pick").boundingBox();
+  expect(pickBox!.y).toBeGreaterThan(likedBox!.y + likedBox!.height - 1);
   await page.getByRole("button", { name: "3 songs" }).click();
   await expect
     .poll(() =>

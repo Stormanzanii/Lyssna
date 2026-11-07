@@ -215,6 +215,9 @@ fn fetch_lyrics(client: &Client, track: &Track, access_token: &str) -> Result<Ly
 /// Lyrics' site and EeveeSpotify do. Lyrics metadata can carry a display name
 /// in its `username` field, so each person is looked up on the public site.
 pub fn resolve_contributors(lyrics: &mut Lyrics) {
+    if !DISCORD_LOOKUP {
+        return;
+    }
     let Some(attribution) = lyrics.attribution.as_mut() else {
         return;
     };
@@ -231,6 +234,10 @@ pub fn resolve_contributors(lyrics: &mut Lyrics) {
         }
     }
 }
+
+// spicylyrics.org stopped answering these lookups; the code stays in case it
+// answers again.
+const DISCORD_LOOKUP: bool = false;
 
 type Identity = (String, Option<String>);
 static IDENTITIES: std::sync::LazyLock<

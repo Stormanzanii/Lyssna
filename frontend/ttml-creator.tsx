@@ -478,7 +478,8 @@ export function TtmlCreator({
   const pickedFrom = useRef(0);
   useEffect(() => setPicked(new Set()), [lines.length, track]);
   const pick = (index: number, range: boolean) => {
-    const [from, to] = [pickedFrom.current, index].sort((a, b) => a - b);
+    const anchor = picked.size ? pickedFrom.current : cursor.line;
+    const [from, to] = [anchor, index].sort((a, b) => a - b);
     pickedFrom.current = index;
     setPicked((old) => {
       const next = new Set(old);
@@ -487,16 +488,25 @@ export function TtmlCreator({
       return next;
     });
   };
-  const pickBox = (index: number) => (
-    <input
-      type="checkbox"
-      className="ttml-pick"
-      aria-label={`Select line ${index + 1}`}
-      checked={picked.has(index)}
-      onChange={() => {}}
-      onClick={(event) => pick(index, event.shiftKey)}
-    />
-  );
+  // Like AMLL: Ctrl-click adds or removes a line, Shift-click adds a range,
+  // and a plain click on a line's empty space drops the selection.
+  const pickProps = (index: number) => ({
+    onMouseDown: (event: ReactMouseEvent) => {
+      if (event.shiftKey || event.ctrlKey || event.metaKey)
+        event.preventDefault();
+    },
+    onClickCapture: (event: ReactMouseEvent) => {
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        pick(index, event.shiftKey);
+      } else if (
+        picked.size &&
+        !(event.target as Element).closest("button, input, textarea")
+      )
+        setPicked(new Set());
+    },
+  });
   const [shiftBy, setShiftBy] = useState(0);
   const allPicked = (key: "background" | "opposite") =>
     [...picked].every((index) => lines[index]?.[key]);
@@ -1327,7 +1337,9 @@ export function TtmlCreator({
           <div className="ttml-write-actions">
             <p className="ttml-hint">
               Double-click a word to edit it. Type <kbd>|</kbd> to split it into
-              syllables. Click <kbd>Space</kbd> to join two words.
+              syllables. Click <kbd>Space</kbd> to join two words.{" "}
+              <kbd>Ctrl</kbd>- or <kbd>Shift</kbd>-click lines to change several
+              at once.
             </p>
             <div className="ttml-row">
               <button
@@ -1387,7 +1399,8 @@ export function TtmlCreator({
               <div
                 key={lineIndex}
                 data-line={lineIndex}
-                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
+                {...pickProps(lineIndex)}
+                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onPointerDown={(event) => {
                   event.currentTarget.draggable = !(
                     event.target as Element
@@ -1426,10 +1439,7 @@ export function TtmlCreator({
                     );
                 }}
               >
-                <span className="ttml-card-number">
-                  {pickBox(lineIndex)}
-                  {lineIndex + 1}
-                </span>
+                <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-card-body">
                   <div className="ttml-chips">
                     {line.units.map((unit, unitIndex) => {
@@ -1857,7 +1867,8 @@ export function TtmlCreator({
               <div
                 key={lineIndex}
                 data-line={lineIndex}
-                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex ? " playing" : ""}`}
+                {...pickProps(lineIndex)}
+                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}`}
                 onClick={(event) => {
                   if (
                     cursor.line !== lineIndex &&
@@ -1866,10 +1877,7 @@ export function TtmlCreator({
                     setCursor(clampCursor(lines, { line: lineIndex, unit: 0 }));
                 }}
               >
-                <span className="ttml-card-number">
-                  {pickBox(lineIndex)}
-                  {lineIndex + 1}
-                </span>
+                <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-cells">
                   {line.units.map((unit, unitIndex) => {
                     const selected =

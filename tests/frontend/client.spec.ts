@@ -15095,12 +15095,17 @@ test("TTML Creator changes several selected lines at once", async ({
   const creator = page.getByRole("region", { name: "TTML Creator" });
   const cards = creator.locator(".ttml-card");
   const total = await cards.count();
-  await creator.getByLabel("Select line 2", { exact: true }).check();
-  await creator
-    .getByLabel("Select line 4", { exact: true })
-    .click({ modifiers: ["Shift"] });
+  const number = (index: number) =>
+    cards.nth(index).locator(".ttml-card-number");
+  await number(1).click({ modifiers: ["Control"] });
+  await number(3).click({ modifiers: ["Shift"] });
   const bar = creator.getByRole("toolbar", { name: "Selected lines" });
   await expect(bar).toContainText("3 lines selected");
+  await number(5).click({ modifiers: ["Control"] });
+  await expect(bar).toContainText("4 lines selected");
+  await number(5).click({ modifiers: ["Control"] });
+  await expect(bar).toContainText("3 lines selected");
+  await expect(cards.nth(2)).toHaveClass(/\bpicked\b/);
   await bar.getByRole("button", { name: "Background" }).click();
   for (const index of [1, 2, 3])
     await expect(cards.nth(index)).toHaveClass(/\bbackground\b/);

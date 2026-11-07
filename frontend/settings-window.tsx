@@ -1033,12 +1033,6 @@ export function SettingsWindow({
       "Lyrics",
       "Display",
       [
-        flag(
-          "lyrics_profiles_in_browser",
-          "Open profiles in browser",
-          "Open community lyrics makers' spicylyrics.org profiles in your browser instead of in Lyssna.",
-          "profile browser community credits maker spicylyrics website",
-        ),
         range(
           "lyric_offset_ms",
           "Timing offset",

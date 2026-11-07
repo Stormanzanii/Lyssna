@@ -2819,13 +2819,11 @@ test("background-only vocals keep the main line anchored; long breaks show dots"
   await expect(
     page.locator(".lyrics-page .lyric-source.expanded"),
   ).toContainText("Made by @! </Maker>");
-  // Profiles open only in the browser, which is off by default.
-  await expect(
-    page.getByRole("button", { name: "@Uploader", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.locator(".lyrics-page span.community-profile").first(),
-  ).toHaveCSS("cursor", "default");
+  const uploader = page
+    .locator(".lyrics-page")
+    .getByRole("button", { name: "@Uploader", exact: true });
+  await expect(uploader).toBeVisible();
+  await expect(uploader).toHaveCSS("cursor", "pointer");
   await expect(page.locator(".lyrics-album-name")).toHaveCount(0);
   expect(
     await page
@@ -11651,11 +11649,8 @@ test("Now playing's dynamic background can be turned off", async ({ page }) => {
   await expect(panel.locator(".ambience")).toHaveCount(0);
 });
 
-test("community profiles can open in the browser", async ({ page }) => {
+test("community profiles open in the browser by default", async ({ page }) => {
   await startClient(page);
-  await openSettings(page, "Lyrics");
-  await page.getByRole("switch", { name: "Open profiles in browser" }).click();
-  await page.getByRole("button", { name: "Close settings" }).click();
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page.evaluate((uri) => {
     (window as any).__clientTest.emit({
@@ -11701,7 +11696,7 @@ test("community profiles can open in the browser", async ({ page }) => {
     .toEqual([["open_link", "https://spicylyrics.org/profile/Maker"]]);
 });
 
-test("whitelisted community profiles open in the browser with the setting off", async ({
+test("every community profile links, even without a profile url", async ({
   page,
 }) => {
   await startClient(page);
@@ -11738,7 +11733,7 @@ test("whitelisted community profiles open in the browser with the setting off", 
   }, track.uri);
   await expect(
     page.getByRole("button", { name: "@Someone", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await page.getByRole("button", { name: "@Jevk", exact: true }).click();
   const calls = () =>
     page.evaluate(() =>

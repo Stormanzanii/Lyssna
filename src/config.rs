@@ -319,9 +319,6 @@ pub struct Settings {
     pub repeat: String,
     /// Community lyrics credit people by Discord username, not display name.
     pub lyrics_discord_usernames: bool,
-    /// Community credit links open spicylyrics.org instead of the in-app
-    /// creator profile.
-    pub lyrics_profiles_in_browser: bool,
     pub folders: Vec<PlaylistFolder>,
     /// Whether the Now playing panel is open, kept across restarts.
     pub now_playing_open: bool,
@@ -436,7 +433,6 @@ impl Default for Settings {
             shuffle: false,
             repeat: "off".into(),
             lyrics_discord_usernames: true,
-            lyrics_profiles_in_browser: false,
             folders: Vec::new(),
             now_playing_open: true,
             song_sorts: Default::default(),

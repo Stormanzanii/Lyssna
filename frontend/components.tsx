@@ -824,7 +824,6 @@ export function LyricsDisplay({
         <LyricCredits
           lyrics={lyrics}
           discord={settings.lyrics_discord_usernames !== false}
-          browser={settings.lyrics_profiles_in_browser}
         />
       </div>
     );
@@ -932,7 +931,6 @@ export function LyricsDisplay({
                 lyrics={lyrics}
                 expanded
                 discord={settings.lyrics_discord_usernames !== false}
-                browser={settings.lyrics_profiles_in_browser}
               />
             )}
           </div>
@@ -949,7 +947,6 @@ export function LyricsDisplay({
             lyrics={lyrics}
             expanded
             discord={settings.lyrics_discord_usernames !== false}
-            browser={settings.lyrics_profiles_in_browser}
           />
         </div>
       )}
@@ -975,21 +972,15 @@ export function LyricsDisplay({
   );
 }
 
-// Their profiles link to the browser even with "Open profiles in browser" off.
-const ALWAYS_LINKED = new Set(["ipixelgalaxy", "jevk", "arimodu"]);
-
 const LyricCredits = memo(function LyricCredits({
   lyrics,
   expanded = false,
   discord = true,
-  browser = false,
 }: {
   lyrics: Lyrics;
   expanded?: boolean;
   /** Name people by Discord username when their profile gave one. */
   discord?: boolean;
-  /** Open spicylyrics.org profiles in the browser instead of in the app. */
-  browser?: boolean;
 }) {
   const nameOf = (person: Contributor) =>
     (discord && person.discord) || person.username;
@@ -1003,18 +994,17 @@ const LyricCredits = memo(function LyricCredits({
       } as Record<string, string>
     )[lyrics.source] ?? lyrics.source;
   const openCreator = useCreatorProfile();
-  // Where a name links to, if anywhere. Without the in-app window, names
-  // only link when profiles open in the browser.
+  // Spicy Lyrics' developer terms require every community credit to link
+  // the person's profile, preferring the url from the response.
   const linkOf = (person: Contributor, url?: string) =>
     PROFILE_WINDOW
       ? person.id || url
         ? () =>
-            person.id && !(browser && url)
+            person.id && !url
               ? openCreator(person)
               : void rpc("open_link", { url }).catch(() => {})
         : undefined
-      : (browser || ALWAYS_LINKED.has(person.username.toLowerCase())) &&
-          (url ?? creatorEmbed(nameOf(person)))
+      : (url ?? creatorEmbed(nameOf(person)))
         ? () =>
             void rpc("open_link", {
               url: url ?? creatorEmbed(nameOf(person)),
@@ -1879,7 +1869,6 @@ function SongLyricsPage({
                       discord={
                         state.settings.lyrics_discord_usernames !== false
                       }
-                      browser={state.settings.lyrics_profiles_in_browser}
                     />
                   </>
                 }

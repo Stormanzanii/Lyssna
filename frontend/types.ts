@@ -229,7 +229,6 @@ export interface Settings {
   crossfade_seconds?: number;
   soloist?: boolean;
   lyrics_discord_usernames?: boolean;
-  lyrics_profiles_in_browser?: boolean;
   audio_output?: string | null;
   folders: Folder[];
   spotify_plus?: SpotifyPlus;

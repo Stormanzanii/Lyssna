@@ -5868,14 +5868,13 @@ input[type="range"]:hover {
   opacity: 0.8;
   transition: opacity 0.2s;
 }
-button.community-profile .community-name {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
 .community-credits
   button.community-profile:is(:hover, :focus-visible)
   .community-name {
   opacity: 1;
+}
+.lyric-source .text-link:hover {
+  text-decoration: none;
 }
 .community-credits span.community-profile {
   cursor: default;

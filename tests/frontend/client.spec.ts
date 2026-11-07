@@ -14795,6 +14795,21 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
       .poll(async () => (await requests()).at(-1))
       .toEqual({ command: "seek", positionMs });
   }
+  await creator.getByRole("button", { name: "Change keys" }).click();
+  const keys = page.getByRole("dialog", { name: "Timing keys" });
+  await keys.getByRole("button", { name: "Jump to previous word key" }).click();
+  await page.keyboard.press("q");
+  await expect(
+    keys.getByRole("button", { name: "Jump to previous word key" }),
+  ).toHaveText("Q");
+  await keys.getByRole("button", { name: "Close timing keys" }).click();
+  await expect(creator.locator(".ttml-keys")).toContainText(
+    "Q jump to previous word",
+  );
+  await page.keyboard.press("q");
+  await expect
+    .poll(async () => (await requests()).at(-1))
+    .toEqual({ command: "seek", positionMs: 3500 });
 
   await creator.getByRole("tab", { name: "Preview" }).click();
   await expect(creator.locator(".ttml-preview")).toContainText("Hello world");

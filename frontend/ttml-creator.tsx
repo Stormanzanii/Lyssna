@@ -84,6 +84,16 @@ import {
 import { romanizeAway } from "./romanization";
 import { MetadataDialog } from "./ttml-metadata";
 import {
+  type KeyAction,
+  type KeyMap,
+  KEY_ACTIONS,
+  KeysDialog,
+  actionFor,
+  keyLabel,
+  loadKeys,
+  saveKeys,
+} from "./ttml-keys";
+import {
   type DraftVersion,
   type SavedSong,
   addVersion,
@@ -765,6 +775,14 @@ export function TtmlCreator({
   useEffect(() => () => clearTimeout(speedTimer.current), []);
   const shownSpeed = speedDraft ?? rate;
 
+  const [keys, setKeys] = useState<KeyMap>(loadKeys);
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
+  const [editingKeys, setEditingKeys] = useState(false);
+  const changeKeys = useCallback((next: KeyMap) => {
+    setKeys(next);
+    saveKeys(next);
+  }, []);
   const stateRef = useRef({ lines, cursor });
   stateRef.current = { lines, cursor };
   useEffect(() => {
@@ -788,47 +806,57 @@ export function TtmlCreator({
       else if (event.key === "ArrowLeft" && event.shiftKey) seek(read() - 3000);
       else if (event.key === "ArrowRight" && event.shiftKey)
         seek(read() + 3000);
-      else if (event.key === "ArrowLeft" || key === "a")
-        setCursor(previousCursor(lines, cursor) ?? cursor);
-      else if (event.key === "ArrowRight" || key === "d")
-        setCursor(nextCursor(lines, cursor) ?? cursor);
-      else if (event.key === "ArrowUp" || key === "w")
-        setCursor(clampCursor(lines, { line: cursor.line - 1, unit: 0 }));
-      else if (event.key === "ArrowDown" || key === "s")
-        setCursor(clampCursor(lines, { line: cursor.line + 1, unit: 0 }));
-      else if (key === "'") changeSpeed(1);
-      else if (!here || !lines.length) handled = false;
-      else if (key === "r" || key === "y") {
-        const to =
-          (key === "r"
-            ? previousCursor(lines, cursor)
-            : nextCursor(lines, cursor)) ?? cursor;
-        setCursor(to);
-        const start = lines[to.line]?.units[to.unit]?.start;
-        if (start !== undefined) seek(start);
-      } else if (event.repeat && "fgh".includes(key)) handled = true;
-      else if (key === "f") setLines(markStart(lines, cursor, tap()));
-      else if (key === "g") {
-        const result = markNext(lines, cursor, tap());
-        setLines(result.lines);
-        setCursor(result.cursor);
-      } else if (key === "h") {
-        const result = markEnd(lines, cursor, tap());
-        setLines(result.lines);
-        setCursor(result.cursor);
-      } else if (key === "t") {
-        const line = lines[cursor.line];
-        const before = lines[cursor.line - 1];
-        const from =
-          (line && lineSpan(line)?.start) ??
-          (before && lineSpan(before)?.end) ??
-          read();
-        seek(from - 2000);
-      } else if (event.key === "Backspace" || event.key === "Delete")
-        setLines(clearTiming(lines, cursor));
-      else if (event.key === "[") changeSpeed(clampSpeed(rate - 0.05));
-      else if (event.key === "]") changeSpeed(clampSpeed(rate + 0.05));
-      else handled = false;
+      else {
+        const arrows: Record<string, KeyAction> = {
+          ArrowLeft: "previous",
+          ArrowRight: "following",
+          ArrowUp: "lineUp",
+          ArrowDown: "lineDown",
+          Backspace: "clear",
+        };
+        const action = arrows[event.key] ?? actionFor(keysRef.current, key);
+        const timing = ["start", "next", "end"].includes(action ?? "");
+        if (action === "previous")
+          setCursor(previousCursor(lines, cursor) ?? cursor);
+        else if (action === "following")
+          setCursor(nextCursor(lines, cursor) ?? cursor);
+        else if (action === "lineUp")
+          setCursor(clampCursor(lines, { line: cursor.line - 1, unit: 0 }));
+        else if (action === "lineDown")
+          setCursor(clampCursor(lines, { line: cursor.line + 1, unit: 0 }));
+        else if (action === "normalSpeed") changeSpeed(1);
+        else if (action === "slower") changeSpeed(clampSpeed(rate - 0.05));
+        else if (action === "faster") changeSpeed(clampSpeed(rate + 0.05));
+        else if (!action || !here || !lines.length) handled = false;
+        else if (action === "jumpBack" || action === "jumpForward") {
+          const to =
+            (action === "jumpBack"
+              ? previousCursor(lines, cursor)
+              : nextCursor(lines, cursor)) ?? cursor;
+          setCursor(to);
+          const start = lines[to.line]?.units[to.unit]?.start;
+          if (start !== undefined) seek(start);
+        } else if (event.repeat && timing) handled = true;
+        else if (action === "start") setLines(markStart(lines, cursor, tap()));
+        else if (action === "next") {
+          const result = markNext(lines, cursor, tap());
+          setLines(result.lines);
+          setCursor(result.cursor);
+        } else if (action === "end") {
+          const result = markEnd(lines, cursor, tap());
+          setLines(result.lines);
+          setCursor(result.cursor);
+        } else if (action === "replay") {
+          const line = lines[cursor.line];
+          const before = lines[cursor.line - 1];
+          const from =
+            (line && lineSpan(line)?.start) ??
+            (before && lineSpan(before)?.end) ??
+            read();
+          seek(from - 2000);
+        } else if (action === "clear") setLines(clearTiming(lines, cursor));
+        else handled = false;
+      }
       if (handled) {
         event.preventDefault();
         event.stopPropagation();
@@ -1688,15 +1716,30 @@ export function TtmlCreator({
             </button>
           </div>
           <p className="ttml-keys">
-            <kbd>F</kbd> start word · <kbd>G</kbd> end and start next ·{" "}
-            <kbd>H</kbd> end word · <kbd>←</kbd>
-            <kbd>→</kbd> or <kbd>A</kbd>
-            <kbd>D</kbd> move · <kbd>R</kbd>
-            <kbd>Y</kbd> jump to word · <kbd>Shift</kbd>+<kbd>←</kbd>
-            <kbd>→</kbd> seek 3s · <kbd>T</kbd> replay line · <kbd>Space</kbd>{" "}
-            play · <kbd>[</kbd>
-            <kbd>]</kbd> speed · <kbd>'</kbd> normal speed · <kbd>Del</kbd>{" "}
-            clear word
+            {KEY_ACTIONS.map(([action, label]) => (
+              <span key={action}>
+                <kbd>{keyLabel(keys[action])}</kbd> {label.toLowerCase()}
+              </span>
+            ))}
+            <span>
+              <kbd>←</kbd>
+              <kbd>→</kbd>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> move
+            </span>
+            <span>
+              <kbd>Shift</kbd>+<kbd>←</kbd>
+              <kbd>→</kbd> seek 3s
+            </span>
+            <span>
+              <kbd>Space</kbd> play
+            </span>
+            <button
+              className="ttml-keys-edit"
+              onClick={() => setEditingKeys(true)}
+            >
+              Change keys
+            </button>
           </p>
           {pickBar}
           <div
@@ -1842,6 +1885,13 @@ export function TtmlCreator({
         />
       )}
       {savesDialog}
+      {editingKeys && (
+        <KeysDialog
+          keys={keys}
+          onChange={changeKeys}
+          onClose={() => setEditingKeys(false)}
+        />
+      )}
       {editingMeta && (
         <MetadataDialog
           entries={entries}

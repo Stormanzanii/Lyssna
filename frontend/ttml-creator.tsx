@@ -62,6 +62,7 @@ import {
   moveLine,
   moveSpace,
   moveWord,
+  moveWords,
   applyRomanized,
   nextCursor,
   romanizeRequest,
@@ -150,7 +151,8 @@ const OFFSET_KEY = "lyssna.ttml-offset";
 const HISTORY_LIMIT = 200;
 
 type Drag =
-  { kind: "line"; line: number } | { kind: "word" | "space"; at: Cursor };
+  | { kind: "line"; line: number }
+  | { kind: "word" | "space"; at: Cursor; group?: Cursor[] };
 
 const firstHalf = (event: ReactDragEvent, vertical: boolean) => {
   const box = event.currentTarget.getBoundingClientRect();
@@ -443,6 +445,59 @@ export function TtmlCreator({
   const [chosen, setChosen] = useState<Cursor | null>(null);
   const chosenRef = useRef(chosen);
   chosenRef.current = chosen;
+  // Word starts picked with Ctrl or Shift, dragged as one bunch.
+  const [group, setGroup] = useState<Cursor[]>([]);
+  useEffect(() => setGroup([]), [lines, tab]);
+  const wordStart = (at: Cursor) => ({
+    line: at.line,
+    unit: wordBounds(lines[at.line]?.units ?? [], at.unit).start,
+  });
+  const inGroup = (at: Cursor) => {
+    const start = wordStart(at);
+    return group.some(
+      (each) => each.line === start.line && each.unit === start.unit,
+    );
+  };
+  const pickWord = (at: Cursor, range: boolean) => {
+    const start = wordStart(at);
+    const base = group.length || !chosen ? group : [wordStart(chosen)];
+    if (range && chosen) {
+      const from = wordStart(chosen);
+      const [first, last] =
+        from.line < start.line ||
+        (from.line === start.line && from.unit <= start.unit)
+          ? [from, start]
+          : [start, from];
+      const picked: Cursor[] = [];
+      for (let line = first.line; line <= last.line; line++)
+        lines[line]?.units.forEach((unit, index) => {
+          if (unit.joined && index) return;
+          if (line === first.line && index < first.unit) return;
+          if (line === last.line && index > last.unit) return;
+          picked.push({ line, unit: index });
+        });
+      setGroup(picked);
+      return;
+    }
+    const has = base.some(
+      (each) => each.line === start.line && each.unit === start.unit,
+    );
+    setGroup(
+      has
+        ? base.filter(
+            (each) => each.line !== start.line || each.unit !== start.unit,
+          )
+        : [...base, start],
+    );
+    setChosen(at);
+  };
+  const moveDragged = (
+    dragged: { at: Cursor; group?: Cursor[] },
+    to: Cursor,
+  ) =>
+    dragged.group
+      ? moveWords(lines, dragged.group, to)
+      : moveWord(lines, dragged.at, to);
   const [adding, setAdding] = useState<{ card: number; after: number } | null>(
     null,
   );
@@ -495,8 +550,10 @@ export function TtmlCreator({
             ? { line: at.line, unit: Math.min(at.unit, line.units.length - 1) }
             : null,
         );
-      } else if (event.key === "Escape") setChosen(null);
-      else if (event.key === "Enter") setEditing(at);
+      } else if (event.key === "Escape") {
+        setChosen(null);
+        setGroup([]);
+      } else if (event.key === "Enter") setEditing(at);
       else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         const move = event.key === "ArrowLeft" ? previousCursor : nextCursor;
         setChosen(move(lines, at) ?? at);
@@ -545,7 +602,10 @@ export function TtmlCreator({
         event.preventDefault();
     },
     onClickCapture: (event: ReactMouseEvent) => {
-      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      if (
+        (event.shiftKey || event.ctrlKey || event.metaKey) &&
+        !(event.target as Element).closest(".ttml-chip")
+      ) {
         event.preventDefault();
         event.stopPropagation();
         pick(index, event.shiftKey);
@@ -1483,10 +1543,11 @@ export function TtmlCreator({
           <div
             className="ttml-lines"
             ref={list}
-            onClick={(event) =>
-              !(event.target as Element).closest(".ttml-chip") &&
-              setChosen(null)
-            }
+            onClick={(event) => {
+              if ((event.target as Element).closest(".ttml-chip")) return;
+              setChosen(null);
+              setGroup([]);
+            }}
             onDragEnd={endDrag}
             onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
           >
@@ -1532,7 +1593,7 @@ export function TtmlCreator({
                   else if (drag?.kind === "word")
                     land(
                       event,
-                      moveWord(lines, drag.at, {
+                      moveDragged(drag, {
                         line: lineIndex,
                         unit: line.units.length,
                       }),
@@ -1566,7 +1627,7 @@ export function TtmlCreator({
                               }
                               onDrop={(event) =>
                                 drag?.kind === "word" &&
-                                land(event, moveWord(lines, drag.at, at))
+                                land(event, moveDragged(drag, at))
                               }
                             >
                               Space
@@ -1595,7 +1656,7 @@ export function TtmlCreator({
                               />
                             ) : (
                               <button
-                                className={`ttml-chip${unit.joined ? " joined" : ""}${chosen?.line === lineIndex && chosen.unit === unitIndex ? " chosen" : ""}${drag?.kind === "word" && drag.at.line === lineIndex && drag.at.unit === unitIndex ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
+                                className={`ttml-chip${unit.joined ? " joined" : ""}${(chosen?.line === lineIndex && chosen.unit === unitIndex) || inGroup(at) ? " chosen" : ""}${drag?.kind === "word" && ((drag.at.line === lineIndex && drag.at.unit === unitIndex) || (drag.group && inGroup(at))) ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
                                 title={
                                   unit.joined
                                     ? "Syllable. Double-click to edit; right-click to make it its own word."
@@ -1603,7 +1664,12 @@ export function TtmlCreator({
                                 }
                                 draggable
                                 onDragStart={(event) =>
-                                  startDrag(event, { kind: "word", at })
+                                  startDrag(event, {
+                                    kind: "word",
+                                    at,
+                                    ...(group.length > 1 &&
+                                      inGroup(at) && { group }),
+                                  })
                                 }
                                 onDragOver={(event) => {
                                   if (drag?.kind === "word")
@@ -1629,7 +1695,7 @@ export function TtmlCreator({
                                     );
                                     land(
                                       event,
-                                      moveWord(lines, drag.at, {
+                                      moveDragged(drag, {
                                         line: lineIndex,
                                         unit: firstHalf(event, false)
                                           ? word.start
@@ -1642,7 +1708,16 @@ export function TtmlCreator({
                                   )
                                     land(event, moveSpace(lines, drag.at, at));
                                 }}
-                                onClick={() => setChosen(at)}
+                                onClick={(event) => {
+                                  if (
+                                    event.shiftKey ||
+                                    event.ctrlKey ||
+                                    event.metaKey
+                                  )
+                                    return pickWord(at, event.shiftKey);
+                                  setGroup([]);
+                                  setChosen(at);
+                                }}
                                 onDoubleClick={() => setEditing(at)}
                                 onContextMenu={(event) => openMenu(event, at)}
                               >

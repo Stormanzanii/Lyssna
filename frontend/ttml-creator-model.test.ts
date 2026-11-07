@@ -22,6 +22,7 @@ import {
   moveLine,
   moveSpace,
   moveWord,
+  moveWords,
   nextCursor,
   parseText,
   problems,
@@ -232,6 +233,43 @@ describe("TTML Creator card editing", () => {
     lines = editUnit(lines, { line: 0, unit: 0 }, "");
     expect(words(lines)).toEqual(["t|o o"]);
     expect(editUnit(parseText("x"), { line: 0, unit: 0 }, " ")).toEqual([]);
+  });
+
+  it("moves several picked words together in reading order", () => {
+    const lines = parseText("a b|c d\ne f");
+    expect(
+      words(
+        moveWords(
+          lines,
+          [
+            { line: 0, unit: 2 },
+            { line: 0, unit: 0 },
+          ],
+          {
+            line: 1,
+            unit: 1,
+          },
+        ),
+      ),
+    ).toEqual(["d", "e a b|c f"]);
+    expect(
+      words(moveWords(lines, [{ line: 0, unit: 0 }], { line: 0, unit: 4 })),
+    ).toEqual(["b|c d a", "e f"]);
+    const gone = moveWords(
+      lines,
+      [
+        { line: 1, unit: 0 },
+        { line: 1, unit: 1 },
+      ],
+      {
+        line: 0,
+        unit: 0,
+      },
+    );
+    expect(words(gone)).toEqual(["e f a b|c d"]);
+    expect(moveWords(lines, [{ line: 0, unit: 1 }], { line: 0, unit: 2 })).toBe(
+      lines,
+    );
   });
 
   it("adds typed words to the end of a line", () => {

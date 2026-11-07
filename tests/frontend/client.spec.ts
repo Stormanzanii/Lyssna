@@ -15040,6 +15040,46 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await expect(first.locator(".ttml-chip").last()).toHaveClass(/joined/);
 });
 
+test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const card = creator.locator(".ttml-card").first();
+  const word = (name: string) =>
+    card.getByRole("button", { name, exact: true });
+  await expect(card.locator(".ttml-space").first()).not.toHaveAttribute(
+    "title",
+    /./,
+  );
+  await word("just").click({ modifiers: ["Control"] });
+  await word("lyric").click({ modifiers: ["Control"] });
+  await expect(creator.locator(".ttml-pick-bar")).toHaveCount(0);
+  await expect(card.locator(".ttml-chip.chosen")).toHaveText(["just", "lyric"]);
+  await word("just").dragTo(word("I"), { targetPosition: { x: 2, y: 10 } });
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "just lyric I am a line number 1".split(" "),
+  );
+  await word("I").click();
+  await word("a").click({ modifiers: ["Shift"] });
+  await expect(card.locator(".ttml-chip.chosen")).toHaveText(["I", "am", "a"]);
+  await word("I").dragTo(word("1"));
+  await expect(card.locator(".ttml-chip")).toHaveText(
+    "just lyric line number I am a 1".split(" "),
+  );
+});
+
 test("TTML Creator word menu splits words and moves them to new lines", async ({
   page,
 }) => {

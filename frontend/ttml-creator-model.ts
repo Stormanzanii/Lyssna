@@ -623,6 +623,44 @@ export function moveWord(
     .filter((line) => line.units.length);
 }
 
+/** Moves several words, kept in reading order, to before `to.unit`. */
+export function moveWords(
+  lines: CreatorLine[],
+  from: Cursor[],
+  to: Cursor,
+): CreatorLine[] {
+  if (!lines[to.line]) return lines;
+  const taken = new Set<CreatorUnit>();
+  const words: CreatorUnit[] = [];
+  for (const at of [...from].sort(
+    (a, b) => a.line - b.line || a.unit - b.unit,
+  )) {
+    const units = lines[at.line]?.units;
+    if (!units?.[at.unit] || taken.has(units[at.unit])) continue;
+    const { start, end } = wordBounds(units, at.unit);
+    units.slice(start, end).forEach((unit, index) => {
+      taken.add(unit);
+      words.push(index ? unit : { ...unit, joined: false });
+    });
+  }
+  const anchor = lines[to.line].units[to.unit];
+  if (!words.length || (anchor && taken.has(anchor))) return lines;
+  const at = lines[to.line].units
+    .slice(0, to.unit)
+    .filter((unit) => !taken.has(unit)).length;
+  return lines
+    .map((line, index) => {
+      const units = line.units.filter((unit) => !taken.has(unit));
+      if (index === to.line) units.splice(at, 0, ...words);
+      if (units[0]?.joined) units[0] = { ...units[0], joined: false };
+      return units.length === line.units.length &&
+        units.every((unit, position) => unit === line.units[position])
+        ? line
+        : { ...line, units };
+    })
+    .filter((line) => line.units.length);
+}
+
 /** Moves the gap before `from.unit` to before `to.unit`, a syllable joint. */
 export function moveSpace(
   lines: CreatorLine[],

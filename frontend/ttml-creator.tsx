@@ -55,6 +55,7 @@ import {
   insertBlankLine,
   keepTimings,
   lineSpan,
+  singingAt,
   markEnd,
   markNext,
   markStart,
@@ -1207,6 +1208,12 @@ export function TtmlCreator({
     shownWord.current = found;
     return found;
   }, [lines, position]);
+  // Overlapping lines, like a second singer or background vocals, sing
+  // together, so every word under the playhead lights up.
+  const liveWords = useMemo(
+    () => singingAt(lines, position),
+    [lines, position],
+  );
   const playingLine = useMemo(() => {
     let found = -1;
     lines.forEach((line, index) => {
@@ -2158,7 +2165,7 @@ export function TtmlCreator({
                 key={lineIndex}
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
-                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}`}
+                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex || liveWords.singing.has(lineIndex) ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}`}
                 onClick={(event) => {
                   if (
                     cursor.line !== lineIndex &&
@@ -2175,8 +2182,11 @@ export function TtmlCreator({
                     const selected =
                       cursor.line === lineIndex && cursor.unit === unitIndex;
                     const live =
-                      liveWord?.line === lineIndex &&
-                      liveWord.unit === unitIndex;
+                      (liveWord?.line === lineIndex &&
+                        liveWord.unit === unitIndex) ||
+                      // The lit word's own line keeps its steadied pick.
+                      (liveWord?.line !== lineIndex &&
+                        liveWords.live.has(`${lineIndex}:${unitIndex}`));
                     return (
                       <button
                         key={unitIndex}

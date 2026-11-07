@@ -804,6 +804,27 @@ export function lineSpan(line: CreatorLine) {
   };
 }
 
+/** Lines and words sung at `position`; overlapping lines sing together. */
+export function singingAt(lines: CreatorLine[], position: number) {
+  const live = new Set<string>();
+  const singing = new Set<number>();
+  lines.forEach((line, lineIndex) => {
+    const span = lineSpan(line);
+    if (span && position >= span.start && position < span.end)
+      singing.add(lineIndex);
+    line.units.forEach((unit, unitIndex) => {
+      if (
+        unit.start !== undefined &&
+        unit.end !== undefined &&
+        position >= unit.start &&
+        position < unit.end
+      )
+        live.add(`${lineIndex}:${unitIndex}`);
+    });
+  });
+  return { live, singing };
+}
+
 export function problems(lines: CreatorLine[]): string[] {
   const found: string[] = [];
   if (!lines.length) return ["Add some lyrics first."];
@@ -825,7 +846,10 @@ export function problems(lines: CreatorLine[]): string[] {
 
 export function toLyrics(lines: CreatorLine[]): Lyrics {
   const shown: Line[] = [];
+  // Background vocals sit with the singer before them, as in the TTML file.
+  let leadOpposite = false;
   for (const line of lines) {
+    if (!line.background && line.units.length) leadOpposite = line.opposite;
     const words: Word[] = [];
     line.units.forEach((unit, index) => {
       if (unit.start === undefined) return;
@@ -851,7 +875,7 @@ export function toLyrics(lines: CreatorLine[]): Lyrics {
         : (line.romanization ?? ""),
       words,
       background: line.background,
-      opposite: line.opposite,
+      opposite: line.background ? leadOpposite : line.opposite,
     });
   }
   return {

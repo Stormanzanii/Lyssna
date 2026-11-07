@@ -26,6 +26,7 @@ import {
   removeSpaces,
   insertBlankLine,
   deletePicked,
+  singingAt,
   nextCursor,
   parseText,
   problems,
@@ -293,6 +294,27 @@ describe("TTML Creator card editing", () => {
     expect(lines[1].units).toEqual([]);
     expect(toLyrics(lines).lines).toHaveLength(2);
     expect(words(appendWords(lines, 1, "new"))[1]).toBe("new");
+  });
+
+  it("lights overlapping lines and words together", () => {
+    const lines = parseText("whats my\n(whats my)\nnext");
+    const time = (line: number, unit: number, start: number, end: number) =>
+      Object.assign(lines[line].units[unit], { start, end });
+    time(0, 0, 1000, 1500);
+    time(0, 1, 1500, 2000);
+    time(1, 0, 1030, 1520);
+    time(1, 1, 1520, 2010);
+    time(2, 0, 3000, 3500);
+    const at = singingAt(lines, 1510);
+    expect([...at.singing]).toEqual([0, 1]);
+    expect([...at.live]).toEqual(["0:1", "1:0"]);
+    expect(singingAt(lines, 2500).singing.size).toBe(0);
+    lines[0].opposite = true;
+    expect(toLyrics(lines).lines.map((line) => line.opposite)).toEqual([
+      true,
+      true,
+      false,
+    ]);
   });
 
   it("deletes picked words and spaces together", () => {

@@ -1495,6 +1495,11 @@ export function TtmlCreator({
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
                 className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
+                onClick={() =>
+                  setCursor((at) =>
+                    at.line === lineIndex ? at : { line: lineIndex, unit: 0 },
+                  )
+                }
                 onPointerDown={(event) => {
                   event.currentTarget.draggable = !(
                     event.target as Element

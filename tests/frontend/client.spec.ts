@@ -15016,6 +15016,12 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await expect(second.getByPlaceholder("Type word here")).toBeHidden();
   await second.locator(".ttml-card-number").hover();
   await expect(second.getByPlaceholder("Type word here")).toBeVisible();
+  await second.locator(".ttml-card-number").click();
+  await expect(second).toHaveClass(/current/);
+  await expect(first).not.toHaveClass(/current/);
+  await page.mouse.move(0, 0);
+  await expect(second.getByPlaceholder("Type word here")).toBeVisible();
+  await first.locator(".ttml-card-number").click();
   await add.fill("extra wo|rds");
   await add.press("Enter");
   await expect(first.locator(".ttml-chip").last()).toHaveText("rds");

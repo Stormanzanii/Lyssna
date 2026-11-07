@@ -36,10 +36,8 @@ export interface MetaEntry {
 export const META_KEYS = [
   "musicName",
   "artists",
-  "album",
   "songwriters",
   "isrc",
-  "spotifyId",
   "appleMusicId",
   "ncmMusicId",
   "qqMusicId",
@@ -47,6 +45,8 @@ export const META_KEYS = [
   "ttmlAuthorGithubLogin",
 ] as const;
 export const AUTHOR_KEYS = ["ttmlAuthorGithub", "ttmlAuthorGithubLogin"];
+/** Always the song's own; not editable. */
+export const SONG_KEYS = ["album", "spotifyId"];
 
 export function defaultMetadata(
   meta: SongMeta,
@@ -55,8 +55,6 @@ export function defaultMetadata(
   const known: Record<string, string[]> = {
     musicName: meta.name ? [meta.name] : [],
     artists: meta.artists,
-    album: meta.album ? [meta.album] : [],
-    spotifyId: meta.spotifyId ? [meta.spotifyId] : [],
   };
   for (const entry of author)
     if (AUTHOR_KEYS.includes(entry.key)) known[entry.key] = entry.values;
@@ -805,7 +803,11 @@ export function toTtml(
   const metadata = [
     `<ttm:agent type="person" xml:id="v1"/>`,
     opposite ? `<ttm:agent type="other" xml:id="v2"/>` : "",
-    ...entries
+    ...[
+      ...entries.filter((entry) => !SONG_KEYS.includes(entry.key.trim())),
+      { key: "album", values: meta.album ? [meta.album] : [] },
+      { key: "spotifyId", values: meta.spotifyId ? [meta.spotifyId] : [] },
+    ]
       .filter((entry) => entry.key.trim() && entry.key !== "songwriters")
       .flatMap((entry) =>
         filled(entry.values).map(

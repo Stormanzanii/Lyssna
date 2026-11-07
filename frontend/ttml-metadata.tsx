@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { ChevronDown, Plus, RotateCcw, Trash2, X } from "lucide-react";
-import { type MetaEntry, META_KEYS, metaProblem } from "./ttml-creator-model";
+import {
+  type MetaEntry,
+  META_KEYS,
+  SONG_KEYS,
+  metaProblem,
+} from "./ttml-creator-model";
 
 const LABELS: Record<string, { label: string; hint?: string }> = {
   musicName: {
@@ -8,10 +13,8 @@ const LABELS: Record<string, { label: string; hint?: string }> = {
     hint: "Add other titles too, like the name in its original script.",
   },
   artists: { label: "Artist" },
-  album: { label: "Album" },
   songwriters: { label: "Songwriter" },
   isrc: { label: "ISRC", hint: "One per region if the song has several." },
-  spotifyId: { label: "Spotify ID" },
   appleMusicId: {
     label: "Apple Music ID",
     hint: "The song's own ID: the ?i= number in a song link, not the album's.",
@@ -72,7 +75,9 @@ export function MetadataDialog({
       ).map((key) => ({ key, values: [""] })),
     ]);
   const rows = entries.flatMap((entry, index) =>
-    entry.values.map((value, at) => ({ entry, index, value, at })),
+    SONG_KEYS.includes(entry.key)
+      ? []
+      : entry.values.map((value, at) => ({ entry, index, value, at })),
   );
   return (
     <div className="ttml-dialog-backdrop" onClick={onClose}>

@@ -14836,7 +14836,10 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await creator.getByRole("button", { name: "Use for this song" }).click();
   const saved = await last("import_lyrics");
   expect(saved.contents).toContain(
-    '<amll:meta key="isrc" value="USUM71703861"/><amll:meta key="spotifyId"',
+    '<amll:meta key="isrc" value="USUM71703861"/>',
+  );
+  expect(saved.contents).toContain(
+    '<amll:meta key="album" value="Album"/><amll:meta key="spotifyId" value="0123456789abcdefghijkl"/>',
   );
   expect(saved.contents).toContain(
     '<amll:meta key="ttmlAuthorGithubLogin" value="someone"/>',

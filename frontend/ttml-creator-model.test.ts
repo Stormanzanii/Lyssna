@@ -401,7 +401,11 @@ describe("TTML Creator metadata", () => {
       { key: "qqMusicId", values: [""] },
       { key: "songwriters", values: ["Ann", "Bo"] },
       { key: "custom", values: ['x"y'] },
+      { key: "spotifyId", values: ["edited"] },
+      { key: "album", values: ["edited"] },
     ]);
+    expect(ttml).not.toContain("edited");
+    expect(ttml).toContain('<amll:meta key="spotifyId" value="abc"/>');
     expect(ttml).toContain(
       '<amll:meta key="musicName" value="Song"/><amll:meta key="musicName" value="曲"/><amll:meta key="isrc" value="USUM71703861"/><amll:meta key="isrc" value="GBUM71703861"/><amll:meta key="custom" value="x&quot;y"/>',
     );

@@ -1,9 +1,8 @@
-/** Animator presets and Custom tuning, reimplemented from the
- * pixels-spicy-lyrics fork (`src/utils/Lyrics/Animator/Tuning.ts`,
- * AGPL-3.0): the same parameters, ranges, defaults, value cleaning, saved
- * presets, Randomize and SLP1 share codes. Default plays upstream Spicy
- * Lyrics' animator unchanged; Custom rests unsung text at full size
- * and apply these values to the curves and springs. */
+/** Animator presets and Custom tuning (reimplemented from
+ * `src/utils/Lyrics/Animator/Tuning.ts`, AGPL-3.0): parameters, ranges,
+ * defaults, value cleaning, saved presets, Randomize and SLP1 share codes.
+ * Default plays the standard animation unchanged; Custom rests unsung text
+ * at full size and applies these values to the curves and springs. */
 
 export type AnimatorPreset = "Default" | "Custom";
 export type AnimatorDetail = "Basic" | "Advanced" | "Full" | "Full + Extras";
@@ -210,9 +209,8 @@ export const ANIMATOR_DEFAULTS = Object.freeze(
     ANIMATOR_PARAMETERS.map((item) => [item.id, item.defaultValue]),
   ) as AnimatorValues,
 );
-/** Spikerko/spicy-lyrics main 2a14863f, kept apart from the editable
- * defaults as the fork does. Words rest at full size here rather than
- * upstream's 0.95, so they peak at 1.075 instead of 1.0505 to keep more of
+/** The standard animation's values (main 2a14863f), kept apart from the
+ * editable defaults. Words rest at full size here rather than 0.95, so they peak at 1.075 instead of 1.0505 to keep more of
  * the pop. */
 export const UPSTREAM_ANIMATOR_VALUES: Readonly<AnimatorValues> = Object.freeze(
   {
@@ -447,7 +445,7 @@ export function importCode(
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       throw new Error("Preset code has no preset data.");
     input = parsed as typeof input;
-  } else throw new Error("Not a Spicy Lyrics animator preset.");
+  } else throw new Error("Not an animator preset.");
   const values = cleanAnimatorValues(input.values);
   if (!Object.keys(values).length)
     throw new Error("Preset has no recognized animator values.");

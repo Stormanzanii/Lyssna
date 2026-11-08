@@ -3045,10 +3045,9 @@ small {
 /* Under Default every piece of a split word moves, as the fork's: it
    rests small, pops while sung and settles full size, so none grows once
    the line ends. Other presets hold split pieces still (below). */
-/* Custom animator preset, as the pixels-spicy-lyrics fork: split
-   syllables keep full size while more of the line follows, so no gaps open;
-   the line's final syllable and Space Gravity keep their scale. Default
-   scales every piece like upstream Spicy Lyrics. */
+/* Custom animator preset: split syllables keep full size while more of the
+   line follows, so no gaps open; the line's final syllable and Space Gravity
+   keep their scale. Default scales every piece. */
 :root:not([data-animator="Default"])
   .lyric-word
   > .lyric-syllable:not(
@@ -3107,13 +3106,13 @@ small {
 }
 /* Registered so the container-relative lyric size resolves once on the row
    and the dots inherit plain pixels. Unregistered, every per-frame dot
-   transform re-resolved cqw, which Spicy Lyrics found drops frame rates. */
+   transform re-resolved cqw, which drops frame rates. */
 @property --dot-lyric-size {
   syntax: "<length>";
   inherits: true;
   initial-value: 32px;
 }
-/* Sized from the lyrics like Spicy Lyrics: a sung dot is about 0.42 of the
+/* Sized from the lyrics: a sung dot is about 0.42 of the
    lyric size, dots sit 0.7 apart and lift by lyric-size units. */
 .lyric-wait {
   --dot-lyric-size: var(--lead-lyric-size, var(--lyric-size, 32px));
@@ -3155,7 +3154,7 @@ small {
   transform-origin: center;
   transition: scale 0.3s cubic-bezier(0.2, 0.7, 0.25, 1);
 }
-/* Spicy Lyrics' exit: the finished group swells about 19%, then collapses
+/* Exit: the finished group swells about 19%, then collapses
    toward its centre in 0.4 s. */
 .lyric-wait[aria-hidden="true"] .lyric-wait-dots {
   scale: 0;
@@ -6941,4 +6940,20 @@ button.discography-track:hover {
 }
 .lyrics-display.simple-lyrics .lyric-line.active {
   opacity: 1;
+}
+
+/* A line-synced line being sung fills top to bottom. */
+.lyric-plain {
+  display: inline-block;
+}
+.lyric-line.active .lyric-plain {
+  --wipe: var(--line-wipe, 100%);
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    rgb(255 255 255 / var(--sung-alpha)) var(--wipe),
+    rgb(255 255 255 / var(--unsung-alpha)) calc(var(--wipe) + 20%)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
 }

@@ -74,7 +74,7 @@ describe("animator presets", () => {
     const second = importCode(first.settings, code);
     expect(second.name).toBe("Bouncy (2)");
     expect(() => importCode({}, "SLP1:x|1,2")).toThrow(/missing/);
-    expect(() => importCode({}, "hello")).toThrow(/Not a Spicy Lyrics/);
+    expect(() => importCode({}, "hello")).toThrow(/Not an animator preset/);
   });
   it("reads the fork's legacy SLAP1 codes", () => {
     const json = JSON.stringify({ name: "Old", values: { glowStrength: 2 } });

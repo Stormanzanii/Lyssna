@@ -68,6 +68,7 @@ function clear(target: Piece) {
  * straight to the DOM. Other lines rest on static styles. */
 export class LyricAnimator {
   private live = new Map<number, Syllable[]>();
+  private wiping = new Map<number, string>();
   private ends: number[];
   private time = 0;
   private last = performance.now();
@@ -90,7 +91,23 @@ export class LyricAnimator {
    * in song time. */
   reset() {
     for (const [index, syllables] of this.live) this.release(index, syllables);
+    for (const index of [...this.wiping.keys()]) this.wipe(index, undefined);
   }
+  /** A line without word timing fills top to bottom while it is sung. It
+   *  turns active slightly early, so it rests unfilled until it starts. */
+  private wipe(index: number, progress: number | undefined) {
+    const element = this.line(index);
+    if (progress === undefined) {
+      element?.style.removeProperty("--line-wipe");
+      this.wiping.delete(index);
+      return;
+    }
+    const value = `${(120 * progress - 20).toFixed(2)}%`;
+    if (this.wiping.get(index) === value) return;
+    element?.style.setProperty("--line-wipe", value);
+    this.wiping.set(index, value);
+  }
+
   dispose() {
     cancelAnimationFrame(this.frame);
     this.reset();
@@ -180,6 +197,16 @@ export class LyricAnimator {
       // voice; line timing itself stays exact.
       ahead = time + MOTION.leadMs;
     let moving = false;
+    this.lyrics.lines.forEach((line, index) => {
+      if (line.words.length) return;
+      const end = this.ends[index];
+      if (this.simple || time < line.start_ms - 1000) {
+        if (this.wiping.has(index)) this.wipe(index, undefined);
+        return;
+      }
+      const progress = (time - line.start_ms) / (end - line.start_ms || 1);
+      this.wipe(index, Math.min(1, Math.max(0, progress)));
+    });
     if (this.simple) {
       this.lyrics.lines.forEach((line, index) => {
         if (!line.words.length) return;

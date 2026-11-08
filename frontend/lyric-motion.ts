@@ -24,11 +24,10 @@ export interface VocalGap {
   after: number;
 }
 
-/** A dot waiting its turn, as in Spicy Lyrics (its non-simple mode). */
+/** A dot waiting its turn, outside Simple lyrics mode. */
 export const DORMANT_DOT_OPACITY = 0.35;
-// Spicy Lyrics' dot curves. Scale is normalized to a dormant dot (the fork's
-// 0.75 -> 1.05 -> 1), and lift is in lyric font sizes (the fork's -0.12em
-// YOffset). Its natural spline bows the lift to a peak near mid-turn.
+// Dot curves. Scale is normalized to a dormant dot (0.75 -> 1.05 -> 1), and
+// lift is in lyric font sizes (a -0.12em offset). Its natural spline bows the lift to a peak near mid-turn.
 const DOT_MOTION = {
   scale: naturalSpline([
     [0, 1],
@@ -80,7 +79,7 @@ export function countdownDots(
   });
 }
 
-/** Spicy Lyrics' dot springs (frequency, damping). The lift is underdamped,
+/** Dot springs (frequency, damping). The lift is underdamped,
  * so a finished dot lands with a slight bounce. */
 const DOT_SPRINGS = {
   scale: [0.7, 0.6],

@@ -31,9 +31,10 @@ import {
 const readClipboard = () =>
   rpc<string>("read_clipboard").catch(() => navigator.clipboard.readText());
 
-const PRESET_HELP = "Default matches upstream. Custom stores live tuning.";
+const PRESET_HELP =
+  "Default is the standard animation. Custom stores live tuning.";
 
-/** Spicy Lyrics' Animator Presets row, with Manage for Custom tuning. */
+/** The Animator Presets row, with Manage for Custom tuning. */
 export function AnimatorPresetRow({
   animator = {},
   onChange,
@@ -136,7 +137,7 @@ function ValueSlider({
   );
 }
 
-/** The fork's Animator Behavior panel: saved presets, share codes, detail
+/** The Animator Behavior panel: saved presets, share codes, detail
  * level and live Custom tuning. */
 export function AnimatorBehavior({
   animator = {},
@@ -370,8 +371,7 @@ export function AnimatorBehavior({
   );
 }
 
-/** Custom tuning floating over full screen lyrics, as the fork's Manage
- * opens it: the lyrics keep playing beside it so each change shows live.
+/** Custom tuning floating over full screen lyrics: the lyrics keep playing beside it so each change shows live.
  * Escape closes the panel without leaving full screen. */
 export function AnimatorPanel({
   animator,

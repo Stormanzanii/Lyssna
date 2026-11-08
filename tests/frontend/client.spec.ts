@@ -3036,6 +3036,71 @@ test("simple lyrics mode fills words softly without scale or glow", async ({
   ).toBe("0.45");
 });
 
+test("a line-synced line fills top to bottom as it is sung", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const line = (text: string, start_ms: number, end_ms: number) => ({
+    text,
+    start_ms,
+    end_ms,
+    translation: "",
+    romanization: "",
+    background: false,
+    opposite: false,
+    words: [],
+  });
+  const at = (position_ms: number) =>
+    page.evaluate(
+      ({ uri, position_ms }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, position_ms },
+    );
+  await page.evaluate(
+    ({ uri, lines }) =>
+      (window as any).__clientTest.emit({
+        type: "lyrics",
+        uri,
+        lyrics: { source: "LRCLIB", synced: true, instrumental: false, lines },
+      }),
+    {
+      uri: track.uri,
+      lines: [line("First line", 1000, 3000), line("Second line", 3000, 5000)],
+    },
+  );
+  await at(2000);
+  const active = page.locator(".lyric-line.active");
+  await expect(active).toHaveText("First line");
+  await expect
+    .poll(() =>
+      active.evaluate((element) =>
+        (element as HTMLElement).style.getPropertyValue("--line-wipe"),
+      ),
+    )
+    .toBe("40.00%");
+  expect(
+    await active
+      .locator(".lyric-plain")
+      .evaluate((element) => getComputedStyle(element).backgroundImage),
+  ).toContain("linear-gradient(rgba(255, 255, 255");
+  await at(2900);
+  const next = page.locator(".lyric-line", { hasText: "Second line" });
+  await expect
+    .poll(() =>
+      next.evaluate((element) =>
+        (element as HTMLElement).style.getPropertyValue("--line-wipe"),
+      ),
+    )
+    .toBe("-20.00%");
+});
+
 test("seek drag released outside slider resumes the audio clock", async ({
   page,
 }) => {

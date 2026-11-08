@@ -369,6 +369,13 @@ fn path(account: &str) -> Result<std::path::PathBuf> {
         .join("resume")
         .join(format!("{key}.json")))
 }
+/// DJ sets started on this account, kept by the Connect player.
+pub fn dj_sets_path(account: &str) -> Option<std::path::PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
+    Some(path(account).ok()?.with_extension("dj-sets.txt"))
+}
 fn order_path(account: &str) -> Result<std::path::PathBuf> {
     Ok(path(account)?.with_extension("order.json"))
 }

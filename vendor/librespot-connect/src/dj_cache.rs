@@ -1,13 +1,50 @@
 use crate::{context_resolver::LEXICON_CONTEXT_URL, core::Session, protocol::context::Context};
 use log::warn;
 use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 use tokio::sync::OnceCell;
 
 pub(crate) const DJ_URI: &str = "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
+const HEARD_LIMIT: usize = 200;
+static HEARD_PATH: OnceLock<fn(&str) -> Option<PathBuf>> = OnceLock::new();
+
+/// Where each account's started DJ sets are kept, so starting DJ after a
+/// restart moves on instead of replaying the set heard before it.
+pub fn keep_dj_sets_at(path: fn(&str) -> Option<PathBuf>) {
+    let _ = HEARD_PATH.set(path);
+}
+fn read_heard(path: &PathBuf) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .filter(|text| text.len() < 2_000_000)
+        .map(|text| {
+            text.lines()
+                .filter(|key| !key.is_empty() && key.len() < 4096)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .map(|mut keys| {
+            let extra = keys.len().saturating_sub(HEARD_LIMIT);
+            keys.drain(..extra);
+            keys
+        })
+        .unwrap_or_default()
+}
+fn write_heard(path: &PathBuf, keys: &[String]) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    let temporary = path.with_extension("tmp");
+    let written = std::fs::create_dir_all(parent)
+        .and_then(|()| std::fs::write(&temporary, keys.join("\n")))
+        .and_then(|()| std::fs::rename(&temporary, path));
+    if let Err(error) = written {
+        warn!("could not save heard DJ sets: {error}");
+    }
+}
 struct Prepared {
     /// The `next_page_url` a following set was fetched from, or `None` for
     /// the set DJ's session is on now.
@@ -31,8 +68,8 @@ impl Pending {
 pub(crate) struct DjCache {
     session: Session,
     current: Mutex<Option<Arc<Pending>>>,
-    /// Sets started since Lyssna opened, so starting DJ again moves on.
-    heard: Mutex<HashSet<String>>,
+    /// Sets started here, oldest first, loaded from disk on first use.
+    heard: Mutex<Option<Vec<String>>>,
 }
 /// Names a set: its page URL, else its first track.
 fn set_key(context: &Context) -> Option<String> {
@@ -82,7 +119,7 @@ impl DjCache {
         Self {
             session,
             current: Mutex::new(None),
-            heard: Mutex::new(HashSet::new()),
+            heard: Mutex::new(None),
         }
     }
     /// What starting DJ plays. Like Spotify, DJ carries on with the set its
@@ -94,7 +131,8 @@ impl DjCache {
             context.pages = vec![latest];
         }
         let heard = set_key(&context)
-            .is_some_and(|key| self.heard.lock().is_ok_and(|heard| heard.contains(&key)));
+            .and_then(|key| self.with_heard(|heard| heard.contains(&key)))
+            .unwrap_or(false);
         let next = context
             .pages
             .last()
@@ -111,13 +149,31 @@ impl DjCache {
                 _ => warn!("no new DJ set, carrying on with the current one"),
             }
         }
-        if let (Some(key), Ok(mut heard)) = (set_key(&context), self.heard.lock()) {
-            if heard.len() > 500 {
-                heard.clear();
-            }
-            heard.insert(key);
+        if let Some(key) = set_key(&context) {
+            let path = self.heard_path();
+            self.with_heard(|heard| {
+                if heard.contains(&key) {
+                    return;
+                }
+                heard.push(key);
+                let extra = heard.len().saturating_sub(HEARD_LIMIT);
+                heard.drain(..extra);
+                if let Some(path) = &path {
+                    write_heard(path, heard);
+                }
+            });
         }
         context
+    }
+    fn heard_path(&self) -> Option<PathBuf> {
+        let account = self.session.username();
+        (!account.is_empty()).then(|| HEARD_PATH.get()?(&account))?
+    }
+    fn with_heard<T>(&self, use_heard: impl FnOnce(&mut Vec<String>) -> T) -> Option<T> {
+        let path = self.heard_path();
+        let mut heard = self.heard.lock().ok()?;
+        let heard = heard.get_or_insert_with(|| path.as_ref().map(read_heard).unwrap_or_default());
+        Some(use_heard(heard))
     }
     pub fn prepare(&self, seed: Option<Context>) {
         let pending = {
@@ -236,6 +292,22 @@ async fn fetch(session: &Session, seed: Option<Context>) -> Option<Prepared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn heard_sets_survive_a_restart_and_keep_the_newest() {
+        let dir = std::env::temp_dir().join(format!("lyssna-dj-heard-{}", std::process::id()));
+        let path = dir.join("account.dj-sets.txt");
+        let keys: Vec<String> = (0..HEARD_LIMIT + 5)
+            .map(|n| format!("hm://set/{n}"))
+            .collect();
+        write_heard(&path, &keys);
+        let read = read_heard(&path);
+        assert_eq!(read.len(), HEARD_LIMIT);
+        assert_eq!(read.first().map(String::as_str), Some("hm://set/5"));
+        assert_eq!(read.last(), keys.last());
+        assert!(read_heard(&dir.join("missing.txt")).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
     #[test]
     fn starting_dj_takes_the_current_set_never_one_prepared_ahead() {
         let current = Prepared {

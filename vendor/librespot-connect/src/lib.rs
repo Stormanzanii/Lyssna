@@ -18,6 +18,7 @@ mod spirc;
 mod state;
 mod state_updates;
 
+pub use dj_cache::keep_dj_sets_at;
 pub use jam_follow::JamPhase;
 pub use model::*;
 pub use spirc::*;

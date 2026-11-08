@@ -2453,6 +2453,7 @@ async fn run(
     let player = kit.player.clone();
     let mut player_events = player.get_player_event_channel();
     let local_player = player.clone();
+    librespot_connect::keep_dj_sets_at(crate::resume::dj_sets_path);
     let config = ConnectConfig {
         resume_on_startup: false,
         emit_set_queue_events: true,

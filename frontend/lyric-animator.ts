@@ -9,6 +9,23 @@ import {
 } from "./lyric-motion";
 import { frameDue } from "./frame-cap";
 
+/** Simple lyrics mode: no scale or glow, a wider soft edge
+ *  starting further back, and a small steady rise across each word. */
+export function simpleGoal(
+  start: number,
+  end: number,
+  time: number,
+): SyllableGoal {
+  const at =
+    time < start ? 0 : time >= end ? 1 : (time - start) / (end - start || 1);
+  return {
+    scale: 1,
+    lift: 0.01 - 0.043 * at,
+    glow: 0,
+    gradient: time < start ? -50 : time >= end ? 100 : -50 + 120 * at,
+  };
+}
+
 interface Piece {
   element: HTMLElement;
   springs: SyllableSprings;
@@ -59,6 +76,7 @@ export class LyricAnimator {
     private lyrics: Lyrics,
     private line: (index: number) => HTMLElement | null,
     private reduceMotion: boolean,
+    private simple = false,
   ) {
     this.ends = lyrics.lines.map(vocalEnd);
   }
@@ -116,8 +134,15 @@ export class LyricAnimator {
             (letter) => piece(letter, true),
           )
         : [];
+      const base = piece(node);
+      if (this.simple)
+        base.springs.lift.position = base.springs.lift.goal = simpleGoal(
+          1,
+          2,
+          0,
+        ).lift;
       return {
-        ...piece(node),
+        ...base,
         start,
         end: end - (emphasis ? MOTION.emphasisTailMs : 0),
         letters,
@@ -155,6 +180,49 @@ export class LyricAnimator {
       // voice; line timing itself stays exact.
       ahead = time + MOTION.leadMs;
     let moving = false;
+    if (this.simple) {
+      this.lyrics.lines.forEach((line, index) => {
+        if (!line.words.length) return;
+        const active = line.start_ms <= time && time < this.ends[index];
+        let syllables = this.live.get(index);
+        if (!active && !syllables) return;
+        if (syllables && time < line.start_ms) {
+          this.release(index, syllables);
+          return;
+        }
+        if (!syllables) {
+          syllables = this.build(index);
+          if (!syllables) return;
+          this.live.set(index, syllables);
+        }
+        let awake = false;
+        for (const syllable of syllables) {
+          const goal = simpleGoal(syllable.start, syllable.end, time);
+          if (syllable.letters.length) {
+            // Held words fill letter by letter but move as one block.
+            const share =
+              (syllable.end - syllable.start) / syllable.letterCount;
+            syllable.letters.forEach((letter, part) => {
+              const from =
+                syllable.start + (syllable.letterOffset + part) * share;
+              const fill = simpleGoal(from, from + share, time).gradient;
+              write(letter, "--gradient-position", `${fill}%`);
+              write(letter, "--gradient-ratio", `${fill / 100}`);
+            });
+          } else {
+            write(syllable, "--gradient-position", `${goal.gradient}%`);
+            write(syllable, "--gradient-ratio", `${goal.gradient / 100}`);
+          }
+          if (this.reduceMotion) continue;
+          const lift = syllable.springs.step(goal, seconds).lift;
+          write(syllable, "translate", `0 ${lift.toFixed(4)}em`);
+          awake ||= !syllable.springs.lift.asleep;
+        }
+        moving ||= awake;
+        if (!awake && !active) this.release(index, syllables);
+      });
+      return moving;
+    }
     this.lyrics.lines.forEach((line, index) => {
       if (!line.words.length) return;
       const active = line.start_ms <= time && time < this.ends[index];

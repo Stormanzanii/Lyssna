@@ -640,7 +640,8 @@ export function LyricsDisplay({
     const instance = new LyricAnimator(
       lyrics,
       (index) => lines.current[index] ?? null,
-      settings.reduce_motion || !!settings.lyrics_simple,
+      !!settings.reduce_motion,
+      !!settings.lyrics_simple,
     );
     animator.current = instance;
     return () => instance.dispose();
@@ -842,7 +843,7 @@ export function LyricsDisplay({
     );
   return (
     <div
-      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_minimal && !compact ? "minimal" : ""} ${highlighter ? "highlighter" : ""} ${settings.lyrics_keep_overlaps !== false ? "keep-overlaps" : ""} ${lyrics.synced && lyrics.lines.length && positionMs >= Math.max(...lyrics.lines.map(vocalEnd)) ? "all-sung" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
+      className={`lyrics-display ${compact ? "compact" : ""} ${footerMode !== "off" ? "has-pinned-footer" : ""} ${!lyrics.synced ? "static-lyrics" : ""} ${settings.reduce_motion ? "reduce-motion" : ""} ${settings.lyrics_simple ? "simple-lyrics" : ""} ${settings.lyrics_right_align ? "lyrics-right" : ""} ${settings.lyrics_flip_duet ? "lyrics-flip-duet" : ""} ${settings.lyrics_wide_duet === false ? "" : "lyrics-wide-duet"} ${settings.lyrics_line_hover ? "lyrics-line-hover" : ""} ${lyrics.lines.some((line) => line.opposite) ? "has-duet" : ""} ${settings.lyrics_minimal && !compact ? "minimal" : ""} ${highlighter ? "highlighter" : ""} ${settings.lyrics_keep_overlaps !== false ? "keep-overlaps" : ""} ${lyrics.synced && lyrics.lines.length && positionMs >= Math.max(...lyrics.lines.map(vocalEnd)) ? "all-sung" : ""} ${settings.lyrics_credits_follow && endsOnRight(lyrics.lines, !!(settings.lyrics_flip_duet || settings.lyrics_right_align)) ? "credits-right" : ""}`}
       data-following={following}
       style={
         {

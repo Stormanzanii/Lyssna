@@ -1069,7 +1069,7 @@ export function SettingsWindow({
         flag(
           "lyrics_simple",
           "Simple lyrics mode",
-          "Fill lines without the per-word lift, scale and glow.",
+          "Words fill with a softer gradient and rise gently, without the bounce and glow, and resting lines are dimmer.",
           "simple minimal animation",
         ),
         flag(

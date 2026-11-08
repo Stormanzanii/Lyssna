@@ -2965,6 +2965,77 @@ test("lyrics wrap at narrow widths; countdown and unsung syllables follow song t
   ).toBe("none");
 });
 
+test("simple lyrics mode fills words softly without scale or glow", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "Simple lyrics mode" }).check();
+  await page.keyboard.press("Escape");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: "One two",
+            start_ms: 1000,
+            end_ms: 3000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [
+              { text: "One", start_ms: 1000, end_ms: 1300 },
+              { text: " two", start_ms: 1300, end_ms: 3000 },
+            ],
+          },
+          {
+            text: "Later",
+            start_ms: 8000,
+            end_ms: 9000,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words: [{ text: "Later", start_ms: 8000, end_ms: 9000 }],
+          },
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1150,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  await expect(page.locator(".lyrics-display")).toHaveClass(/simple-lyrics/);
+  const first = page.locator(".lyric-line.active .lyric-syllable").first();
+  const style = (name: string) =>
+    first.evaluate(
+      (element, name) => (element as HTMLElement).style.getPropertyValue(name),
+      name,
+    );
+  await expect.poll(() => style("--gradient-position")).toBe("10%");
+  expect(await style("scale")).toBe("");
+  expect(await style("--glow")).toBe("");
+  await expect.poll(() => style("translate")).toMatch(/^0(px)? -0\.0\d+em$/);
+  expect(
+    await page
+      .locator(".lyric-line")
+      .last()
+      .evaluate((element) => getComputedStyle(element).opacity),
+  ).toBe("0.45");
+});
+
 test("seek drag released outside slider resumes the audio clock", async ({
   page,
 }) => {

@@ -3235,7 +3235,7 @@ small {
     rgb(var(--lyric-rgb, 255 255 255) / var(--unsung-alpha))
       calc(
         var(--glyph-bleed) + (100% - 2 * var(--glyph-bleed)) *
-          (var(--sweep) + 0.2) + var(--sweep-overrun)
+          (var(--sweep) + var(--sweep-soft, 0.2)) + var(--sweep-overrun)
       )
   );
   background-clip: text;
@@ -6926,4 +6926,19 @@ button.discography-track:hover {
 .credits-note {
   margin: 16px 0 0;
   color: #b3b3b3;
+}
+
+/* Simple lyrics mode: a 30% soft edge from full white to 30%, and dimmer
+   resting lines. */
+.lyrics-display.simple-lyrics .lyric-line {
+  --sweep-soft: 0.3;
+  --sung-alpha: 1;
+  --unsung-alpha: 0.3;
+  opacity: 0.45;
+}
+.lyrics-display.simple-lyrics .lyric-line.past {
+  opacity: 0.35;
+}
+.lyrics-display.simple-lyrics .lyric-line.active {
+  opacity: 1;
 }

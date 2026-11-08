@@ -628,7 +628,9 @@ async function startClient(
             );
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
-          if (command === "search_suggestions")
+          if (command === "search_suggestions") {
+            if (args.query.startsWith("slow"))
+              await new Promise((resolve) => setTimeout(resolve, 500));
             return {
               terms: [args.query.toLowerCase(), `${args.query.toLowerCase()} demo version`],
               results: {
@@ -649,6 +651,7 @@ async function startClient(
                 top_results: ["spotify:artist:0123456789abcdefghij02", "spotify:track:0123456789abcdefghij01"],
               },
             };
+          }
           if (command === "browse_categories")
             return [
               { id: "music0000", title: "Music", color: "#dc148c", images: [{ url: "https://artwork.example.test/music", width: 300 }] },
@@ -16230,6 +16233,18 @@ test("typing shows Spotify's suggestions; only Enter opens the search page", asy
         )
         .map((entry: any) => entry.args.key),
     );
+  const layout = () =>
+    page.evaluate(() => {
+      const box = document.querySelector(".search-box")!;
+      const icon = box.querySelector(":scope > svg")!.getBoundingClientRect();
+      const input = box.querySelector("input")!.getBoundingClientRect();
+      return [icon.width, icon.left, input.left];
+    });
+  await page.mouse.move(0, 400);
+  const resting = await layout();
+  await page.locator(".search-box").hover();
+  await expect(page.locator(".search-shortcut")).toHaveCSS("opacity", "1");
+  expect(await layout()).toEqual(resting);
   await search.fill("DYK");
   const list = page.getByRole("listbox", { name: "Search suggestions" });
   await expect(list.getByRole("option")).toHaveText([
@@ -16255,6 +16270,11 @@ test("typing shows Spotify's suggestions; only Enter opens the search page", asy
   await search.press("Enter");
   await expect(list).toBeHidden();
   await expect.poll(searched).toContain("search:dykily");
+  await search.fill("");
+  await search.fill("slow");
+  await expect(page.getByLabel("Loading suggestions")).toBeVisible();
+  await expect(list.getByRole("option").first()).toHaveText("slow");
+  await page.screenshot({ path: "target/diagnostics/suggestions.png" });
   await search.fill("dy");
   await list.getByRole("option", { name: /Suggested song/ }).click();
   await expect

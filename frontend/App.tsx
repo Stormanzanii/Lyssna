@@ -2925,6 +2925,12 @@ function App() {
                 }
               }}
             />
+            {!query && state.profile && (
+              <span className="search-shortcut" aria-hidden="true">
+                <kbd>{MODIFIER}</kbd>
+                <kbd>L</kbd>
+              </span>
+            )}
             {query && (
               <button
                 className="icon-button"

@@ -14,7 +14,7 @@ import {
   Search,
 } from "lucide-react";
 import { rpc } from "./bridge";
-import { Cover } from "./components";
+import { Cover, ExplicitBadge } from "./components";
 import { searchEntries, type SearchEntry } from "./search-results";
 import type { Album, Artist, Playlist, Profile, Track } from "./types";
 
@@ -65,8 +65,15 @@ export function suggestionRows(found: SearchSuggestionResults): Row[] {
 
 function detail(entry: SearchEntry) {
   if (entry.kind === "Artist" || entry.kind === "Profile") return entry.kind;
+  const type = entry.album?.album_type;
+  const kind =
+    entry.kind === "Album" && type && type !== "album"
+      ? type === "ep"
+        ? "EP"
+        : type[0].toUpperCase() + type.slice(1)
+      : entry.kind;
   const subtitle = entry.subtitle.replace(/^By /, "");
-  return subtitle ? `${entry.kind} • ${subtitle}` : entry.kind;
+  return subtitle ? `${kind} • ${subtitle}` : kind;
 }
 
 export function SearchSuggestions({
@@ -147,7 +154,23 @@ export function SearchSuggestions({
       ?.querySelector<HTMLElement>(`[data-row="${active}"]`)
       ?.scrollIntoView({ block: "nearest" });
   }, [active]);
-  if (!rows.length) return null;
+  if (!rows.length)
+    return (
+      <div
+        className="recent-searches search-suggestions popover"
+        aria-label="Loading suggestions"
+        aria-busy="true"
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        {Array.from({ length: 7 }, (_, index) => (
+          <div className="search-suggestion-skeleton" key={index}>
+            <i />
+            <i style={{ width: `${70 - ((index * 17) % 35)}%` }} />
+            <i />
+          </div>
+        ))}
+      </div>
+    );
   return (
     <div
       ref={list}
@@ -183,7 +206,7 @@ export function SearchSuggestions({
                 onMouseMove={() => setActive(index)}
               >
                 <span className="search-suggestion-icon">
-                  <Search size={20} />
+                  <Search size={24} />
                 </span>
                 <strong>{row.term}</strong>
               </button>
@@ -213,7 +236,10 @@ export function SearchSuggestions({
               />
               <span>
                 <strong>{entry.name}</strong>
-                <small>{detail(entry)}</small>
+                <small>
+                  {entry.track && <ExplicitBadge track={entry.track} />}
+                  {detail(entry)}
+                </small>
               </span>
             </button>
             {entry.track && (
@@ -227,9 +253,9 @@ export function SearchSuggestions({
                 onClick={() => save(entry.track!)}
               >
                 {liked ? (
-                  <CircleCheck size={20} fill="currentColor" />
+                  <CircleCheck size={18} fill="currentColor" />
                 ) : (
-                  <CirclePlus size={20} />
+                  <CirclePlus size={18} />
                 )}
               </button>
             )}

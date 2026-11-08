@@ -690,8 +690,83 @@ small {
 .recent-searches-clear:hover {
   color: light-dark(#000, #fff);
 }
+/* Sizes measured from Spotify's dropdown: 64px item rows, 56px search
+   rows, 48px artwork. */
 .search-suggestions {
+  max-height: min(600px, calc(100vh - 120px));
   padding-top: 8px;
+}
+.search-suggestions .recent-search > button:first-child {
+  gap: 16px;
+  padding: 8px 12px;
+}
+.search-suggestions .recent-search:has(.search-suggestion-icon) > button {
+  padding-block: 4px;
+}
+.search-suggestions .recent-search span {
+  gap: 4px;
+}
+.search-suggestions .recent-search strong {
+  font-size: 16px;
+}
+.search-suggestions .recent-search small {
+  display: block;
+  font-size: 14px;
+}
+.search-suggestion-skeleton {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: 1fr 1fr;
+  column-gap: 16px;
+  align-items: center;
+  height: 64px;
+  padding: 8px 12px;
+}
+.search-suggestion-skeleton i {
+  display: block;
+  height: 11px;
+  border-radius: 4px;
+  background: light-dark(#0000000f, #ffffff12);
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+.search-suggestion-skeleton i:first-child {
+  grid-row: span 2;
+  height: 48px;
+}
+.search-suggestion-skeleton i:last-child {
+  align-self: start;
+  width: 30%;
+  height: 9px;
+}
+.search-suggestion-skeleton i:nth-child(2) {
+  align-self: end;
+  margin-bottom: 5px;
+}
+/* Always laid out so showing it on hover never squeezes the icon or text. */
+.search-shortcut {
+  display: flex;
+  gap: 4px;
+  margin-right: 6px;
+  flex: none;
+  opacity: 0;
+}
+.search-box:hover > .search-shortcut {
+  opacity: 1;
+}
+.search-box > svg {
+  flex: none;
+}
+.search-shortcut kbd {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid light-dark(#0000004d, #ffffff4d);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  color: light-dark(#585858, #a7a7a7);
 }
 .search-suggestions-keys {
   display: flex;
@@ -699,6 +774,7 @@ small {
   gap: 6px;
   margin: 0 10px 6px;
   font-size: 13px;
+  line-height: 1;
   color: light-dark(#585858, #a7a7a7);
 }
 .search-suggestions-keys kbd {
@@ -711,6 +787,14 @@ small {
   border-radius: 4px;
   font: inherit;
   font-size: 12px;
+  line-height: 1;
+}
+/* The key caps centre their text; plain labels need the same drop. */
+.search-suggestions-keys > span {
+  padding-top: 2px;
+}
+.search-suggestions-keys kbd svg {
+  display: block;
 }
 .search-suggestions-keys kbd.wide {
   margin-left: auto;
@@ -734,8 +818,9 @@ small {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.search-suggestion-save {
-  margin-right: 8px;
+.recent-search > .search-suggestion-save {
+  opacity: 1;
+  margin-right: 14px;
   color: light-dark(#585858, #a7a7a7);
 }
 .search-suggestion-save:hover {

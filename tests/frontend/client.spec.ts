@@ -4533,6 +4533,10 @@ test("a playlist page's more options button opens its menu", async ({
   await expect(
     menu.getByRole("menuitem", { name: "Edit details" }),
   ).toBeVisible();
+  // Privacy was read as the page opened, so it shows with the menu.
+  await expect(
+    menu.getByRole("menuitem", { name: "Make private" }),
+  ).toBeVisible({ timeout: 100 });
   const button = (await more.boundingBox())!;
   const box = (await menu.boundingBox())!;
   expect(box.y).toBeGreaterThan(button.y + button.height);

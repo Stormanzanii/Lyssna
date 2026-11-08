@@ -951,25 +951,45 @@ function App() {
   );
   const songMenuElement = useRef<HTMLDivElement>(null);
   const entityMenuElement = useRef<HTMLDivElement>(null);
-  const [privacy, setPrivacy] = useState<PlaylistPrivacy & { id: string }>();
-  const ownMenuPlaylist =
-    entityMenu?.kind === "playlist" &&
+  const [privacy, setPrivacy] = useState<Record<string, PlaylistPrivacy>>(
+    {},
+  );
+  const ownPlaylistId = (id: string | undefined) =>
+    id &&
     state.playlists.some(
-      (item) =>
-        item.id === entityMenu.id && item.owner.id === state.profile?.id,
+      (item) => item.id === id && item.owner.id === state.profile?.id,
     )
-      ? entityMenu.id
+      ? id
       : undefined;
+  const ownMenuPlaylist =
+    entityMenu?.kind === "playlist" ? ownPlaylistId(entityMenu.id) : undefined;
+  const ownPagePlaylist = state.route.startsWith("playlist:")
+    ? ownPlaylistId(state.route.slice("playlist:".length))
+    : undefined;
+  const loadPrivacy = useCallback(
+    (id: string) =>
+      rpc<PlaylistPrivacy>("playlist_privacy", { id })
+        .then((now) => setPrivacy((known) => ({ ...known, [id]: now })))
+        .catch(() => {}),
+    [],
+  );
+  // Read as the page opens, so its ⋯ menu shows every item at once.
   useEffect(() => {
+    if (ownPagePlaylist) void loadPrivacy(ownPagePlaylist);
+  }, [ownPagePlaylist, loadPrivacy]);
+  useEffect(() => {
+    if (ownMenuPlaylist) void loadPrivacy(ownMenuPlaylist);
+  }, [ownMenuPlaylist, loadPrivacy]);
+  // A menu whose privacy is not known yet waits briefly rather than growing.
+  const [privacyWait, setPrivacyWait] = useState(false);
+  useLayoutEffect(() => {
     if (!ownMenuPlaylist) return;
-    let live = true;
-    rpc<PlaylistPrivacy>("playlist_privacy", { id: ownMenuPlaylist })
-      .then((now) => live && setPrivacy({ ...now, id: ownMenuPlaylist }))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [ownMenuPlaylist]);
+    setPrivacyWait(true);
+    const timer = setTimeout(() => setPrivacyWait(false), 400);
+    return () => clearTimeout(timer);
+  }, [entityMenu, ownMenuPlaylist]);
+  const menuWaiting =
+    !!ownMenuPlaylist && privacyWait && !privacy[ownMenuPlaylist];
   const changePrivacy = (
     command: "set_playlist_private" | "set_playlist_on_profile",
     id: string,
@@ -978,7 +998,7 @@ function App() {
   ) =>
     rpc<PlaylistPrivacy>(command, { id, ...args })
       .then((now) => {
-        setPrivacy({ ...now, id });
+        setPrivacy((known) => ({ ...known, [id]: now }));
         notify(done);
       })
       .catch((error) => notify(String(error), true));
@@ -1004,7 +1024,7 @@ function App() {
       window.removeEventListener("resize", position);
       window.removeEventListener("keydown", close);
     };
-  }, [entityMenu, songMenu]);
+  }, [entityMenu, songMenu, menuWaiting]);
   const toggleIntent = useRef<ToggleIntent | undefined>(undefined);
   const refreshHome = useCallback(() => {
     if (!stateRef.current.profile || !stateRef.current.native_ready) return;
@@ -5109,7 +5129,7 @@ function App() {
               });
             if (saved) {
               const own = saved.owner.id === current.profile?.id;
-              const known = own && privacy?.id === saved.id ? privacy : undefined;
+              const known = own ? privacy[saved.id] : undefined;
               if (known && !known.private)
                 actions.push({
                   label: known.on_profile ? "Remove from profile" : "Add to profile",
@@ -5188,6 +5208,7 @@ function App() {
                 style={{
                   left: menu.x,
                   top: menu.y,
+                  visibility: menuWaiting ? "hidden" : undefined,
                 }}
                 onKeyDown={(event) => {
                   if (

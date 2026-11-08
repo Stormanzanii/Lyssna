@@ -119,6 +119,8 @@ impl OutputChoice {
         if let Ok(mut selection) = self.0.lock()
             && selection.revision == revision
         {
+            #[cfg(not(test))]
+            crate::native::diagnostic("audio output reported an error; reopening");
             selection.revision = selection.revision.wrapping_add(1);
             selection.issue = None;
             selection.reported = None;
@@ -191,6 +193,8 @@ impl OutputChoice {
                 .as_ref()
                 .is_some_and(|previous| previous != &endpoint)
             {
+                #[cfg(not(test))]
+                crate::native::diagnostic("default audio output changed; reopening");
                 selection.revision = selection.revision.wrapping_add(1);
                 selection.issue = None;
                 selection.reported = None;

@@ -21,6 +21,7 @@ const SAMPLE_RATE: u32 = 44_100;
 const MAX_SAMPLES: usize = SAMPLE_RATE as usize * CHANNELS as usize * 250 / 1000;
 /// How long a playing output may take no samples before it counts as stuck.
 const OUTPUT_STALL: Duration = Duration::from_secs(2);
+const REOPEN_AFTER_PAUSE: Duration = Duration::from_secs(3);
 pub(crate) fn set_playback_speed(percent: u32) -> u32 {
     let percent = percent.clamp(25, 200);
     librespot_playback::player::PLAYBACK_RATE_PERCENT.store(percent, Ordering::Relaxed);
@@ -103,6 +104,7 @@ pub struct AudioSink {
     stream: Option<OutputStream>,
     applied_output: Option<u64>,
     sink: Option<rodio::Sink>,
+    paused_at: Option<Instant>,
     queued: Arc<AtomicUsize>,
     flush: Arc<AtomicBool>,
     seek_ready: tokio::sync::mpsc::UnboundedSender<()>,
@@ -163,6 +165,7 @@ impl AudioSink {
             stream: None,
             applied_output: None,
             sink: None,
+            paused_at: None,
             queued: buffer.queued,
             flush,
             seek_ready,
@@ -175,6 +178,8 @@ impl AudioSink {
     }
     pub fn prepare_output(&mut self) -> SinkResult<()> {
         if let Some((stream, revision)) = self.buffer.output.open(self.applied_output)? {
+            #[cfg(not(test))]
+            crate::native::diagnostic(&format!("audio output opened, revision {revision}"));
             self.install_sink(rodio::Sink::connect_new(stream.mixer()), revision);
             self.stream = Some(stream);
             #[cfg(windows)]
@@ -256,6 +261,19 @@ impl Sink for AudioSink {
         self.queued.load(Ordering::Acquire) == 0 || !self.crossfade.tail.is_empty()
     }
     fn start(&mut self) -> SinkResult<()> {
+        // Some USB DACs wake after Windows boots under the same endpoint id:
+        // the old stream keeps taking samples but plays nothing, while a new
+        // stream plays. Resuming after a real pause reopens it.
+        if self
+            .paused_at
+            .take()
+            .is_some_and(|paused| paused.elapsed() >= REOPEN_AFTER_PAUSE)
+            && self.stream.is_some()
+        {
+            #[cfg(not(test))]
+            crate::native::diagnostic("audio output reopened on resume");
+            self.buffer.output.retire_stream();
+        }
         self.discard_old_audio();
         self.prepare_output()?;
         self.sink.as_ref().unwrap().play();
@@ -273,6 +291,7 @@ impl Sink for AudioSink {
         if let Some(sink) = &self.sink {
             sink.pause();
         }
+        self.paused_at = Some(Instant::now());
         Ok(())
     }
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {

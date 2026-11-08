@@ -310,6 +310,9 @@ pub struct Settings {
     /// songs: off by default, 1 to 12 seconds, 5 unless chosen.
     pub crossfade: bool,
     pub crossfade_seconds: u8,
+    /// Crossfade also into a song played by hand or skipped to while
+    /// another plays. Off by default: such songs start straight away.
+    pub crossfade_picked: bool,
     /// Play through Spotify Soloist, Spotify's own player, for accounts
     /// whose audio keys Spotify refuses to Lyssna's engine.
     pub soloist: bool,
@@ -429,6 +432,7 @@ impl Default for Settings {
             cinema_lyrics: false,
             crossfade: false,
             crossfade_seconds: 5,
+            crossfade_picked: false,
             soloist: false,
             shuffle: false,
             repeat: "off".into(),

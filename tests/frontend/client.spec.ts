@@ -8760,6 +8760,14 @@ test("Lyssna settings combines app and lyrics options with ordered sources", asy
           .at(-1)?.args.settings[key],
       key,
     );
+  const picked = dialog.getByRole("switch", {
+    name: "Crossfade when you pick or skip",
+  });
+  await expect(picked).toHaveCount(0);
+  await dialog.getByRole("switch", { name: "Crossfade songs" }).check();
+  await expect(picked).not.toBeChecked();
+  await picked.check();
+  await expect.poll(() => saved("crossfade_picked")).toBe(true);
   await openSettings(page, "Sources");
   const sources = page.locator(".lyric-sources li");
   await expect(sources).toHaveText([

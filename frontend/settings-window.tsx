@@ -485,7 +485,7 @@ export function SettingsWindow({
         flag(
           "crossfade",
           "Crossfade songs",
-          "Fade each song into the next, as Spotify does, including songs you pick or skip to.",
+          "Fade each song into the next when one runs into the other, as Spotify does.",
           "crossfade fade transition gapless overlap blend",
           soloistPlays,
         ),
@@ -516,6 +516,15 @@ export function SettingsWindow({
             </span>
           </SettingRow>
         ) : null,
+        settings.crossfade
+          ? flag(
+              "crossfade_picked",
+              "Crossfade when you pick or skip",
+              "Also fade when you play a song yourself or skip forward or back. Off starts the new song straight away.",
+              "crossfade manual pick skip click play song",
+              soloistPlays,
+            )
+          : null,
         <SettingRow
           key="refresh"
           label="New headphones or speakers"

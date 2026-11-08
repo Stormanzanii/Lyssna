@@ -227,6 +227,7 @@ export interface Settings {
   cinema_lyrics?: boolean;
   crossfade?: boolean;
   crossfade_seconds?: number;
+  crossfade_picked?: boolean;
   soloist?: boolean;
   lyrics_discord_usernames?: boolean;
   audio_output?: string | null;

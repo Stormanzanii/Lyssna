@@ -2982,10 +2982,11 @@ fn save_settings(
                 .set_audio_output(&profile.id, settings.audio_output.clone());
         }
         if let Some(profile) = snapshot.profile.as_ref() {
-            state
-                .0
-                .controls
-                .set_crossfade(&profile.id, settings.active_crossfade_seconds());
+            state.0.controls.set_crossfade(
+                &profile.id,
+                settings.active_crossfade_seconds(),
+                settings.crossfade_picked,
+            );
         }
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_visible(settings.keep_playing_on_close);

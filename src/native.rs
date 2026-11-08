@@ -247,13 +247,14 @@ impl NativeControls {
             connection.audio_buffer.output.request(name);
         }
     }
-    pub fn set_crossfade(&self, account: &str, seconds: u8) {
+    pub fn set_crossfade(&self, account: &str, seconds: u8, picked: bool) {
         if let Ok(connection) = self.0.lock()
             && let Some(connection) = connection
                 .as_ref()
                 .filter(|connection| connection.account == account)
         {
             connection.audio_buffer.set_crossfade(seconds);
+            connection.audio_buffer.set_crossfade_picked(picked);
         }
     }
     #[cfg(test)]
@@ -2197,6 +2198,7 @@ impl NativePlayer {
         let latest_volume = Arc::new(AtomicU32::new(u32::from(volume)));
         if let Ok(settings) = crate::config::Settings::load() {
             audio_buffer.set_crossfade(settings.active_crossfade_seconds());
+            audio_buffer.set_crossfade_picked(settings.crossfade_picked);
             audio_buffer.output.request(settings.audio_output);
         }
         if let Ok(mut connection) = controls.0.lock() {

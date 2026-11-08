@@ -41,6 +41,7 @@ pub struct AudioBuffer {
     generation: Arc<AtomicUsize>,
     target: Arc<Mutex<Option<String>>>,
     crossfade_ms: Arc<AtomicU32>,
+    crossfade_picked: Arc<AtomicBool>,
     /// A generation that keeps sounding after a selection: with crossfade
     /// on, the old song plays on until it fades out under the chosen one.
     fading_generation: Arc<AtomicUsize>,
@@ -67,12 +68,19 @@ impl AudioBuffer {
         self.crossfade_ms
             .store(u32::from(seconds.min(12)) * 1000, Ordering::Relaxed);
     }
+    pub fn set_crossfade_picked(&self, on: bool) {
+        self.crossfade_picked.store(on, Ordering::Relaxed);
+    }
+    fn picked_crossfade_ms(&self) -> u32 {
+        if !self.crossfade_picked.load(Ordering::Relaxed) || self.narrating() {
+            return 0;
+        }
+        self.crossfade_ms.load(Ordering::Relaxed)
+    }
     /// Silence old packets immediately, including while Connect is awaiting HTTP.
     pub fn interrupt(&self, target: Option<String>) {
         if let Ok(mut pending) = self.target.lock() {
-            let fades = target.is_some()
-                && self.crossfade_ms.load(Ordering::Relaxed) > 0
-                && !self.narration.load(Ordering::Acquire);
+            let fades = target.is_some() && self.picked_crossfade_ms() > 0;
             *pending = target;
             let old = self.generation.fetch_add(1, Ordering::AcqRel);
             self.fading_generation
@@ -292,10 +300,7 @@ impl Sink for AudioSink {
         self.crossfade.remaining_ms = remaining_ms;
     }
     fn manual_crossfade_ms(&self) -> u32 {
-        if self.buffer.narrating() {
-            return 0;
-        }
-        self.buffer.crossfade_ms.load(Ordering::Relaxed)
+        self.buffer.picked_crossfade_ms()
     }
     fn fade_out(&mut self, packets: Vec<AudioPacket>, converter: &mut Converter) {
         let mut handed = Vec::new();
@@ -714,6 +719,9 @@ mod tests {
         buffer.set_crossfade(1);
         let (ready, _) = tokio::sync::mpsc::unbounded_channel();
         let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        // Off by default: a picked song starts straight away.
+        assert_eq!(audio.manual_crossfade_ms(), 0);
+        buffer.set_crossfade_picked(true);
         let mut old = audio.test_output();
         let mut converter = Converter::new(None);
         audio.set_track(&track(1));

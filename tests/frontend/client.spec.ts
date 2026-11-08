@@ -4351,6 +4351,41 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   await expect(page.locator(".profile-hero")).toHaveCount(0);
 });
 
+test("a playlist page's more options button opens its menu", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "library",
+      playlists: [
+        {
+          id: "4123456789abcdefghijkl",
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    }),
+  );
+  await page.locator(".library-item", { hasText: "Road trip" }).first().click();
+  await expect(page.locator(".track-row").first()).toBeVisible();
+  const more = page.locator(".browse-actions").getByTitle("More options", {
+    exact: true,
+  });
+  await more.click();
+  const menu = page.getByRole("menu", { name: "playlist actions" });
+  await expect(menu).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: "Edit details" }),
+  ).toBeVisible();
+  const button = (await more.boundingBox())!;
+  const box = (await menu.boundingBox())!;
+  expect(box.y).toBeGreaterThan(button.y + button.height);
+  expect(Math.abs(box.x - button.x)).toBeLessThan(4);
+});
+
 test("Spotify+ copy actions, folder choice and contributor credits", async ({
   page,
   context,

@@ -3741,6 +3741,29 @@ function App() {
                         >
                           <Shuffle size={28} />
                         </button>
+                        {/^(playlist|album):/.test(state.route) && (
+                          <button
+                            className="icon-button action-icon"
+                            title="More options"
+                            aria-label={`More options for ${title}`}
+                            aria-haspopup="menu"
+                            onClick={(event) => {
+                              const rect =
+                                event.currentTarget.getBoundingClientRect();
+                              const [kind, id] = state.route.split(":");
+                              setSongMenu(null);
+                              setEntityMenu({
+                                kind: kind as EntityMenu["kind"],
+                                id,
+                                name: title,
+                                x: rect.left,
+                                y: rect.bottom + 6,
+                              });
+                            }}
+                          >
+                            <MoreHorizontal size={28} />
+                          </button>
+                        )}
                         {entity?.artist &&
                           (() => {
                             const artist = entity.artist;

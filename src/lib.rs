@@ -12,6 +12,7 @@ mod audio_output;
 pub mod auth;
 #[cfg(feature = "desktop")]
 pub mod autostart;
+pub mod browse;
 pub mod canvas;
 pub mod catalogue;
 pub mod chrome_release;

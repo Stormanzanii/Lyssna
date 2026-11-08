@@ -628,6 +628,66 @@ async function startClient(
             );
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
+          if (command === "browse_categories")
+            return [
+              { id: "music0000", title: "Music", color: "#dc148c", images: [{ url: "https://artwork.example.test/music", width: 300 }] },
+              { id: "pop0000", title: "Pop", color: "#148a08", images: [{ url: "https://artwork.example.test/pop", width: 300 }] },
+              { id: "dance0000", title: "Dance/Electronic", color: "#477d95", images: [{ url: "https://artwork.example.test/dance", width: 300 }] },
+            ];
+          if (command === "browse_page")
+            return args.offset === 0
+              ? {
+                  title: args.id === "pop0000" ? "Pop" : "Music",
+                  color: "#dc148c",
+                  sections: [
+                    {
+                      uri: "spotify:section:editors",
+                      title: "Playlists from our Editors",
+                      subtitle: "",
+                      items: [
+                        {
+                          uri: "spotify:playlist:0123456789abcdefghijkl",
+                          route: "playlist:0123456789abcdefghijkl",
+                          name: "Fresh picks",
+                          subtitle: "New songs",
+                          images: [],
+                          kind: "playlist",
+                          playable: true,
+                          format: "",
+                        },
+                      ],
+                    },
+                  ],
+                  categories: [
+                    { id: "pop0000", title: "Pop", color: "#148a08", images: [] },
+                  ],
+                  next: 10,
+                }
+              : {
+                  title: "Music",
+                  color: "#dc148c",
+                  sections: [
+                    {
+                      uri: "spotify:section:charts",
+                      title: "Featured Charts",
+                      subtitle: "",
+                      items: [
+                        {
+                          uri: "spotify:playlist:1123456789abcdefghijkl",
+                          route: "playlist:1123456789abcdefghijkl",
+                          name: "Top 50",
+                          subtitle: "Charts",
+                          images: [],
+                          kind: "playlist",
+                          playable: true,
+                          format: "",
+                        },
+                      ],
+                    },
+                  ],
+                  categories: [],
+                  next: null,
+                };
           if (command === "artist_liked_count")
             return host.__clientTest.artistLiked ?? 0;
           if (command === "track_credits")
@@ -16064,4 +16124,55 @@ test("light theme follows the setting and keeps lyrics and heroes dark", async (
     .first()
     .click({ button: "right" });
   await page.screenshot({ path: "target/diagnostics/light-glass-menu.png" });
+});
+
+test("Browse all opens categories with shelves, subcategories and more", async ({
+  page,
+}) => {
+  await startClient(page, "home");
+  const box = page.locator(".search-box");
+  const border = () =>
+    box.evaluate((node) => getComputedStyle(node).borderColor);
+  const resting = await border();
+  const browse = page.getByRole("button", { name: "Browse", exact: true });
+  await expect(browse).toHaveAttribute("aria-pressed", "false");
+  await browse.click();
+  await expect(browse).toHaveAttribute("aria-pressed", "true");
+  expect(await border()).toBe(resting);
+  await page.getByLabel("Search Spotify").focus();
+  await expect.poll(border).not.toBe(resting);
+  await page.getByLabel("Search Spotify").blur();
+  await expect(page.getByRole("heading", { name: "Browse all" })).toBeVisible();
+  await expect(page.locator(".browse-tile")).toHaveText([
+    "Music",
+    "Pop",
+    "Dance/Electronic",
+  ]);
+  // Long names wrap at the slash, never inside a word.
+  const lines = await page
+    .locator(".browse-tile", { hasText: "Dance" })
+    .locator("span")
+    .evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return [...range.getClientRects()].map((rect) => Math.round(rect.top));
+    });
+  expect(new Set(lines).size).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: "target/diagnostics/browse-all.png" });
+  await page.locator(".browse-tile", { hasText: "Music" }).click();
+  await expect(page.locator(".browse-category-hero h1")).toHaveText("Music");
+  await expect(
+    page.getByRole("region", { name: "Playlists from our Editors" }),
+  ).toBeVisible();
+  await expect(page.locator(".browse-subcategories .browse-tile")).toHaveText([
+    "Pop",
+  ]);
+  await page.screenshot({ path: "target/diagnostics/browse-category.png" });
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(page.getByRole("region", { name: "Featured Charts" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show more" })).toHaveCount(0);
+  await page.locator(".browse-subcategories .browse-tile").click();
+  await expect(page.locator(".browse-category-hero h1")).toHaveText("Pop");
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(page.locator(".browse-category-hero h1")).toHaveText("Music");
 });

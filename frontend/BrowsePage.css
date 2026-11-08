@@ -1,0 +1,132 @@
+.browse-page {
+  padding: 0 36px 32px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.browse-page > h1 {
+  margin: 48px 0 18px;
+  font-size: 22px;
+}
+.browse-page > h1,
+.browse-page > .browse-grid {
+  max-width: 1000px;
+  margin-inline: auto;
+}
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px 22px;
+}
+@container (max-width: 860px) {
+  .browse-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* Spotify's tile: the category colour with its artwork tipped into the
+   bottom-right corner. */
+.browse-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  aspect-ratio: 1.78;
+  border: 0;
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--tile);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.browse-tile > span {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 62%;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  text-shadow: 0 1px 6px #0004;
+}
+.browse-tile > img {
+  position: absolute;
+  right: -7%;
+  bottom: -9%;
+  width: 42%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  transform: rotate(25deg);
+  box-shadow: 0 4px 14px #0006;
+  transition: transform 0.2s;
+}
+.browse-tile:hover > img {
+  transform: rotate(25deg) scale(1.06);
+}
+.browse-tile:focus-visible {
+  outline: 2px solid light-dark(#000, #fff);
+  outline-offset: 2px;
+}
+.browse-category-hero {
+  display: flex;
+  align-items: flex-end;
+  min-height: 210px;
+  padding: 24px 36px;
+  background: linear-gradient(transparent, #0006), var(--tile);
+  color: #fff;
+  color-scheme: dark;
+}
+.browse-category-hero h1 {
+  font-size: clamp(36px, 7cqi, 86px);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.browse-category {
+  container-type: inline-size;
+}
+.browse-category .browse-page {
+  padding-top: 16px;
+}
+.browse-subcategories h2 {
+  margin: 32px 0 16px;
+  font-size: 23px;
+}
+.browse-message {
+  padding: 32px 36px;
+  color: var(--muted);
+}
+.browse-loading {
+  display: block;
+  margin: 64px auto;
+  color: var(--muted);
+  animation: home-spin 1s linear infinite;
+}
+.browse-more {
+  display: block;
+  margin: 28px auto 0;
+  padding: 10px 22px;
+  border: 1px solid light-dark(#0000004d, #ffffff4d);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.browse-more:hover:not(:disabled) {
+  border-color: light-dark(#000, #fff);
+}
+@container (max-width: 560px) {
+  .browse-page {
+    padding: 0 18px 24px;
+  }
+  .browse-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .browse-tile > span {
+    font-size: 17px;
+  }
+}

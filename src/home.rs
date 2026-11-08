@@ -53,7 +53,7 @@ pub fn route(uri: &str) -> Option<String> {
     }
     Some(format!("{kind}:{id}"))
 }
-fn text(value: &Value) -> String {
+pub(crate) fn text(value: &Value) -> String {
     value
         .as_str()
         .or_else(|| value["transformedLabel"].as_str())
@@ -134,7 +134,7 @@ fn card(data: &Value) -> Option<HomeItem> {
         format: text(&data["format"]),
     })
 }
-fn cards(value: &Value, depth: usize, items: &mut Vec<HomeItem>) {
+pub(crate) fn cards(value: &Value, depth: usize, items: &mut Vec<HomeItem>) {
     if depth > 5 || items.len() >= 50 {
         return;
     }

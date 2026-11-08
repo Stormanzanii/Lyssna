@@ -603,7 +603,7 @@ small {
   color: var(--muted);
   border: 1px solid transparent;
 }
-.search-box:focus-within {
+.search-box:has(> input:focus) {
   border-color: light-dark(#0a0a0a, #f5f5f5);
   background: light-dark(#d7d7d7, #282828);
 }
@@ -704,6 +704,27 @@ small {
 }
 .search-box > input:focus-visible {
   outline: 0;
+}
+.search-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  background: light-dark(#0000002e, #ffffff2e);
+}
+.search-browse {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.search-browse:hover,
+.search-browse.active {
+  color: light-dark(#000, #fff);
+}
+.search-browse,
+.search-browse:hover {
+  background: none;
+}
+.search-browse.active:after {
+  content: none;
 }
 .top-actions {
   display: flex;

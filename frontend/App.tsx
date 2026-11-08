@@ -162,6 +162,7 @@ import { UpdatePrompt } from "./update-prompt";
 import { NightlyButton } from "./nightly-button";
 import { NightlyDialog } from "./nightly-dialog";
 import { GlassBackdrop } from "./liquid-glass";
+import { BrowsePage } from "./BrowsePage";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
 import { SongSortMenu } from "./song-sort-menu";
@@ -924,6 +925,7 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.animator = animatorPreset;
   }, [animatorPreset]);
+  const browsing = state.route === "browse" || state.route.startsWith("browse:");
   const theme = state.settings.theme ?? "dark";
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -2930,6 +2932,49 @@ function App() {
                 <X size={17} />
               </button>
             )}
+            <span className="search-divider" aria-hidden="true" />
+            <button
+              className={`icon-button search-browse ${browsing ? "active" : ""}`}
+              aria-label="Browse"
+              aria-pressed={browsing}
+              title="Browse"
+              disabled={!state.profile}
+              onClick={() => navigate("browse")}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {browsing ? (
+                  <g fill="currentColor" strokeWidth="1.2">
+                    <rect x="5.1" y="2.6" width="13.8" height="3.9" rx="0.9" />
+                    <path
+                      fillRule="evenodd"
+                      strokeWidth="2"
+                      d="M3.1 10.4h17.8l-1.8 10H5zM7.6 16a4.4 3.6 0 1 0 8.8 0a4.4 3.6 0 1 0-8.8 0z"
+                    />
+                  </g>
+                ) : (
+                  <g strokeWidth="1.4">
+                    <path d="M5.4 6.7V3.7q0-1 1-1h11.2q1 0 1 1v3" />
+                    <path d="M2.7 10.2h18.6l-1.9 11.1H5.1z" />
+                    <ellipse
+                      cx="12"
+                      cy="15.7"
+                      rx="2.9"
+                      ry="1.9"
+                      fill="currentColor"
+                      stroke="none"
+                    />
+                  </g>
+                )}
+              </svg>
+            </button>
             {searchFocused && !query && recentSearches.length > 0 && (
               <div
                 className="recent-searches popover"
@@ -3510,6 +3555,15 @@ function App() {
                   dispatch({ type: "saved", uri, saved });
                   void call("save_item", { uri, saved });
                 }}
+              />
+            </div>
+          ) : state.route === "browse" || state.route.startsWith("browse:") ? (
+            <div className="browse-scroll" ref={mainScroll}>
+              <BrowsePage
+                route={state.route}
+                navigate={homeNavigate}
+                play={homePlay}
+                ready={state.native_ready}
               />
             </div>
           ) : state.route === "recent" ? (

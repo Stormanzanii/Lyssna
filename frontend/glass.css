@@ -224,7 +224,7 @@
   box-shadow: 0 1px 0 #ffffff1f inset;
   pointer-events: none;
 }
-.liquid-glass .search-box:focus-within::before {
+.liquid-glass .search-box:has(> input:focus)::before {
   background: light-dark(#0000001f, #ffffff1f);
 }
 /* Home and the profile ring are glass like the search box beside them,

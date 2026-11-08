@@ -1948,8 +1948,23 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
     state.0.commands.send(Command::Logout).map_err(error)
 }
 fn valid_route(key: &str) -> bool {
-    if ["home", "liked", "local", "queue", "recent", "whats-new"].contains(&key) {
+    if [
+        "home",
+        "liked",
+        "local",
+        "queue",
+        "recent",
+        "whats-new",
+        "browse",
+    ]
+    .contains(&key)
+    {
         return true;
+    }
+    if let Some(id) = key.strip_prefix("browse:") {
+        return !id.is_empty()
+            && id.len() <= 64
+            && id.bytes().all(|byte| byte.is_ascii_alphanumeric());
     }
     if let Some(query) = key.strip_prefix("search:") {
         return !query.trim().is_empty() && query.len() <= 500;
@@ -2105,6 +2120,8 @@ fn browse(
         // These pages load their own content.
         if key == "home"
             || key == "whats-new"
+            || key == "browse"
+            || key.starts_with("browse:")
             || key.starts_with("discography:")
             || key.starts_with("artist-shelf:")
         {
@@ -4704,6 +4721,45 @@ async fn search_page(
     .map_err(error)?
     .map_err(|_| "More results are unavailable right now. Try again shortly.".to_owned())
 }
+fn signed_in_controls(
+    state: &State<'_, Desktop>,
+) -> std::result::Result<crate::native::NativeControls, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    state.0.controls.scoped(&account).map_err(error)
+}
+#[tauri::command]
+async fn browse_categories(
+    state: State<'_, Desktop>,
+) -> std::result::Result<Vec<crate::browse::Category>, String> {
+    let controls = signed_in_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::browse::all(session).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|_| "Browse is unavailable right now. Try again shortly.".to_owned())
+}
+#[tauri::command]
+async fn browse_page(
+    state: State<'_, Desktop>,
+    id: String,
+    offset: usize,
+) -> std::result::Result<crate::browse::BrowsePage, String> {
+    let controls = signed_in_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::browse::page(session, &id, offset).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|_| "This category is unavailable right now. Try again shortly.".to_owned())
+}
 #[tauri::command]
 async fn resolve_album(
     state: State<'_, Desktop>,
@@ -5482,6 +5538,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             set_playlist_private,
             set_playlist_on_profile,
             search_page,
+            browse_categories,
+            browse_page,
             app_update,
             media_state
         ])
@@ -5837,6 +5895,10 @@ mod tests {
     fn routes_reject_arbitrary_urls_and_malformed_ids() {
         assert!(valid_route("search:Petite Meller"));
         assert!(valid_route("recent"));
+        assert!(valid_route("browse"));
+        assert!(valid_route("browse:0JQ5DAqbMKFSi39LMRT0Cy"));
+        assert!(!valid_route("browse:"));
+        assert!(!valid_route("browse:../x"));
         assert!(valid_route("album:0123456789abcdefghijkl"));
         assert!(valid_route("liked-artist:0123456789abcdefghijkl"));
         assert!(valid_route("discography:0123456789abcdefghijkl"));

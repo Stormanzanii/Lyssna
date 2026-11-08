@@ -403,6 +403,19 @@ export type HomeSection = {
   /** The section's own picture, such as the artist of a new release. */
   header_images?: Artwork[];
 };
+export type BrowseCategory = {
+  id: string;
+  title: string;
+  color: string;
+  images: Artwork[];
+};
+export type BrowseCategoryPage = {
+  title: string;
+  color: string;
+  sections: HomeSection[];
+  categories: BrowseCategory[];
+  next: number | null;
+};
 /** A Spotify user's profile page, as the desktop client shows it. */
 export type UserProfilePage = {
   id: string;

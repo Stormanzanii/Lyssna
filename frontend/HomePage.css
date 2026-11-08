@@ -12,24 +12,24 @@
   top: -24px;
   z-index: 3;
   padding: 14px 0;
-  background: #141414;
+  background: light-dark(#ebebeb, #141414);
 }
 .home-filters {
   display: flex;
   gap: 8px;
 }
 .home-toolbar .pill {
-  background: #ffffff1a;
-  color: #fff;
+  background: light-dark(#0000001a, #ffffff1a);
+  color: light-dark(#000, #fff);
   padding: 7px 14px;
   font-size: 14px;
 }
 .home-toolbar .pill:hover {
-  background: #ffffff2b;
+  background: light-dark(#0000002b, #ffffff2b);
 }
 .home-toolbar .pill.active {
-  background: #f5f5f5;
-  color: #151515;
+  background: light-dark(#0a0a0a, #f5f5f5);
+  color: light-dark(#eaeaea, #151515);
 }
 .home-quick-links {
   display: grid;
@@ -43,12 +43,12 @@
   gap: 12px;
   border: 0;
   padding: 0;
-  color: #fff;
+  color: light-dark(#000, #fff);
   border-radius: 6px;
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .home-quick-links .quick-tile:hover {
-  background: #ffffff24;
+  background: light-dark(#00000024, #ffffff24);
 }
 .home-quick-links .quick-tile:disabled {
   opacity: 0.55;
@@ -106,7 +106,7 @@
   }
 }
 .home-status-hint {
-  color: #8f8f8f;
+  color: light-dark(#707070, #8f8f8f);
   font-size: 13px;
   margin: 0 0 -8px;
 }
@@ -115,9 +115,9 @@
   border-radius: 4px;
   background: linear-gradient(
     90deg,
-    #ffffff0d 25%,
-    #ffffff1a 50%,
-    #ffffff0d 75%
+    light-dark(#0000000d, #ffffff0d) 25%,
+    light-dark(#0000001a, #ffffff1a) 50%,
+    light-dark(#0000000d, #ffffff0d) 75%
   );
   background-size: 300% 100%;
   animation: home-shimmer 1.4s ease-in-out infinite;
@@ -168,18 +168,18 @@
   line-height: 1.2;
 }
 .home-shelf-heading p {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 13px;
   margin: 0 0 4px;
 }
 .home-show-all {
   flex-shrink: 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 14px;
   font-weight: 700;
 }
 .home-show-all:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
   text-decoration: underline;
 }
 /* One row, clipped at the edge like Spotify; Show all wraps the rest. */
@@ -198,9 +198,9 @@
 .home-shelf-items.clipped {
   --fade: linear-gradient(
     to right,
-    #000 calc(100% - 180px),
-    #000000c0 calc(100% - 120px),
-    #00000059 calc(100% - 60px),
+    light-dark(#fff, #000) calc(100% - 180px),
+    light-dark(#ffffffc0, #000000c0) calc(100% - 120px),
+    light-dark(#ffffff59, #00000059) calc(100% - 60px),
     transparent
   );
   -webkit-mask-image: var(--fade);
@@ -228,7 +228,7 @@
   border: 0;
   border-radius: 7px;
   overflow: hidden;
-  background: #242424;
+  background: light-dark(#dbdbdb, #242424);
 }
 .home-card-open .cover {
   width: 100%;
@@ -272,7 +272,7 @@
 }
 .home-card-title {
   display: block;
-  color: #f4f4f4;
+  color: light-dark(#0b0b0b, #f4f4f4);
   text-align: left;
   font-size: 16px;
   font-weight: 600;
@@ -286,7 +286,7 @@
 }
 .home-card p {
   font-size: 14px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
   line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -321,7 +321,7 @@
   border-radius: 50%;
 }
 .home-featured-heading p {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 13px;
   margin: 0 0 2px;
 }
@@ -343,7 +343,7 @@
   padding: 0;
   border-radius: 8px;
   overflow: hidden;
-  background: #242424;
+  background: light-dark(#dbdbdb, #242424);
 }
 .home-featured-art .cover {
   width: 100%;
@@ -354,14 +354,14 @@
   min-width: 0;
 }
 .home-featured-info > p {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 15px;
   margin: 0 0 6px;
 }
 .home-featured-title {
   display: block;
   max-width: 100%;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 28px;
   font-weight: 800;
   text-align: left;
@@ -383,8 +383,8 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #fff;
-  color: #000;
+  background: light-dark(#000, #fff);
+  color: light-dark(#fff, #000);
 }
 .home-featured-play:hover {
   transform: scale(1.05);
@@ -393,13 +393,13 @@
   opacity: 0.5;
 }
 .home-featured-actions .icon-button {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .home-featured-actions .icon-button.is-saved {
   color: #1ed760;
 }
 .home-status {
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
   padding: 24px 0;
   line-height: 1.6;
 }

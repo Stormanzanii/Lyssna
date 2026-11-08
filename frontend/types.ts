@@ -148,6 +148,7 @@ export interface Settings {
   animation_fps_cap?: number;
   cover_animation?: boolean;
   liquid_glass?: boolean;
+  theme?: "dark" | "light" | "system";
   canvas_lyrics?: boolean;
   npv_ambience?: boolean;
   glass_seek?: boolean;

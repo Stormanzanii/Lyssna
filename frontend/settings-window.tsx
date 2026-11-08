@@ -735,6 +735,27 @@ export function SettingsWindow({
       "Appearance",
       "Theme",
       [
+        <SettingRow
+          key="theme"
+          label="Theme"
+          help="Light or dark, or follow Windows. Lyrics and artwork headers stay dark."
+          keywords="theme light dark mode colour color system appearance"
+        >
+          <select
+            className="settings-select"
+            aria-label="Theme"
+            value={settings.theme ?? "dark"}
+            onChange={(event) =>
+              onSettings({
+                theme: event.target.value as "dark" | "light" | "system",
+              })
+            }
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">Match Windows</option>
+          </select>
+        </SettingRow>,
         flag(
           "liquid_glass",
           "Liquid Glass",

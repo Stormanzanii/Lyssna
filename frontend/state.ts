@@ -160,6 +160,7 @@ export const emptyState: AppState = {
     animation_fps_cap: 60,
     cover_animation: true,
     liquid_glass: false,
+    theme: "dark",
     canvas_lyrics: true,
     npv_ambience: true,
     glass_seek: true,

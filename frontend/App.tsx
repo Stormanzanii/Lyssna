@@ -924,6 +924,10 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.animator = animatorPreset;
   }, [animatorPreset]);
+  const theme = state.settings.theme ?? "dark";
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   useAppZoom(
     state.settings.ui_zoom_percent ?? 100,
     (percent) => updateSettings({ ui_zoom_percent: percent }),

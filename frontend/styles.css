@@ -1,15 +1,33 @@
 :root {
   font-family:
     Metropolis, "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
-  color: #f7f7f7;
-  background: #000000;
+  color: light-dark(#080808, #f7f7f7);
+  background: light-dark(#fff, #000000);
   font-synthesis: none;
   font-weight: 400;
-  --accent: #fff;
-  --muted: #a9a9a9;
-  --panel: #121212;
-  --line: #ffffff12;
+  --accent: light-dark(#000, #fff);
+  --muted: light-dark(#565656, #a9a9a9);
+  --panel: light-dark(#ededed, #121212);
+  --line: light-dark(#00000012, #ffffff12);
   color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="system"] {
+  color-scheme: light dark;
+}
+/* Lyrics, ambience and artwork headers keep white type on artwork colours in
+   every theme. Colour is set too, as the inherited light text is dark. */
+.page-hero,
+.now-playing,
+.lyrics-page,
+.lyrics-popout,
+.ttml-creator,
+.dj-presentation,
+.canvas-hero {
+  color-scheme: dark;
+  color: #f7f7f7;
 }
 .collection-table .track-row,
 .collection-table .track-table-head {
@@ -24,10 +42,10 @@
 }
 .song-filters select,
 .playlist-search {
-  border: 1px solid #ffffff1a;
+  border: 1px solid light-dark(#0000001a, #ffffff1a);
   border-radius: 7px;
-  background: #1d1d1d;
-  color: #f3f3f3;
+  background: light-dark(#e2e2e2, #1d1d1d);
+  color: light-dark(#0c0c0c, #f3f3f3);
   min-height: 36px;
   font: inherit;
   font-size: 13px;
@@ -58,10 +76,10 @@
   box-shadow: none;
 }
 .playlist-search:focus-within {
-  border-color: #ffffff35;
+  border-color: light-dark(#00000035, #ffffff35);
 }
 .song-filters small {
-  color: #a9a9a9;
+  color: light-dark(#565656, #a9a9a9);
 }
 .explicit-badge {
   /* Sized from the surrounding text and lifted so the badge centres on the
@@ -77,8 +95,8 @@
   /* The drawn E gives no text baseline, so the box aligns by its bottom
      edge; this centres it on the artist's capitals. */
   vertical-align: -0.23em;
-  background: #c5c5c5;
-  color: #151515;
+  background: light-dark(#3a3a3a, #c5c5c5);
+  color: light-dark(#eaeaea, #151515);
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
@@ -101,7 +119,7 @@
   cursor: pointer;
 }
 .spotify-description-link:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
   text-decoration: underline;
 }
 .avatar img {
@@ -127,22 +145,22 @@
   height: min(860px, 88vh);
 }
 .creator-dialog::backdrop {
-  background: #000a;
+  background: light-dark(#fffa, #000a);
   backdrop-filter: blur(8px);
 }
 .creator-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #151515;
-  border: 1px solid #ffffff20;
+  background: light-dark(#eaeaea, #151515);
+  border: 1px solid light-dark(#00000020, #ffffff20);
   border-radius: 16px;
   padding: 16px;
   gap: 12px;
 }
 .creator-frame-note {
   font-size: 13px;
-  color: #b5b5b5;
+  color: light-dark(#4a4a4a, #b5b5b5);
   margin: 0;
 }
 .creator-panel iframe {
@@ -151,7 +169,7 @@
   min-height: 0;
   border: 0;
   border-radius: 10px;
-  background: #191919;
+  background: light-dark(#e6e6e6, #191919);
 }
 .canvas-artwork {
   display: block;
@@ -161,7 +179,7 @@
   border: 0;
   overflow: hidden;
   border-radius: 9px;
-  background: #101010;
+  background: light-dark(#efefef, #101010);
 }
 .canvas-artwork video {
   display: block;
@@ -263,8 +281,8 @@ small {
     transform 0.15s;
 }
 .icon-button:hover {
-  color: #fff;
-  background: #ffffff0c;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000c, #ffffff0c);
 }
 .icon-button:active {
   transform: scale(0.94);
@@ -292,7 +310,7 @@ small {
   justify-content: center;
   border-radius: 24px;
   padding: 10px 19px;
-  background: #ffffff16;
+  background: light-dark(#00000016, #ffffff16);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -301,23 +319,23 @@ small {
     transform 0.15s;
 }
 .pill:hover {
-  background: #ffffff25;
+  background: light-dark(#00000025, #ffffff25);
   transform: scale(1.025);
 }
 .pill.outline {
   background: transparent;
-  border: 1px solid #ffffff65;
+  border: 1px solid light-dark(#00000065, #ffffff65);
 }
 .pill.outline:hover {
   border-color: white;
-  background: #ffffff08;
+  background: light-dark(#00000008, #ffffff08);
 }
 .pill.primary {
-  color: #0d0d0d;
+  color: light-dark(#f2f2f2, #0d0d0d);
   background: var(--accent);
 }
 .pill.primary:hover {
-  background: #f0f0f0;
+  background: light-dark(#0f0f0f, #f0f0f0);
 }
 .inline-actions {
   display: flex;
@@ -328,7 +346,7 @@ small {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #252525;
+  background: light-dark(#dadada, #252525);
   border-radius: 5px;
   overflow: hidden;
   aspect-ratio: 1;
@@ -343,7 +361,7 @@ small {
 .cover > svg {
   width: 35%;
   height: 35%;
-  color: #acacac;
+  color: light-dark(#535353, #acacac);
 }
 .application {
   display: grid;
@@ -385,8 +403,8 @@ small {
   width: 48px;
   height: 48px;
   border-radius: 4px;
-  color: #fff;
-  background: #0009;
+  color: light-dark(#000, #fff);
+  background: light-dark(#fff9, #0009);
   opacity: 0;
   transition: opacity 0.12s;
 }
@@ -458,7 +476,7 @@ small {
 }
 .dj-presentation p {
   margin: 4px 0 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 14px;
 }
 .lyrics-album > .dj-art {
@@ -481,14 +499,14 @@ small {
   font-size: clamp(24px, 3.2cqw, 42px);
   line-height: 1.15;
   letter-spacing: -1px;
-  color: #fff;
+  color: light-dark(#000, #fff);
   text-wrap: balance;
 }
 .dj-lyrics-message p {
   max-width: 520px;
   margin: 0 auto;
   font-size: clamp(14px, 1.5cqw, 18px);
-  color: #ffffffb8;
+  color: light-dark(#000000b8, #ffffffb8);
   text-wrap: balance;
 }
 .now-playing.dj-view .dj-art {
@@ -504,7 +522,7 @@ small {
 }
 .dj-note {
   font-size: 14px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .topbar {
   display: flex;
@@ -514,7 +532,7 @@ small {
   min-width: 0;
   position: relative;
   z-index: 25;
-  background: #000000;
+  background: light-dark(#fff, #000000);
 }
 /* Reserve space for native traffic lights inside the 60 px toolbar. */
 .application.macos .topbar {
@@ -546,7 +564,7 @@ small {
   padding: 20px 24px;
 }
 .search-playlists > p {
-  color: var(--text-subdued, #b3b3b3);
+  color: var(--text-subdued, light-dark(#4c4c4c, #b3b3b3));
   margin: 12px 0;
 }
 .search-group {
@@ -564,10 +582,10 @@ small {
   height: 43px;
   width: 43px;
   flex: none;
-  background: #212121;
+  background: light-dark(#dedede, #212121);
 }
 .home-button.active {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .home-button.active:after {
   content: none;
@@ -579,15 +597,15 @@ small {
   padding: 0 12px 0 17px;
   height: 43px;
   border-radius: 25px;
-  background: #212121;
+  background: light-dark(#dedede, #212121);
   flex: 1;
   min-width: 0;
   color: var(--muted);
   border: 1px solid transparent;
 }
 .search-box:focus-within {
-  border-color: #f5f5f5;
-  background: #282828;
+  border-color: light-dark(#0a0a0a, #f5f5f5);
+  background: light-dark(#d7d7d7, #282828);
 }
 /* Recent searches under the empty, focused search box. */
 .search-box {
@@ -602,7 +620,7 @@ small {
   overflow-y: auto;
   padding: 12px 8px 8px;
   z-index: 60;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .recent-searches h3 {
   margin: 4px 10px 8px;
@@ -615,7 +633,7 @@ small {
   border-radius: 6px;
 }
 .recent-search:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .recent-search > button:first-child {
   display: flex;
@@ -653,7 +671,7 @@ small {
 }
 .recent-search small {
   font-size: 13px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
 }
 .recent-search > .icon-button {
   margin-right: 8px;
@@ -667,10 +685,10 @@ small {
   margin: 8px 10px 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
 }
 .recent-searches-clear:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .search-box > input {
   background: transparent;
@@ -682,7 +700,7 @@ small {
   height: 100%;
 }
 .search-box > input::placeholder {
-  color: #a9a9a9;
+  color: light-dark(#565656, #a9a9a9);
 }
 .search-box > input:focus-visible {
   outline: 0;
@@ -698,8 +716,8 @@ small {
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border: 8px solid #1f1f1f;
-  outline: 1px solid #ffffff13;
+  border: 8px solid light-dark(#e0e0e0, #1f1f1f);
+  outline: 1px solid light-dark(#00000013, #ffffff13);
   border-radius: 50%;
   background: #d3e3aa;
   color: #191d13;
@@ -716,12 +734,12 @@ small {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #bfbfbf;
+  color: light-dark(#404040, #bfbfbf);
   transition: background 0.12s;
 }
 .window-controls button:hover {
-  background: #ffffff15;
-  color: #fff;
+  background: light-dark(#00000015, #ffffff15);
+  color: light-dark(#000, #fff);
 }
 .window-controls .window-close:hover {
   background: #c52a43;
@@ -771,17 +789,17 @@ small {
 }
 .chip {
   padding: 7px 13px;
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
   border-radius: 20px;
   font-size: 14px;
   white-space: nowrap;
 }
 .chip:hover {
-  background: #ffffff1b;
+  background: light-dark(#0000001b, #ffffff1b);
 }
 .chip.selected {
-  background: #ececec;
-  color: #151515;
+  background: light-dark(#131313, #ececec);
+  color: light-dark(#eaeaea, #151515);
 }
 .library-search {
   display: flex;
@@ -815,10 +833,10 @@ small {
   text-align: left;
 }
 .library-item:hover {
-  background: #ffffff08;
+  background: light-dark(#00000008, #ffffff08);
 }
 .library-item.current {
-  background: #ffffff10;
+  background: light-dark(#00000010, #ffffff10);
 }
 .library-item > .cover,
 .library-item > .liked-cover {
@@ -854,7 +872,7 @@ small {
   background: linear-gradient(135deg, #6032e8, #9884ea 65%, #bde3dc);
   border-radius: 4px;
   aspect-ratio: 1;
-  color: #fff;
+  color: light-dark(#000, #fff);
   flex-shrink: 0;
 }
 /* Local Files: Spotify's green folder on dark blue. */
@@ -903,8 +921,8 @@ small {
   display: grid;
   place-items: center;
   border-radius: 4px;
-  background: #282828;
-  color: #b3b3b3;
+  background: light-dark(#d7d7d7, #282828);
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .folder-picker {
   max-height: 340px;
@@ -946,7 +964,7 @@ small {
   min-width: 0;
   overflow: hidden;
   border-radius: 10px;
-  background: #141414;
+  background: light-dark(#ebebeb, #141414);
 }
 .browse-scroll {
   height: 100%;
@@ -956,7 +974,7 @@ small {
 }
 .home-heading {
   padding: 42px 30px 28px;
-  background: radial-gradient(ellipse at top left, #49494966, transparent 75%);
+  background: radial-gradient(ellipse at top left, light-dark(#b6b6b666, #49494966), transparent 75%);
 }
 .eyebrow {
   display: block;
@@ -964,7 +982,7 @@ small {
   font-weight: 700;
   letter-spacing: 1.2px;
   margin-bottom: 10px;
-  color: #d9d9d9;
+  color: light-dark(#262626, #d9d9d9);
 }
 .home-heading h1 {
   font-size: clamp(30px, 3.2vw, 44px);
@@ -985,14 +1003,14 @@ small {
   align-items: center;
   gap: 13px;
   text-align: left;
-  background: #ffffff0e;
+  background: light-dark(#0000000e, #ffffff0e);
   border-radius: 5px;
   overflow: hidden;
   min-width: 0;
   transition: background 0.15s;
 }
 .quick-tile:hover {
-  background: #ffffff1c;
+  background: light-dark(#0000001c, #ffffff1c);
 }
 .quick-tile > .cover,
 .quick-tile > .liked-cover {
@@ -1029,7 +1047,7 @@ small {
   padding: 38px 28px 28px;
   min-height: 250px;
   overflow: hidden;
-  background: linear-gradient(125deg, #494949, #232323);
+  background: linear-gradient(125deg, light-dark(#b6b6b6, #494949), light-dark(#dcdcdc, #232323));
 }
 .hero-wash {
   position: absolute;
@@ -1058,7 +1076,7 @@ small {
 }
 .hero-copy small {
   display: block;
-  color: #d8d8d8;
+  color: light-dark(#272727, #d8d8d8);
   margin-top: 9px;
 }
 .artist-hero .hero-cover {
@@ -1154,7 +1172,7 @@ small {
   bottom: 0;
   right: 0;
   color: #1ed760;
-  background: #121212;
+  background: light-dark(#ededed, #121212);
   box-shadow: 0 0 0 4px #121212;
   border-radius: 50%;
 }
@@ -1168,7 +1186,7 @@ small {
   align-self: flex-start;
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: light-dark(#000, #fff);
   text-align: left;
 }
 .artist-liked-count:hover {
@@ -1186,7 +1204,7 @@ small {
   width: 100%;
   padding: 0;
   text-align: left;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-liked .artist-pick .cover {
   width: 96px;
@@ -1228,7 +1246,7 @@ small {
   color: var(--muted);
 }
 .artist-monthly {
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 16px;
   margin: 8px 0 12px;
 }
@@ -1238,8 +1256,8 @@ small {
   padding: 0 28px 18px;
 }
 .discography-filters .active {
-  background: #fff;
-  color: #131313;
+  background: light-dark(#000, #fff);
+  color: light-dark(#ececec, #131313);
 }
 /* Artist shelves line up with the About section and Popular. */
 .artist-shelf {
@@ -1263,8 +1281,8 @@ small {
   border-radius: 8px;
   overflow: hidden;
   text-align: left;
-  color: #fff;
-  background-color: #282828;
+  color: light-dark(#000, #fff);
+  background-color: light-dark(#d7d7d7, #282828);
   background-size: cover;
   /* Spotify frames the About photo lower, keeping faces near the top. */
   background-position: center 60%;
@@ -1318,7 +1336,7 @@ small {
   overflow-y: auto;
   padding: 0;
   border-radius: 8px;
-  background: #121212;
+  background: light-dark(#ededed, #121212);
 }
 .artist-about-close {
   position: absolute;
@@ -1328,8 +1346,8 @@ small {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  color: #fff;
-  background: #000000b3;
+  color: light-dark(#000, #fff);
+  background: light-dark(#ffffffb3, #000000b3);
   /* A faint ring keeps it visible on black letterboxing too. */
   box-shadow: 0 0 0 1px #ffffff2e;
 }
@@ -1337,7 +1355,7 @@ small {
   position: relative;
   display: flex;
   justify-content: center;
-  background: #000;
+  background: light-dark(#fff, #000);
 }
 .artist-about-gallery img {
   display: block;
@@ -1354,9 +1372,9 @@ small {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #000000b3;
+  background: light-dark(#ffffffb3, #000000b3);
   box-shadow: 0 0 0 1px #ffffff2e;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .gallery-step.previous {
   left: 24px;
@@ -1365,7 +1383,7 @@ small {
   right: 24px;
 }
 .gallery-step:hover {
-  background: #000d;
+  background: light-dark(#fffd, #000d);
 }
 .artist-about-dialog .artist-about-body {
   display: grid;
@@ -1392,7 +1410,7 @@ small {
   display: flex;
   flex-direction: column;
   margin: 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 15px;
 }
 .artist-about-dialog .artist-fact strong {
@@ -1400,7 +1418,7 @@ small {
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.5px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-about-dialog .artist-city {
   gap: 2px;
@@ -1412,18 +1430,18 @@ small {
 }
 .artist-about-dialog .artist-city strong {
   font-size: 15px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-about-dialog .artist-about-text > p {
   margin: 0 0 24px;
   font-size: 16px;
   line-height: 1.6;
-  color: #e4e4e4;
+  color: light-dark(#1b1b1b, #e4e4e4);
   white-space: pre-line;
 }
 .artist-about-dialog .artist-about-text > p a,
 .artist-about-dialog .artist-about-text > p button {
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-weight: 700;
 }
 .artist-about-dialog .artist-about-text > .text-link {
@@ -1451,7 +1469,7 @@ small {
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
-  border-bottom: 1px solid #ffffff14;
+  border-bottom: 1px solid light-dark(#00000014, #ffffff14);
 }
 /* Scoped under .dialog: the generic dialog heading margin, defined later,
    would otherwise push the title above the close button's centre. */
@@ -1476,7 +1494,7 @@ small {
   margin: 0;
   min-width: 0;
   font-size: 13.5px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1495,13 +1513,13 @@ small {
   border-radius: 7px;
   font-size: 12.5px;
   font-weight: 500;
-  color: #fff;
-  background: #ffffff0f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
 .load-ttml-actions button:hover,
 .load-ttml-mode:hover {
-  background: #ffffff1a;
+  background: light-dark(#0000001a, #ffffff1a);
   box-shadow: inset 0 0 0 1px #ffffff33;
 }
 .load-ttml-modes {
@@ -1517,8 +1535,8 @@ small {
   padding: 13px 14px;
   border-radius: 10px;
   text-align: left;
-  color: #fff;
-  background: #ffffff0f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow: inset 0 0 0 1px #ffffff1f;
   transition:
     background 0.18s,
@@ -1538,7 +1556,7 @@ small {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
 .load-ttml-mode > span:last-child {
@@ -1554,11 +1572,11 @@ small {
   margin-top: 4px;
   font-size: 12px;
   line-height: 1.45;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .dialog .load-ttml-empty {
   font-size: 15px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 /* TTML Database, after Spicy Lyrics' list: Back, search and Reset above
    rows of cover, song and Play / Download / Delete. */
@@ -1584,12 +1602,12 @@ small {
     box-shadow 0.15s;
 }
 .load-ttml-back {
-  color: #fff;
-  background: #ffffff0f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
 .load-ttml-back:hover {
-  background: #ffffff1a;
+  background: light-dark(#0000001a, #ffffff1a);
 }
 .load-ttml-reset {
   color: #f46a6a;
@@ -1608,8 +1626,8 @@ small {
   height: 34px;
   padding: 0 12px;
   border-radius: 8px;
-  color: #b3b3b3;
-  background: #ffffff0a;
+  color: light-dark(#4c4c4c, #b3b3b3);
+  background: light-dark(#0000000a, #ffffff0a);
   box-shadow: inset 0 0 0 1px #ffffff1f;
 }
 .load-ttml-search:focus-within {
@@ -1621,7 +1639,7 @@ small {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font: inherit;
   font-size: 13.5px;
 }
@@ -1647,7 +1665,7 @@ small {
   transition: background 0.15s;
 }
 .load-ttml-saved li:hover {
-  background: #ffffff0d;
+  background: light-dark(#0000000d, #ffffff0d);
 }
 .load-ttml-saved img,
 .load-ttml-art {
@@ -1656,12 +1674,12 @@ small {
   border-radius: 5px;
   flex-shrink: 0;
   object-fit: cover;
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
 }
 .load-ttml-art {
   display: grid;
   place-items: center;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .load-ttml-song {
   flex: 1;
@@ -1681,7 +1699,7 @@ small {
 .load-ttml-saved small {
   margin-top: 2px;
   font-size: 13px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .load-ttml-row-actions {
   display: flex;
@@ -1694,15 +1712,15 @@ small {
   width: 34px;
   height: 34px;
   border-radius: 7px;
-  color: #fff;
-  background: #ffffff0f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow: inset 0 0 0 1px #ffffff1f;
   transition:
     background 0.15s,
     transform 0.12s;
 }
 .load-ttml-row-actions button:hover:not(:disabled) {
-  background: #ffffff24;
+  background: light-dark(#00000024, #ffffff24);
 }
 .load-ttml-row-actions button:active:not(:disabled) {
   transform: scale(0.94);
@@ -1730,7 +1748,7 @@ small {
   align-items: center;
   gap: 16px;
   padding: 0 24px;
-  background: color-mix(in srgb, var(--hero, #535353) 55%, #121212);
+  background: color-mix(in srgb, var(--hero, light-dark(#acacac, #535353)) 55%, light-dark(#ededed, #121212));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
@@ -1766,14 +1784,14 @@ small {
 }
 .artist-stats strong {
   font-size: 26px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .browse-actions {
   display: flex;
   align-items: center;
   gap: 23px;
   padding: 24px 28px;
-  background: linear-gradient(#29292966, transparent);
+  background: linear-gradient(light-dark(#d6d6d666, #29292966), transparent);
 }
 .browse-actions > span {
   color: var(--muted);
@@ -1788,12 +1806,12 @@ small {
   height: 54px;
   border-radius: 50%;
   background: var(--accent);
-  color: #111111;
+  color: light-dark(#eee, #111111);
   padding: 0;
 }
 .primary-play:hover {
   transform: scale(1.05);
-  background: #fff;
+  background: light-dark(#000, #fff);
 }
 .primary-play,
 .play-toggle {
@@ -1818,7 +1836,7 @@ small {
 .lyric-end-credits {
   /* Leave room below so credits can scroll clear of the bottom fade. */
   padding: 24px 2px 48px;
-  color: #d9d9d9a6;
+  color: light-dark(#262626a6, #d9d9d9a6);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -1856,7 +1874,7 @@ small {
 }
 .track-table-head {
   height: 37px;
-  border-bottom: 1px solid #ffffff17;
+  border-bottom: 1px solid light-dark(#00000017, #ffffff17);
   font-size: 12px;
   color: var(--muted);
   margin-bottom: 8px;
@@ -1877,7 +1895,7 @@ small {
   cursor: default;
 }
 .track-row:hover {
-  background: #ffffff0b;
+  background: light-dark(#0000000b, #ffffff0b);
 }
 .track-number {
   position: relative;
@@ -2033,7 +2051,7 @@ small {
 .skeleton-row i {
   display: block;
   height: 12px;
-  background: #ffffff0d;
+  background: light-dark(#0000000d, #ffffff0d);
   border-radius: 4px;
   animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
 }
@@ -2059,7 +2077,7 @@ small {
   }
 }
 .empty-page h2 {
-  color: #f7f7f7;
+  color: light-dark(#080808, #f7f7f7);
 }
 .empty-page p {
   font-size: 14px;
@@ -2095,7 +2113,7 @@ small {
 }
 .album-release-details {
   padding: 16px 28px 28px;
-  color: #b2b2b2;
+  color: light-dark(#4d4d4d, #b2b2b2);
   font-size: 13px;
 }
 .album-release-details p {
@@ -2113,7 +2131,7 @@ small {
   text-align: left;
 }
 .album-tile:hover {
-  background: #ffffff09;
+  background: light-dark(#00000009, #ffffff09);
 }
 .album-tile .cover {
   width: 100%;
@@ -2153,7 +2171,7 @@ small {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: #222222;
+  background: light-dark(#ddd, #222222);
 }
 .now-playing-scroll {
   position: relative;
@@ -2201,7 +2219,7 @@ small {
 }
 .now-artists {
   font-size: 17px;
-  color: #e1e1e1c9;
+  color: light-dark(#1e1e1ec9, #e1e1e1c9);
   margin-top: 7px;
   line-height: 1.5;
 }
@@ -2214,7 +2232,7 @@ small {
 .save-track {
   width: 36px;
   height: 36px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .is-saved {
   color: #1ed760;
@@ -2223,7 +2241,7 @@ small {
   color: #1ed760;
 }
 .now-card {
-  background: #14141475;
+  background: light-dark(#ebebeb75, #14141475);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -2278,10 +2296,10 @@ small {
   inset: 0;
   pointer-events: none;
   background: linear-gradient(
-    #0006,
+    light-dark(#fff6, #0006),
     transparent 32%,
     transparent 48%,
-    #000000b8 100%
+    light-dark(#ffffffb8, #000000b8) 100%
   );
 }
 .artist-portrait strong {
@@ -2305,12 +2323,12 @@ small {
 }
 .artist-portrait > .artist-card-row .artist-stat {
   font-size: 14px;
-  color: #ffffffd9;
+  color: light-dark(#000000d9, #ffffffd9);
 }
 .artist-portrait > .artist-card-row .pill {
-  background: #0000004d;
+  background: light-dark(#ffffff4d, #0000004d);
   backdrop-filter: blur(12px);
-  border-color: #ffffffb3;
+  border-color: light-dark(#000000b3, #ffffffb3);
   text-shadow: none;
 }
 /* No photo at all: the same parts, stacked plainly. */
@@ -2336,7 +2354,7 @@ small {
   font-size: 18px;
   font-weight: 700;
   line-height: 1.3;
-  color: #fff;
+  color: light-dark(#000, #fff);
   max-width: 100%;
   white-space: nowrap;
 }
@@ -2361,7 +2379,7 @@ small {
 .artist-bio {
   font-size: 15px;
   line-height: 1.45;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -2385,11 +2403,11 @@ small {
   flex-shrink: 0;
   font-size: 14px;
   padding: 7px 16px;
-  border-color: #ffffff80;
+  border-color: light-dark(#00000080, #ffffff80);
 }
 .artist-stat {
   font-size: 16px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -2398,7 +2416,7 @@ small {
 }
 .artist-genres {
   font-size: 14px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   text-transform: capitalize;
 }
 .credit-list {
@@ -2421,7 +2439,7 @@ small {
   display: block;
   font-size: 15px;
   line-height: 1.3;
-  color: #fff;
+  color: light-dark(#000, #fff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2429,7 +2447,7 @@ small {
 }
 .credit p {
   font-size: 13px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   margin-top: 3px;
 }
 .next-track {
@@ -2454,7 +2472,7 @@ small {
 }
 .next-track > div > span {
   display: block;
-  color: #e1e1e1b0;
+  color: light-dark(#1e1e1eb0, #e1e1e1b0);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2488,7 +2506,7 @@ small {
   transition: background 0.15s;
 }
 .queue-row:not(:disabled):hover {
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
 }
 .queue-row:disabled {
   cursor: default;
@@ -2505,7 +2523,7 @@ small {
   font-weight: 700;
 }
 .queue-empty {
-  color: #e1e1e1b0;
+  color: light-dark(#1e1e1eb0, #e1e1e1b0);
   font-size: 13px;
   margin: 4px 10px;
 }
@@ -2515,12 +2533,12 @@ small {
   padding: 8px 3px;
   font-size: 12px;
   align-items: center;
-  color: #c8c8c8;
+  color: light-dark(#373737, #c8c8c8);
 }
 .playing-on small {
   display: block;
   font-size: 10px;
-  color: #cdcdcda0;
+  color: light-dark(#323232a0, #cdcdcda0);
   margin-bottom: 4px;
 }
 .playing-on strong {
@@ -2541,7 +2559,7 @@ small {
 .empty-now > svg {
   width: 45px;
   height: 45px;
-  color: #ffffff50;
+  color: light-dark(#00000050, #ffffff50);
   margin-bottom: 20px;
 }
 .empty-now h3 {
@@ -2647,7 +2665,7 @@ small {
   overflow: hidden;
   isolation: isolate;
   z-index: -1;
-  background: #121212;
+  background: light-dark(#ededed, #121212);
   pointer-events: none;
 }
 .ambient-layer {
@@ -2667,7 +2685,7 @@ small {
 }
 .now-playing .ambient-shade {
   /* Its side panel's brightness(0.6). */
-  background: #0006;
+  background: light-dark(#fff6, #0006);
 }
 .lyrics-page {
   container-type: inline-size;
@@ -2739,7 +2757,7 @@ small {
   min-width: 0;
   font-size: clamp(14px, 1.8cqw, 21px);
   margin-top: 10px;
-  color: #ecececcf;
+  color: light-dark(#131313cf, #ecececcf);
   text-align: center;
 }
 .lyrics-year {
@@ -2757,7 +2775,7 @@ small {
   font-size: 14px;
   line-height: 1.6;
   margin-top: 9px;
-  color: #f2f2f28c;
+  color: light-dark(#0d0d0d8c, #f2f2f28c);
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3185,7 +3203,7 @@ small {
   height: var(--dot-size);
   flex-shrink: 0;
   border-radius: 50%;
-  background: #fff;
+  background: light-dark(#000, #fff);
   opacity: var(--dot-opacity);
   transform: translateY(calc(var(--dot-lift) * var(--dot-lyric-size) * -1))
     scale(var(--dot-scale));
@@ -3255,7 +3273,7 @@ small {
   display: block;
   font-size: 0.43em;
   font-weight: 550;
-  color: #e9e9e9a6;
+  color: light-dark(#161616a6, #e9e9e9a6);
   letter-spacing: 0;
   line-height: 1.5;
   margin-top: 9px;
@@ -3268,19 +3286,19 @@ small {
   right: 16px;
   width: 52px;
   height: 52px;
-  border: 1px solid #ffffff45;
+  border: 1px solid light-dark(#00000045, #ffffff45);
   border-radius: 16px;
   background: color-mix(
     in srgb,
-    var(--lyrics-cover-color, #535353) 48%,
-    #15151566
+    var(--lyrics-cover-color, light-dark(#acacac, #535353)) 48%,
+    light-dark(#eaeaea66, #15151566)
   );
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
   box-shadow:
     0 6px 16px -8px #0006,
     inset 0 1px 0 #ffffff38;
-  color: #fff;
+  color: light-dark(#000, #fff);
   z-index: 2;
   transition:
     background 0.2s ease,
@@ -3289,8 +3307,8 @@ small {
 .follow-lyrics:hover {
   background: color-mix(
     in srgb,
-    var(--lyrics-cover-color, #535353) 60%,
-    #ffffff16
+    var(--lyrics-cover-color, light-dark(#acacac, #535353)) 60%,
+    light-dark(#00000016, #ffffff16)
   );
 }
 .follow-lyrics:active {
@@ -3318,7 +3336,7 @@ small {
   bottom: 18px;
   width: 100%;
   text-align: left;
-  color: #e9e9e990;
+  color: light-dark(#16161690, #e9e9e990);
   font-size: 12px;
   line-height: 1.5;
   padding: 0 2px;
@@ -3352,7 +3370,7 @@ small {
   text-align: center;
   gap: 13px;
   padding: 25px;
-  color: #f6f6f6;
+  color: light-dark(#090909, #f6f6f6);
   position: relative;
   z-index: 1;
 }
@@ -3366,7 +3384,7 @@ small {
 }
 .lyrics-message p {
   font-size: 14px;
-  color: #f1f1f1b0;
+  color: light-dark(#0e0e0eb0, #f1f1f1b0);
   max-width: 300px;
 }
 .lyrics-message > .inline-actions {
@@ -3379,14 +3397,14 @@ small {
   display: flex;
   gap: 6px;
   z-index: 4;
-  background: #0d0d0f6b;
+  background: light-dark(#f2f2f06b, #0d0d0f6b);
   backdrop-filter: blur(15px) brightness(0.85);
-  border: 1px solid #ffffff13;
+  border: 1px solid light-dark(#00000013, #ffffff13);
   border-radius: 30px;
   padding: 4px;
 }
 .lyrics-toolbar .icon-button {
-  color: #f1f1f1b0;
+  color: light-dark(#0e0e0eb0, #f1f1f1b0);
   transition:
     color 0.15s,
     background 0.15s,
@@ -3415,11 +3433,11 @@ small {
 }
 /* Hovering darkens the frosted bar without making it opaque. */
 .lyrics-toolbar:hover {
-  background: #00000080;
+  background: light-dark(#ffffff80, #00000080);
 }
 .lyrics-toolbar .icon-button:hover {
-  color: #fff;
-  background: #ffffff1f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000001f, #ffffff1f);
   transform: scale(1.1);
 }
 .lyrics-toolbar .icon-button:active {
@@ -3667,7 +3685,7 @@ small {
   display: flex;
   flex-direction: column;
   /* Spicy Lyrics' card: the panel's white tint over a light blur. */
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
   backdrop-filter: blur(12px);
 }
 .lyric-preview > .card-heading {
@@ -3687,8 +3705,8 @@ small {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  color: #fff;
-  background: #ffffff0f;
+  color: light-dark(#000, #fff);
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow:
     inset 0 1px 0 #ffffff5c,
     inset 0 0 0 1px #ffffff29,
@@ -3700,7 +3718,7 @@ small {
 }
 .lyric-card-control:hover {
   scale: 1.05;
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
 }
 .lyric-card-control:active {
   scale: 0.94;
@@ -3830,7 +3848,7 @@ small {
   --bar-pad-left: var(--bar-pad-x);
   --bar-pad-bottom: 9px;
   padding: 0 18px 9px;
-  background: #000000;
+  background: light-dark(#fff, #000000);
   z-index: 20;
   min-width: 0;
 }
@@ -3906,7 +3924,7 @@ small {
 }
 .player-placeholder {
   font-size: 12px;
-  color: #646464;
+  color: light-dark(#9b9b9b, #646464);
 }
 .player-transport {
   width: 100%;
@@ -3925,7 +3943,7 @@ small {
 .transport-buttons .icon-button {
   width: 35px;
   height: 35px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .transport-buttons .play-toggle {
   width: 35px;
@@ -3936,12 +3954,12 @@ small {
 }
 /* As in Spotify, side buttons only brighten; the play button alone grows. */
 .transport-buttons .icon-button:is(:hover, :active) {
-  color: #fff;
+  color: light-dark(#000, #fff);
   background: none;
   transform: none;
 }
 .transport-buttons .icon-button:active {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .play-toggle {
   width: 32px;
@@ -3952,15 +3970,15 @@ small {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 50%;
-  color: #111111;
-  background: #fff;
+  color: light-dark(#eee, #111111);
+  background: light-dark(#000, #fff);
 }
 .play-toggle {
   transition: transform 0.1s;
 }
 .play-toggle:hover {
   transform: scale(1.06);
-  background: #fff;
+  background: light-dark(#000, #fff);
 }
 .play-toggle:active {
   transform: scale(0.98);
@@ -3976,7 +3994,7 @@ small {
 }
 .seek-row time {
   font-size: 12.5px;
-  color: #b0b0b0;
+  color: light-dark(#4f4f4f, #b0b0b0);
   font-variant-numeric: tabular-nums;
   min-width: 30px;
   text-align: left;
@@ -3992,8 +4010,8 @@ input[type="range"] {
   cursor: pointer;
   background: linear-gradient(
     90deg,
-    #e5e5e5 var(--range, 0%),
-    #ffffff25 var(--range, 0%)
+    light-dark(#1a1a1a, #e5e5e5) var(--range, 0%),
+    light-dark(#00000025, #ffffff25) var(--range, 0%)
   );
   outline: 0;
   accent-color: var(--accent);
@@ -4018,9 +4036,9 @@ input[type="range"] {
   transform: translateX(-50%);
   padding: 4px 8px;
   border-radius: 4px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow: 0 4px 12px #0009;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -4034,7 +4052,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #fff;
+  background: light-dark(#000, #fff);
   opacity: 0;
 }
 input[type="range"]:hover::-webkit-slider-thumb,
@@ -4045,7 +4063,7 @@ input[type="range"]:hover {
   background: linear-gradient(
     90deg,
     var(--accent) var(--range, 0%),
-    #ffffff25 var(--range, 0%)
+    light-dark(#00000025, #ffffff25) var(--range, 0%)
   );
 }
 .player-extras {
@@ -4058,7 +4076,7 @@ input[type="range"]:hover {
 .player-extras .icon-button {
   width: 37px;
   height: 37px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 /* The pen glyph leaves empty space on its right, so pull the microphone
    in to match the microphone-to-queue gap. */
@@ -4066,7 +4084,7 @@ input[type="range"]:hover {
   margin-right: -1.5px;
 }
 .player-extras .icon-button:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
   background: none;
 }
 .player-bar .icon-button.active {
@@ -4091,9 +4109,9 @@ input[type="range"]:hover {
   background: linear-gradient(
     90deg,
     #1ed760 var(--range, 0%),
-    #ffffffb3 var(--range, 0%),
-    #ffffffb3 max(var(--range, 0%), var(--hover, 0%)),
-    #ffffff4d max(var(--range, 0%), var(--hover, 0%))
+    light-dark(#000000b3, #ffffffb3) var(--range, 0%),
+    light-dark(#000000b3, #ffffffb3) max(var(--range, 0%), var(--hover, 0%)),
+    light-dark(#0000004d, #ffffff4d) max(var(--range, 0%), var(--hover, 0%))
   );
 }
 /* At rest the white fill ends in a rounded cap, as Spotify's does: the
@@ -4106,14 +4124,14 @@ input[type="range"]:hover {
   background:
     radial-gradient(
         circle 2px at calc(var(--range, 0%) - 2px) 50%,
-        #e5e5e5 1.5px,
+        light-dark(#1a1a1a, #e5e5e5) 1.5px,
         transparent 2px
       )
       no-repeat,
     linear-gradient(
       90deg,
-      #e5e5e5 calc(var(--range, 0%) - 2px),
-      #ffffff25 calc(var(--range, 0%) - 2px)
+      light-dark(#1a1a1a, #e5e5e5) calc(var(--range, 0%) - 2px),
+      light-dark(#00000025, #ffffff25) calc(var(--range, 0%) - 2px)
     );
 }
 :is(input.volume-range, .seek-row input[type="range"])::-webkit-slider-thumb {
@@ -4133,8 +4151,8 @@ input[type="range"]:hover {
   }
 }
 .popover {
-  background: #232323;
-  border: 1px solid #ffffff12;
+  background: light-dark(#dcdcdc, #232323);
+  border: 1px solid light-dark(#00000012, #ffffff12);
   box-shadow: 0 12px 40px #0008;
   border-radius: 9px;
   padding: 7px;
@@ -4162,7 +4180,7 @@ input[type="range"]:hover {
   text-align: left;
 }
 .device-menu > button:hover {
-  background: #ffffff09;
+  background: light-dark(#00000009, #ffffff09);
 }
 .device-menu > button.selected {
   color: var(--accent);
@@ -4200,14 +4218,14 @@ input[type="range"]:hover {
   text-align: left;
 }
 .song-menu > button:hover {
-  background: #ffffff0b;
+  background: light-dark(#0000000b, #ffffff0b);
 }
 .song-menu > button.active {
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
 }
 .song-menu .menu-chevron {
   margin-left: auto;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 /* Add to playlist flyout beside the song menu. */
 .playlist-flyout {
@@ -4226,8 +4244,8 @@ input[type="range"]:hover {
   padding: 0 12px;
   height: 40px;
   border-radius: 6px;
-  background: #3e3e3e;
-  color: #b3b3b3;
+  background: light-dark(#c1c1c1, #3e3e3e);
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .playlist-flyout-search:focus-within {
   box-shadow: 0 0 0 1px #ffffff59 inset;
@@ -4243,7 +4261,7 @@ input[type="range"]:hover {
   background: none;
   border: 0;
   outline: none;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font: inherit;
   font-size: 15px;
 }
@@ -4257,18 +4275,18 @@ input[type="range"]:hover {
   border-radius: 4px;
   font-size: 15px;
   text-align: left;
-  color: #e8e8e8;
+  color: light-dark(#171717, #e8e8e8);
 }
 .playlist-flyout-new {
   flex: none;
   padding-bottom: 13px;
-  border-bottom: 1px solid #ffffff1a;
+  border-bottom: 1px solid light-dark(#0000001a, #ffffff1a);
   border-radius: 4px 4px 0 0;
   margin-bottom: 4px;
 }
 .playlist-flyout-new:hover,
 .playlist-flyout-list > button:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .playlist-flyout-list {
   overflow-y: auto;
@@ -4292,11 +4310,11 @@ input[type="range"]:hover {
 }
 .playlist-flyout-list > button svg {
   flex: none;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .playlist-flyout-list > p {
   padding: 12px 14px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
   font-size: 14px;
 }
 /* Covers the whole window so a left click anywhere outside an open menu,
@@ -4330,7 +4348,7 @@ input[type="range"]:hover {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .edit-playlist textarea {
   resize: vertical;
@@ -4362,7 +4380,7 @@ input[type="range"]:hover {
   height: 180px;
   overflow: hidden;
   border-radius: 6px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow: 0 4px 24px #0006;
   cursor: pointer;
 }
@@ -4380,8 +4398,8 @@ input[type="range"]:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #000000a6;
-  color: #fff;
+  background: light-dark(#ffffffa6, #000000a6);
+  color: light-dark(#000, #fff);
   font-size: 14px;
   font-weight: 600;
   opacity: 0;
@@ -4400,7 +4418,7 @@ input[type="range"]:hover {
 .edit-playlist-legal {
   margin: 0;
   font-size: 11px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
 }
 @media (max-width: 560px) {
   .edit-playlist-body {
@@ -4411,7 +4429,7 @@ input[type="range"]:hover {
 .setup-backdrop {
   position: fixed;
   inset: 60px 0 0;
-  background: #050505c4;
+  background: light-dark(#fafafac4, #050505c4);
   backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
@@ -4427,13 +4445,13 @@ input[type="range"]:hover {
   align-content: center;
   justify-items: center;
   gap: 12px;
-  background: #121212;
-  color: #b3b3b3;
+  background: light-dark(#ededed, #121212);
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .mic-loader {
   overflow: visible;
   fill: none;
-  stroke: #fff;
+  stroke: light-dark(#000, #fff);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -4459,7 +4477,7 @@ input[type="range"]:hover {
   stroke-dasharray: none;
 }
 .startup-screen strong {
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 22px;
 }
 .artist-loading {
@@ -4467,12 +4485,12 @@ input[type="range"]:hover {
   align-items: center;
   gap: 10px;
   padding: 24px;
-  color: var(--muted, #b3b3b3);
+  color: var(--muted, light-dark(#4c4c4c, #b3b3b3));
 }
 .dialog,
 .setup-dialog {
-  background: #191919;
-  border: 1px solid #ffffff15;
+  background: light-dark(#e6e6e6, #191919);
+  border: 1px solid light-dark(#00000015, #ffffff15);
   box-shadow: 0 25px 120px #0007;
   border-radius: 16px;
   padding: 30px;
@@ -4494,10 +4512,10 @@ input[type="range"]:hover {
 .update-dialog {
   margin: auto;
   max-width: calc(100vw - 32px);
-  color: var(--text, #fff);
+  color: var(--text, light-dark(#000, #fff));
 }
 .update-dialog::backdrop {
-  background: #050505c4;
+  background: light-dark(#fafafac4, #050505c4);
   backdrop-filter: blur(12px);
 }
 .update-dialog h3 {
@@ -4521,7 +4539,7 @@ input[type="range"]:hover {
 .update-commits code {
   padding: 2px 6px;
   border-radius: 6px;
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
   font-size: 11px;
   color: var(--muted);
 }
@@ -4547,7 +4565,7 @@ input[type="range"]:hover {
   min-width: 18px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
   font-size: 11px;
   text-align: center;
   letter-spacing: 0;
@@ -4592,7 +4610,7 @@ input[type="range"]:hover {
    column on the app background, centred in the window, not the area under
    the title bar. */
 .setup-backdrop {
-  background: #121212;
+  background: light-dark(#ededed, #121212);
   backdrop-filter: none;
   padding: 24px 24px 84px;
   overflow: hidden;
@@ -4643,11 +4661,11 @@ input[type="range"]:hover {
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.5;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
 }
 .setup-dialog > .setup-premium {
   margin-bottom: 32px;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-weight: 700;
 }
 .setup-steps {
@@ -4668,18 +4686,18 @@ input[type="range"]:hover {
 .setup-steps code {
   display: block;
   padding: 11px 12px;
-  background: #0d0d0d;
-  border: 1px solid #ffffff0b;
+  background: light-dark(#f2f2f2, #0d0d0d);
+  border: 1px solid light-dark(#0000000b, #ffffff0b);
   border-radius: 7px;
   font-size: 11px;
   user-select: text;
-  color: #d3d3d3;
+  color: light-dark(#2c2c2c, #d3d3d3);
   margin-top: 9px;
 }
 .field {
   width: 100%;
-  background: #0e0e0e;
-  border: 1px solid #ffffff27;
+  background: light-dark(#f1f1f1, #0e0e0e);
+  border: 1px solid light-dark(#00000027, #ffffff27);
   border-radius: 7px;
   min-height: 43px;
   padding: 11px 13px;
@@ -4687,7 +4705,7 @@ input[type="range"]:hover {
   outline: 0;
 }
 .field:focus {
-  border-color: #ffffff;
+  border-color: light-dark(#000, #ffffff);
 }
 .setup-sign-in {
   width: 100%;
@@ -4714,17 +4732,17 @@ input[type="range"]:hover {
 .setup-mode {
   margin-top: 20px;
   font-size: 13px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
 }
 .setup-dialog > small {
   display: block;
   margin-top: 32px;
   font-size: 12px;
-  color: #6a6a6a;
+  color: light-dark(#959595, #6a6a6a);
 }
 .setup-dialog .setup-help {
   font-size: 13px;
-  color: #a7a7a7;
+  color: light-dark(#585858, #a7a7a7);
   margin: 16px 0 6px;
 }
 .setup-recovery {
@@ -4748,7 +4766,7 @@ input[type="range"]:hover {
   align-items: flex-start;
   gap: 10px;
   font-size: 12px;
-  color: #b7b7b7;
+  color: light-dark(#484848, #b7b7b7);
   line-height: 1.5;
   margin: 17px 0;
 }
@@ -4768,9 +4786,9 @@ input[type="range"]:hover {
   display: flex;
   align-items: center;
   gap: 15px;
-  background: #ebebeb;
-  color: #181818;
-  border: 1px solid #ffffff30;
+  background: light-dark(#141414, #ebebeb);
+  color: light-dark(#e7e7e7, #181818);
+  border: 1px solid light-dark(#00000030, #ffffff30);
   box-shadow: 0 8px 40px #0005;
   padding: 9px 11px 9px 19px;
   border-radius: 9px;
@@ -4779,7 +4797,7 @@ input[type="range"]:hover {
 }
 .toast.error {
   background: #e22134;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .toast .icon-button {
   color: inherit;
@@ -4832,7 +4850,7 @@ input[type="range"]:hover {
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
   -webkit-backdrop-filter: blur(14px) saturate(1.6);
   backdrop-filter: blur(14px) saturate(1.6);
   box-shadow:
@@ -4845,7 +4863,7 @@ input[type="range"]:hover {
   inset: 0 auto 0 0;
   width: var(--range, 0%);
   border-radius: inherit;
-  background: linear-gradient(#ffffff, #ffffffc7);
+  background: linear-gradient(light-dark(#000, #ffffff), light-dark(#000000c7, #ffffffc7));
   box-shadow:
     0 0 10px #ffffff73,
     inset 0 1px 0 #fff;
@@ -4865,14 +4883,14 @@ input[type="range"]:hover {
   background: transparent;
 }
 .lyrics-glass-seek:has(input:focus-visible) {
-  outline: 2px solid #ffffffb3;
+  outline: 2px solid light-dark(#000000b3, #ffffffb3);
   outline-offset: 3px;
 }
 .lyrics-fullscreen-times {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  color: #ffffffa6;
+  color: light-dark(#000000a6, #ffffffa6);
   font-variant-numeric: tabular-nums;
 }
 .lyrics-fullscreen-buttons {
@@ -4886,19 +4904,19 @@ input[type="range"]:hover {
   width: auto;
   height: auto;
   padding: 6px;
-  color: #ffffffd9;
+  color: light-dark(#000000d9, #ffffffd9);
 }
 .lyrics-fullscreen-buttons .icon-button.active {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .lyrics-fullscreen-buttons .lyrics-fullscreen-like {
   margin-right: auto;
 }
 .lyrics-fullscreen-buttons .lyrics-fullscreen-like.is-saved {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .lyrics-fullscreen-play {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 /* Full screen Canvas: the controls take the bottom corner where the song
    details sit over the video, and the details move up above them. */
@@ -4971,12 +4989,12 @@ input[type="range"]:hover {
 .overlay-scrollbar-thumb {
   width: 100%;
   border-radius: 999px;
-  background: #ffffff4d;
+  background: light-dark(#0000004d, #ffffff4d);
   will-change: transform;
 }
 .overlay-scrollbar-thumb:hover,
 .overlay-scrollbar.dragging .overlay-scrollbar-thumb {
-  background: #ffffff80;
+  background: light-dark(#00000080, #ffffff80);
 }
 ::-webkit-scrollbar {
   width: 8px;
@@ -4986,13 +5004,13 @@ input[type="range"]:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #ffffff24;
+  background: light-dark(#00000024, #ffffff24);
   border: 2px solid transparent;
   background-clip: padding-box;
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #ffffff45;
+  background-color: light-dark(#00000045, #ffffff45);
 }
 @media (min-width: 1800px) {
   .library-panel {
@@ -5156,11 +5174,11 @@ input[type="range"]:hover {
   inset: 0;
   pointer-events: none;
   background: linear-gradient(
-    #000b 0%,
-    #0000 20%,
-    #0000 55%,
-    #000a 82%,
-    #000d 100%
+    light-dark(#fffb, #000b) 0%,
+    light-dark(#fff0, #0000) 20%,
+    light-dark(#fff0, #0000) 55%,
+    light-dark(#fffa, #000a) 82%,
+    light-dark(#fffd, #000d) 100%
   );
 }
 .now-playing .canvas-hero-head {
@@ -5239,7 +5257,7 @@ input[type="range"]:hover {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(transparent 65%, #0009);
+  background: linear-gradient(transparent 65%, light-dark(#fff9, #0009));
 }
 .canvas-lyrics .lyrics-title {
   position: absolute;
@@ -5422,7 +5440,7 @@ input[type="range"]:hover {
   --lyric-rgb: 255 140 168;
 }
 .gravity-word:focus-visible {
-  outline: 2px solid #fff9;
+  outline: 2px solid light-dark(#0009, #fff9);
   border-radius: 6px;
 }
 .gravity-wait {
@@ -5447,7 +5465,7 @@ input[type="range"]:hover {
   padding-inline: calc(var(--lyric-size, 58px) * 0.35 + 2px);
   max-height: 160px;
   overflow: auto;
-  color: #ffffff8c;
+  color: light-dark(#0000008c, #ffffff8c);
   font-size: clamp(
     15px,
     calc(min(var(--lyric-size, 58px), 4.6cqw) * 0.34),
@@ -5474,7 +5492,7 @@ input[type="range"]:hover {
   position: fixed;
   inset: 0;
   z-index: 800;
-  background: #000000b8;
+  background: light-dark(#ffffffb8, #000000b8);
   backdrop-filter: blur(8px);
   animation: dj-request-fade 0.18s ease-out;
 }
@@ -5485,7 +5503,7 @@ input[type="range"]:hover {
   z-index: 800;
   display: grid;
   place-items: center;
-  background: #000000b8;
+  background: light-dark(#ffffffb8, #000000b8);
   backdrop-filter: blur(8px);
   animation: dj-request-fade 0.18s ease-out;
 }
@@ -5494,11 +5512,11 @@ input[type="range"]:hover {
   width: min(540px, calc(100vw - 48px));
   padding: 26px 28px 24px;
   border-radius: 20px;
-  border: 1px solid #ffffff14;
+  border: 1px solid light-dark(#00000014, #ffffff14);
   background:
     radial-gradient(120% 90% at 0% 0%, #1f4fb066, transparent 60%), #181a1f;
   box-shadow: 0 30px 90px #000c;
-  color: #fff;
+  color: light-dark(#000, #fff);
   animation: dj-request-rise 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 @keyframes dj-request-fade {
@@ -5548,15 +5566,15 @@ input[type="range"]:hover {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #aaa;
+  color: light-dark(#555, #aaa);
   cursor: pointer;
   transition:
     background 0.15s,
     color 0.15s;
 }
 .dj-request-close:hover {
-  background: #ffffff14;
-  color: #fff;
+  background: light-dark(#00000014, #ffffff14);
+  color: light-dark(#000, #fff);
 }
 .dj-request-field {
   position: relative;
@@ -5567,10 +5585,10 @@ input[type="range"]:hover {
   min-height: 128px;
   resize: none;
   padding: 14px 16px 30px;
-  border: 1px solid #ffffff1f;
+  border: 1px solid light-dark(#0000001f, #ffffff1f);
   border-radius: 12px;
-  background: #0d0e11;
-  color: #fff;
+  background: light-dark(#f2f1ee, #0d0e11);
+  color: light-dark(#000, #fff);
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
@@ -5626,11 +5644,11 @@ input[type="range"]:hover {
   transform: scale(0.97);
 }
 .dj-request-actions .dj-request-secondary {
-  background: #ffffff14;
-  color: #fff;
+  background: light-dark(#00000014, #ffffff14);
+  color: light-dark(#000, #fff);
 }
 .dj-request-actions .dj-request-secondary:not(:disabled):hover {
-  background: #ffffff24;
+  background: light-dark(#00000024, #ffffff24);
 }
 .dj-request-actions .dj-request-primary {
   margin-left: auto;
@@ -5652,7 +5670,7 @@ input[type="range"]:hover {
   align-items: center;
   gap: 12px;
   min-height: 32px;
-  color: #bbb;
+  color: light-dark(#444, #bbb);
   font-size: 13px;
 }
 .dj-voice-meter {
@@ -5668,7 +5686,7 @@ input[type="range"]:hover {
   display: block;
   width: 4px;
   border-radius: 1px;
-  background: #fff;
+  background: light-dark(#000, #fff);
   transition: height 70ms linear;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -5711,7 +5729,7 @@ input[type="range"]:hover {
   order: 2;
 }
 .lyrics-toolbar .icon-button.active {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 /* Wide lyrics: the toolbar sits over the cover-art side and follows the
    artwork when it is flipped, as it does with Canvas. */
@@ -5730,7 +5748,7 @@ input[type="range"]:hover {
   width: 1px;
   height: 18px;
   margin: 0 2px;
-  background: #ffffff26;
+  background: light-dark(#00000026, #ffffff26);
 }
 
 /* Lyrics display options from Lyrics settings. */
@@ -5772,11 +5790,11 @@ input[type="range"]:hover {
     background-color 0.15s;
 }
 .lyrics-line-hover .lyric-line:hover {
-  background-color: #ffffff0f;
+  background-color: light-dark(#0000000f, #ffffff0f);
 }
 /* "Cover colour" background: one colour from the artwork, fading down. */
 .lyrics-page.colour-background {
-  background: linear-gradient(var(--hero, #282828), #0b0b0b 85%);
+  background: linear-gradient(var(--hero, light-dark(#d7d7d7, #282828)), light-dark(#f4f4f4, #0b0b0b) 85%);
 }
 
 /* Community lyrics credit, as in the Spicy Lyrics fork: a dim line with
@@ -5795,7 +5813,7 @@ input[type="range"]:hover {
 }
 /* Names stand out a shade brighter than their label, as in Spicy Lyrics. */
 .writer-credits .credit-names {
-  color: #fff;
+  color: light-dark(#000, #fff);
   opacity: 0.8;
 }
 /* Beside the lyrics, end credits match the pinned footer's size, and
@@ -5809,7 +5827,7 @@ input[type="range"]:hover {
     26px
   );
   line-height: 1.35;
-  color: #ffffff8c;
+  color: light-dark(#0000008c, #ffffff8c);
 }
 /* The provider line matches the writers line above it. */
 .lyrics-page .lyric-end-credits .lyric-source {
@@ -5864,7 +5882,7 @@ input[type="range"]:hover {
 }
 .community-credits .community-name {
   /* A shade brighter than its label, like the songwriter names. */
-  color: #fff;
+  color: light-dark(#000, #fff);
   opacity: 0.8;
   transition: opacity 0.2s;
 }
@@ -5934,7 +5952,7 @@ input[type="range"]:hover {
   max-width: 100%;
   height: calc(var(--lyric-size) * 0.72);
   border-radius: calc(var(--lyric-size) * 0.18);
-  background: #ffffff17;
+  background: light-dark(#00000017, #ffffff17);
   overflow: hidden;
 }
 .lyrics-skeleton-lines span::after {
@@ -5944,8 +5962,8 @@ input[type="range"]:hover {
   background: linear-gradient(
     90deg,
     transparent,
-    #ffffff1a 45%,
-    #ffffff1a 55%,
+    light-dark(#0000001a, #ffffff1a) 45%,
+    light-dark(#0000001a, #ffffff1a) 55%,
     transparent
   );
   transform: translateX(-100%);
@@ -5960,7 +5978,7 @@ input[type="range"]:hover {
   align-items: baseline;
   font-size: 13px;
   font-weight: 600;
-  color: #ffffffb8;
+  color: light-dark(#000000b8, #ffffffb8);
 }
 .lyrics-skeleton-dots {
   display: inline-flex;
@@ -6120,12 +6138,12 @@ input[type="range"]:hover {
   -webkit-text-fill-color: rgb(255 255 255 / var(--unsung-alpha));
 }
 .lyric-line.active .highlighter-piece {
-  -webkit-text-fill-color: #fff;
+  -webkit-text-fill-color: light-dark(#000, #fff);
 }
 .lyric-line.active .highlighter-piece[style*="--ink: 1"] {
   -webkit-text-fill-color: color-mix(
     in srgb,
-    #fff 90%,
+    light-dark(#000, #fff) 90%,
     var(--highlighter-ink)
   );
 }
@@ -6209,14 +6227,14 @@ input[type="range"]:hover {
   place-items: center;
   height: 32px;
   border-radius: 4px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .library-view-picker button:hover {
-  background: #ffffff14;
-  color: #fff;
+  background: light-dark(#00000014, #ffffff14);
+  color: light-dark(#000, #fff);
 }
 .library-view-picker button.active {
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
   color: var(--spotify-green);
 }
 
@@ -6355,8 +6373,8 @@ input[type="range"]:hover {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-  color: #fff;
-  background: #121212;
+  color: light-dark(#000, #fff);
+  background: light-dark(#ededed, #121212);
   container-type: inline-size;
 }
 .lyrics-popout > .ambience {
@@ -6384,7 +6402,7 @@ input[type="range"]:hover {
 }
 .lyrics-popout-title span {
   font-size: 14px;
-  color: rgb(255 255 255 / 0.75);
+  color: light-dark(rgb(0 0 0 / 0.75), rgb(255 255 255 / 0.75));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6410,7 +6428,7 @@ input[type="range"]:hover {
   margin: auto;
   font-size: 22px;
   font-weight: 700;
-  color: rgb(255 255 255 / 0.7);
+  color: light-dark(rgb(0 0 0 / 0.7), rgb(255 255 255 / 0.7));
 }
 .lyrics-popout-seek {
   display: flex;
@@ -6442,9 +6460,9 @@ input[type="range"]:hover {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  color: #fff;
-  background: rgb(0 0 0 / 0.25);
-  border: 1px solid rgb(255 255 255 / 0.18);
+  color: light-dark(#000, #fff);
+  background: light-dark(rgb(255 255 255 / 0.25), rgb(0 0 0 / 0.25));
+  border: 1px solid light-dark(rgb(0 0 0 / 0.18), rgb(255 255 255 / 0.18));
 }
 .lyrics-popout > .lyrics-popout-controls {
   position: absolute;
@@ -6460,7 +6478,7 @@ input[type="range"]:hover {
 .lyrics-popout-like {
   position: absolute;
   left: 0;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .lyrics-popout-like.is-saved {
   color: #1ed760;
@@ -6471,7 +6489,7 @@ input[type="range"]:hover {
   gap: 18px;
 }
 .lyrics-popout-controls .icon-button {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .lyrics-popout-controls .icon-button.active {
   color: #1ed760;
@@ -6481,7 +6499,7 @@ input[type="range"]:hover {
   justify-content: space-between;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  color: rgb(255 255 255 / 0.85);
+  color: light-dark(rgb(0 0 0 / 0.85), rgb(255 255 255 / 0.85));
 }
 .lyrics-popout-seek input[type="range"] {
   width: 100%;
@@ -6491,8 +6509,8 @@ input[type="range"]:hover {
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    #fff var(--range, 0%),
-    rgb(255 255 255 / 0.3) var(--range, 0%)
+    light-dark(#000, #fff) var(--range, 0%),
+    light-dark(rgb(0 0 0 / 0.3), rgb(255 255 255 / 0.3)) var(--range, 0%)
   );
   cursor: pointer;
 }
@@ -6501,7 +6519,7 @@ input[type="range"]:hover {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: light-dark(#000, #fff);
   opacity: 0;
 }
 .lyrics-popout-seek input[type="range"]:hover::-webkit-slider-thumb {
@@ -6533,7 +6551,7 @@ input[type="range"]:hover {
   align-items: center;
   justify-content: space-between;
   padding: 24px 0 16px;
-  background: var(--panel, #121212);
+  background: var(--panel, light-dark(#ededed, #121212));
 }
 .discography-header h1 {
   margin: 0;
@@ -6551,7 +6569,7 @@ input[type="range"]:hover {
   color: var(--muted);
 }
 .discography-filter > .text-link:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .discography-filter-menu {
   position: absolute;
@@ -6562,7 +6580,7 @@ input[type="range"]:hover {
   min-width: 180px;
   padding: 4px;
   border-radius: 6px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow: 0 16px 24px rgb(0 0 0 / 0.5);
 }
 .discography-filter-menu button {
@@ -6570,10 +6588,10 @@ input[type="range"]:hover {
   border-radius: 3px;
   text-align: left;
   font-size: 14px;
-  color: #e5e5e5;
+  color: light-dark(#1a1a1a, #e5e5e5);
 }
 .discography-filter-menu button:hover {
-  background: rgb(255 255 255 / 0.1);
+  background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
 }
 .discography-filter-menu button[aria-checked="true"] {
   color: #1ed760;
@@ -6631,7 +6649,7 @@ input[type="range"]:hover {
   font-weight: 800;
   line-height: 1.15;
   text-align: left;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .discography-release-title:hover {
   text-decoration: underline;
@@ -6648,8 +6666,8 @@ input[type="range"]:hover {
   height: 36px;
   margin-top: 8px;
   border-radius: 50%;
-  color: #000;
-  background: #fff;
+  color: light-dark(#fff, #000);
+  background: light-dark(#000, #fff);
 }
 .discography-release-play:hover {
   transform: scale(1.05);
@@ -6676,12 +6694,12 @@ input[type="range"]:hover {
   text-align: right;
 }
 button.discography-track:hover {
-  background: rgb(255 255 255 / 0.1);
+  background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
 }
 .discography-track-head {
   min-height: 36px;
   margin-bottom: 8px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  border-bottom: 1px solid light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
   border-radius: 0;
   font-size: 13px;
 }
@@ -6693,7 +6711,7 @@ button.discography-track:hover {
 .discography-track-title strong {
   font-size: 16px;
   font-weight: 400;
-  color: #fff;
+  color: light-dark(#000, #fff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6736,7 +6754,7 @@ button.discography-track:hover {
   border-radius: 50%;
   box-shadow: 0 0 0 2px #ffffff40;
   object-fit: cover;
-  background: #535353;
+  background: light-dark(#acacac, #535353);
 }
 .jam-members > * + * {
   margin-left: -6px;
@@ -6752,10 +6770,10 @@ button.discography-track:hover {
 .jam-pill {
   height: 36px;
   padding: 0 18px;
-  border: 1px solid #ffffff73;
+  border: 1px solid light-dark(#00000073, #ffffff73);
   border-radius: 999px;
   background: transparent;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 14px;
   font-weight: 700;
   transition:
@@ -6763,7 +6781,7 @@ button.discography-track:hover {
     transform 0.15s;
 }
 .jam-pill:hover {
-  border-color: #fff;
+  border-color: light-dark(#000, #fff);
   transform: scale(1.04);
 }
 .jam-pill:active {
@@ -6771,7 +6789,7 @@ button.discography-track:hover {
 }
 .jam-invite {
   border-radius: 10px;
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
   box-shadow: inset 0 0 0 1px #ffffff0d;
   overflow: hidden;
 }
@@ -6790,7 +6808,7 @@ button.discography-track:hover {
 }
 .jam-invite-head p {
   margin: 4px 0 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -6800,7 +6818,7 @@ button.discography-track:hover {
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border-top: 1px solid #ffffff12;
+  border-top: 1px solid light-dark(#00000012, #ffffff12);
 }
 .jam-copy {
   display: inline-flex;
@@ -6811,8 +6829,8 @@ button.discography-track:hover {
   padding: 0 20px;
   border: 0;
   border-radius: 999px;
-  background: #fff;
-  color: #000;
+  background: light-dark(#000, #fff);
+  color: light-dark(#fff, #000);
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
@@ -6829,7 +6847,7 @@ button.discography-track:hover {
   height: 112px;
   padding: 8px;
   border-radius: 8px;
-  background: #fff;
+  background: light-dark(#000, #fff);
   image-rendering: pixelated;
 }
 /* A narrow panel stacks the QR code under the button. */
@@ -6845,12 +6863,12 @@ button.discography-track:hover {
   justify-content: space-between;
   gap: 12px;
   padding: 2px 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 14px;
   cursor: pointer;
 }
 .jam-control:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .queue-header-actions {
   display: flex;
@@ -6869,7 +6887,7 @@ button.discography-track:hover {
   width: min(420px, 100%);
   max-height: min(560px, 100%);
   border-radius: 8px;
-  background: #121212;
+  background: light-dark(#ededed, #121212);
   box-shadow: 0 16px 48px #000a;
   overflow: hidden;
 }
@@ -6879,7 +6897,7 @@ button.discography-track:hover {
   justify-content: space-between;
   gap: 12px;
   padding: 24px 20px 16px 24px;
-  border-bottom: 1px solid #ffffff1a;
+  border-bottom: 1px solid light-dark(#0000001a, #ffffff1a);
 }
 .credits-dialog h1 {
   margin: 0 0 4px;
@@ -6916,7 +6934,7 @@ button.discography-track:hover {
 .credits-person p,
 .credits-sources p {
   margin: 2px 0 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 0.85rem;
 }
 .credits-sources {
@@ -6924,7 +6942,7 @@ button.discography-track:hover {
 }
 .credits-note {
   margin: 16px 0 0;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 
 /* Simple lyrics mode: a 30% soft edge from full white to 30%, and dimmer

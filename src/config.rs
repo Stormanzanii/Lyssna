@@ -191,6 +191,8 @@ pub struct Settings {
     /// The lyrics page artwork crossfades when the song changes.
     pub cover_animation: bool,
     pub liquid_glass: bool,
+    /// "dark", "light" or "system".
+    pub theme: String,
     pub canvas_lyrics: bool,
     /// The Now playing panel draws the moving artwork behind itself.
     pub npv_ambience: bool,
@@ -362,6 +364,7 @@ impl Default for Settings {
             animation_fps_cap: 60,
             cover_animation: true,
             liquid_glass: false,
+            theme: "dark".into(),
             canvas_lyrics: true,
             npv_ambience: true,
             glass_seek: true,
@@ -525,6 +528,9 @@ impl Settings {
         .contains(&self.library_sort.as_str())
         {
             self.library_sort = "recents".into();
+        }
+        if !["dark", "light", "system"].contains(&self.theme.as_str()) {
+            self.theme = "dark".into();
         }
         if !["compact", "list", "grid", "large_grid"].contains(&self.library_view.as_str()) {
             self.library_view = "list".into();

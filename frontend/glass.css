@@ -2,14 +2,14 @@
    track's artwork moves behind the window as the lyrics ambience does;
    panels become frosted, translucent sheets with a bright specular rim. */
 .liquid-glass {
-  --glass-fill: #16161a6b;
+  --glass-fill: light-dark(#e9e9e56b, #16161a6b);
   --glass-fill-strong: #1e1e23db;
   --glass-blur: blur(30px) saturate(175%);
   --glass-shadow:
     0 1px 0 #ffffff1f inset, 0 0 0 1px #ffffff0a inset, 0 18px 50px #00000040;
   position: relative;
   isolation: isolate;
-  background: #0b0b0d;
+  background: light-dark(#f4f4f2, #0b0b0d);
 }
 .glass-backdrop {
   position: fixed;
@@ -17,16 +17,16 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(circle at 30% 20%, #2b2b3a, #0b0b0d 70%);
+  background: radial-gradient(circle at 30% 20%, #2b2b3a, light-dark(#f4f4f2, #0b0b0d) 70%);
 }
 .glass-backdrop-shade {
   position: absolute;
   inset: 0;
   /* Keep all three original gradients in one full-window paint layer. */
   background:
-    radial-gradient(ellipse at 50% 0%, transparent, #00000059 70%),
-    linear-gradient(#0000002e, #00000066),
-    linear-gradient(#0004, #0005);
+    radial-gradient(ellipse at 50% 0%, transparent, light-dark(#ffffff59, #00000059) 70%),
+    linear-gradient(light-dark(#ffffff2e, #0000002e), light-dark(#fff6, #00000066)),
+    linear-gradient(light-dark(#fff4, #0004), light-dark(#fff5, #0005));
 }
 .glass-backdrop .ambience {
   z-index: 0;
@@ -69,10 +69,10 @@
   border-radius: inherit;
   background: linear-gradient(
     150deg,
-    #ffffff59,
-    #ffffff12 28%,
-    #ffffff05 55%,
-    #ffffff26
+    light-dark(#00000059, #ffffff59),
+    light-dark(#00000012, #ffffff12) 28%,
+    light-dark(#00000005, #ffffff05) 55%,
+    light-dark(#00000026, #ffffff26)
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -89,7 +89,7 @@
   inset: 0 0 auto;
   height: 90px;
   border-radius: inherit;
-  background: linear-gradient(#ffffff0d, transparent);
+  background: linear-gradient(light-dark(#0000000d, #ffffff0d), transparent);
   pointer-events: none;
 }
 
@@ -117,7 +117,7 @@
   background: #3be477;
 }
 .liquid-glass .now-card {
-  background: #ffffff0f;
+  background: light-dark(#0000000f, #ffffff0f);
   box-shadow: 0 1px 0 #ffffff14 inset;
   border-radius: 14px;
 }
@@ -131,7 +131,7 @@
    backdrop only dims, without its own blur: a blurred backdrop would be
    all the sheet's blur could see. */
 .liquid-glass .modal-backdrop.load-ttml-backdrop {
-  background: #0000004d;
+  background: light-dark(#ffffff4d, #0000004d);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -140,10 +140,10 @@
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   backdrop-filter: blur(40px) saturate(180%);
   box-shadow: var(--glass-shadow);
-  border: 1px solid #ffffff1f;
+  border: 1px solid light-dark(#0000001f, #ffffff1f);
 }
 .liquid-glass .load-ttml-head {
-  border-bottom-color: #ffffff1f;
+  border-bottom-color: light-dark(#0000001f, #ffffff1f);
 }
 @media (prefers-reduced-transparency: reduce) {
   .liquid-glass .dialog.load-ttml {
@@ -158,7 +158,7 @@
   border-radius: 18px 18px 0 0;
 }
 .liquid-glass .artist-about-card {
-  background-color: #ffffff12;
+  background-color: light-dark(#00000012, #ffffff12);
 }
 /* The shorthand above also resets size and position; artist banners set
    their image inline and still need to cover the header. */
@@ -176,23 +176,23 @@
   background: transparent;
 }
 .liquid-glass .search-category {
-  background: #ffffff17;
+  background: light-dark(#00000017, #ffffff17);
 }
 .liquid-glass .search-category:hover {
-  background: #ffffff26;
+  background: light-dark(#00000026, #ffffff26);
 }
 .liquid-glass .search-category.selected {
-  background: #fff;
+  background: light-dark(#000, #fff);
 }
 .liquid-glass .search-top-result {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .liquid-glass .search-top-result:hover,
 .liquid-glass .search-top-result:focus-within {
-  background: #ffffff1c;
+  background: light-dark(#0000001c, #ffffff1c);
 }
 .liquid-glass .search-result-art {
-  background: #ffffff0f;
+  background: light-dark(#0000000f, #ffffff0f);
 }
 
 /* The sticky Home bar stays fully see-through. */
@@ -200,7 +200,7 @@
   background: transparent;
 }
 .liquid-glass .liked-heart {
-  background: #000;
+  background: light-dark(#fff, #000);
   box-shadow: 0 0 0 3px #0006;
 }
 
@@ -218,65 +218,65 @@
   inset: -1px;
   z-index: -1;
   border-radius: inherit;
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 1px 0 #ffffff1f inset;
   pointer-events: none;
 }
 .liquid-glass .search-box:focus-within::before {
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
 }
 /* Home and the profile ring are glass like the search box beside them,
    not the solid grey of the plain theme. */
 .liquid-glass .home-button {
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 1px 0 #ffffff1f inset;
 }
 .liquid-glass .home-button:hover {
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
 }
 .liquid-glass .avatar {
-  border-color: #ffffff14;
+  border-color: light-dark(#00000014, #ffffff14);
   background-clip: padding-box;
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 1px 0 #ffffff1f inset;
 }
 .liquid-glass .playlist-flyout-search {
-  background: #ffffff14;
+  background: light-dark(#00000014, #ffffff14);
   box-shadow: 0 1px 0 #ffffff1f inset;
   border-radius: 10px;
 }
 .liquid-glass .playlist-flyout-search:focus-within {
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
   box-shadow:
     0 1px 0 #ffffff1f inset,
     0 0 0 1px #ffffff40 inset;
 }
 .liquid-glass .library-item:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .liquid-glass .library-item.current {
-  background: #ffffff1c;
+  background: light-dark(#0000001c, #ffffff1c);
 }
 .liquid-glass .track-row:hover,
 .liquid-glass .recents-row:hover,
 .liquid-glass .album-tile:hover {
-  background: #ffffff17;
+  background: light-dark(#00000017, #ffffff17);
 }
 /* Selected songs, with or without Liquid Glass and under the pointer,
    take Spotify's lighter highlight. */
 .track-row.selected,
 .liquid-glass .track-row.selected {
-  background: #ffffff4d;
+  background: light-dark(#0000004d, #ffffff4d);
 }
 .liquid-glass .settings-select,
 .liquid-glass .number-field,
 .liquid-glass .settings-search {
-  background-color: #ffffff17;
+  background-color: light-dark(#00000017, #ffffff17);
 }
 
 /* Menus become frosted popovers. */
@@ -305,7 +305,7 @@
 /* Recent searches are real frosted glass: plain blur, no refraction, so a
    tall list over moving lyrics stays cheap. */
 .liquid-glass .recent-searches {
-  background: #16161ab8;
+  background: light-dark(#e9e9e5b8, #16161ab8);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }
@@ -369,14 +369,14 @@
 .glass-refraction .lyrics-toolbar {
   /* Dark and dimmed, so the icons stay readable over bright artwork while
      the bend still shows. */
-  background: #0b0b0f99;
+  background: light-dark(#f4f4f099, #0b0b0f99);
   -webkit-backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.4)
     brightness(0.82);
   backdrop-filter: url(#glass-refraction) blur(8px) saturate(1.4)
     brightness(0.82);
 }
 .glass-refraction .lyrics-toolbar:hover {
-  background: #08080bb8;
+  background: light-dark(#f7f7f4b8, #08080bb8);
 }
 .glass-refraction .profile-menu,
 .glass-refraction .song-menu {

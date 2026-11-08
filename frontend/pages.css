@@ -4,7 +4,7 @@
 :root {
   --spotify-green: #1ed760;
   --spotify-green-hover: #3be477;
-  --text-subdued: #b3b3b3;
+  --text-subdued: light-dark(#4c4c4c, #b3b3b3);
 }
 
 /* Hero and action bar share one colour taken from the artwork (--hero),
@@ -23,7 +23,7 @@
   padding: 64px 24px 24px;
   /* Let the cover's shadow fall past the hero instead of ending in a line. */
   overflow: visible;
-  background: linear-gradient(transparent, #00000073), var(--hero, #535353);
+  background: linear-gradient(transparent, light-dark(#ffffff73, #00000073)), var(--hero, light-dark(#acacac, #535353));
 }
 /* A narrow centre panel has no room for the tall header's empty top. */
 @container (max-width: 760px) {
@@ -61,8 +61,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: #000000b3;
-  color: #fff;
+  background: light-dark(#ffffffb3, #000000b3);
+  color: light-dark(#000, #fff);
   font-size: 16px;
   font-weight: 600;
   opacity: 0;
@@ -84,7 +84,7 @@
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
-  color: #fff;
+  color: light-dark(#000, #fff);
   text-transform: capitalize;
 }
 .hero-copy h1 {
@@ -106,7 +106,7 @@
   margin: -16px 0 12px;
   max-width: 760px;
   font-size: 14px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -117,16 +117,16 @@
   flex-wrap: wrap;
   align-items: center;
   font-size: 14px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
   line-height: 1.6;
 }
 .hero-meta strong {
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-weight: 700;
 }
 .hero-meta strong .text-link {
   font-weight: 700;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .hero-meta > span::before {
   content: "•";
@@ -144,7 +144,7 @@
 .artist-hero {
   min-height: clamp(320px, 31vw, 480px);
   padding: 24px 24px 28px;
-  background-color: var(--hero, #282828);
+  background-color: var(--hero, light-dark(#d7d7d7, #282828));
   background-size: cover;
   background-position: center 22%;
 }
@@ -172,15 +172,15 @@
   margin-bottom: 4px;
   font-size: 16px;
   font-weight: 500;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-monthly {
   margin: 0;
   font-size: 16px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-header .browse-actions {
-  background: linear-gradient(#0000004d, transparent);
+  background: linear-gradient(light-dark(#ffffff4d, #0000004d), transparent);
 }
 
 /* Action bar. */
@@ -188,7 +188,7 @@
   gap: 24px;
   padding: 24px 24px 40px;
   background: linear-gradient(
-    color-mix(in srgb, var(--hero, #535353) 34%, transparent),
+    color-mix(in srgb, var(--hero, light-dark(#acacac, #535353)) 34%, transparent),
     transparent
   );
 }
@@ -232,7 +232,7 @@
 .browse-actions .pill.outline {
   font-size: 14px;
   padding: 7px 16px;
-  border-color: #878787;
+  border-color: light-dark(#787878, #878787);
 }
 
 /* Track table. */
@@ -260,7 +260,7 @@
 }
 .track-added {
   font-size: 14px;
-  color: var(--text-subdued, #b3b3b3);
+  color: var(--text-subdued, light-dark(#4c4c4c, #b3b3b3));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -281,7 +281,7 @@
 .track-table-head {
   height: 36px;
   margin-bottom: 12px;
-  border-bottom: 1px solid #ffffff1a;
+  border-bottom: 1px solid light-dark(#0000001a, #ffffff1a);
   font-size: 14px;
   color: var(--text-subdued);
 }
@@ -290,7 +290,7 @@
   border-radius: 4px;
 }
 .track-row:hover {
-  background: #ffffff1a;
+  background: light-dark(#0000001a, #ffffff1a);
 }
 .track-number {
   font-size: 16px;
@@ -304,7 +304,7 @@
 }
 .track-name {
   font-size: 16px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .track-row.playing .track-name {
   color: var(--spotify-green);
@@ -316,7 +316,7 @@
 }
 .track-row:is(:hover, .selected) .track-artists,
 .track-row:is(:hover, .selected) .album-link {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .album-link,
 .track-streams {
@@ -362,7 +362,7 @@
 }
 .sort-menu-button:hover,
 .sort-menu-button[aria-expanded="true"] {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .sort-menu-button.filtered {
   color: var(--spotify-green);
@@ -377,7 +377,7 @@
   min-width: 220px;
   padding: 4px;
   border-radius: 6px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow:
     0 16px 24px #0000004d,
     0 6px 8px #00000033;
@@ -398,10 +398,10 @@
   border-radius: 3px;
   text-align: left;
   font-size: 14px;
-  color: #ffffffe6;
+  color: light-dark(#000000e6, #ffffffe6);
 }
 .sort-menu > button:hover {
-  background: #ffffff1a;
+  background: light-dark(#0000001a, #ffffff1a);
 }
 .sort-menu > button.active {
   color: var(--spotify-green);
@@ -409,7 +409,7 @@
 .sort-menu hr {
   margin: 4px 0;
   border: 0;
-  border-top: 1px solid #ffffff1a;
+  border-top: 1px solid light-dark(#0000001a, #ffffff1a);
 }
 .sort-menu label {
   display: block;
@@ -423,13 +423,13 @@
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
-  background: #ffffff14;
-  color: #fff;
+  background: light-dark(#00000014, #ffffff14);
+  color: light-dark(#000, #fff);
   font: inherit;
   font-size: 14px;
 }
 .sort-menu select option {
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
 }
 .playlist-search {
   display: flex;
@@ -441,7 +441,7 @@
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
-  background: #ffffff1a;
+  background: light-dark(#0000001a, #ffffff1a);
   color: var(--text-subdued);
   font-size: 14px;
 }
@@ -482,7 +482,7 @@
   color: var(--text-subdued);
 }
 .see-more:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .artist-liked {
   padding: 32px 24px 16px 0;
@@ -502,16 +502,16 @@
   font-weight: 500;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .discography-filters .pill:hover {
-  background: #ffffff1f;
+  background: light-dark(#0000001f, #ffffff1f);
   transform: none;
 }
 .discography-filters .active,
 .discography-filters .active:hover {
-  background: #fff;
-  color: #000;
+  background: light-dark(#000, #fff);
+  color: light-dark(#fff, #000);
 }
 .album-grid {
   padding: 8px 24px 32px;
@@ -524,7 +524,7 @@
   transition: background 0.2s;
 }
 .album-tile:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .album-tile .cover {
   border-radius: 6px;
@@ -570,7 +570,7 @@
   min-width: 220px;
   padding: 4px;
   border-radius: 6px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow:
     0 16px 24px #0000004d,
     0 6px 8px #00000033;
@@ -592,7 +592,7 @@
   padding: 0 12px;
   border-radius: 3px;
   font-size: 14px;
-  color: #ffffffe6;
+  color: light-dark(#000000e6, #ffffffe6);
   text-align: left;
 }
 .profile-menu > button > span {
@@ -602,17 +602,17 @@
 }
 .profile-menu > button:hover,
 .profile-menu > button:focus-visible {
-  background: #ffffff1a;
-  color: #fff;
+  background: light-dark(#0000001a, #ffffff1a);
+  color: light-dark(#000, #fff);
   outline: none;
 }
 .profile-menu > button svg {
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .profile-menu hr {
   margin: 2px 0;
   border: 0;
-  border-top: 1px solid #ffffff1a;
+  border-top: 1px solid light-dark(#0000001a, #ffffff1a);
 }
 
 /* Profile page. */
@@ -621,8 +621,8 @@
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
-  background: #282828;
-  color: #7f7f7f;
+  background: light-dark(#d7d7d7, #282828);
+  color: light-dark(#808080, #7f7f7f);
 }
 .profile-avatar img {
   width: 100%;
@@ -659,10 +659,10 @@
 .profile-counts > * + *::before {
   content: "•";
   margin: 0 6px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .profile-counts button {
-  color: #fff;
+  color: light-dark(#000, #fff);
   font: inherit;
   font-weight: 600;
 }
@@ -677,11 +677,11 @@
   position: relative;
 }
 .profile-more > .icon-button {
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .profile-more > .icon-button:hover,
 .profile-more > .icon-button.active {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .profile-more .profile-menu {
   left: 0;
@@ -713,7 +713,7 @@
 .profile-skeleton-row span {
   aspect-ratio: 1;
   border-radius: 50%;
-  background: #ffffff0f;
+  background: light-dark(#0000000f, #ffffff0f);
   animation: profile-pulse 1.4s ease-in-out infinite;
 }
 @keyframes profile-pulse {
@@ -741,8 +741,8 @@
   font-size: 14px;
   font-weight: 500;
   padding: 6px 12px;
-  background: #ffffff1a;
-  color: #fff;
+  background: light-dark(#0000001a, #ffffff1a);
+  color: light-dark(#000, #fff);
   cursor: default;
 }
 .recents-filters .pill:hover {
@@ -767,7 +767,7 @@
   transition: background 0.15s;
 }
 .recents-row:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .recents-main {
   display: flex;
@@ -800,7 +800,7 @@
 .recents-copy > .text-link {
   font-size: 16px;
   font-weight: 500;
-  color: #fff;
+  color: light-dark(#000, #fff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -834,7 +834,7 @@
   border-radius: 4px;
 }
 .recents-tracks li:hover {
-  background: #ffffff12;
+  background: light-dark(#00000012, #ffffff12);
 }
 .recents-tracks .cover {
   width: 40px;
@@ -865,7 +865,7 @@
 .app-menu-button {
   width: 36px;
   height: 36px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .app-menu,
 .app-submenu {
@@ -874,7 +874,7 @@
   min-width: 200px;
   padding: 4px;
   border-radius: 6px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow:
     0 16px 24px #0000004d,
     0 6px 8px #00000033;
@@ -903,23 +903,23 @@
   padding: 0 12px;
   border-radius: 3px;
   font-size: 14px;
-  color: #ffffffe6;
+  color: light-dark(#000000e6, #ffffffe6);
   text-align: left;
 }
 .app-menu button:hover,
 .app-menu button.active,
 .app-menu button:focus-visible {
-  background: #ffffff1a;
-  color: #fff;
+  background: light-dark(#0000001a, #ffffff1a);
+  color: light-dark(#000, #fff);
   outline: none;
 }
 .app-menu button:disabled {
-  color: #ffffff59;
+  color: light-dark(#00000059, #ffffff59);
   background: none;
   cursor: default;
 }
 .app-menu button svg {
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 .app-submenu button.divided {
   margin-top: 5px;
@@ -931,12 +931,12 @@
   left: 8px;
   right: 8px;
   top: -3px;
-  border-top: 1px solid #ffffff1a;
+  border-top: 1px solid light-dark(#0000001a, #ffffff1a);
 }
 .app-submenu kbd {
   font: inherit;
   font-size: 12px;
-  color: #ffffff80;
+  color: light-dark(#00000080, #ffffff80);
 }
 
 /* Lyrics settings → Sources: ordered source list. */
@@ -953,7 +953,7 @@
   gap: 6px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: #ffffff0d;
+  background: light-dark(#0000000d, #ffffff0d);
 }
 .lyric-sources li.off .lyric-source-name {
   opacity: 0.5;
@@ -971,12 +971,12 @@
 }
 .lyric-source-name small {
   font-size: 12px;
-  color: #ffffff99;
+  color: light-dark(#0009, #ffffff99);
 }
 .lyric-sources-reset {
   margin-top: 8px;
   font-size: 13px;
-  color: #ffffffb3;
+  color: light-dark(#000000b3, #ffffffb3);
 }
 
 /* Help → About Lyssna: brand header, a details card, then the legal
@@ -989,8 +989,8 @@
   width: min(440px, calc(100vw - 48px));
   padding: 24px;
   border-radius: 14px;
-  background: #1c1c1e;
-  color: #ffffffcc;
+  background: light-dark(#e3e3e1, #1c1c1e);
+  color: light-dark(#000c, #ffffffcc);
   box-shadow: 0 24px 80px #000000a6;
 }
 .about-brand {
@@ -1010,22 +1010,22 @@
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.4px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .about-platform {
   margin-top: 2px;
   font-size: 13px;
-  color: #ffffff99;
+  color: light-dark(#0009, #ffffff99);
 }
 .about-close {
   align-self: flex-start;
-  color: #ffffffa6;
+  color: light-dark(#000000a6, #ffffffa6);
 }
 .about-details {
   margin: 0;
-  border: 1px solid #ffffff14;
+  border: 1px solid light-dark(#00000014, #ffffff14);
   border-radius: 10px;
-  background: #ffffff08;
+  background: light-dark(#00000008, #ffffff08);
 }
 .about-details > div {
   display: flex;
@@ -1036,11 +1036,11 @@
   padding: 6px 14px;
 }
 .about-details > div + div {
-  border-top: 1px solid #ffffff0f;
+  border-top: 1px solid light-dark(#0000000f, #ffffff0f);
 }
 .about-details dt {
   font-size: 13px;
-  color: #ffffff99;
+  color: light-dark(#0009, #ffffff99);
 }
 .about-details dd {
   display: flex;
@@ -1048,16 +1048,16 @@
   gap: 8px;
   margin: 0;
   font-size: 14px;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-variant-numeric: tabular-nums;
 }
 .about-copy {
   width: 28px;
   height: 28px;
-  color: #ffffffa6;
+  color: light-dark(#000000a6, #ffffffa6);
 }
 .about-copy:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .about-status {
   display: inline-flex;
@@ -1084,10 +1084,10 @@
 .about-legal {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid #ffffff12;
+  border-top: 1px solid light-dark(#00000012, #ffffff12);
   font-size: 12px;
   line-height: 1.55;
-  color: #ffffff80;
+  color: light-dark(#00000080, #ffffff80);
 }
 .about-legal p {
   margin: 0;
@@ -1105,7 +1105,7 @@
   white-space: nowrap;
 }
 .column-sort:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .column-sort.active {
   color: #1ed760;
@@ -1132,7 +1132,7 @@
 }
 .whats-new-intro {
   margin: 6px 0 20px;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 17px;
 }
 .whats-new-filters {
@@ -1143,8 +1143,8 @@
 .whats-new-filters .pill {
   padding: 9px 16px;
   border-radius: 999px;
-  background: #ffffff1a;
-  color: #fff;
+  background: light-dark(#0000001a, #ffffff1a);
+  color: light-dark(#000, #fff);
   font-size: 17px;
   font-weight: 500;
   cursor: default;
@@ -1174,7 +1174,7 @@
   column-gap: 32px;
   row-gap: 8px;
   padding: 22px 16px;
-  border-top: 1px solid #ffffff1a;
+  border-top: 1px solid light-dark(#0000001a, #ffffff1a);
 }
 .whats-new-cover {
   grid-row: 1 / span 2;
@@ -1206,18 +1206,18 @@
 .whats-new-title {
   font-size: 20px;
   font-weight: 400;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .whats-new-artists {
   font-size: 17px;
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .whats-new-meta {
   display: flex;
   align-items: baseline;
   gap: 10px;
   margin-top: 6px;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 17px;
 }
 .whats-new-type {
@@ -1239,15 +1239,15 @@
   border: 0;
   border-radius: 50%;
   background: none;
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
 }
 .whats-new-actions .whats-new-save:hover {
-  color: #fff;
+  color: light-dark(#000, #fff);
   background: none;
 }
 .whats-new-actions .whats-new-save.saved {
   background: var(--accent);
-  color: #000;
+  color: light-dark(#fff, #000);
 }
 .whats-new-actions .whats-new-play {
   display: grid;
@@ -1257,8 +1257,8 @@
   margin-right: 0;
   border: 0;
   border-radius: 50%;
-  background: #fff;
-  color: #000;
+  background: light-dark(#000, #fff);
+  color: light-dark(#fff, #000);
   cursor: pointer;
   transition: transform 0.15s;
 }
@@ -1269,11 +1269,11 @@
   transform: scale(1.06);
 }
 .whats-new-empty {
-  color: #b3b3b3;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font-size: 17px;
 }
 .whats-new-button.active {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 .whats-new-button.active:after {
   content: none;
@@ -1308,7 +1308,7 @@
   pointer-events: none;
 }
 .nightly-ring circle:first-child {
-  stroke: #ffffff26;
+  stroke: light-dark(#00000026, #ffffff26);
 }
 .nightly-ring circle:last-child {
   stroke: #1ed760;
@@ -1316,7 +1316,7 @@
   transition: stroke-dasharray 0.4s ease;
 }
 .nightly-refresh.building {
-  color: #fff;
+  color: light-dark(#000, #fff);
 }
 /* A newer Nightly found while automatic builds are off. */
 .nightly-refresh.available {
@@ -1374,9 +1374,9 @@
   gap: 6px;
   padding: 4px 9px;
   border-radius: 999px;
-  background: #282828;
+  background: light-dark(#d7d7d7, #282828);
   box-shadow: 0 4px 14px #0008;
-  color: #fff;
+  color: light-dark(#000, #fff);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -1410,7 +1410,7 @@
   background: #1ed760;
 }
 .nightly-tag:hover {
-  background: #333;
+  background: light-dark(#ccc, #333);
 }
 @keyframes nightly-ready-pop {
   0% {
@@ -1437,7 +1437,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: #00000099;
+  background: light-dark(#fff9, #00000099);
   backdrop-filter: grayscale(1) brightness(0.7);
   outline: none;
   animation: cover-viewer-in 0.18s ease-out;

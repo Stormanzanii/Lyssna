@@ -16016,3 +16016,40 @@ test("TTML Creator saves drafts with a time and keeps versions", async ({
   await expect(saves).toHaveCount(0);
   await expect(page.getByText(/Restored the save from/)).toBeVisible();
 });
+
+test("light theme follows the setting and keeps lyrics and heroes dark", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await startClient(page, "playlist:0123456789abcdefghijkl");
+  await openSettings(page, "Appearance");
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
+  await dialog.getByRole("combobox", { name: "Theme" }).selectOption("light");
+  await dialog.screenshot({ path: "target/diagnostics/light-settings.png" });
+  await page.keyboard.press("Escape");
+  const scheme = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((node) => getComputedStyle(node).colorScheme);
+  await expect.poll(() => scheme("html")).toBe("light");
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor),
+    )
+    .toBe("rgb(255, 255, 255)");
+  expect(await scheme(".page-hero")).toBe("dark");
+  expect(await scheme(".now-playing")).toBe("dark");
+  await page.screenshot({ path: "target/diagnostics/light-playlist.png" });
+  await page.locator(".track-row").first().click({ button: "right" });
+  await page.screenshot({ path: "target/diagnostics/light-menu.png" });
+  await page.keyboard.press("Escape");
+  await page.getByPlaceholder("What do you want to play?").fill("song");
+  await page.screenshot({ path: "target/diagnostics/light-search.png" });
+  await page.getByRole("button", { name: "Home", exact: true }).first().click();
+  await page.screenshot({ path: "target/diagnostics/light-home.png" });
+  await openSettings(page, "Appearance");
+  await dialog.getByRole("switch", { name: "Liquid Glass" }).check();
+  await page.keyboard.press("Escape");
+  await page.screenshot({ path: "target/diagnostics/light-glass.png" });
+});

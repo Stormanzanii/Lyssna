@@ -191,6 +191,24 @@
    corner. Everything keys off the transport size. */
 .immersive .canvas-lyrics:not(.narrow) {
   --canvas-transport: clamp(30px, 2.6vw, 60px);
+  --dock-transport: calc(var(--canvas-transport) * 0.75);
+  /* The transport row's height: the heart, its tallest glyph, plus the
+     gap above it. */
+  --dock-row: calc(
+    var(--dock-transport) * 1.05 + var(--canvas-transport) * 0.3
+  );
+  --dock-drop: 0px;
+}
+/* While the transport is hidden, the seek bar drops into its place and
+   rises back above it when the controls wake. */
+.immersive
+  .canvas-lyrics.lyrics-page:not(.narrow):not([data-tools="awake"]):not(
+    [data-seeking="true"]
+  ):not(:has(:focus-visible)):not(
+    [data-always-show="controls"],
+    [data-always-show="both"]
+  ) {
+  --dock-drop: var(--dock-row);
 }
 .immersive
   .canvas-lyrics.lyrics-page:not(.narrow):is(
@@ -199,7 +217,18 @@
     :has(:focus-visible),
     [data-always-show]
   ) {
-  --lyrics-dock-lift: calc(var(--canvas-transport) * 3.1);
+  --lyrics-dock-lift: calc(
+    var(--canvas-transport) * 1.75 + var(--dock-row) - var(--dock-drop)
+  );
+}
+.immersive
+  .canvas-lyrics:not(.narrow)
+  .lyrics-fullscreen-controls
+  > :is(.lyrics-glass-seek, .lyrics-fullscreen-times) {
+  translate: 0 var(--dock-drop);
+  transition:
+    translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1),
+    opacity 250ms ease;
 }
 .immersive .canvas-lyrics:not(.narrow) .lyrics-fullscreen-controls {
   left: var(--fullscreen-gutter);
@@ -244,8 +273,8 @@
   grid-column: 1;
   grid-row: 3;
   margin-top: calc(var(--canvas-transport) * 0.3);
-  gap: calc(var(--canvas-transport) * 0.6);
-  --transport: var(--canvas-transport);
+  gap: calc(var(--dock-transport) * 0.55);
+  --transport: var(--dock-transport);
 }
 .immersive .canvas-lyrics .lyrics-fullscreen-like {
   margin: 0;
@@ -531,7 +560,7 @@
   grid-column: 2;
   grid-row: 3;
   justify-self: start;
-  width: calc(var(--canvas-transport) * 3.6);
+  width: calc(var(--canvas-transport) * 5.6);
   height: auto;
   margin-top: calc(var(--canvas-transport) * 0.3);
 }

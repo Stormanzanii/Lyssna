@@ -761,6 +761,136 @@ pub async fn edit_details(
     Ok(())
 }
 
+/// Whether only invited people can open a playlist, and whether its owner
+/// shows it on their profile. Spotify's apps keep these apart: privacy is
+/// the playlist's base permission, the profile flag sits in the library.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Privacy {
+    pub private: bool,
+    pub on_profile: bool,
+}
+
+const PRIVATE: &str = "BLOCKED";
+const PUBLIC: &str = "VIEWER";
+
+fn permission_path(id: &str) -> String {
+    format!("/playlist-permission/v1/playlist/{id}/permission/base")
+}
+
+async fn base_permission(session: &Session, id: &str) -> Result<Value> {
+    use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(15),
+        session.spclient().request(
+            &reqwest::Method::GET,
+            &permission_path(id),
+            Some(headers),
+            None,
+        ),
+    )
+    .await
+    .context("Spotify permission request timed out")??;
+    let value: Value = serde_json::from_slice(&bytes).context("Invalid Spotify permission")?;
+    ensure!(
+        value["permissionLevel"].is_string(),
+        "Spotify sent no playlist permission"
+    );
+    Ok(value)
+}
+
+/// The library row's profile flag, or None when the playlist is not saved.
+async fn on_profile(session: &Session, uri: &str) -> Result<Option<bool>> {
+    use protobuf::Message;
+    let mut read = 0;
+    for _ in 0..100 {
+        let bytes = tokio::time::timeout(
+            Duration::from_secs(10),
+            session.spclient().get_rootlist(read, Some(ROOTLIST_PAGE)),
+        )
+        .await
+        .context("Spotify library request timed out")??;
+        let page =
+            librespot_protocol::playlist4_external::SelectedListContent::parse_from_bytes(&bytes)
+                .context("Invalid Spotify library page")?;
+        let items = &page.contents.get_or_default().items;
+        if let Some(item) = items.iter().find(|item| item.uri() == uri) {
+            return Ok(Some(item.attributes.get_or_default().public()));
+        }
+        read += items.len();
+        if items.is_empty() || read >= usize::try_from(page.length()).unwrap_or_default() {
+            return Ok(None);
+        }
+    }
+    anyhow::bail!("Spotify library has too many pages")
+}
+
+pub async fn privacy(session: &Session, id: &str) -> Result<Privacy> {
+    valid_playlist_id(id)?;
+    let uri = format!("spotify:playlist:{id}");
+    let (base, shown) = tokio::join!(base_permission(session, id), on_profile(session, &uri));
+    Ok(Privacy {
+        private: base?["permissionLevel"].as_str() == Some(PRIVATE),
+        on_profile: shown?.unwrap_or(false),
+    })
+}
+
+/// Makes a playlist private or public as Spotify's web player does; going
+/// private also takes it off the profile.
+pub async fn set_private(session: &Session, id: &str, private: bool) -> Result<Privacy> {
+    use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+    valid_playlist_id(id)?;
+    let mut base = base_permission(session, id).await?;
+    base["permissionLevel"] = json!(if private { PRIVATE } else { PUBLIC });
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    let body = serde_json::to_vec(&base)?;
+    tokio::time::timeout(
+        Duration::from_secs(15),
+        session.spclient().request(
+            &reqwest::Method::POST,
+            &permission_path(id),
+            Some(headers),
+            Some(&body),
+        ),
+    )
+    .await
+    .context("Spotify permission request timed out")?
+    .context("Spotify could not change who can see the playlist")?;
+    if private && on_profile(session, &format!("spotify:playlist:{id}")).await? == Some(true) {
+        rootlist_change(session, profile_change(id, false)).await?;
+    }
+    let now = privacy(session, id).await?;
+    ensure!(now.private == private, "Spotify did not confirm the change");
+    Ok(now)
+}
+
+fn profile_change(id: &str, shown: bool) -> Value {
+    json!({"kind": 5, "updateItemAttributes": {
+        "newAttributes": {"values": {"public": shown}, "noValue": []},
+        "item": {"uri": format!("spotify:playlist:{id}")}
+    }})
+}
+
+/// Adds a saved playlist to the owner's profile or removes it.
+pub async fn set_on_profile(session: &Session, id: &str, shown: bool) -> Result<Privacy> {
+    valid_playlist_id(id)?;
+    ensure!(
+        on_profile(session, &format!("spotify:playlist:{id}"))
+            .await?
+            .is_some(),
+        "Save the playlist to Your Library first"
+    );
+    rootlist_change(session, profile_change(id, shown)).await?;
+    let now = privacy(session, id).await?;
+    ensure!(
+        now.on_profile == shown,
+        "Spotify did not confirm the change"
+    );
+    Ok(now)
+}
+
 /// Largest cover accepted; the app sends a 640 px JPEG well under this.
 const MAX_COVER_BYTES: usize = 4 * 1024 * 1024;
 
@@ -1663,6 +1793,19 @@ async fn warm_tracks(session: &Session, uris: &[String]) {
 
 #[cfg(test)]
 mod rootlist_tests {
+    #[test]
+    fn profile_flag_is_keyed_by_uri_not_position() {
+        let change = super::profile_change("4123456789abcdefghijkl", false);
+        assert_eq!(change["kind"], 5);
+        let update = &change["updateItemAttributes"];
+        assert!(update.get("index").is_none());
+        assert_eq!(
+            update["item"]["uri"],
+            "spotify:playlist:4123456789abcdefghijkl"
+        );
+        assert_eq!(update["newAttributes"]["values"]["public"], false);
+    }
+
     use super::*;
     #[test]
     fn default_covers_use_distinct_albums_and_keep_empty_playlists_empty() {

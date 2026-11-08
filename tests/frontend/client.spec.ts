@@ -754,6 +754,23 @@ async function startClient(
               host.__clientTest.resolveDJRequest = resolve;
             });
           if (command === "follow_user") return args.follow;
+          if (command === "playlist_privacy")
+            return (host.__clientTest.privacy ??= {
+              private: false,
+              on_profile: true,
+            });
+          if (command === "set_playlist_private")
+            return (host.__clientTest.privacy = {
+              private: args.private,
+              on_profile: args.private
+                ? false
+                : !!host.__clientTest.privacy?.on_profile,
+            });
+          if (command === "set_playlist_on_profile")
+            return (host.__clientTest.privacy = {
+              private: false,
+              on_profile: args.shown,
+            });
           if (command === "whats_new") return host.__clientTest.whatsNew ?? [];
           if (command === "library_items")
             return (
@@ -4384,6 +4401,50 @@ test("a playlist page's more options button opens its menu", async ({
   const box = (await menu.boundingBox())!;
   expect(box.y).toBeGreaterThan(button.y + button.height);
   expect(Math.abs(box.x - button.x)).toBeLessThan(4);
+});
+
+test("your playlist's menu makes it private and takes it off your profile", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "library",
+      playlists: [
+        {
+          id: "4123456789abcdefghijkl",
+          name: "Road trip",
+          images: [],
+          owner: { id: "test-user" },
+          collaborative: false,
+        },
+      ],
+    }),
+  );
+  const item = page.locator(".library-item", { hasText: "Road trip" }).first();
+  const menu = page.getByRole("menu", { name: "playlist actions" });
+  await item.click({ button: "right" });
+  await expect(
+    menu.getByRole("menuitem", { name: "Remove from profile" }),
+  ).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Make private" }).click();
+  await expect(page.getByText("The playlist is private.")).toBeVisible();
+  await item.click({ button: "right" });
+  await expect(
+    menu.getByRole("menuitem", { name: "Make public" }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /profile/ }),
+  ).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: "Make public" }).click();
+  await item.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Add to profile" }).click();
+  const last = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "set_playlist_on_profile")
+      .at(-1),
+  );
+  expect(last.args).toEqual({ id: "4123456789abcdefghijkl", shown: true });
 });
 
 test("Spotify+ copy actions, folder choice and contributor credits", async ({

@@ -572,3 +572,5 @@ export type SoloistStatus =
   | { state: "unsupported" | "needs_key" | "installing" | "starting" }
   | { state: "needs_pairing" | "ready" }
   | { state: "failed"; message: string };
+
+export type PlaylistPrivacy = { private: boolean; on_profile: boolean };

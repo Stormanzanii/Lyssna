@@ -4553,6 +4553,61 @@ async fn user_profile(
     .map_err(error)?
     .map_err(|_| "Profile unavailable. Try again shortly.".to_owned())
 }
+fn session_controls(
+    state: &State<'_, Desktop>,
+) -> std::result::Result<crate::native::NativeControls, String> {
+    let account = lock(&state.0.snapshot)
+        .map_err(error)?
+        .profile
+        .as_ref()
+        .context("Sign in first")
+        .map_err(error)?
+        .id
+        .clone();
+    state.0.controls.scoped(&account).map_err(error)
+}
+#[tauri::command]
+async fn playlist_privacy(
+    state: State<'_, Desktop>,
+    id: String,
+) -> std::result::Result<crate::native_browse::Privacy, String> {
+    let controls = session_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::native_browse::privacy(session, &id).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|error| format!("{error:#}"))
+}
+#[tauri::command]
+async fn set_playlist_private(
+    state: State<'_, Desktop>,
+    id: String,
+    private: bool,
+) -> std::result::Result<crate::native_browse::Privacy, String> {
+    let controls = session_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::native_browse::set_private(session, &id, private).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|error| format!("{error:#}"))
+}
+#[tauri::command]
+async fn set_playlist_on_profile(
+    state: State<'_, Desktop>,
+    id: String,
+    shown: bool,
+) -> std::result::Result<crate::native_browse::Privacy, String> {
+    let controls = session_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls
+            .run(async |session| crate::native_browse::set_on_profile(session, &id, shown).await)
+    })
+    .await
+    .map_err(error)?
+    .map_err(|error| format!("{error:#}"))
+}
 /// Saved albums and followed artists, newest first, for Your Library.
 #[tauri::command]
 async fn library_items(
@@ -5422,6 +5477,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             resolve_album,
             user_profile,
             follow_user,
+            playlist_privacy,
+            set_playlist_private,
+            set_playlist_on_profile,
             search_page,
             app_update,
             media_state

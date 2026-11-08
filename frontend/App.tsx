@@ -113,6 +113,7 @@ import type {
   AppEvent,
   Profile,
   Lyrics,
+  PlaylistPrivacy,
 } from "./types";
 import {
   Ambience,
@@ -950,6 +951,37 @@ function App() {
   );
   const songMenuElement = useRef<HTMLDivElement>(null);
   const entityMenuElement = useRef<HTMLDivElement>(null);
+  const [privacy, setPrivacy] = useState<PlaylistPrivacy & { id: string }>();
+  const ownMenuPlaylist =
+    entityMenu?.kind === "playlist" &&
+    state.playlists.some(
+      (item) =>
+        item.id === entityMenu.id && item.owner.id === state.profile?.id,
+    )
+      ? entityMenu.id
+      : undefined;
+  useEffect(() => {
+    if (!ownMenuPlaylist) return;
+    let live = true;
+    rpc<PlaylistPrivacy>("playlist_privacy", { id: ownMenuPlaylist })
+      .then((now) => live && setPrivacy({ ...now, id: ownMenuPlaylist }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [ownMenuPlaylist]);
+  const changePrivacy = (
+    command: "set_playlist_private" | "set_playlist_on_profile",
+    id: string,
+    args: Record<string, boolean>,
+    done: string,
+  ) =>
+    rpc<PlaylistPrivacy>(command, { id, ...args })
+      .then((now) => {
+        setPrivacy({ ...now, id });
+        notify(done);
+      })
+      .catch((error) => notify(String(error), true));
   useLayoutEffect(() => {
     if (!entityMenu && !songMenu) return;
     const position = () => {
@@ -5077,10 +5109,37 @@ function App() {
               });
             if (saved) {
               const own = saved.owner.id === current.profile?.id;
+              const known = own && privacy?.id === saved.id ? privacy : undefined;
+              if (known && !known.private)
+                actions.push({
+                  label: known.on_profile ? "Remove from profile" : "Add to profile",
+                  run: () =>
+                    void changePrivacy(
+                      "set_playlist_on_profile",
+                      saved.id,
+                      { shown: !known.on_profile },
+                      known.on_profile
+                        ? "Removed from your profile."
+                        : "Added to your profile.",
+                    ),
+                });
               if (own)
                 actions.push({
                   label: "Edit details",
                   run: () => openEditDialog(saved),
+                });
+              if (known)
+                actions.push({
+                  label: known.private ? "Make public" : "Make private",
+                  run: () =>
+                    void changePrivacy(
+                      "set_playlist_private",
+                      saved.id,
+                      { private: !known.private },
+                      known.private
+                        ? "The playlist is public."
+                        : "The playlist is private.",
+                    ),
                 });
               actions.push({
                 label: own ? "Delete" : "Remove from Your Library",

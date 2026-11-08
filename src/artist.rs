@@ -42,6 +42,10 @@ pub struct ArtistOverview {
     /// The item the artist pinned to their page ("Artist pick").
     #[serde(default)]
     pub pick: Option<crate::home::HomeItem>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pick_comment: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pick_background: Option<String>,
     /// Featuring, Discovered on, Artist Playlists, Fans also like, Appears On.
     #[serde(default)]
     pub sections: Vec<crate::home::HomeSection>,
@@ -385,6 +389,12 @@ pub(crate) fn from_entity(artist: &Value, id: &str) -> Result<ArtistOverview> {
             .map(larger_gallery_photo),
         sections: related_sections(artist),
         pick: artist_pick(&artist["profile"]["pinnedItem"]),
+        pick_comment: pick_comment(&artist["profile"]["pinnedItem"]),
+        pick_background: artist["profile"]["pinnedItem"]
+            .pointer("/backgroundImageV2/data/sources/0/url")
+            .and_then(Value::as_str)
+            .filter(|url| url.starts_with("https://") && !url.contains(['"', '\\', '\n']))
+            .map(str::to_owned),
         gallery: artist["visuals"]["gallery"]["items"]
             .as_array()
             .map(Vec::as_slice)
@@ -524,6 +534,11 @@ fn artist_pick(pin: &Value) -> Option<crate::home::HomeItem> {
         kind,
         format: String::new(),
     })
+}
+
+fn pick_comment(pin: &Value) -> String {
+    let comment = pin["comment"].as_str().unwrap_or_default().trim();
+    comment.chars().take(300).collect()
 }
 
 /// The type label Spotify's client gives an Artist pick.
@@ -776,6 +791,13 @@ mod section_tests {
         assert_eq!(pick.subtitle, "Playlist");
         assert_eq!(pick.images.len(), 1);
         assert!(artist_pick(&serde_json::Value::Null).is_none());
+    }
+    #[test]
+    fn pick_comment_is_trimmed_and_capped() {
+        assert_eq!(pick_comment(&json!({"comment": "  FOMO  "})), "FOMO");
+        assert_eq!(pick_comment(&json!({"comment": null})), "");
+        let long = "a".repeat(400);
+        assert_eq!(pick_comment(&json!({ "comment": long })).len(), 300);
     }
     #[test]
     fn verified_reads_the_reputation_trait_then_older_fields() {

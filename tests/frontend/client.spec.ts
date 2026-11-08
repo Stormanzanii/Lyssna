@@ -7334,9 +7334,9 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
     playable: true,
     format: "",
   };
-  const showArtist = async (withPick: boolean) =>
+  const showArtist = async (withPick: boolean, extra = {}) =>
     page.evaluate(
-      ({ key, track, pick }) => {
+      ({ key, track, pick, extra }) => {
         const host = (window as any).__clientTest;
         const generation = host.commands
           .filter(
@@ -7357,6 +7357,7 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
             overview: {
               popular: [{ track, streams: 1 }],
               pick,
+              ...extra,
               source_url: "",
               fetched_at: 0,
               details_loaded: true,
@@ -7368,6 +7369,7 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
         key: `artist:${track.artists[0].id}`,
         track,
         pick: withPick ? pick : undefined,
+        extra,
       },
     );
   // No liked songs and no pick: nothing beside Popular.
@@ -7382,6 +7384,19 @@ test("artist You Liked counts liked songs and opens Liked Songs by the artist", 
     "Posted By Test artist",
   );
   await expect(page.locator(".artist-pick")).toContainText("Picked album");
+  await expect(page.locator(".artist-pick")).not.toHaveClass(/has-background/);
+  await showArtist(true, {
+    pick_comment: "Out now",
+    pick_background: "https://i.scdn.co/image/background",
+  });
+  await expect(page.locator(".artist-pick-comment")).toHaveText("Out now");
+  await expect(page.locator(".artist-pick")).not.toContainText("Posted By");
+  await expect(page.locator(".artist-pick")).toHaveClass(/has-background/);
+  expect(
+    await page
+      .locator(".artist-pick")
+      .evaluate((node) => getComputedStyle(node).backgroundImage),
+  ).toContain("https://i.scdn.co/image/background");
   // Liked songs put You Liked first, the pick below.
   await page.evaluate(() => ((window as any).__clientTest.artistLiked = 3));
   await page.locator(".home-button").click();

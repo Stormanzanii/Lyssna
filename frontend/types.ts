@@ -326,6 +326,8 @@ export interface BrowseInfo {
     sections?: HomeSection[];
     /** The item the artist pinned ("Artist pick"). */
     pick?: HomeItem;
+    pick_comment?: string;
+    pick_background?: string;
     /** The releases Spotify's own artist page lists. */
     discography?: Discography;
   };

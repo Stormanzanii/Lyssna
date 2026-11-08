@@ -4305,7 +4305,18 @@ function App() {
                       <div className="artist-aside-block">
                         <h2>Artist pick</h2>
                         <button
-                          className="artist-pick"
+                          className={
+                            entity.overview.pick_background
+                              ? "artist-pick has-background"
+                              : "artist-pick"
+                          }
+                          style={
+                            entity.overview.pick_background
+                              ? ({
+                                  "--pick-background": `url("${entity.overview.pick_background}")`,
+                                } as CSSProperties)
+                              : undefined
+                          }
                           data-context-route={entity.overview.pick.route}
                           data-context-name={entity.overview.pick.name}
                           onClick={() =>
@@ -4327,7 +4338,13 @@ function App() {
                                   alt=""
                                 />
                               )}
-                              Posted By {entity.artist.name}
+                              {entity.overview.pick_comment ? (
+                                <span className="artist-pick-comment">
+                                  {entity.overview.pick_comment}
+                                </span>
+                              ) : (
+                                <>Posted By {entity.artist.name}</>
+                              )}
                             </span>
                             <strong>{entity.overview.pick.name}</strong>
                             <small>{entity.overview.pick.subtitle}</small>

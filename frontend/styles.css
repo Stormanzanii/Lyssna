@@ -1278,19 +1278,70 @@ small {
   overflow-wrap: anywhere;
   box-shadow: 0 1px 4px #0003;
 }
+/* Spotify's background pick: a fixed card with the note pinned top-left
+   and the cover and name along the bottom. */
 .artist-pick.has-background {
-  min-height: 220px;
-  padding: 16px;
+  position: relative;
+  width: min(100%, 300px);
+  aspect-ratio: 1.38;
+  padding: 14px;
   border-radius: 8px;
   align-items: flex-end;
-  background: linear-gradient(transparent 30%, #000b), var(--pick-background)
+  overflow: hidden;
+  background: linear-gradient(transparent 45%, #0009), var(--pick-background)
     center / cover;
   color: #fff;
   color-scheme: dark;
 }
-.artist-pick.has-background .artist-pick-posted,
+.artist-liked .artist-pick.has-background .cover {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px #0007;
+}
+.artist-pick.has-background > span {
+  gap: 2px;
+  align-self: flex-end;
+}
+.artist-pick.has-background .artist-pick-posted {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 3px 10px 3px 3px;
+  gap: 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: 13px;
+  box-shadow: 0 1px 4px #0004;
+}
+.artist-pick.has-background .artist-pick-posted img {
+  width: 20px;
+  height: 20px;
+}
+.artist-pick.has-background .artist-pick-comment {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artist-pick.has-background strong {
+  font-size: 15px;
+  text-shadow: 0 1px 4px #0008;
+}
 .artist-pick.has-background small {
+  font-size: 13px;
   color: #ffffffd9;
+  text-shadow: 0 1px 4px #0008;
 }
 .artist-monthly {
   color: light-dark(#000, #fff);

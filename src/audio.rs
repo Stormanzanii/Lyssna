@@ -41,6 +41,9 @@ pub struct AudioBuffer {
     generation: Arc<AtomicUsize>,
     target: Arc<Mutex<Option<String>>>,
     crossfade_ms: Arc<AtomicU32>,
+    /// A generation that keeps sounding after a selection: with crossfade
+    /// on, the old song plays on until it fades out under the chosen one.
+    fading_generation: Arc<AtomicUsize>,
     temporary_volume: Arc<AtomicU32>,
 }
 impl AudioBuffer {
@@ -67,8 +70,13 @@ impl AudioBuffer {
     /// Silence old packets immediately, including while Connect is awaiting HTTP.
     pub fn interrupt(&self, target: Option<String>) {
         if let Ok(mut pending) = self.target.lock() {
+            let fades = target.is_some()
+                && self.crossfade_ms.load(Ordering::Relaxed) > 0
+                && !self.narration.load(Ordering::Acquire);
             *pending = target;
-            self.generation.fetch_add(1, Ordering::AcqRel);
+            let old = self.generation.fetch_add(1, Ordering::AcqRel);
+            self.fading_generation
+                .store(if fades { old } else { usize::MAX }, Ordering::Release);
             #[cfg(test)]
             if let Ok(mut started) = self.output_started.lock() {
                 *started = None;
@@ -115,7 +123,7 @@ pub struct AudioSink {
     /// The old song fading out under a chosen one.
     fade: Option<rodio::Sink>,
     #[cfg(test)]
-    test_fade: Option<rodio::queue::SourcesQueueOutput>,
+    test_fresh: Option<rodio::queue::SourcesQueueOutput>,
     stretch: crate::time_stretch::TimeStretch,
 }
 /// The end of one song, held back and mixed into the start of the next.
@@ -184,7 +192,7 @@ impl AudioSink {
             crossfade: Crossfade::default(),
             fade: None,
             #[cfg(test)]
-            test_fade: None,
+            test_fresh: None,
             stretch: crate::time_stretch::TimeStretch::new(),
             buffer: buffer.clone(),
             mixer: None,
@@ -290,30 +298,32 @@ impl Sink for AudioSink {
         self.buffer.crossfade_ms.load(Ordering::Relaxed)
     }
     fn fade_out(&mut self, packets: Vec<AudioPacket>, converter: &mut Converter) {
-        self.discard_old_audio();
         let mut handed = Vec::new();
         for packet in &packets {
             if let Ok(samples) = packet.samples() {
                 handed.extend(converter.f64_to_f32(samples));
             }
         }
-        let fade = match &self.stream {
+        // The old song's output keeps playing what it has queued, then its
+        // read-ahead fading out; the chosen song gets an output of its own.
+        let fresh = match &self.stream {
             Some(stream) => rodio::Sink::connect_new(stream.mixer()),
             #[cfg(test)]
             None => {
                 let (sink, output) = rodio::Sink::new();
-                self.test_fade = Some(output);
+                self.test_fresh = Some(output);
                 sink
             }
             #[cfg(not(test))]
             None => return,
         };
+        let Some(fade) = self.sink.replace(fresh) else {
+            return;
+        };
         let total = handed.len().max(1) as f32;
         for (index, sample) in handed.iter_mut().enumerate() {
             *sample *= (index as f32 / total * std::f32::consts::FRAC_PI_2).cos();
         }
-        // The selection silences the old song's queued audio at once, so its
-        // fade plays beside the main output rather than through it.
         let mut packet = QueuedPacket::new(handed, Arc::new(AtomicUsize::new(0)));
         if let Some(mixer) = &self.mixer {
             packet.volume = mixer.get_soft_volume();
@@ -470,6 +480,7 @@ struct QueuedPacket {
     output_started: Option<Arc<Mutex<Option<std::time::Instant>>>>,
     generation: usize,
     active_generation: Option<Arc<AtomicUsize>>,
+    fading_generation: Option<Arc<AtomicUsize>>,
     marker_applied: bool,
     marker: Option<(Arc<AtomicBool>, bool)>,
     volume: Box<dyn VolumeGetter + Send>,
@@ -488,6 +499,7 @@ impl QueuedPacket {
         let mut packet = Self::new(samples, buffer.queued);
         packet.generation = buffer.generation.load(Ordering::Acquire);
         packet.active_generation = Some(buffer.generation);
+        packet.fading_generation = Some(buffer.fading_generation);
         #[cfg(test)]
         {
             packet.output_started = Some(buffer.output_started);
@@ -507,6 +519,7 @@ impl QueuedPacket {
             output_started: None,
             generation: 0,
             active_generation: None,
+            fading_generation: None,
             marker: None,
             marker_applied: false,
             volume: Box::new(NoOpVolume),
@@ -521,10 +534,13 @@ impl Iterator for QueuedPacket {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
         let sample = self.samples.next();
-        let current = self
-            .active_generation
-            .as_ref()
-            .is_none_or(|generation| generation.load(Ordering::Acquire) == self.generation);
+        let current =
+            self.active_generation
+                .as_ref()
+                .is_none_or(|generation| generation.load(Ordering::Acquire) == self.generation)
+                || self.fading_generation.as_ref().is_some_and(|generation| {
+                    generation.load(Ordering::Acquire) == self.generation
+                });
         if sample.is_some() {
             if !self.marker_applied && current {
                 #[cfg(test)]
@@ -693,35 +709,35 @@ mod tests {
     }
 
     #[test]
-    fn a_chosen_song_rises_while_the_old_one_fades_out_beside_it() {
+    fn a_chosen_song_rises_while_the_old_one_plays_on_and_fades_out() {
         let buffer = AudioBuffer::default();
         buffer.set_crossfade(1);
         let (ready, _) = tokio::sync::mpsc::unbounded_channel();
         let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
-        let mut output = audio.test_output();
+        let mut old = audio.test_output();
         let mut converter = Converter::new(None);
         audio.set_track(&track(1));
         audio
             .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
             .unwrap();
-        assert!((0..400).all(|_| output.next() == Some(0.5)));
-        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        // Choosing a song keeps the old one sounding: no gap while it loads.
+        buffer.interrupt(Some(track(2).to_uri()));
+        assert!((0..200).all(|_| old.next() == Some(0.5)));
         assert_eq!(audio.manual_crossfade_ms(), 1000);
         audio.fade_out(vec![AudioPacket::Samples(vec![0.5; 400])], &mut converter);
-        buffer.interrupt(Some(track(2).to_uri()));
         audio.set_track(&track(2));
         audio
             .write(AudioPacket::Samples(vec![1.0; 800]), &mut converter)
             .unwrap();
-        let fade: Vec<f32> = audio.test_fade.take().unwrap().take(400).collect();
-        assert!((fade[0] - 0.5).abs() < 1e-6);
-        assert!(fade[399] < 0.01);
-        // The old song's queued audio is silenced; the chosen one rises.
-        let new: Vec<f32> = output.take(4000).filter(|sample| *sample > 0.0).collect();
-        assert_eq!(new.len(), 799);
+        // The rest of the queued old song, then its read-ahead fading out.
+        let fade: Vec<f32> = old.by_ref().take(600).collect();
+        assert!(fade[..200].iter().all(|sample| *sample == 0.5));
+        assert!((fade[200] - 0.5).abs() < 1e-6);
+        assert!(fade[599] < 0.01);
+        let new: Vec<f32> = audio.test_fresh.take().unwrap().take(800).collect();
         assert!(new[0] < 0.01);
         assert!(new[398] > 0.99);
-        assert!(new[399..].iter().all(|sample| *sample == 1.0));
+        assert!(new[400..].iter().all(|sample| *sample == 1.0));
     }
 
     #[test]

@@ -16255,6 +16255,15 @@ test("typing shows Spotify's suggestions; only Enter opens the search page", asy
   ]);
   await page.waitForTimeout(400);
   expect(await searched()).toEqual([]);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "search_warm")
+          .map((entry: any) => entry.args.query),
+      ),
+    )
+    .toEqual(["DYK"]);
   await search.press("ArrowDown");
   await search.press("ArrowDown");
   await expect(list.getByRole("option").nth(1)).toHaveAttribute(

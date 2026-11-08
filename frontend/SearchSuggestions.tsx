@@ -96,6 +96,14 @@ export function SearchSuggestions({
   const [active, setActive] = useState(-1);
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // Fetch the full results once typing pauses, so Enter shows them at once.
+    const timer = setTimeout(
+      () => void rpc("search_warm", { query: term }).catch(() => {}),
+      450,
+    );
+    return () => clearTimeout(timer);
+  }, [term]);
+  useEffect(() => {
     setActive(-1);
     const known = cache.get(term);
     if (known) {

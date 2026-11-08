@@ -3,7 +3,9 @@ use anyhow::{Context, Result, ensure};
 use librespot_core::Session;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use crate::model::{Album, Artist, Artwork, Owner, Playlist, Track};
 
@@ -121,11 +123,37 @@ fn native_user(value: &Value) -> Option<crate::model::Profile> {
     })
 }
 
+type Shared = Arc<tokio::sync::OnceCell<(Instant, SearchResults)>>;
+static RECENT: LazyLock<Mutex<HashMap<(String, String), Shared>>> = LazyLock::new(Mutex::default);
+const FRESH: Duration = Duration::from_secs(120);
+
+/// Shares one fetch per account and query, so a search warmed while typing
+/// answers Enter at once, or joins the fetch still on its way.
 pub async fn catalogue(session: &Session, query: &str) -> Result<SearchResults> {
     ensure!(
         !query.trim().is_empty() && query.len() <= 600 && !query.chars().any(char::is_control),
         "Invalid search query"
     );
+    let cell = {
+        let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
+        recent.retain(|_, cell| cell.get().is_none_or(|(at, _)| at.elapsed() < FRESH));
+        if recent.len() >= 32 {
+            recent.clear();
+        }
+        recent
+            .entry((session.username(), query.to_owned()))
+            .or_default()
+            .clone()
+    };
+    let (_, results) = cell
+        .get_or_try_init(async || {
+            Ok::<_, anyhow::Error>((Instant::now(), fetch(session, query).await?))
+        })
+        .await?;
+    Ok(results.clone())
+}
+
+async fn fetch(session: &Session, query: &str) -> Result<SearchResults> {
     let response = crate::catalogue::query(
         session,
         "searchDesktop",
@@ -650,6 +678,20 @@ mod tests {
         assert_eq!(results.tracks[0].name, "DYKILY");
         assert_eq!(results.playlists[0].name, "Mix");
         assert!(parse_suggestions(&json!({})).is_err());
+    }
+
+    #[test]
+    #[ignore = "Runs one native search twice with the saved sign-in"]
+    fn live_repeat_search_is_shared() {
+        crate::native::with_live_session(async |session: &Session| {
+            let (first, second) =
+                tokio::join!(catalogue(session, "dykily"), catalogue(session, "dykily"));
+            assert_eq!(first.unwrap().tracks.len(), second.unwrap().tracks.len());
+            let started = Instant::now();
+            catalogue(session, "dykily").await.unwrap();
+            println!("cached search took {} ms", started.elapsed().as_millis());
+            assert!(started.elapsed() < Duration::from_millis(50));
+        });
     }
 
     #[test]

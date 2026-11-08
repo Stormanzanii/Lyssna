@@ -4735,6 +4735,17 @@ fn signed_in_controls(
     state.0.controls.scoped(&account).map_err(error)
 }
 #[tauri::command]
+async fn search_warm(state: State<'_, Desktop>, query: String) -> std::result::Result<(), String> {
+    let controls = signed_in_controls(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        controls.run(async |session| crate::search::catalogue(session, &query).await)
+    })
+    .await
+    .map_err(error)?
+    .map(|_| ())
+    .map_err(|_| "Search is unavailable right now.".to_owned())
+}
+#[tauri::command]
 async fn search_suggestions(
     state: State<'_, Desktop>,
     query: String,
@@ -5552,6 +5563,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             set_playlist_on_profile,
             search_page,
             search_suggestions,
+            search_warm,
             browse_categories,
             browse_page,
             app_update,

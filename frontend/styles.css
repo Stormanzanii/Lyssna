@@ -789,9 +789,16 @@ small {
   font-size: 12px;
   line-height: 1;
 }
-/* The key caps centre their text; plain labels need the same drop. */
-.search-suggestions-keys > span {
-  padding-top: 2px;
+/* Trimmed to the capital letters so the text centres the same way in
+   every app font. */
+.search-suggestions-keys > span,
+.search-suggestions-keys kbd.wide {
+  display: block;
+  text-box: trim-both cap alphabetic;
+}
+.search-suggestions-keys kbd.wide {
+  height: auto;
+  padding: 5px 5px;
 }
 .search-suggestions-keys kbd svg {
   display: block;

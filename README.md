@@ -18,6 +18,11 @@
 > [!IMPORTANT]
 > **Spotify Premium is required.** librespot, which Lyssna streams through, cannot play on free accounts.
 
+> [!WARNING]
+> **Newer Spotify accounts may not play.** Spotify changed how it hands out audio decryption keys, and accounts created after an apparent cutoff (around 2023–2024) no longer get them through librespot. Songs fail with an audio key error. This is a Spotify-side restriction that affects every librespot version, and no workaround is known; see [librespot #1649](https://github.com/librespot-org/librespot/issues/1649).
+>
+> On Windows, Lyssna can play these accounts through Spotify Soloist, Spotify's official background player. Turn on **Play through Spotify Soloist** in Settings. It needs a free Soloist API key from Spotify for Developers and a one-time pick of the device in the Spotify app.
+
 ## What it is
 
 A Spotify client written in Rust. It streams through [librespot](https://github.com/librespot-org/librespot) and draws its own interface in Spotify's layout, so it needs neither the Spotify app nor Spicetify.

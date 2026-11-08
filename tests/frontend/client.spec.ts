@@ -628,6 +628,27 @@ async function startClient(
             );
           if (command === "audio_outputs")
             return ["Test speakers", "Test headphones"];
+          if (command === "search_suggestions")
+            return {
+              terms: [args.query.toLowerCase(), `${args.query.toLowerCase()} demo version`],
+              results: {
+                tracks: [
+                  {
+                    id: "0123456789abcdefghij01",
+                    uri: "spotify:track:0123456789abcdefghij01",
+                    name: "Suggested song",
+                    duration_ms: 180000,
+                    artists: [{ id: "0123456789abcdefghij02", uri: "spotify:artist:0123456789abcdefghij02", name: "Suggested artist" }],
+                    album: { id: "0123456789abcdefghij03", uri: "spotify:album:0123456789abcdefghij03", name: "Suggested album", images: [] },
+                  },
+                ],
+                artists: [{ id: "0123456789abcdefghij02", uri: "spotify:artist:0123456789abcdefghij02", name: "Suggested artist", images: [] }],
+                albums: [],
+                playlists: [],
+                users: [],
+                top_results: ["spotify:artist:0123456789abcdefghij02", "spotify:track:0123456789abcdefghij01"],
+              },
+            };
           if (command === "browse_categories")
             return [
               { id: "music0000", title: "Music", color: "#dc148c", images: [{ url: "https://artwork.example.test/music", width: 300 }] },
@@ -16190,4 +16211,61 @@ test("Browse all opens categories with shelves, subcategories and more", async (
   await expect(page.locator(".browse-category-hero h1")).toHaveText("Pop");
   await page.getByTitle("Go back", { exact: true }).click();
   await expect(page.locator(".browse-category-hero h1")).toHaveText("Music");
+});
+
+test("typing shows Spotify's suggestions; only Enter opens the search page", async ({
+  page,
+}) => {
+  await startClient(page);
+  const search = page.getByRole("textbox", {
+    name: "Search Spotify",
+    exact: true,
+  });
+  const searched = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter(
+          (entry: any) =>
+            entry.command === "browse" && entry.args.key?.startsWith("search:"),
+        )
+        .map((entry: any) => entry.args.key),
+    );
+  await search.fill("DYK");
+  const list = page.getByRole("listbox", { name: "Search suggestions" });
+  await expect(list.getByRole("option")).toHaveText([
+    "dyk",
+    "dyk demo version",
+    /Suggested artist\s*Artist/,
+    /Suggested song\s*Song • Suggested artist/,
+  ]);
+  await page.waitForTimeout(400);
+  expect(await searched()).toEqual([]);
+  await search.press("ArrowDown");
+  await search.press("ArrowDown");
+  await expect(list.getByRole("option").nth(1)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await search.press("Enter");
+  await expect(search).toHaveValue("dyk demo version");
+  await expect(list).toBeHidden();
+  await expect.poll(searched).toEqual(["search:dyk demo version"]);
+  await search.fill("dykily");
+  await expect(list).toBeVisible();
+  await search.press("Enter");
+  await expect(list).toBeHidden();
+  await expect.poll(searched).toContain("search:dykily");
+  await search.fill("dy");
+  await list.getByRole("option", { name: /Suggested song/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "player" &&
+            call.args?.request?.uri === "spotify:track:0123456789abcdefghij01",
+        ),
+      ),
+    )
+    .toBe(true);
 });

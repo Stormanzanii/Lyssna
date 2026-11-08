@@ -163,6 +163,7 @@ import { NightlyButton } from "./nightly-button";
 import { NightlyDialog } from "./nightly-dialog";
 import { GlassBackdrop } from "./liquid-glass";
 import { BrowsePage } from "./BrowsePage";
+import { SearchSuggestions, type SuggestionKeys } from "./SearchSuggestions";
 import { setWindowActivity, setWindowPosition } from "./window-activity";
 import { useArtworkColor } from "./artwork-color";
 import { SongSortMenu } from "./song-sort-menu";
@@ -346,6 +347,8 @@ function App() {
   }, [state.profile?.id]);
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [suggestionsClosed, setSuggestionsClosed] = useState(false);
+  const suggestionKeys = useRef<SuggestionKeys>(null);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   // No chip by default: Your Library lists everything, as in Spotify.
@@ -868,16 +871,6 @@ function App() {
     }
     if (!state.profile) loadedAccount.current = "";
   }, [state.profile, navigate, call]);
-  useEffect(() => {
-    if (!state.profile || !query.trim()) return;
-    const requestGeneration = generation.current;
-    const timer = setTimeout(() => {
-      if (generation.current !== requestGeneration) return;
-      const key = `search:${query.trim()}`;
-      if (routeRef.current !== key) navigate(key);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [query, state.profile?.id, navigate]);
   useEffect(() => {
     if (state.toast) {
       const timer = setTimeout(() => dispatch({ type: "toast_clear" }), 6000);
@@ -2909,13 +2902,25 @@ function App() {
               placeholder="What do you want to play?"
               value={query}
               disabled={!state.profile}
-              onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => setSearchFocused(true)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSuggestionsClosed(false);
+              }}
+              onFocus={() => {
+                setSearchFocused(true);
+                setSuggestionsClosed(false);
+              }}
               onBlur={() => setSearchFocused(false)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") event.currentTarget.blur();
+                if (
+                  !suggestionsClosed &&
+                  suggestionKeys.current?.handle(event)
+                )
+                  return;
                 if (event.key === "Enter" && query.trim()) {
                   event.preventDefault();
+                  setSuggestionsClosed(true);
                   navigate(`search:${query.trim()}`);
                 }
               }}
@@ -2975,6 +2980,26 @@ function App() {
                 )}
               </svg>
             </button>
+            {searchFocused &&
+              !suggestionsClosed &&
+              !!query.trim() &&
+              !!state.profile && (
+                <SearchSuggestions
+                  query={query}
+                  keys={suggestionKeys}
+                  saved={state.saved}
+                  save={save}
+                  searchFor={(term) => {
+                    setQuery(term);
+                    setSuggestionsClosed(true);
+                    navigate(`search:${term}`);
+                  }}
+                  open={(entry) => {
+                    updateRecentSearches((list) => rememberSearch(list, entry));
+                    openRecentSearch(entry);
+                  }}
+                />
+              )}
             {searchFocused && !query && recentSearches.length > 0 && (
               <div
                 className="recent-searches popover"

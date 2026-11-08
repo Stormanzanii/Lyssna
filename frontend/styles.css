@@ -690,6 +690,60 @@ small {
 .recent-searches-clear:hover {
   color: light-dark(#000, #fff);
 }
+.search-suggestions {
+  padding-top: 8px;
+}
+.search-suggestions-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 10px 6px;
+  font-size: 13px;
+  color: light-dark(#585858, #a7a7a7);
+}
+.search-suggestions-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+}
+.search-suggestions-keys kbd.wide {
+  margin-left: auto;
+}
+.recent-search.active {
+  background: light-dark(#00000012, #ffffff12);
+}
+.recent-search .search-suggestion-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 50%;
+  background: light-dark(#0000000d, #ffffff0d);
+}
+.search-suggestions .recent-search > button > strong {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-suggestion-save {
+  margin-right: 8px;
+  color: light-dark(#585858, #a7a7a7);
+}
+.search-suggestion-save:hover {
+  color: light-dark(#000, #fff);
+}
+.search-suggestion-save.saved {
+  color: #1ed760;
+}
 .search-box > input {
   background: transparent;
   border: 0;

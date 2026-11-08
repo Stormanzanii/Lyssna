@@ -141,6 +141,90 @@ pub async fn catalogue(session: &Session, query: &str) -> Result<SearchResults> 
     parse_catalogue(&response)
 }
 
+#[derive(Clone, Default, Serialize)]
+pub struct Suggestions {
+    pub terms: Vec<String>,
+    /// `top_results` keeps Spotify's order across the item kinds.
+    pub results: SearchResults,
+}
+
+/// The as-you-type dropdown: query completions, then ranked items.
+pub async fn suggest(session: &Session, query: &str) -> Result<Suggestions> {
+    ensure!(
+        !query.trim().is_empty() && query.len() <= 600 && !query.chars().any(char::is_control),
+        "Invalid search query"
+    );
+    let response = crate::catalogue::query(
+        session,
+        "searchSuggestions",
+        "b50ebd72524415b132ddaca04158fd7aca529da28be322c9924643c0633df5bd",
+        json!({
+            "query": query, "limit": 30, "numberOfTopResults": 30, "offset": 0,
+            "includeAuthors": false, "includeAlbumPreReleases": false,
+            "includeEpisodeContentRatingsV2": false
+        }),
+    )
+    .await?;
+    parse_suggestions(&response)
+}
+
+fn parse_suggestions(response: &Value) -> Result<Suggestions> {
+    let items = response
+        .pointer("/data/searchV2/topResultsV2/itemsV2")
+        .and_then(Value::as_array)
+        .context("Spotify search unavailable")?;
+    let mut suggestions = Suggestions::default();
+    for item in items {
+        let entity = &item["item"];
+        let results = &mut suggestions.results;
+        let uri = match entity["__typename"].as_str() {
+            Some("SearchAutoCompleteEntity") => {
+                if let Some(text) = entity["data"]["text"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+                    && !suggestions.terms.iter().any(|known| known == text)
+                {
+                    suggestions.terms.push(text.into());
+                }
+                continue;
+            }
+            Some("TrackResponseWrapper") => native_track(entity).map(|track| {
+                let uri = track.uri.clone();
+                results.tracks.push(track);
+                uri
+            }),
+            Some("ArtistResponseWrapper") => native_artist(entity).map(|artist| {
+                let uri = artist.uri.clone();
+                results.artists.push(artist);
+                uri
+            }),
+            Some("AlbumResponseWrapper") => native_album(entity).map(|album| {
+                let uri = album.uri.clone();
+                results.albums.push(album);
+                uri
+            }),
+            Some("PlaylistResponseWrapper") => native_playlist(entity).map(|playlist| {
+                let uri = format!("spotify:playlist:{}", playlist.id);
+                results.playlists.push(playlist);
+                uri
+            }),
+            Some("UserResponseWrapper") => native_user(entity).map(|user| {
+                let uri = format!("spotify:user:{}", user.id);
+                results.users.push(user);
+                uri
+            }),
+            _ => None,
+        };
+        if let Some(uri) = uri
+            && !results.top_results.contains(&uri)
+        {
+            results.top_results.push(uri);
+        }
+    }
+    Ok(suggestions)
+}
+
 fn data(value: &Value) -> &Value {
     if let Some(item) = value.get("item") {
         return data(item);
@@ -356,55 +440,55 @@ fn parse_native(response: &Value) -> Result<Vec<Playlist>> {
     let mut seen = HashSet::new();
     Ok(items
         .iter()
-        .filter_map(|item| {
-            let data = &item["data"];
-            if data["__typename"].as_str() != Some("Playlist") {
-                return None;
-            }
-            let uri = data["uri"].as_str()?;
-            let id = uri.strip_prefix("spotify:playlist:")?;
-            crate::home::route(uri)?;
-            let name = data["name"].as_str().filter(|name| !name.is_empty())?;
-            if !seen.insert(id.to_owned()) {
-                return None;
-            }
-            let owner = &data["ownerV2"]["data"];
-            let images = data["images"]["items"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|image| image["sources"].as_array())
-                .flatten()
-                .filter_map(|image| {
-                    let url = image["url"]
-                        .as_str()
-                        .filter(|url| url.starts_with("https://"))?;
-                    Some(Artwork {
-                        url: url.into(),
-                        width: image["width"]
-                            .as_u64()
-                            .and_then(|width| width.try_into().ok()),
-                    })
-                })
-                .collect();
-            Some(Playlist {
-                id: id.into(),
-                name: name.into(),
-                images,
-                owner: Owner {
-                    id: owner["username"]
-                        .as_str()
-                        .or_else(|| owner["uri"].as_str()?.strip_prefix("spotify:user:"))
-                        .unwrap_or_default()
-                        .into(),
-                    display_name: owner["name"].as_str().map(str::to_owned),
-                },
-                collaborative: false,
-                folders: Vec::new(),
-                added_at: 0,
+        .filter_map(native_playlist)
+        .filter(|playlist| seen.insert(playlist.id.clone()))
+        .collect())
+}
+
+fn native_playlist(item: &Value) -> Option<Playlist> {
+    let data = data(item);
+    if data["__typename"].as_str() != Some("Playlist") {
+        return None;
+    }
+    let uri = data["uri"].as_str()?;
+    let id = uri.strip_prefix("spotify:playlist:")?;
+    crate::home::route(uri)?;
+    let name = data["name"].as_str().filter(|name| !name.is_empty())?;
+    let owner = &data["ownerV2"]["data"];
+    let images = data["images"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|image| image["sources"].as_array())
+        .flatten()
+        .filter_map(|image| {
+            let url = image["url"]
+                .as_str()
+                .filter(|url| url.starts_with("https://"))?;
+            Some(Artwork {
+                url: url.into(),
+                width: image["width"]
+                    .as_u64()
+                    .and_then(|width| width.try_into().ok()),
             })
         })
-        .collect())
+        .collect();
+    Some(Playlist {
+        id: id.into(),
+        name: name.into(),
+        images,
+        owner: Owner {
+            id: owner["username"]
+                .as_str()
+                .or_else(|| owner["uri"].as_str()?.strip_prefix("spotify:user:"))
+                .unwrap_or_default()
+                .into(),
+            display_name: owner["name"].as_str().map(str::to_owned),
+        },
+        collaborative: false,
+        folders: Vec::new(),
+        added_at: 0,
+    })
 }
 
 pub(crate) fn parse_public(response: &Value) -> Result<Vec<Playlist>> {
@@ -534,6 +618,49 @@ mod tests {
         let last = parse_page(&page, "users", 2).unwrap();
         assert!(!last.more, "offset 2 plus 3 items reaches all 5");
         assert!(parse_page(&json!({}), "tracksV2", 0).is_err());
+    }
+
+    #[test]
+    fn suggestions_keep_terms_then_items_in_spotify_order() {
+        let track = "spotify:track:0123456789abcdefghij01";
+        let artist = "spotify:artist:0123456789abcdefghij02";
+        let response = json!({"data": {"searchV2": {"topResultsV2": {"itemsV2": [
+            {"item": {"__typename": "SearchAutoCompleteEntity", "data": {"text": "dykily"}}},
+            {"item": {"__typename": "SearchAutoCompleteEntity", "data": {"text": "dykily"}}},
+            {"item": {"__typename": "SearchAutoCompleteEntity", "data": {"text": " "}}},
+            {"item": {"__typename": "ArtistResponseWrapper", "data": {"__typename": "Artist",
+                "uri": artist, "profile": {"name": "Joji"}}}},
+            {"item": {"__typename": "TrackResponseWrapper", "data": {"__typename": "Track",
+                "uri": track, "name": "DYKILY", "duration": {"totalMilliseconds": 1000},
+                "artists": {"items": [{"uri": artist, "profile": {"name": "Joji"}}]},
+                "albumOfTrack": {"uri": "spotify:album:0123456789abcdefghij03", "name": "Album",
+                    "coverArt": {"sources": [{"url": "https://i.scdn.co/image/c"}]}}}}},
+            {"item": {"__typename": "PlaylistResponseWrapper", "data": {"__typename": "Playlist",
+                "uri": "spotify:playlist:0123456789abcdefghij04", "name": "Mix",
+                "ownerV2": {"data": {"name": "Spotify", "username": "spotify"}}}}},
+            {"item": {"__typename": "EpisodeResponseWrapper", "data": {"uri": "spotify:episode:x"}}}
+        ]}}}});
+        let suggestions = parse_suggestions(&response).unwrap();
+        assert_eq!(suggestions.terms, ["dykily"]);
+        let results = &suggestions.results;
+        assert_eq!(
+            results.top_results,
+            [artist, track, "spotify:playlist:0123456789abcdefghij04"]
+        );
+        assert_eq!(results.tracks[0].name, "DYKILY");
+        assert_eq!(results.playlists[0].name, "Mix");
+        assert!(parse_suggestions(&json!({})).is_err());
+    }
+
+    #[test]
+    #[ignore = "Reads search suggestions with the saved sign-in"]
+    fn live_suggestions_complete_and_rank() {
+        crate::native::with_live_session(async |session: &Session| {
+            let suggestions = suggest(session, "dykily").await.unwrap();
+            assert!(!suggestions.terms.is_empty());
+            assert!(!suggestions.results.tracks.is_empty());
+            assert!(!suggestions.results.top_results.is_empty());
+        });
     }
 
     #[test]

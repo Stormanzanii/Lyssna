@@ -17,20 +17,25 @@ const plural = (count: number, one: string) =>
 export function ProfilePage({
   user,
   hint,
+  section,
   ready,
   onNavigate,
   onPlay,
   onUser,
+  onSection,
   onOpen,
   onNotice,
 }: {
   user: string;
   /** Known name and picture, shown while the page loads. */
   hint?: Profile;
+  /** One row's URI: Show all lists that row alone, as a page of its own. */
+  section?: string;
   ready: boolean;
   onNavigate: (route: string, item?: HomeItem) => void;
   onPlay: (item: HomeItem) => void;
   onUser: (id: string, hint: Profile) => void;
+  onSection: (uri: string) => void;
   onOpen: (url: string) => void;
   onNotice: (message: string, error?: boolean) => void;
 }) {
@@ -100,6 +105,32 @@ export function ProfilePage({
       });
     else onNavigate(route, item);
   };
+  if (section) {
+    const listed = shown?.sections.find((row) => row.uri === section);
+    return (
+      <div className="browse-scroll profile-page" ref={root}>
+        {listed ? (
+          <div className="artist-shelf-page profile-section-page">
+            <h1>{listed.title}</h1>
+            <Shelf
+              section={listed}
+              navigate={navigate}
+              play={onPlay}
+              ready={ready}
+              defaultExpanded
+              page
+            />
+          </div>
+        ) : failed || shown ? (
+          <p className="discography-message">
+            Open the profile again to see this list.
+          </p>
+        ) : (
+          <div className="profile-sections profile-loading" aria-busy="true" />
+        )}
+      </div>
+    );
+  }
   return (
     <div
       className="browse-scroll profile-page"
@@ -224,6 +255,7 @@ export function ProfilePage({
                 play={onPlay}
                 ready={ready}
                 noteBelow
+                onShowAll={() => onSection(section.uri)}
               />
             ))}
           </div>

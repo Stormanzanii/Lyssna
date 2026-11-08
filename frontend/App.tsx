@@ -331,8 +331,11 @@ function App() {
   const [profileView, setProfileView] = useState<{
     user: string;
     hint?: Profile;
+    section?: string;
   }>();
-  const profileTrail = useRef<{ user: string; hint?: Profile }[]>([]);
+  const profileTrail = useRef<
+    { user: string; hint?: Profile; section?: string }[]
+  >([]);
   // Another account never sees the previous one's profile trail.
   useEffect(() => {
     profileTrail.current = [];
@@ -3377,14 +3380,20 @@ function App() {
           ) : center === "profile" ? (
             profileView && (
               <ProfilePage
+                key={`${profileView.user}:${profileView.section ?? ""}`}
                 user={profileView.user}
                 hint={profileView.hint}
+                section={profileView.section}
                 ready={state.native_ready}
                 onNavigate={homeNavigate}
                 onPlay={homePlay}
                 onUser={(user, hint) => {
                   profileTrail.current.push(profileView);
                   setProfileView({ user, hint });
+                }}
+                onSection={(section) => {
+                  profileTrail.current.push(profileView);
+                  setProfileView({ ...profileView, section });
                 }}
                 onOpen={(url) => void call("open_link", { url })}
                 onNotice={notify}

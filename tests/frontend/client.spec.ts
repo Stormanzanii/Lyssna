@@ -4303,6 +4303,17 @@ test("profiles follow Spotify's layout and open people, artists and playlists", 
   ).toContainText("By Test Listener");
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.screenshot({ path: "target/diagnostics/profile-page.png" });
+  await page
+    .locator('section[aria-label="Followers"]')
+    .getByRole("button", { name: "Show all", exact: true })
+    .click();
+  await expect(page.locator(".profile-section-page h1")).toHaveText(
+    "Followers",
+  );
+  await expect(page.locator(".profile-hero")).toHaveCount(0);
+  await expect(page.locator(".profile-section-page .home-card")).toHaveCount(1);
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(hero.locator("h1")).toHaveText("Test Listener");
   const friend = page.locator('section[aria-label="Followers"] .home-card');
   await expect(friend).toHaveClass(/artist-card/);
   await expect(friend.locator(".home-card-play")).toBeDisabled();

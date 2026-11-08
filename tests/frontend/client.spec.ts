@@ -16052,4 +16052,16 @@ test("light theme follows the setting and keeps lyrics and heroes dark", async (
   await dialog.getByRole("switch", { name: "Liquid Glass" }).check();
   await page.keyboard.press("Escape");
   await page.screenshot({ path: "target/diagnostics/light-glass.png" });
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await expect(
+    page.getByRole("menuitem", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "target/diagnostics/light-glass-profile.png" });
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Liked Songs" })
+    .first()
+    .click({ button: "right" });
+  await page.screenshot({ path: "target/diagnostics/light-glass-menu.png" });
 });

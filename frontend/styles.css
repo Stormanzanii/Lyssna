@@ -1462,7 +1462,7 @@ small {
   width: min(100% - 48px, 720px);
   padding: 0;
   border-radius: 16px;
-  background: #1c1414f2;
+  background: light-dark(#e3ebebf2, #1c1414f2);
 }
 .load-ttml-head {
   display: flex;
@@ -5514,7 +5514,7 @@ input[type="range"]:hover {
   border-radius: 20px;
   border: 1px solid light-dark(#00000014, #ffffff14);
   background:
-    radial-gradient(120% 90% at 0% 0%, #1f4fb066, transparent 60%), #181a1f;
+    radial-gradient(120% 90% at 0% 0%, #1f4fb066, transparent 60%), light-dark(#e7e5e0, #181a1f);
   box-shadow: 0 30px 90px #000c;
   color: light-dark(#000, #fff);
   animation: dj-request-rise 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);

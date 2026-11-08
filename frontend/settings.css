@@ -311,7 +311,7 @@
 }
 @media (prefers-reduced-transparency: reduce) {
   .lyrics-settings {
-    background: #1e1e23f2;
+    background: light-dark(#e1e1dcf2, #1e1e23f2);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

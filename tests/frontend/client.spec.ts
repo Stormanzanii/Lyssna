@@ -11457,6 +11457,43 @@ test("full screen can keep the time or controls up while idle", async ({
   ).toHaveCount(0);
 });
 
+test("compact full screen centres its controls and drops the time bar when idle", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await startClient(page);
+  await openSettings(page, "Layout");
+  await page
+    .getByLabel("Always show in full screen", { exact: true })
+    .selectOption("time");
+  await page
+    .getByLabel("Full screen volume slider", { exact: true })
+    .selectOption("right");
+  await page.keyboard.press("Escape");
+  await showLyrics(page);
+  await page
+    .locator(".lyrics-toolbar")
+    .getByTitle("Compact lyrics", { exact: true })
+    .click();
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  const section = page.locator(".lyrics-page.narrow");
+  const play = section.getByRole("button", { name: "Play", exact: true });
+  const seek = section.locator(".lyrics-glass-seek");
+  await page.mouse.move(800, 450);
+  await page.mouse.move(801, 451);
+  const buttons = section.locator(".lyrics-fullscreen-buttons");
+  await expect(buttons).toHaveCSS("opacity", "1");
+  const box = (await play.boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - 800)).toBeLessThan(2);
+  expect(box.y + box.height).toBeGreaterThan(820);
+  const awake = (await seek.boundingBox())!.y;
+  await expect(buttons).toHaveCSS("opacity", "0", { timeout: 5000 });
+  await expect
+    .poll(async () => (await seek.boundingBox())!.y)
+    .toBeGreaterThan(awake + 40);
+});
+
 test("a song without lyrics fills full screen with its cover and controls", async ({
   page,
 }) => {

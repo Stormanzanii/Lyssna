@@ -764,3 +764,73 @@
   justify-self: center;
   width: var(--lyrics-art);
 }
+/* Compact full screen: the controls float as one centred dock at the
+   bottom, clear of the song header, so the lyrics keep the whole page. The
+   heart starts the row, the transport sits in its middle and a short
+   volume pill ends it. */
+.immersive .lyrics-page.narrow {
+  --compact-row: 44px;
+  --compact-drop: 0px;
+}
+.immersive
+  .lyrics-page.narrow:not([data-tools="awake"]):not([data-seeking="true"]):not(
+    :has(:focus-visible)
+  ):not([data-always-show="controls"], [data-always-show="both"]) {
+  --compact-drop: calc(var(--compact-row) + 6px);
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-controls {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 22px;
+  translate: -50% 0;
+  width: min(760px, calc(100% - 2 * var(--fullscreen-gutter) - 64px));
+  max-width: none;
+  margin: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto auto var(--compact-row);
+  column-gap: 0;
+  row-gap: 6px;
+  align-items: center;
+}
+.immersive
+  .lyrics-page.narrow
+  .lyrics-fullscreen-controls
+  > :is(.lyrics-glass-seek, .lyrics-fullscreen-times) {
+  grid-column: 1 / -1;
+  translate: 0 var(--compact-drop);
+  transition:
+    translate 350ms cubic-bezier(0.2, 0.7, 0.25, 1),
+    opacity 250ms ease;
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-buttons {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(5, auto) minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 22px;
+  margin: 0;
+  --transport: 30px;
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-buttons > * {
+  justify-self: center;
+}
+.immersive
+  .lyrics-page.narrow
+  .lyrics-fullscreen-buttons
+  > .lyrics-fullscreen-like {
+  justify-self: start;
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-buttons > :nth-child(2) {
+  grid-column: 2;
+}
+.immersive .lyrics-page.narrow .lyrics-fullscreen-volume {
+  --pill: 30px;
+  grid-column: 3;
+  grid-row: 3;
+  justify-self: end;
+  width: min(170px, 100%);
+  margin: 0;
+}

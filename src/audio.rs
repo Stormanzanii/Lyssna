@@ -112,6 +112,10 @@ pub struct AudioSink {
     generation: usize,
     track_uri: Option<String>,
     crossfade: Crossfade,
+    /// The old song fading out under a chosen one.
+    fade: Option<rodio::Sink>,
+    #[cfg(test)]
+    test_fade: Option<rodio::queue::SourcesQueueOutput>,
     stretch: crate::time_stretch::TimeStretch,
 }
 /// The end of one song, held back and mixed into the start of the next.
@@ -123,13 +127,32 @@ struct Crossfade {
     tail: Vec<f32>,
     /// The previous song's held end, being mixed into this song.
     fading: Vec<f32>,
+    /// Samples of a chosen song to fade in, while the old song fades out
+    /// on its own output; set when the old song is handed over.
+    pending_rise: usize,
+    rise: usize,
+    risen: usize,
     mixed: usize,
 }
 impl Crossfade {
     fn clear(&mut self) {
         self.tail.clear();
         self.fading.clear();
+        self.pending_rise = 0;
+        self.rise = 0;
+        self.risen = 0;
         self.mixed = 0;
+    }
+    /// A chosen song rises on the curve the old song falls on.
+    fn rise_in(&mut self, samples: &mut [f32]) {
+        for sample in samples {
+            if self.risen >= self.rise {
+                break;
+            }
+            let progress = self.risen as f32 / self.rise as f32 * std::f32::consts::FRAC_PI_2;
+            *sample *= progress.sin();
+            self.risen += 1;
+        }
     }
     /// Equal-power mix: the old song falls as the new one rises, so the
     /// overall loudness holds steady through the overlap.
@@ -159,6 +182,9 @@ impl AudioSink {
             generation: buffer.generation.load(Ordering::Acquire),
             track_uri: None,
             crossfade: Crossfade::default(),
+            fade: None,
+            #[cfg(test)]
+            test_fade: None,
             stretch: crate::time_stretch::TimeStretch::new(),
             buffer: buffer.clone(),
             mixer: None,
@@ -233,13 +259,15 @@ impl Sink for AudioSink {
             }
             None => false,
         };
-        // Only a song running into the next crossfades; a chosen song
-        // starts cleanly.
+        // A song running into the next fades over its held end; a chosen
+        // song rises while the old one fades out on its own output.
+        let pending = std::mem::take(&mut self.crossfade.pending_rise);
         self.crossfade.fading = if natural {
             std::mem::take(&mut self.crossfade.tail)
         } else {
             Vec::new()
         };
+        (self.crossfade.rise, self.crossfade.risen) = (if natural { 0 } else { pending }, 0);
         self.crossfade.tail.clear();
         self.crossfade.mixed = 0;
         self.crossfade.remaining_ms = None;
@@ -254,6 +282,46 @@ impl Sink for AudioSink {
     }
     fn crossfade_hint(&mut self, remaining_ms: Option<u32>) {
         self.crossfade.remaining_ms = remaining_ms;
+    }
+    fn manual_crossfade_ms(&self) -> u32 {
+        if self.buffer.narrating() {
+            return 0;
+        }
+        self.buffer.crossfade_ms.load(Ordering::Relaxed)
+    }
+    fn fade_out(&mut self, packets: Vec<AudioPacket>, converter: &mut Converter) {
+        self.discard_old_audio();
+        let mut handed = Vec::new();
+        for packet in &packets {
+            if let Ok(samples) = packet.samples() {
+                handed.extend(converter.f64_to_f32(samples));
+            }
+        }
+        let fade = match &self.stream {
+            Some(stream) => rodio::Sink::connect_new(stream.mixer()),
+            #[cfg(test)]
+            None => {
+                let (sink, output) = rodio::Sink::new();
+                self.test_fade = Some(output);
+                sink
+            }
+            #[cfg(not(test))]
+            None => return,
+        };
+        let total = handed.len().max(1) as f32;
+        for (index, sample) in handed.iter_mut().enumerate() {
+            *sample *= (index as f32 / total * std::f32::consts::FRAC_PI_2).cos();
+        }
+        // The selection silences the old song's queued audio at once, so its
+        // fade plays beside the main output rather than through it.
+        let mut packet = QueuedPacket::new(handed, Arc::new(AtomicUsize::new(0)));
+        if let Some(mixer) = &self.mixer {
+            packet.volume = mixer.get_soft_volume();
+        }
+        packet.temporary_volume = Some(self.buffer.temporary_volume.clone());
+        self.crossfade.pending_rise = packet.samples.len();
+        fade.append(packet);
+        self.fade = Some(fade);
     }
     fn is_empty(&self) -> bool {
         // A held end counts as played: the next song can start while the
@@ -283,6 +351,7 @@ impl Sink for AudioSink {
         if let Some(sink) = &self.sink {
             sink.stop();
         }
+        self.fade = None;
         self.crossfade.clear();
         self.stretch.reset();
         Ok(())
@@ -291,6 +360,7 @@ impl Sink for AudioSink {
         if let Some(sink) = &self.sink {
             sink.pause();
         }
+        self.fade = None;
         self.paused_at = Some(Instant::now());
         Ok(())
     }
@@ -332,6 +402,9 @@ impl Sink for AudioSink {
             return Ok(());
         } else if !self.crossfade.fading.is_empty() {
             self.crossfade.mix(&mut samples);
+        }
+        if !narration {
+            self.crossfade.rise_in(&mut samples);
         }
         self.append(samples, narration)
     }
@@ -617,6 +690,38 @@ mod tests {
             .unwrap();
         assert!((0..999).all(|_| output.next() == Some(0.25)));
         assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn a_chosen_song_rises_while_the_old_one_fades_out_beside_it() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        assert!((0..400).all(|_| output.next() == Some(0.5)));
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        assert_eq!(audio.manual_crossfade_ms(), 1000);
+        audio.fade_out(vec![AudioPacket::Samples(vec![0.5; 400])], &mut converter);
+        buffer.interrupt(Some(track(2).to_uri()));
+        audio.set_track(&track(2));
+        audio
+            .write(AudioPacket::Samples(vec![1.0; 800]), &mut converter)
+            .unwrap();
+        let fade: Vec<f32> = audio.test_fade.take().unwrap().take(400).collect();
+        assert!((fade[0] - 0.5).abs() < 1e-6);
+        assert!(fade[399] < 0.01);
+        // The old song's queued audio is silenced; the chosen one rises.
+        let new: Vec<f32> = output.take(4000).filter(|sample| *sample > 0.0).collect();
+        assert_eq!(new.len(), 799);
+        assert!(new[0] < 0.01);
+        assert!(new[398] > 0.99);
+        assert!(new[399..].iter().all(|sample| *sample == 1.0));
     }
 
     #[test]

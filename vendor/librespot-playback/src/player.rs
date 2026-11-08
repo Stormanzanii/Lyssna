@@ -2238,6 +2238,45 @@ impl PlayerInternal {
         self.narrations.get(track_id) == self.playing_narration.as_ref()
     }
 
+    /// Decodes the playing song's next moments before its decoder is dropped,
+    /// so the sink can fade them out under a song chosen by hand. Only a fully
+    /// downloaded song is read ahead, as reading must not wait on the network.
+    fn hand_over_fade(&mut self, next: &SpotifyUri) {
+        let fade_ms = self.sink.manual_crossfade_ms();
+        if fade_ms == 0 {
+            return;
+        }
+        let packets = match &mut self.state {
+            PlayerState::Playing {
+                track_id,
+                decoder,
+                stream_loader_controller,
+                stream_position_ms,
+                duration_ms,
+                ..
+            } if track_id != next && stream_loader_controller.range_to_end_available() => {
+                let from = *stream_position_ms;
+                let until = from.saturating_add(fade_ms).min(*duration_ms);
+                let mut packets = Vec::new();
+                while let Ok(Some((position, packet))) = decoder.next_packet() {
+                    if !matches!(packet, AudioPacket::Samples(_)) {
+                        packets.clear();
+                        break;
+                    }
+                    packets.push(packet);
+                    if position.position_ms >= until {
+                        break;
+                    }
+                }
+                packets
+            }
+            _ => return,
+        };
+        if !packets.is_empty() {
+            self.sink.fade_out(packets, &mut self.converter);
+        }
+    }
+
     fn handle_command_load(
         &mut self,
         track_id: SpotifyUri,
@@ -2249,6 +2288,8 @@ impl PlayerInternal {
             play_request_id_option.unwrap_or(self.play_request_id_generator.get());
 
         self.send_event(PlayerEvent::PlayRequestIdChanged { play_request_id });
+
+        self.hand_over_fade(&track_id);
 
         // Gapless transitions may keep playing audio. A paused queue belongs
         // to the old selection and must be cleared before an explicit load.

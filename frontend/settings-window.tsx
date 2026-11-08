@@ -485,7 +485,7 @@ export function SettingsWindow({
         flag(
           "crossfade",
           "Crossfade songs",
-          "Fade each song into the next when one runs into the other, as Spotify does. Songs you pick start straight away.",
+          "Fade each song into the next, as Spotify does, including songs you pick or skip to.",
           "crossfade fade transition gapless overlap blend",
           soloistPlays,
         ),

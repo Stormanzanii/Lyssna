@@ -29,6 +29,13 @@ pub trait Sink {
     /// Time left in the song for the next packet, when the following song is
     /// already loaded and could start over its end. `None` otherwise.
     fn crossfade_hint(&mut self, _remaining_ms: Option<u32>) {}
+    /// How long a song chosen while another plays fades in over it; 0 starts
+    /// it cleanly.
+    fn manual_crossfade_ms(&self) -> u32 {
+        0
+    }
+    /// The playing song's next moments, to fade out under the chosen song.
+    fn fade_out(&mut self, _packets: Vec<AudioPacket>, _converter: &mut Converter) {}
     /// Whether all submitted PCM has been consumed. Legacy backends may complete immediately.
     fn is_empty(&self) -> bool {
         true

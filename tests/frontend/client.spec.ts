@@ -10562,6 +10562,47 @@ test("lyrics artwork scales with the window and the title keeps to its width", a
   await page.screenshot({ path: "test-results/lyrics-art-2400.png" });
 });
 
+test("lyrics artwork loads a bigger size when it grows", async ({ page }) => {
+  await startClient(page);
+  await openSettings(page, "Effects");
+  await page.getByLabel("Canvas in lyrics").uncheck();
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 760, height: 520 });
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const id = "0123456789abcdef01234567";
+  await page.evaluate(
+    ({ track, base, id }) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: {
+            ...track,
+            album: {
+              ...track.album,
+              images: [
+                { url: `https://i.scdn.co/image/ab67616d0000b273${id}` },
+                { url: `https://i.scdn.co/image/ab67616d00001e02${id}` },
+                { url: `https://i.scdn.co/image/ab67616d00004851${id}` },
+              ],
+            },
+          },
+          is_playing: false,
+          progress_ms: 0,
+          device: { name: "Lyssna", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback, id },
+  );
+  const cover = page.locator(".lyrics-media > .cover img").first();
+  await expect(cover).toHaveAttribute("src", /ab67616d00001e02/);
+  await page.setViewportSize({ width: 2400, height: 1400 });
+  await expect(cover).toHaveAttribute("src", /ab67616d0000b273/);
+});
+
 test("Space Gravity without Canvas floats around the artwork, not over it", async ({
   page,
 }) => {

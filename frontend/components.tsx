@@ -150,15 +150,28 @@ export function Cover({
     if (!element) return;
     if (fade && element.complete && element.currentSrc)
       setPrevious({ url: element.currentSrc, fading: false });
-    const width = element.parentElement?.clientWidth ?? 0;
-    const url = artworkFor(
-      images,
-      width ? Math.ceil(width * devicePixelRatio) : undefined,
-    );
+    const parent = element.parentElement;
+    const width = parent?.clientWidth ?? 0;
+    let widest = width ? Math.ceil(width * devicePixelRatio) : 0;
+    const url = artworkFor(images, widest || undefined);
     if (url) {
       attempted.current.add(url);
       setSourceSoon(element, url);
     }
+    if (!parent) return;
+    // A cover laid out small (a compact view) and then enlarged needs a
+    // bigger size; it never steps down.
+    const observer = new ResizeObserver(([entry]) => {
+      const pixels = Math.ceil(entry.contentRect.width * devicePixelRatio);
+      if (pixels <= widest) return;
+      widest = pixels;
+      const bigger = artworkFor(images, pixels);
+      if (!bigger || element.getAttribute("src") === bigger) return;
+      attempted.current.add(bigger);
+      setSourceSoon(element, bigger);
+    });
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, [sources]);
   const inner = src ? (
     <>

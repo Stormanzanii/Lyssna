@@ -79,8 +79,16 @@ impl AudioBuffer {
     }
     /// Silence old packets immediately, including while Connect is awaiting HTTP.
     pub fn interrupt(&self, target: Option<String>) {
+        let fades = target.is_some();
+        self.begin(target, fades);
+    }
+    /// Next and Previous don't know their song yet, but may still fade.
+    pub fn skip(&self) {
+        self.begin(None, true);
+    }
+    fn begin(&self, target: Option<String>, may_fade: bool) {
         if let Ok(mut pending) = self.target.lock() {
-            let fades = target.is_some() && self.picked_crossfade_ms() > 0;
+            let fades = may_fade && self.picked_crossfade_ms() > 0;
             *pending = target;
             let old = self.generation.fetch_add(1, Ordering::AcqRel);
             self.fading_generation
@@ -746,6 +754,27 @@ mod tests {
         assert!(new[0] < 0.01);
         assert!(new[398] > 0.99);
         assert!(new[400..].iter().all(|sample| *sample == 1.0));
+    }
+
+    #[test]
+    fn a_skip_keeps_the_old_song_sounding_only_with_crossfade_on_pick() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        assert_eq!(output.next(), Some(0.5));
+        buffer.set_crossfade_picked(true);
+        buffer.skip();
+        assert!((0..100).all(|_| output.next() == Some(0.5)));
+        buffer.set_crossfade_picked(false);
+        buffer.skip();
+        assert_eq!(output.next(), Some(0.0));
     }
 
     #[test]

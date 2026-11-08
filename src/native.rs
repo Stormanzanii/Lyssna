@@ -957,13 +957,13 @@ impl NativeControls {
         if loading {
             connection.loaded.store(true, Ordering::Release);
         }
-        if loading
-            || matches!(
-                action,
-                PlayerAction::Next | PlayerAction::SkipTo(_) | PlayerAction::Previous
-            )
-        {
+        if loading {
             connection.audio_buffer.interrupt(selected_track(&action));
+        } else if matches!(
+            action,
+            PlayerAction::Next | PlayerAction::SkipTo(_) | PlayerAction::Previous
+        ) {
+            connection.audio_buffer.skip();
         }
         let result = connection.sender.send(action).map_err(|error| error.0);
         if loading && result.is_err() {

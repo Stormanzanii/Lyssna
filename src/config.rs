@@ -427,7 +427,7 @@ impl Default for Settings {
             settings_hide_buttons: true,
             hidden_settings: Vec::new(),
             ui_font: String::new(),
-            ui_zoom_percent: 100,
+            ui_zoom_percent: 125,
             lyric_font: String::new(),
             volume_percent: 100,
             audio_output: None,

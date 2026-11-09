@@ -65,5 +65,5 @@ test("zoom shortcuts persist scale, work in search, reset and restore", async ({
   await page.reload();
   await expect.poll(zoom).toBe(1.2);
   await page.keyboard.press("Control+0");
-  await expect.poll(zoom).toBe(1);
+  await expect.poll(zoom).toBe(1.25);
 });

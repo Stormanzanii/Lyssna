@@ -222,7 +222,7 @@ import {
   albumTypeLabel,
   discographyReleases,
 } from "./album-type";
-import { useAppZoom } from "./app-zoom";
+import { DEFAULT_ZOOM, useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
 import { TtmlCreator } from "./ttml-creator";
@@ -975,7 +975,7 @@ function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
   useAppZoom(
-    state.settings.ui_zoom_percent ?? 100,
+    state.settings.ui_zoom_percent ?? DEFAULT_ZOOM,
     (percent) => updateSettings({ ui_zoom_percent: percent }),
     notify,
   );
@@ -1612,7 +1612,7 @@ function App() {
     updateSettings({
       ui_zoom_percent: Math.min(
         200,
-        Math.max(75, (state.settings.ui_zoom_percent ?? 100) + step),
+        Math.max(75, (state.settings.ui_zoom_percent ?? DEFAULT_ZOOM) + step),
       ),
     });
   const songPosition = () =>
@@ -1713,7 +1713,7 @@ function App() {
         {
           label: "Reset zoom",
           shortcut: `${MODIFIER}+0`,
-          onSelect: () => updateSettings({ ui_zoom_percent: 100 }),
+          onSelect: () => updateSettings({ ui_zoom_percent: DEFAULT_ZOOM }),
         },
         {
           label: state.settings.compact_library

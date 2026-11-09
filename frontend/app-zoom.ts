@@ -1,8 +1,13 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
+export const DEFAULT_ZOOM = 125;
+
 function clampZoom(percent: number): number {
-  return Math.min(200, Math.max(75, Number.isFinite(percent) ? percent : 100));
+  return Math.min(
+    200,
+    Math.max(75, Number.isFinite(percent) ? percent : DEFAULT_ZOOM),
+  );
 }
 
 export function useAppZoom(
@@ -39,7 +44,8 @@ export function useAppZoom(
         event.code === "NumpadSubtract"
       )
         zoom = clampZoom(desired.current - 10);
-      else if (event.key === "0" || event.code === "Numpad0") zoom = 100;
+      else if (event.key === "0" || event.code === "Numpad0")
+        zoom = DEFAULT_ZOOM;
       else return;
       event.preventDefault();
       if (zoom === desired.current) return;

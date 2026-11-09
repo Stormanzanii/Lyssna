@@ -1507,13 +1507,30 @@
 }
 .downloading-bar {
   display: grid;
-  gap: 8px;
-  padding: 12px 16px 4px;
-  font-size: 13px;
+  gap: 10px;
+  padding: 18px 15px 6px;
+  flex-shrink: 0;
+  animation: downloading-in 0.25s ease-out;
 }
 .downloading-bar > div:first-child {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+  line-height: 1;
+}
+.downloading-bar strong {
+  font-weight: 700;
+  color: light-dark(#000, #fff);
+}
+.downloading-bar strong:last-child {
+  font-variant-numeric: tabular-nums;
+}
+@keyframes downloading-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .downloading-track {
   height: 4px;

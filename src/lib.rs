@@ -44,6 +44,7 @@ mod native_remote;
 pub mod nightly;
 pub mod notify;
 pub mod offline;
+pub mod offline_sync;
 mod playback_intent;
 pub mod provider;
 mod reconnect;

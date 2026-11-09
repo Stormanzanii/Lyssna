@@ -1799,6 +1799,9 @@ fn public_track_change(event: &PlayerEvent) -> Option<crate::model::Track> {
             })
         });
     }
+    if let Some(track) = crate::offline_sync::track(&track_id.to_uri()) {
+        return Some(track);
+    }
     let mut track = public_track(audio_item)?;
     // Metadata may describe an available alternative. Transport and queue
     // events still use the originally requested track, so keep that identity.
@@ -1807,7 +1810,9 @@ fn public_track_change(event: &PlayerEvent) -> Option<crate::model::Track> {
     Some(track)
 }
 
-fn public_track(item: &librespot_metadata::audio::item::AudioItem) -> Option<crate::model::Track> {
+pub(crate) fn public_track(
+    item: &librespot_metadata::audio::item::AudioItem,
+) -> Option<crate::model::Track> {
     use crate::model::{Album, Artist, Artwork, Track};
     use librespot_metadata::{artist::ArtistRole, audio::item::UniqueFields};
     let UniqueFields::Track { artists, album, .. } = &item.unique_fields else {
@@ -2516,6 +2521,7 @@ async fn run(
     if let Ok(store) = crate::offline::Store::for_account(account) {
         let _ = store.seen_online();
     }
+    crate::offline_sync::publish(account);
     if cancelled.load(Ordering::Relaxed) {
         session.shutdown();
         return Outcome::Stopped;

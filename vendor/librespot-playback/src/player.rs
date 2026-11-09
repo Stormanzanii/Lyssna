@@ -1206,6 +1206,13 @@ impl PlayerTrackLoader {
             }
         };
 
+        if let Some(download) = crate::downloads::downloaded(&track_uri) {
+            match self.load_downloaded(track_uri.clone(), download, position_ms) {
+                Some(loaded) => return Some(loaded),
+                None => warn!("Downloaded copy of <{track_uri}> is unreadable; streaming it"),
+            }
+        }
+
         let cache_uri = track_uri.clone();
         let cached = self
             .load_cache
@@ -1463,6 +1470,74 @@ impl PlayerTrackLoader {
                 is_explicit,
             });
         }
+    }
+
+    fn load_downloaded(
+        &self,
+        track_uri: SpotifyUri,
+        download: crate::downloads::Downloaded,
+        position_ms: u32,
+    ) -> Option<PlayerLoadedTrackData> {
+        let file = File::open(&download.path).ok()?;
+        let length = file.metadata().ok()?.len();
+        let bytes_per_second = self.stream_data_rate(download.format)?;
+        let mut decrypted =
+            AudioDecrypt::new(Some(crate::core::audio_key::AudioKey(download.key)), file);
+        let (offset, mut normalisation_data) = if AudioFiles::is_ogg_vorbis(download.format) {
+            let data = NormalisationData::parse_from_ogg(&mut decrypted).ok();
+            (SPOTIFY_OGG_HEADER_END, data)
+        } else {
+            (0, None)
+        };
+        let audio_file = Subfile::new(decrypted, offset, length).ok()?;
+        let mut hint = Hint::new();
+        if let Some(mime_type) = AudioFiles::mime_type(download.format) {
+            hint.mime_type(mime_type);
+        }
+        let mut decoder = SymphoniaDecoder::new(audio_file, hint).ok()?;
+        if normalisation_data.is_none() {
+            normalisation_data = decoder.normalisation_data();
+        }
+        let duration_ms = download.duration_ms;
+        let position_ms = if position_ms > duration_ms {
+            0
+        } else {
+            position_ms
+        };
+        let stream_position_ms = decoder.seek(position_ms).ok()?;
+        info!(
+            "<{}> ({duration_ms} ms) loaded from downloads",
+            download.name
+        );
+        Some(PlayerLoadedTrackData {
+            decoder: Box::new(decoder),
+            normalisation_data: normalisation_data.unwrap_or_default(),
+            stream_loader_controller: StreamLoaderController::from_local_file(length),
+            bytes_per_second,
+            duration_ms,
+            stream_position_ms,
+            is_explicit: false,
+            audio_item: AudioItem {
+                duration_ms,
+                uri: track_uri.to_uri(),
+                track_id: track_uri,
+                files: Default::default(),
+                name: download.name,
+                covers: Vec::new(),
+                language: Vec::new(),
+                is_explicit: false,
+                availability: Ok(()),
+                alternatives: None,
+                unique_fields: UniqueFields::Track {
+                    artists: Default::default(),
+                    album: String::new(),
+                    album_artists: Vec::new(),
+                    popularity: 0,
+                    number: 0,
+                    disc_number: 0,
+                },
+            },
+        })
     }
 
     async fn load_local_track(

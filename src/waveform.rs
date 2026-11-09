@@ -15,7 +15,7 @@ const KEPT: usize = 6;
 
 // The player's default 160 kbps order first, so the file playback already
 // fetched (and cached) is reused instead of downloading another.
-const FORMATS: [(AudioFileFormat, usize); 7] = [
+pub(crate) const FORMATS: [(AudioFileFormat, usize); 7] = [
     (AudioFileFormat::OGG_VORBIS_160, 20 * 1024),
     (AudioFileFormat::MP3_160, 20 * 1024),
     (AudioFileFormat::OGG_VORBIS_96, 12 * 1024),

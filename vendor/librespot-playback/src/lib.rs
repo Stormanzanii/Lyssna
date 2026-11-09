@@ -10,6 +10,8 @@ pub mod config;
 pub mod convert;
 pub mod decoder;
 pub mod dither;
+mod downloads;
+pub use downloads::{Downloaded, set_downloads};
 mod load_cache;
 mod local_file;
 pub use local_file::{set_local_files, set_local_gain};

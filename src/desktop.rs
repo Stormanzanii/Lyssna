@@ -1945,7 +1945,7 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         snapshot.profile = None;
         snapshot.login_pending = false;
     }
-    if let Err(failure) = crate::offline::wipe_all() {
+    if let Err(failure) = crate::offline_sync::forget_all() {
         crate::native::diagnostic(&format!("event downloads not removed: {failure:#}"));
     }
     state.0.commands.send(Command::Logout).map_err(error)
@@ -4737,6 +4737,81 @@ fn signed_in_controls(
         .clone();
     state.0.controls.scoped(&account).map_err(error)
 }
+fn downloadable_collection(uri: &str) -> bool {
+    ["spotify:playlist:", "spotify:album:"]
+        .iter()
+        .any(|prefix| uri.starts_with(prefix))
+        || (uri.starts_with("spotify:user:") && uri.ends_with(":collection"))
+}
+fn emit_downloads(app: &tauri::AppHandle, account: &str) {
+    if let Ok(status) = crate::offline_sync::status(account) {
+        let _ = app.emit("lyssna", json!({"type":"downloads","status":status}));
+    }
+}
+#[tauri::command]
+fn offline_status(
+    state: State<'_, Desktop>,
+) -> std::result::Result<crate::offline_sync::Status, String> {
+    crate::offline_sync::status(&signed_in_account(&state).map_err(error)?).map_err(error)
+}
+#[tauri::command]
+fn offline_remove(
+    app: tauri::AppHandle,
+    state: State<'_, Desktop>,
+    uri: String,
+) -> std::result::Result<(), String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    crate::offline_sync::remove(&account, &uri).map_err(error)?;
+    emit_downloads(&app, &account);
+    Ok(())
+}
+#[tauri::command]
+fn offline_download(
+    app: tauri::AppHandle,
+    state: State<'_, Desktop>,
+    uri: String,
+    name: String,
+    image: Option<String>,
+    tracks: Vec<String>,
+) -> std::result::Result<(), String> {
+    if !downloadable_collection(&uri) {
+        return Err("Only playlists, albums and Liked Songs download".into());
+    }
+    let account = signed_in_account(&state).map_err(error)?;
+    let session = state
+        .0
+        .controls
+        .scoped(&account)
+        .and_then(|controls| controls.session())
+        .map_err(|_| "Downloads need a connection to Spotify".to_owned())?;
+    let mut seen = std::collections::HashSet::new();
+    let tracks = tracks
+        .into_iter()
+        .filter(|track| track.starts_with("spotify:track:") && seen.insert(track.clone()))
+        .collect();
+    let collection = crate::offline::Collection {
+        uri,
+        name,
+        image,
+        tracks,
+    };
+    std::thread::Builder::new()
+        .name("lyssna-downloads".into())
+        .spawn(move || {
+            let result = crate::offline_sync::download(&session, collection, || {
+                emit_downloads(&app, &account)
+            });
+            emit_downloads(&app, &account);
+            if let Err(failure) = result {
+                let _ = app.emit(
+                    "lyssna",
+                    json!({"type":"notice","message":format!("{failure:#}"),"error":true}),
+                );
+            }
+        })
+        .map_err(error)?;
+    Ok(())
+}
 #[tauri::command]
 async fn search_warm(state: State<'_, Desktop>, query: String) -> std::result::Result<(), String> {
     let controls = signed_in_controls(&state)?;
@@ -5567,6 +5642,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             search_page,
             search_suggestions,
             search_warm,
+            offline_status,
+            offline_remove,
+            offline_download,
             browse_categories,
             browse_page,
             app_update,

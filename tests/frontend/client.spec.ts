@@ -1773,6 +1773,30 @@ test("sidebar preserves pins and changes recents only after manual playback", as
     page.locator(".library-list > .library-liked .pinned-mark"),
   ).toHaveCount(0);
 });
+test("Back from a page opened in the lyrics view returns to the lyrics", async ({
+  page,
+}) => {
+  await startClient(page);
+  const lyrics = page.locator(".lyrics-page");
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toHaveText("Liked Songs");
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(lyrics).toBeVisible();
+  await page.locator(".player-song .artist-link").first().click();
+  await expect(lyrics).toHaveCount(0);
+  const artist = await heading.textContent();
+  expect(artist).not.toBe("Liked Songs");
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(lyrics).toBeVisible();
+  await page.getByTitle("Go forward", { exact: true }).click();
+  await expect(lyrics).toHaveCount(0);
+  await expect(heading).toHaveText(artist!);
+  await page.getByTitle("Go back", { exact: true }).click();
+  await expect(lyrics).toBeVisible();
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await expect(heading).toHaveText("Liked Songs");
+});
+
 test("artist and song right clicks offer relevant actions", async ({
   page,
 }) => {

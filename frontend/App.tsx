@@ -264,6 +264,8 @@ const isTextInput = (target: EventTarget | null) =>
 
 type Center = "browse" | "lyrics" | "profile" | "ttml";
 const LAYOUT_BEFORE_TTML = "lyssna.layout-before-ttml";
+// A history entry opened from the lyrics view; Back returns to the lyrics.
+const FROM_LYRICS = "lyrics>";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
   id: string;
@@ -319,6 +321,8 @@ function App() {
   const [state, dispatch] = useReducer(reducer, emptyState);
   useEffect(() => setDJRequest(false), [state.profile?.id, state.native_ready]);
   const [center, setCenter] = useState<Center>("browse");
+  const centerRef = useRef(center);
+  centerRef.current = center;
   const [canvasInLyrics, setCanvasInLyrics] = useState(false);
   const plus = state.settings.spotify_plus ?? {};
   const copyText = (text: string, done: string) =>
@@ -737,7 +741,9 @@ function App() {
       // Opening a page shuffles Random anew; Back and Forward keep it.
       if (push) shuffleSeeds.current.delete(key);
       if (push && routeRef.current !== key) {
-        if (!(
+        if (centerRef.current === "lyrics")
+          history.current.push(FROM_LYRICS + routeRef.current);
+        else if (!(
           routeRef.current.startsWith("search:") && key.startsWith("search:")
         ))
           history.current.push(routeRef.current);
@@ -1583,15 +1589,20 @@ function App() {
       return;
     }
     const key = history.current.pop();
-    if (key) {
-      future.current.push(state.route);
-      navigate(key, false);
-    }
+    if (!key) return;
+    future.current.push(state.route);
+    if (key.startsWith(FROM_LYRICS)) {
+      const route = key.slice(FROM_LYRICS.length);
+      if (route !== state.route) navigate(route, false);
+      setCenter("lyrics");
+    } else navigate(key, false);
   };
   const forward = () => {
     const key = future.current.pop();
     if (key) {
-      history.current.push(state.route);
+      history.current.push(
+        center === "lyrics" ? FROM_LYRICS + state.route : state.route,
+      );
       navigate(key, false);
     }
   };

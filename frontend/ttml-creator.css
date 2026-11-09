@@ -350,8 +350,20 @@
   min-width: 5ch;
   max-width: 100%;
 }
-.ttml-card-extra input,
-.ttml-card-extra input:focus,
+.ttml-card-extra input {
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  outline: none;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+}
+.ttml-card-extra input:focus {
+  border-color: #ffffff2e;
+  color: #f3f3f3;
+  background: #ffffff0a;
+}
 .ttml-cells {
   display: flex;
   flex-wrap: wrap;

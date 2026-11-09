@@ -67,13 +67,12 @@ impl Manifest {
         if wanted.len() > MAX_SONGS {
             bail!("Spotify allows {MAX_SONGS} downloaded songs on a device");
         }
+        let mut seen = BTreeSet::new();
         let missing = collection
             .tracks
             .iter()
-            .filter(|uri| !self.tracks.contains_key(*uri))
+            .filter(|uri| !self.tracks.contains_key(*uri) && seen.insert(uri.as_str()))
             .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
             .collect();
         match self
             .collections
@@ -438,6 +437,17 @@ mod tests {
         assert!(manifest.tracks.contains_key("t2"));
         assert_eq!(manifest.remove_collection("spotify:playlist:p"), ["bb"]);
         assert!(manifest.tracks.is_empty());
+    }
+
+    #[test]
+    fn songs_download_in_the_playlist_order() {
+        let mut manifest = Manifest::default();
+        assert_eq!(
+            manifest
+                .add_collection(collection("spotify:playlist:p", &["zz", "aa", "mm", "aa"]))
+                .unwrap(),
+            ["zz", "aa", "mm"]
+        );
     }
 
     #[test]

@@ -1263,11 +1263,11 @@ export function TtmlCreator({
   } | null>(null);
   const trackUri = track?.uri;
   const [spectrogram, setSpectrogram] = useState(
-    () => readStorage(SPECTROGRAM_KEY) !== "0",
+    () => readStorage(SPECTROGRAM_KEY) === "1",
   );
   const showSpectrogram = (on: boolean) => {
     setSpectrogram(on);
-    writeStorage(SPECTROGRAM_KEY, on ? null : "0");
+    writeStorage(SPECTROGRAM_KEY, on ? "1" : null);
   };
   useEffect(() => {
     if (!barSlot || !trackUri || peaks?.uri === trackUri) return;

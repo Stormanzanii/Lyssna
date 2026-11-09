@@ -15761,6 +15761,10 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
         .map((entry: any) => entry.args),
     );
   const wave = page.getByRole("slider", { name: "Song position" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(panel).toHaveCount(0);
+  await expect(wave).toBeVisible();
+  await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await expect(panel).toBeVisible();
   await expect(wave).toHaveCount(0);
@@ -15820,7 +15824,7 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
   await expect(wave).toBeVisible();
   expect(
     await page.evaluate(() => localStorage.getItem("lyssna.ttml-spectrogram")),
-  ).toBe("0");
+  ).toBe(null);
 });
 
 test("TTML Creator swaps the player bar for a waveform bar", async ({
@@ -15838,7 +15842,6 @@ test("TTML Creator swaps the player bar for a waveform bar", async ({
     .locator(".player-extras")
     .getByTitle("TTML Creator", { exact: true })
     .click();
-  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
   const wave = page.getByRole("slider", { name: "Song position" });
   await expect(wave).toBeVisible();
   await expect(page.locator(".player-song")).toHaveCount(0);

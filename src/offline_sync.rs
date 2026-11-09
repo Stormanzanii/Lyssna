@@ -316,6 +316,14 @@ pub fn download(
         store.save(manifest)
     })??;
     publish(&account);
+    let nothing_missing = with(&account, |_, manifest| manifest.missing(&uri))?
+        .unwrap_or_default()
+        .iter()
+        .all(|track| set_aside(track));
+    if nothing_missing {
+        progress();
+        return Ok(());
+    }
     // One worker per list: a second press while one runs leaves the songs
     // to it, since it rereads what is missing each round.
     let first = RUNNING

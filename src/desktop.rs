@@ -1945,6 +1945,9 @@ fn sign_out(state: State<'_, Desktop>) -> std::result::Result<(), String> {
         snapshot.profile = None;
         snapshot.login_pending = false;
     }
+    if let Err(failure) = crate::offline::wipe_all() {
+        crate::native::diagnostic(&format!("event downloads not removed: {failure:#}"));
+    }
     state.0.commands.send(Command::Logout).map_err(error)
 }
 fn valid_route(key: &str) -> bool {

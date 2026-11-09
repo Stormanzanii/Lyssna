@@ -2513,6 +2513,9 @@ async fn run(
     {
         emit(NativeEvent::Error(format!("{error:#}")));
     }
+    if let Ok(store) = crate::offline::Store::for_account(account) {
+        let _ = store.seen_online();
+    }
     if cancelled.load(Ordering::Relaxed) {
         session.shutdown();
         return Outcome::Stopped;

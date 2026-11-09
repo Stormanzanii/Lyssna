@@ -43,6 +43,7 @@ mod native_login;
 mod native_remote;
 pub mod nightly;
 pub mod notify;
+pub mod offline;
 mod playback_intent;
 pub mod provider;
 mod reconnect;

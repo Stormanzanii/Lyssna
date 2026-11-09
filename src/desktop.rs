@@ -2959,6 +2959,7 @@ fn save_settings(
         settings.client_id = snapshot.settings.client_id.clone();
         settings.last_view = snapshot.route.clone();
         settings.volume_percent = snapshot.settings.volume_percent;
+        settings.offline_location = snapshot.settings.offline_location.clone();
         // The player keeps these; the settings window may hold old ones.
         settings.shuffle = snapshot.settings.shuffle;
         settings.repeat = snapshot.settings.repeat.clone();
@@ -4842,6 +4843,64 @@ fn resume_downloads(
     }
 }
 #[tauri::command]
+fn offline_location() -> std::result::Result<String, String> {
+    crate::offline::base_directory()
+        .map(|path| path.display().to_string())
+        .map_err(error)
+}
+/// Spotify's "Change location": downloads move to the chosen folder.
+#[tauri::command]
+async fn offline_move(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Option<String>, String> {
+    #[cfg(windows)]
+    let owner = window
+        .hwnd()
+        .map(|hwnd| hwnd.0 as isize)
+        .unwrap_or_default();
+    #[cfg(not(windows))]
+    let owner = {
+        let _ = window;
+        0
+    };
+    let inner = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>> {
+        let Some(folder) = pick_folder(owner)? else {
+            return Ok(None);
+        };
+        let moved = crate::offline_sync::relocate(&folder, || {
+            let mut snapshot = lock(&inner.snapshot)?;
+            snapshot.settings.offline_location = Some(folder.display().to_string());
+            snapshot.settings.save()
+        })?;
+        let account = lock(&inner.snapshot)?
+            .profile
+            .as_ref()
+            .map(|profile| profile.id.clone());
+        if let Some(account) = account {
+            crate::offline_sync::publish(&account);
+            emit_downloads(&app, &account);
+            resume_downloads(&app, &inner.controls, &account);
+        }
+        Ok(Some(moved.display().to_string()))
+    })
+    .await
+    .map_err(|_| "Folder picker unavailable".to_owned())?
+    .map_err(error)
+}
+#[tauri::command]
+fn offline_remove_all(
+    app: tauri::AppHandle,
+    state: State<'_, Desktop>,
+) -> std::result::Result<bool, String> {
+    let account = signed_in_account(&state).map_err(error)?;
+    crate::offline_sync::forget_all().map_err(error)?;
+    emit_downloads(&app, &account);
+    Ok(true)
+}
+#[tauri::command]
 fn offline_songs(state: State<'_, Desktop>) -> std::result::Result<Vec<String>, String> {
     crate::offline_sync::downloaded_songs(&signed_in_account(&state).map_err(error)?).map_err(error)
 }
@@ -5679,6 +5738,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             offline_remove,
             offline_download,
             offline_songs,
+            offline_location,
+            offline_move,
+            offline_remove_all,
             browse_categories,
             browse_page,
             app_update,

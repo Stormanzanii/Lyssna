@@ -312,6 +312,8 @@ pub struct Settings {
     /// songs: off by default, 1 to 12 seconds, 5 unless chosen.
     pub crossfade: bool,
     pub crossfade_seconds: u8,
+    /// Folder holding downloads; local app data when unset, as Spotify.
+    pub offline_location: Option<String>,
     /// Crossfade also into a song played by hand or skipped to while
     /// another plays. Off by default: such songs start straight away.
     pub crossfade_picked: bool,
@@ -435,6 +437,7 @@ impl Default for Settings {
             cinema_lyrics: false,
             crossfade: false,
             crossfade_seconds: 5,
+            offline_location: None,
             crossfade_picked: false,
             soloist: false,
             shuffle: false,

@@ -147,9 +147,64 @@ pub fn now() -> u64 {
 }
 
 pub fn base_directory() -> Result<PathBuf> {
+    let chosen = crate::config::Settings::load()
+        .ok()
+        .and_then(|settings| settings.offline_location);
+    match chosen {
+        Some(folder) => Ok(inside(Path::new(&folder))),
+        None => default_directory(),
+    }
+}
+
+pub fn default_directory() -> Result<PathBuf> {
     let dirs = directories::ProjectDirs::from("", "", "Lyssna")
         .context("Cannot locate the Lyssna data directory")?;
     Ok(dirs.data_local_dir().join("offline"))
+}
+
+/// Downloads live in their own subfolder of a chosen folder, so removing
+/// them on sign-out never touches the listener's other files.
+pub fn inside(folder: &Path) -> PathBuf {
+    folder.join("Lyssna Downloads")
+}
+
+/// Moves every download to `to`, copying when it is on another drive.
+pub fn move_all(from: &Path, to: &Path) -> Result<()> {
+    if from == to || !from.exists() {
+        return Ok(());
+    }
+    if to
+        .read_dir()
+        .is_ok_and(|mut entries| entries.next().is_some())
+    {
+        bail!("That folder already holds Lyssna downloads");
+    }
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let _ = fs::remove_dir(to);
+    if fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    copy_tree(from, to).inspect_err(|_| {
+        let _ = fs::remove_dir_all(to);
+    })?;
+    fs::remove_dir_all(from)?;
+    Ok(())
+}
+
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
 }
 
 pub struct Store {
@@ -441,6 +496,25 @@ mod tests {
         store.wipe().unwrap();
         assert!(store.load().collections.is_empty());
         assert_eq!(store.size(), 0);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn moving_downloads_keeps_them_and_refuses_a_used_folder() {
+        let base = std::env::temp_dir().join(format!("lyssna-move-{}", std::process::id()));
+        let from = base.join("old");
+        let store = Store::at(from.clone(), "listener");
+        store.write_file("abcd", b"audio").unwrap();
+        let to = inside(&base.join("chosen"));
+        move_all(&from, &to).unwrap();
+        assert!(!from.exists());
+        assert_eq!(Store::at(to.clone(), "listener").size(), 5);
+        let other = base.join("other");
+        Store::at(other.clone(), "listener")
+            .write_file("ef", b"x")
+            .unwrap();
+        assert!(move_all(&other, &to).is_err());
+        assert_eq!(Store::at(to, "listener").size(), 5);
         let _ = fs::remove_dir_all(base);
     }
 

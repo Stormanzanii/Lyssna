@@ -83,6 +83,18 @@ test("Download behaves like Spotify's: progress, stop, green, remove", async ({
     .toBe(sent.uri);
 });
 
+test("Storage settings show the offline location and move downloads", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
+  await expect(dialog).toContainText("Offline storage location");
+  await expect(dialog).toContainText("AppData\Local\Lyssna");
+  await dialog.getByRole("button", { name: "Change location" }).click();
+  await expect(dialog).toContainText("E:\Music\Lyssna Downloads");
+});
+
 test("playing on another device does not silently redirect local Play", async ({
   page,
 }) => {
@@ -684,6 +696,9 @@ async function startClient(
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
           if (command === "playback_speed") return args.percent;
+          if (command === "offline_location")
+            return "C:\Users\listener\AppData\Local\Lyssna\data\offline";
+          if (command === "offline_move") return "E:\Music\Lyssna Downloads";
           if (command === "offline_songs") return host.__clientTest.downloaded ?? [];
           if (command === "track_waveform")
             return Array.from(

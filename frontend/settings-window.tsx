@@ -263,6 +263,22 @@ export function SettingsWindow({
     };
   }, [onCall]);
   const [clearingCache, setClearingCache] = useState(false);
+  const [downloadBytes, setDownloadBytes] = useState<number | null>(null);
+  const [downloadFolder, setDownloadFolder] = useState("");
+  const [movingDownloads, setMovingDownloads] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void onCall<{ bytes: number }>("offline_status").then((status) => {
+      if (active && typeof status?.bytes === "number")
+        setDownloadBytes(status.bytes);
+    });
+    void onCall<string>("offline_location").then((folder) => {
+      if (active && typeof folder === "string") setDownloadFolder(folder);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onCall]);
   const [clearingNightly, setClearingNightly] = useState(false);
   useEffect(() => {
     let active = true;
@@ -641,6 +657,50 @@ export function SettingsWindow({
             }}
           >
             Clear cache
+          </button>
+        </SettingRow>,
+        <SettingRow
+          key="downloads"
+          label={`Downloads: ${downloadBytes === null ? "…" : `${Math.round(downloadBytes / 1_048_576).toLocaleString()} MB`}`}
+          help="Songs you downloaded to play without a connection."
+          keywords="downloads offline storage remove delete disk"
+        >
+          <button
+            className="pill outline"
+            disabled={!downloadBytes}
+            onClick={() =>
+              void onCall<boolean>("offline_remove_all").then((removed) => {
+                if (!removed) return;
+                setDownloadBytes(0);
+                onNotice("Removed all downloads.");
+              })
+            }
+          >
+            Remove all downloads
+          </button>
+        </SettingRow>,
+        <SettingRow
+          key="offline-location"
+          label="Offline storage location"
+          help={downloadFolder || "…"}
+          keywords="downloads offline storage location folder move drive change"
+        >
+          <button
+            className="pill outline"
+            disabled={movingDownloads}
+            onClick={() => {
+              setMovingDownloads(true);
+              void onCall<string | null>("offline_move")
+                .then((folder) => {
+                  if (folder) {
+                    setDownloadFolder(folder);
+                    onNotice("Moved downloads.");
+                  }
+                })
+                .finally(() => setMovingDownloads(false));
+            }}
+          >
+            {movingDownloads ? "Moving…" : "Change location"}
           </button>
         </SettingRow>,
         <SettingRow

@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::{
     collections::{BTreeSet, HashMap},
     io::Read,
+    path::{Path, PathBuf},
     sync::{
         LazyLock, Mutex, RwLock,
         atomic::{AtomicUsize, Ordering},
@@ -23,7 +24,7 @@ static LOADED: Mutex<Option<Loaded>> = Mutex::new(None);
 static TRACKS: LazyLock<RwLock<HashMap<String, crate::model::Track>>> =
     LazyLock::new(Default::default);
 static DOWNLOADING: Mutex<()> = Mutex::new(());
-static SIGN_OUTS: AtomicUsize = AtomicUsize::new(0);
+static STOPS: AtomicUsize = AtomicUsize::new(0);
 static RUNNING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
 
 fn with<R>(account: &str, change: impl FnOnce(&Store, &mut Manifest) -> R) -> Result<R> {
@@ -99,7 +100,7 @@ pub fn track(uri: &str) -> Option<crate::model::Track> {
 
 /// Removes every account's downloads, as Spotify does when you sign out.
 pub fn forget_all() -> Result<()> {
-    SIGN_OUTS.fetch_add(1, Ordering::AcqRel);
+    STOPS.fetch_add(1, Ordering::AcqRel);
     if let Ok(mut loaded) = LOADED.lock() {
         *loaded = None;
     }
@@ -108,6 +109,23 @@ pub fn forget_all() -> Result<()> {
         shared.clear();
     }
     crate::offline::wipe_all()
+}
+
+/// Moves downloads into `folder`; `remember` records the new place while
+/// nothing else can touch them.
+pub fn relocate(folder: &Path, remember: impl FnOnce() -> Result<()>) -> Result<PathBuf> {
+    STOPS.fetch_add(1, Ordering::AcqRel);
+    let _turn = DOWNLOADING
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Downloads unavailable"))?;
+    let mut loaded = LOADED
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Downloads unavailable"))?;
+    let target = crate::offline::inside(folder);
+    crate::offline::move_all(&crate::offline::base_directory()?, &target)?;
+    remember()?;
+    *loaded = None;
+    Ok(target)
 }
 
 #[derive(Clone, Serialize)]
@@ -191,8 +209,8 @@ pub fn download(
     collection: Collection,
     mut progress: impl FnMut(),
 ) -> Result<()> {
-    let signed_in = SIGN_OUTS.load(Ordering::Acquire);
-    let cancelled = || SIGN_OUTS.load(Ordering::Acquire) != signed_in;
+    let started = STOPS.load(Ordering::Acquire);
+    let cancelled = || STOPS.load(Ordering::Acquire) != started;
     let account = session.username();
     let uri = collection.uri.clone();
     let missing = with(&account, |store, manifest| {

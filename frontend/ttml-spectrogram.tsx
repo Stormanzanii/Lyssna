@@ -5,6 +5,7 @@ import {
   type CreatorLine,
   type Cursor,
   formatTime,
+  lineSpan,
   moveEdge,
 } from "./ttml-creator-model";
 
@@ -15,7 +16,6 @@ const TOP_HZ = 20000;
 // The backend sends levels as 16-bit fractions of this.
 const LEVEL_SPAN = 4;
 const RULER = 30;
-const LANE = 24;
 const SNAP_PX = 7;
 const MIN_ZOOM = 50;
 const MAX_ZOOM = 10000;
@@ -460,6 +460,13 @@ export function TtmlSpectrogram({
   const ms = (time: number) => (time / 1000) * zoom;
   const fromMs = (scroll / zoom) * 1000;
   const toMs = ((scroll + width) / zoom) * 1000;
+  const bands = shownLines.flatMap((line, lineIndex) => {
+    const chosen = lineIndex === cursor.line || picked.has(lineIndex);
+    const span = everyLine || chosen ? lineSpan(line) : null;
+    return span && span.end >= fromMs && span.start <= toMs
+      ? [{ key: lineIndex, ...span, chosen, background: line.background }]
+      : [];
+  });
   const segments = shownLines.flatMap((line, lineIndex) => {
     const chosen = lineIndex === cursor.line || picked.has(lineIndex);
     if (!everyLine && !chosen) return [];
@@ -476,7 +483,7 @@ export function TtmlSpectrogram({
               text: unit.text,
               start: unit.start,
               end: unit.end,
-              lane: line.background ? 1 : 0,
+              roman: unit.roman,
               chosen,
               current: lineIndex === cursor.line && unitIndex === cursor.unit,
             },
@@ -585,6 +592,16 @@ export function TtmlSpectrogram({
                 gain={gain}
               />
             ))}
+            {bands.map((band) => (
+              <div
+                key={band.key}
+                className={`ttml-spectrum-line${band.chosen ? " chosen" : ""}${band.background ? " background" : ""}`}
+                style={{
+                  left: ms(band.start),
+                  width: Math.max(1, ms(band.end) - ms(band.start)),
+                }}
+              />
+            ))}
             {segments.map((segment) => (
               <div
                 key={segment.key}
@@ -592,8 +609,6 @@ export function TtmlSpectrogram({
                 style={{
                   left: ms(segment.start),
                   width: Math.max(1, ms(segment.end) - ms(segment.start)),
-                  top: segment.lane * (LANE + 2),
-                  height: LANE,
                 }}
                 title={`${segment.text} ${formatTime(segment.start)} – ${formatTime(segment.end)}`}
                 onPointerDown={(event) => {
@@ -601,6 +616,7 @@ export function TtmlSpectrogram({
                   onCursor(segment.at);
                 }}
               >
+                {segment.roman && <small>{segment.roman}</small>}
                 <span>{segment.text}</span>
                 <i
                   className="ttml-spectrum-edge start"

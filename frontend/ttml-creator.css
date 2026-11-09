@@ -1627,37 +1627,74 @@
   font-size: 13px;
   pointer-events: none;
 }
+.ttml-spectrum-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: #ffffff0f;
+  box-shadow:
+    inset 0 1px 0 #ffffff4d,
+    inset 0 -1px 0 #ffffff4d;
+  pointer-events: none;
+}
+.ttml-spectrum-line.chosen {
+  background: #1ed7601a;
+  box-shadow:
+    inset 0 1px 0 #1ed76099,
+    inset 0 -1px 0 #1ed76099;
+}
+.ttml-spectrum-line.background {
+  opacity: 0.6;
+}
 .ttml-spectrum-word {
   position: absolute;
+  top: 0;
+  bottom: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 2px;
   min-width: 1px;
-  padding: 0 6px;
-  border: 1px solid #ffffff59;
-  border-radius: 4px;
-  color: #ffffffd9;
-  background: #0b0d1ab3;
-  font-size: 11.5px;
-  cursor: pointer;
-  overflow: visible;
-  margin-top: 4px;
-}
-.ttml-spectrum-word span {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 5px 4px 0;
+  color: #ffffffe6;
+  font-size: 15px;
   white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 1px 0 0 #ffffff40,
+    inset -1px 0 0 #ffffff40;
 }
-.ttml-spectrum-word.chosen {
-  border-color: #1ed760b3;
+.ttml-spectrum-word span,
+.ttml-spectrum-word small {
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+  text-shadow: 0 1px 3px #000;
+}
+.ttml-spectrum-word small {
+  color: #ffffffa6;
+  font-size: 11px;
+}
+.ttml-spectrum-word:hover {
+  z-index: 2;
+  background: #ffffff0f;
 }
 .ttml-spectrum-word.current {
-  color: #000;
-  background: #1ed760;
+  z-index: 1;
+  background: #1ed76033;
+  box-shadow:
+    inset 0 1px 0 #1ed760,
+    inset 0 -1px 0 #1ed760,
+    inset 1px 0 0 #1ed76099,
+    inset -1px 0 0 #1ed76099;
 }
 .ttml-spectrum-edge {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
+  top: 0;
+  bottom: 0;
   width: 8px;
   cursor: ew-resize;
 }

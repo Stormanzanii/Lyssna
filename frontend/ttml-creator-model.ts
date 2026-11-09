@@ -431,6 +431,51 @@ export function editUnit(
     : lines.filter((_, index) => index !== at.line);
 }
 
+const SHORTEST_MS = 10;
+
+/** Moves one edge of a timed syllable, dragging a neighbour that shares it. */
+export function moveEdge(
+  lines: CreatorLine[],
+  at: Cursor,
+  edge: "start" | "end",
+  time: number,
+): CreatorLine[] {
+  const units = lines[at.line]?.units;
+  const unit = units?.[at.unit];
+  if (!unit || unit.start === undefined || unit.end === undefined) return lines;
+  const before = units[at.unit - 1];
+  const after = units[at.unit + 1];
+  const shared =
+    edge === "start"
+      ? before?.end !== undefined && before.end === unit.start
+      : after?.start !== undefined && after.start === unit.end;
+  const [low, high] =
+    edge === "start"
+      ? [
+          shared
+            ? (before.start ?? 0) + SHORTEST_MS
+            : (before?.end ?? before?.start ?? 0),
+          unit.end - SHORTEST_MS,
+        ]
+      : [
+          unit.start + SHORTEST_MS,
+          shared
+            ? (after.end ?? Infinity) - SHORTEST_MS
+            : (after?.start ?? Infinity),
+        ];
+  const moved = Math.round(Math.min(high, Math.max(low, Math.max(0, time))));
+  if (moved === unit[edge]) return lines;
+  const next = units.map((each, index) => {
+    if (index === at.unit) return { ...each, [edge]: moved };
+    if (shared && index === at.unit + (edge === "start" ? -1 : 1))
+      return { ...each, [edge === "start" ? "end" : "start"]: moved };
+    return each;
+  });
+  return lines.map((line, index) =>
+    index === at.line ? { ...line, units: next } : line,
+  );
+}
+
 export function replaceMatching(
   lines: CreatorLine[],
   text: string,

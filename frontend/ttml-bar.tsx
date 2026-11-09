@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronUp, FilePenLine, Music2, Pause, Play } from "lucide-react";
+import {
+  AudioLines,
+  ChevronUp,
+  FilePenLine,
+  Music2,
+  Pause,
+  Play,
+} from "lucide-react";
 import { formatTime } from "./ttml-creator-model";
 
 export interface BarSpan {
@@ -13,6 +20,9 @@ export function TtmlBar({
   duration,
   playing,
   peaks,
+  spectrum,
+  spectrogram,
+  onSpectrogram,
   spans,
   onToggle,
   onSeek,
@@ -31,6 +41,9 @@ export function TtmlBar({
   duration: number;
   playing: boolean;
   peaks: Uint8Array | null;
+  spectrum: ReactNode;
+  spectrogram: boolean;
+  onSpectrogram: (on: boolean) => void;
   spans: BarSpan[];
   onToggle: () => void;
   onSeek: (ms: number) => void;
@@ -77,7 +90,7 @@ export function TtmlBar({
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [spectrogram]);
   const shown = dragging ?? position;
   useEffect(() => {
     const element = canvas.current;
@@ -135,7 +148,7 @@ export function TtmlBar({
     }
     context.fillStyle = "#fff";
     context.fillRect(Math.round(played) - 1, 0, 2, height);
-  }, [width, peaks, spans, shown, duration]);
+  }, [width, peaks, spans, shown, duration, spectrogram]);
 
   const timeAt = (clientX: number) => {
     const box = canvas.current!.getBoundingClientRect();
@@ -145,7 +158,7 @@ export function TtmlBar({
     );
   };
   return (
-    <div className="ttml-bar" ref={root}>
+    <div className={`ttml-bar${spectrogram ? " spectral" : ""}`} ref={root}>
       {panel && (
         <div
           className="ttml-bar-panel"
@@ -220,37 +233,50 @@ export function TtmlBar({
         )}
       </button>
       <span className="ttml-bar-time">{formatTime(shown)}</span>
-      <canvas
-        ref={canvas}
-        className={`ttml-bar-wave${peaks ? "" : " loading"}`}
-        role="slider"
-        aria-label="Song position"
-        aria-valuemin={0}
-        aria-valuemax={duration}
-        aria-valuenow={Math.round(shown)}
-        tabIndex={0}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          setDragging(timeAt(event.clientX));
-        }}
-        onPointerMove={(event) =>
-          dragging !== null && setDragging(timeAt(event.clientX))
-        }
-        onPointerUp={(event) => {
-          if (dragging === null) return;
-          onSeek(timeAt(event.clientX));
-          setDragging(null);
-        }}
-        onPointerCancel={() => setDragging(null)}
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          event.preventDefault();
-          event.stopPropagation();
-          onSeek(position + (event.key === "ArrowLeft" ? -3000 : 3000));
-        }}
-      />
+      {spectrogram ? (
+        spectrum
+      ) : (
+        <canvas
+          ref={canvas}
+          className={`ttml-bar-wave${peaks ? "" : " loading"}`}
+          role="slider"
+          aria-label="Song position"
+          aria-valuemin={0}
+          aria-valuemax={duration}
+          aria-valuenow={Math.round(shown)}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setDragging(timeAt(event.clientX));
+          }}
+          onPointerMove={(event) =>
+            dragging !== null && setDragging(timeAt(event.clientX))
+          }
+          onPointerUp={(event) => {
+            if (dragging === null) return;
+            onSeek(timeAt(event.clientX));
+            setDragging(null);
+          }}
+          onPointerCancel={() => setDragging(null)}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            event.stopPropagation();
+            onSeek(position + (event.key === "ArrowLeft" ? -3000 : 3000));
+          }}
+        />
+      )}
       <span className="ttml-bar-time">{formatTime(duration)}</span>
       <div className="player-extras ttml-bar-extras">
+        <button
+          className={`icon-button${spectrogram ? " active" : ""}`}
+          aria-label="Spectrogram"
+          aria-pressed={spectrogram}
+          title={spectrogram ? "Hide the spectrogram" : "Show the spectrogram"}
+          onClick={() => onSpectrogram(!spectrogram)}
+        >
+          <AudioLines size={18} />
+        </button>
         {onClose && (
           <button
             className="icon-button ttml-button active"

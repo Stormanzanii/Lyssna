@@ -11,6 +11,7 @@ import {
   duplicateLine,
   editUnit,
   replaceMatching,
+  moveEdge,
   appendWords,
   dropTrailingSpace,
   formatTime,
@@ -42,6 +43,7 @@ import {
   toTtml,
   toggleJoin,
 } from "./ttml-creator-model";
+import type { CreatorLine } from "./ttml-creator-model";
 import { romanizeLyrics } from "./romanization";
 import type { Lyrics } from "./types";
 
@@ -238,6 +240,50 @@ describe("TTML Creator card editing", () => {
     lines = editUnit(lines, { line: 0, unit: 0 }, "");
     expect(words(lines)).toEqual(["t|o o"]);
     expect(editUnit(parseText("x"), { line: 0, unit: 0 }, " ")).toEqual([]);
+  });
+
+  it("drags a syllable edge and the neighbour sharing it", () => {
+    const line = (units: [number, number][]): CreatorLine[] => [
+      {
+        background: false,
+        opposite: false,
+        units: units.map(([start, end], index) => ({
+          text: `w${index}`,
+          joined: false,
+          start,
+          end,
+        })),
+      },
+    ];
+    const times = (lines: CreatorLine[]) =>
+      lines[0].units.map((unit) => [unit.start, unit.end]);
+    const shared = line([
+      [0, 500],
+      [500, 900],
+    ]);
+    expect(
+      times(moveEdge(shared, { line: 0, unit: 1 }, "start", 620.4)),
+    ).toEqual([
+      [0, 620],
+      [620, 900],
+    ]);
+    expect(times(moveEdge(shared, { line: 0, unit: 0 }, "end", 2000))).toEqual([
+      [0, 890],
+      [890, 900],
+    ]);
+    const apart = line([
+      [0, 400],
+      [600, 900],
+    ]);
+    expect(times(moveEdge(apart, { line: 0, unit: 1 }, "start", 100))).toEqual([
+      [0, 400],
+      [400, 900],
+    ]);
+    expect(times(moveEdge(apart, { line: 0, unit: 0 }, "start", -50))).toEqual([
+      [0, 400],
+      [600, 900],
+    ]);
+    expect(moveEdge(apart, { line: 0, unit: 0 }, "start", -50)).toBe(apart);
   });
 
   it("replaces every identical word, with or without matching case", () => {

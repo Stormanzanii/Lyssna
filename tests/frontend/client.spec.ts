@@ -803,6 +803,11 @@ async function startClient(
             return "C:\Users\listener\AppData\Local\Lyssna\data\offline";
           if (command === "offline_move") return "E:\Music\Lyssna Downloads";
           if (command === "offline_songs") return host.__clientTest.downloaded ?? [];
+          if (command === "track_spectrogram")
+            return Array.from(
+              { length: args.columns * args.rows },
+              (_, index) => (index * 11) % 256,
+            );
           if (command === "track_waveform")
             return Array.from(
               { length: args.buckets },
@@ -15729,6 +15734,95 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
 });
 
+test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const toggle = page.getByRole("button", {
+    name: "Spectrogram",
+    exact: true,
+  });
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  const asked = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "track_spectrogram")
+        .map((entry: any) => entry.args),
+    );
+  const wave = page.getByRole("slider", { name: "Song position" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(panel).toBeVisible();
+  await expect(wave).toHaveCount(0);
+  await expect
+    .poll(async () => (await asked())[0])
+    .toEqual({
+      uri: "spotify:track:0123456789abcdefghijkl",
+      fromMs: 0,
+      toMs: 5000,
+      columns: 1024,
+      rows: 256,
+    });
+  await expect(panel.locator(".ttml-spectrum-tile").first()).toBeVisible();
+
+  const plot = panel.locator(".ttml-spectrum-plot");
+  const box = (await plot.boundingBox())!;
+  await page.mouse.move(box.x + 200, box.y + box.height - 2);
+  await expect(panel.locator(".ttml-spectrum-tip")).toHaveText(
+    /^00:01\.000 \(0\.\d\d kHz \/ [A-G]#?\d+\)$/,
+  );
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect
+    .poll(async () => (await asked()).some((args: any) => args.columns === 2048))
+    .toBe(true);
+  await page.mouse.wheel(0, 400);
+  await expect
+    .poll(async () => (await asked()).some((args: any) => args.fromMs >= 5000))
+    .toBe(true);
+
+  await page.mouse.click(box.x + 100, box.y + box.height / 2);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({ command: "seek" });
+
+  await panel.getByRole("button", { name: "Spectrogram colours" }).click();
+  await page.getByRole("menuitemradio", { name: "Green" }).click();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("lyssna.ttml-spectrum-palette"),
+    ),
+  ).toBe('"green"');
+  const every = panel.getByRole("button", { name: "Show every line" });
+  await expect(every).toHaveAttribute("aria-pressed", "true");
+  await every.click();
+  await expect(every).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(panel).toHaveCount(0);
+  await expect(wave).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.ttml-spectrogram")),
+  ).toBe("0");
+});
+
 test("TTML Creator swaps the player bar for a waveform bar", async ({
   page,
 }) => {
@@ -15744,6 +15838,7 @@ test("TTML Creator swaps the player bar for a waveform bar", async ({
     .locator(".player-extras")
     .getByTitle("TTML Creator", { exact: true })
     .click();
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
   const wave = page.getByRole("slider", { name: "Song position" });
   await expect(wave).toBeVisible();
   await expect(page.locator(".player-song")).toHaveCount(0);

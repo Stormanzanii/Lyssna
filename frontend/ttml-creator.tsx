@@ -92,6 +92,7 @@ import {
 import { romanizeAway } from "./romanization";
 import { MetadataDialog } from "./ttml-metadata";
 import { TtmlBar } from "./ttml-bar";
+import { TtmlSpectrogram } from "./ttml-spectrogram";
 import { createPortal } from "react-dom";
 import { rpc } from "./bridge";
 import {
@@ -151,6 +152,7 @@ const clampSpeed = (value: number) =>
   Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(value * 20) / 20));
 const SPLITS_KEY = "lyssna.ttml-splits";
 const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
+const SPECTROGRAM_KEY = "lyssna.ttml-spectrogram";
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
@@ -1260,6 +1262,13 @@ export function TtmlCreator({
     values: Uint8Array;
   } | null>(null);
   const trackUri = track?.uri;
+  const [spectrogram, setSpectrogram] = useState(
+    () => readStorage(SPECTROGRAM_KEY) !== "0",
+  );
+  const showSpectrogram = (on: boolean) => {
+    setSpectrogram(on);
+    writeStorage(SPECTROGRAM_KEY, on ? null : "0");
+  };
   useEffect(() => {
     if (!barSlot || !trackUri || peaks?.uri === trackUri) return;
     let current = true;
@@ -2364,6 +2373,22 @@ export function TtmlCreator({
             duration={track.duration_ms}
             playing={state.playback.is_playing}
             peaks={peaks?.uri === track.uri ? peaks.values : null}
+            spectrum={
+              <TtmlSpectrogram
+                uri={track.uri}
+                duration={track.duration_ms}
+                position={position}
+                playing={state.playback.is_playing}
+                lines={lines}
+                cursor={cursor}
+                picked={picked}
+                onSeek={seek}
+                onLines={setLines}
+                onCursor={setCursor}
+              />
+            }
+            spectrogram={spectrogram}
+            onSpectrogram={showSpectrogram}
             spans={barSpans}
             onToggle={onToggle}
             onSeek={seek}

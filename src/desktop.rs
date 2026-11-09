@@ -2886,6 +2886,25 @@ async fn track_waveform(
     .map_err(|_| "Waveform worker unavailable".to_owned())?
     .map_err(error)
 }
+#[tauri::command]
+async fn track_spectrogram(
+    uri: String,
+    from_ms: f64,
+    to_ms: f64,
+    columns: usize,
+    rows: usize,
+    state: State<'_, Desktop>,
+) -> std::result::Result<tauri::ipc::Response, String> {
+    let controls = state.0.controls.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = controls.session()?;
+        crate::waveform::track_spectrogram(&session, &uri, from_ms, to_ms, columns, rows)
+    })
+    .await
+    .map_err(|_| "Spectrogram worker unavailable".to_owned())?
+    .map(tauri::ipc::Response::new)
+    .map_err(error)
+}
 /// TTML Creator repeats one song and stops at its end; a crossfade would
 /// fade out its last seconds into its own start.
 static CROSSFADE_HELD: AtomicBool = AtomicBool::new(false);
@@ -5764,6 +5783,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             retry_audio,
             playback_speed,
             track_waveform,
+            track_spectrogram,
             test_audio_output,
             refresh,
             save_item,

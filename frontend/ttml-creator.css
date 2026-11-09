@@ -1482,3 +1482,259 @@
   color: var(--muted);
   font-size: 12.5px;
 }
+.ttml-bar.spectral {
+  padding: 8px 0 4px;
+}
+.ttml-spectrum {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #ffffff14;
+  border-radius: 8px;
+  background: #05060f;
+  overflow: hidden;
+  user-select: none;
+}
+.ttml-spectrum-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  height: 5px;
+  cursor: ns-resize;
+}
+.ttml-spectrum-resize:hover {
+  background: #ffffff26;
+}
+.ttml-spectrum-side {
+  position: relative;
+  display: flex;
+  flex: none;
+  justify-content: flex-start;
+  width: 44px;
+  padding: 34px 0 6px;
+  border-right: 1px solid #ffffff14;
+}
+.ttml-spectrum-scale {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+.ttml-spectrum-scale span {
+  position: absolute;
+  right: 4px;
+  transform: translateY(50%);
+  color: #ffffff8c;
+  font-size: 9px;
+}
+.ttml-spectrum-gain {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 18px;
+  margin-left: 2px;
+}
+.ttml-spectrum-gain input {
+  width: 4px;
+  height: 100%;
+  margin: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  accent-color: #fff;
+  cursor: pointer;
+}
+.ttml-spectrum-gain output {
+  position: absolute;
+  bottom: 100%;
+  left: 2px;
+  margin-bottom: 8px;
+  color: #ffffffa6;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.ttml-spectrum-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ttml-spectrum-ruler {
+  flex: none;
+  width: 100%;
+  height: 30px;
+  border-bottom: 1px solid #ffffff14;
+  background: #0b0d1a;
+  cursor: pointer;
+}
+.ttml-spectrum-plot {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: crosshair;
+}
+.ttml-spectrum-content {
+  position: absolute;
+  inset: 0 auto 0 0;
+  will-change: transform;
+}
+.ttml-spectrum-tile {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  image-rendering: auto;
+}
+.ttml-spectrum-playhead,
+.ttml-spectrum-hover {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  pointer-events: none;
+}
+.ttml-spectrum-hover {
+  width: 1px;
+  margin-left: 0;
+  background: #ffffff73;
+}
+.ttml-spectrum-tip {
+  position: absolute;
+  top: 4px;
+  z-index: 4;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #f1edff;
+  background: #7c5cff;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ttml-spectrum-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: #ffffff80;
+  font-size: 13px;
+  pointer-events: none;
+}
+.ttml-spectrum-word {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  min-width: 1px;
+  padding: 0 6px;
+  border: 1px solid #ffffff59;
+  border-radius: 4px;
+  color: #ffffffd9;
+  background: #0b0d1ab3;
+  font-size: 11.5px;
+  cursor: pointer;
+  overflow: visible;
+  margin-top: 4px;
+}
+.ttml-spectrum-word span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ttml-spectrum-word.chosen {
+  border-color: #1ed760b3;
+}
+.ttml-spectrum-word.current {
+  color: #000;
+  background: #1ed760;
+}
+.ttml-spectrum-edge {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.ttml-spectrum-edge.start {
+  left: -4px;
+}
+.ttml-spectrum-edge.end {
+  right: -4px;
+}
+.ttml-spectrum-edge:hover {
+  background: linear-gradient(#fff, #fff) center / 2px 100% no-repeat;
+}
+.ttml-spectrum-tools {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 40px;
+  border-left: 1px solid #ffffff14;
+}
+.ttml-spectrum-tool {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #ffffff33;
+  border-radius: 50%;
+  color: #ffffffb3;
+  background: transparent;
+}
+.ttml-spectrum-tool:hover {
+  color: #fff;
+  border-color: #ffffff80;
+}
+.ttml-spectrum-tool.on {
+  border-color: #fff;
+  color: #000;
+  background: #fff;
+}
+.ttml-spectrum-settings {
+  position: relative;
+}
+.ttml-spectrum-menu {
+  position: absolute;
+  right: calc(100% + 8px);
+  bottom: 0;
+  z-index: 6;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid #ffffff1f;
+  border-radius: 8px;
+  background: #1c1c1c;
+  box-shadow: 0 10px 30px #000a;
+}
+.ttml-spectrum-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: #f3f3f3;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+.ttml-spectrum-menu button:hover {
+  background: #ffffff14;
+}
+.ttml-spectrum-menu button[aria-checked="true"] {
+  color: #1ed760;
+}
+.ttml-spectrum-menu i {
+  width: 40px;
+  height: 10px;
+  border-radius: 3px;
+}

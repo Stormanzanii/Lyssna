@@ -2248,9 +2248,15 @@ export function NowPlaying({
     !!state.canvas_url &&
     !state.settings.reduce_motion &&
     !canvasInLyrics;
+  // Like Spotify, the header names what the song plays from.
+  const from = contextName(state.playback.context, {
+    dj: !!state.dj_context,
+    playlists: state.playlists,
+    track,
+  });
   const heading = (
     <div className={`section-heading ${canvas ? "canvas-hero-head" : ""}`}>
-      <h2>{canvas && track ? track.name : "Now playing"}</h2>
+      <h2>{from || "Now playing"}</h2>
       <button className="icon-button" onClick={onLyrics} title="Open lyrics">
         <Maximize2 size={17} />
       </button>
@@ -2312,7 +2318,6 @@ export function NowPlaying({
                   reduceMotion={state.settings.reduce_motion}
                   className="now-artists"
                 >
-                  <ExplicitBadge track={track} />
                   <ArtistLinks artists={track.artists} onArtist={onArtist} />
                 </Marquee>
               </div>

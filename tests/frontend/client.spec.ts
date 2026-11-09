@@ -4178,8 +4178,11 @@ test("explicit badges centre on the capitals beside them", async ({ page }) => {
       return Math.abs((box.top + box.bottom) / 2 - baseline + cap / 2);
     }),
   );
-  expect(offsets.length).toBeGreaterThan(1);
+  expect(offsets.length).toBeGreaterThan(0);
   for (const offset of offsets) expect(offset).toBeLessThan(1);
+  // Spotify's Now playing view leaves the badge out.
+  await expect(page.locator(".now-artists")).toBeVisible();
+  await expect(page.locator(".now-artists .explicit-badge")).toHaveCount(0);
 });
 
 test("DJ lyrics show the DJ cover and explain missing lyrics", async ({
@@ -4197,6 +4200,40 @@ test("DJ lyrics show the DJ cover and explain missing lyrics", async ({
     "Lyrics aren't available while the DJ talks",
   );
   await expect(page.locator(".now-playing.dj-view .dj-art img")).toBeVisible();
+});
+
+test("Now playing's header names the playlist the song plays from", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  const header = page.locator(".now-playing .section-heading h2");
+  await expect(header).toHaveText("Now playing");
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: true,
+        progress_ms: 1000,
+        shuffle_state: false,
+        repeat_state: "off",
+        context: "spotify:playlist:0123456789abcdefghijk",
+        device: { name: "Lyssna (test)", id: "local-device", is_active: true },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          artists: [{ id: "a", name: "Juice WRLD" }],
+          album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+          duration_ms: 180000,
+        },
+      },
+    });
+  });
+  await expect(header).toHaveText("Certified Jammers");
 });
 
 test("Now playing lyric dots stay inside the lyrics card", async ({ page }) => {

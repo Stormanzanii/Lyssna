@@ -104,6 +104,11 @@ impl AudioBuffer {
     pub(crate) fn output_started(&self) -> Option<std::time::Instant> {
         *self.output_started.lock().ok()?
     }
+    /// Gives up waiting for a chosen song Spotify never started.
+    fn release_unmet_target(&self) -> Option<usize> {
+        self.target.lock().ok()?.take()?;
+        Some(self.generation.load(Ordering::Acquire))
+    }
     fn select_track(&self, uri: Option<&str>) -> Option<usize> {
         let mut target = self.target.lock().ok()?;
         if target.as_deref().is_some_and(|wanted| Some(wanted) != uri) {
@@ -122,6 +127,12 @@ impl AudioBuffer {
     }
 }
 
+/// How long a song Spotify started instead of the chosen one stays silent
+/// before it plays: a late decoder for an older pick is gone by then, while
+/// a resume Spotify could not place in its list (it starts another song)
+/// would otherwise play silently until the next pick.
+const SUBSTITUTE_AFTER: Duration = Duration::from_millis(1500);
+
 pub struct AudioSink {
     buffer: AudioBuffer,
     mixer: Option<Arc<dyn Mixer>>,
@@ -135,6 +146,9 @@ pub struct AudioSink {
     awaiting_seek: bool,
     generation: usize,
     track_uri: Option<String>,
+    /// When Spotify started a song other than the one chosen.
+    substituted: Option<Instant>,
+    substitute_after: Duration,
     crossfade: Crossfade,
     /// The old song fading out under a chosen one.
     fade: Option<rodio::Sink>,
@@ -205,6 +219,8 @@ impl AudioSink {
         Self {
             generation: buffer.generation.load(Ordering::Acquire),
             track_uri: None,
+            substituted: None,
+            substitute_after: SUBSTITUTE_AFTER,
             crossfade: Crossfade::default(),
             fade: None,
             #[cfg(test)]
@@ -272,7 +288,9 @@ impl AudioSink {
 impl Sink for AudioSink {
     fn set_track(&mut self, track_id: &librespot_core::SpotifyUri) {
         let uri = track_id.to_uri();
-        let natural = match self.buffer.select_track(Some(&uri)) {
+        let selected = self.buffer.select_track(Some(&uri));
+        self.substituted = selected.is_none().then(Instant::now);
+        let natural = match selected {
             Some(generation) => {
                 let natural = self.generation == generation;
                 if !natural && let Some(sink) = &self.sink {
@@ -446,6 +464,19 @@ impl AudioSink {
             self.stretch.set_rate(rate);
             self.stretch.process(&samples)
         };
+        if self
+            .substituted
+            .is_some_and(|since| since.elapsed() >= self.substitute_after)
+        {
+            self.substituted = None;
+            if let Some(generation) = self.buffer.release_unmet_target() {
+                crate::native::diagnostic(&format!(
+                    "event chosen song never started; playing {}",
+                    self.track_uri.as_deref().unwrap_or("Spotify's pick")
+                ));
+                self.generation = generation;
+            }
+        }
         let sink = self
             .sink
             .as_ref()
@@ -699,6 +730,35 @@ mod tests {
             .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
             .unwrap();
         assert!((0..2000).any(|_| output.next() == Some(0.75)));
+    }
+
+    #[test]
+    fn a_song_spotify_starts_instead_of_the_chosen_one_plays_after_a_moment() {
+        let buffer = AudioBuffer::default();
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer.clone());
+        audio.substitute_after = Duration::from_millis(40);
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        buffer.interrupt(Some(track(2).to_uri()));
+        audio.set_track(&track(4));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).all(|_| matches!(output.next(), Some(0.0) | None)));
+        std::thread::sleep(Duration::from_millis(60));
+        audio
+            .write(AudioPacket::Samples(vec![0.75; 1000]), &mut converter)
+            .unwrap();
+        assert!((0..2000).any(|_| output.next() == Some(0.75)));
+        audio.set_track(&track(5));
+        audio
+            .write(AudioPacket::Samples(vec![0.25; 1000]), &mut converter)
+            .unwrap();
+        assert!(
+            (0..2000).any(|_| output.next() == Some(0.25)),
+            "the songs after it play normally"
+        );
     }
 
     #[test]

@@ -15345,6 +15345,7 @@ test("panel scrollers keep only the overlay bar after switching pages", async ({
   // Search and other pages share one scroller element with different classes.
   await page.getByPlaceholder("What do you want to play?").click();
   await page.keyboard.type("song");
+  await page.keyboard.press("Enter");
   await expect(page.locator(".browse-scroll.search-scroll")).toBeVisible();
   await page
     .locator(".library-item")

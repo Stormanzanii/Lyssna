@@ -325,7 +325,7 @@ impl NativeControls {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
                 .clone()
-                .context("Native session unavailable")?;
+                .context("You're offline. This needs Spotify.")?;
             (session, connection.dj_requests.clone())
         };
         session.spawn({
@@ -356,7 +356,7 @@ impl NativeControls {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
                 .clone()
-                .context("Native session unavailable")?;
+                .context("You're offline. This needs Spotify.")?;
             (session, connection.dj_requests.clone())
         };
         let (ready, result) = mpsc::sync_channel(1);
@@ -466,7 +466,7 @@ impl NativeControls {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Native session unavailable"))?
                 .clone()
-                .context("Native session unavailable")?
+                .context("You're offline. This needs Spotify.")?
         };
         Ok(session)
     }

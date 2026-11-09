@@ -30,11 +30,16 @@ fn unavailable(emit: &impl Fn(NativeEvent)) {
 struct Offline<'a, E: Fn(NativeEvent)> {
     player: Arc<Player>,
     queue: OfflineQueue,
+    playing: Arc<AtomicBool>,
+    // The song sounding through the dropout; the app's takeover adopts it
+    // instead of reloading, so it plays on without a gap.
+    carrying: bool,
     emit: &'a E,
 }
 
 impl<E: Fn(NativeEvent)> Offline<'_, E> {
     fn load(&mut self, uri: Option<String>, play: bool, position_ms: u64) {
+        self.carrying = false;
         let Some(uri) = uri else {
             self.player.stop();
             return;
@@ -73,6 +78,11 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
             (self.emit)(NativeEvent::Context(context));
         }
         let first = self.queue.start(playable, index);
+        if self.carrying && start.is_some() {
+            self.carrying = false;
+            self.player.play();
+            return;
+        }
         self.load(first, play, position_ms);
     }
 
@@ -116,7 +126,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
                 ..
             } => {
                 let start = uris.get(offset).cloned();
-                self.start(uris, start.as_deref(), context, false, position_ms);
+                self.start(uris, start.as_deref(), context, true, position_ms);
             }
             PlayerAction::Play(Some(uri)) if uri.starts_with("spotify:track:") => {
                 self.start(vec![uri.clone()], Some(&uri), None, true, 0);
@@ -131,7 +141,10 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
                 flush,
             ),
             PlayerAction::Play(None) => self.player.play(),
-            PlayerAction::Pause => self.player.pause(),
+            PlayerAction::Pause => {
+                self.carrying = false;
+                self.player.pause();
+            }
             PlayerAction::Next => {
                 let next = self.queue.next(true);
                 if next.is_some() {
@@ -183,7 +196,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
         }
     }
 
-    fn heard(&mut self, event: PlayerEvent, playing: &mut bool) {
+    fn heard(&mut self, event: PlayerEvent) {
         match event {
             event @ PlayerEvent::TrackChanged { .. } => {
                 if let Some(track) = public_track_change(&event) {
@@ -195,7 +208,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
                 position_ms,
                 ..
             } => {
-                *playing = true;
+                self.playing.store(true, Ordering::Release);
                 (self.emit)(NativeEvent::Position {
                     uri: track_id.to_uri(),
                     position_ms: position_ms.into(),
@@ -208,7 +221,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
                 position_ms,
                 ..
             } => {
-                *playing = false;
+                self.playing.store(false, Ordering::Release);
                 (self.emit)(NativeEvent::Position {
                     uri: track_id.to_uri(),
                     position_ms: position_ms.into(),
@@ -223,7 +236,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
             } => (self.emit)(NativeEvent::Position {
                 uri: track_id.to_uri(),
                 position_ms: position_ms.into(),
-                playing: Some(*playing),
+                playing: Some(self.playing.load(Ordering::Acquire)),
                 seeked: true,
             }),
             PlayerEvent::PositionChanged {
@@ -240,7 +253,7 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
                 match self.queue.next(false) {
                     Some(next) => self.load(Some(next), true, 0),
                     None => {
-                        *playing = false;
+                        self.playing.store(false, Ordering::Release);
                         self.player.stop();
                         (self.emit)(NativeEvent::Stopped);
                     }
@@ -285,6 +298,7 @@ pub(super) async fn run(
         metadata,
         latest_volume,
         loaded,
+        carried,
         kept,
         ..
     } = channels;
@@ -303,8 +317,12 @@ pub(super) async fn run(
     let flush = kit.flush_audio.clone();
     let mut events = kit.player.get_player_event_channel();
     let modes = PlayModes::saved();
+    let carrying =
+        kit.playing.load(Ordering::Acquire) && carried.lock().is_ok_and(|slot| slot.is_some());
     let mut offline = Offline {
         player: kit.player.clone(),
+        playing: kit.playing.clone(),
+        carrying,
         queue: OfflineQueue::new(
             modes.shuffle,
             Repeat::parse(&modes.repeat),
@@ -316,7 +334,6 @@ pub(super) async fn run(
     diagnostic("audio offline: playing downloads");
     emit(NativeEvent::Ready(OFFLINE_DEVICE.into()));
     offline.modes();
-    let mut playing = false;
     let mut probe = tokio::time::interval(PROBE_EVERY);
     probe.tick().await;
     let online = loop {
@@ -335,7 +352,7 @@ pub(super) async fn run(
             event = events.recv() => match event {
                 Some(event) => {
                     loaded.store(true, Ordering::Release);
-                    offline.heard(event, &mut playing);
+                    offline.heard(event);
                 }
                 None => break false,
             },
@@ -347,6 +364,13 @@ pub(super) async fn run(
         }
     };
     ready.store(false, Ordering::Release);
-    offline.player.stop();
+    // Back online, the song plays on and the new connection takes it over.
+    let carry = online && offline.playing.load(Ordering::Acquire);
+    if !carry {
+        offline.player.stop();
+    }
+    if let Ok(mut slot) = carried.lock() {
+        *slot = carry.then(|| offline.player.clone());
+    }
     online
 }

@@ -1345,7 +1345,9 @@ impl Desktop {
                             }
                             let offline = id == OFFLINE_DEVICE;
                             snapshot.native_status = ready_status(&id);
+                            let mut was_offline = false;
                             if let Ok(mut current) = pump.native_id.lock() {
+                                was_offline = current.as_deref() == Some(OFFLINE_DEVICE);
                                 *current = Some(id);
                             }
                             snapshot.native_ready = true;
@@ -1360,7 +1362,7 @@ impl Desktop {
                             if clicked && let Ok(mut last) = pump.last_native.lock() {
                                 *last = Some(Instant::now());
                             }
-                            if pump
+                            if (pump
                                 .resume_on_ready
                                 .lock()
                                 .ok()
@@ -1369,6 +1371,7 @@ impl Desktop {
                                     lost.elapsed() < RESUME_AFTER_DROP
                                         || snapshot.playback.is_playing
                                 })
+                                || was_offline && !offline && snapshot.playback.is_playing)
                                 && !clicked
                                 && snapshot.playback.item.is_some()
                             {

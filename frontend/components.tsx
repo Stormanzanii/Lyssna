@@ -2905,3 +2905,21 @@ function CreditsCard({
     </article>
   );
 }
+
+export function HistoryChevron({ back }: { back: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="27"
+      height="27"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points={back ? "15 4 7 12 15 20" : "9 4 17 12 9 20"} />
+    </svg>
+  );
+}

@@ -560,6 +560,14 @@ small {
   display: flex;
   gap: 2px;
 }
+.history-buttons .icon-button {
+  color: light-dark(#000, #fff);
+}
+.history-buttons .icon-button:disabled {
+  color: light-dark(#a7a7a7, #6a6a6a);
+  background: none;
+  cursor: default;
+}
 .search-playlists {
   padding: 20px 24px;
 }

@@ -15,8 +15,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DJRequest } from "./DJRequest";
 import { createDJReminder } from "./djHint";
 import {
-  ArrowLeft,
-  ArrowRight,
   Check,
   Settings as SettingsIcon,
   ChevronDown,
@@ -145,6 +143,7 @@ import {
   useStickyLoadedImage,
   preloadImage,
   ExplicitBadge,
+  HistoryChevron,
   VerifiedBadge,
   usePosition,
 } from "./components";
@@ -2928,11 +2927,25 @@ function App() {
       >
         {!nativeMenuReady && <AppMenu groups={menuGroups} />}
         <div className="history-buttons">
-          <button className="icon-button" title="Go back" onClick={back}>
-            <ArrowLeft size={19} />
+          <button
+            className="icon-button"
+            title="Go back"
+            disabled={
+              center === "browse" &&
+              !profileTrail.current.length &&
+              !history.current.length
+            }
+            onClick={back}
+          >
+            <HistoryChevron back />
           </button>
-          <button className="icon-button" title="Go forward" onClick={forward}>
-            <ArrowRight size={19} />
+          <button
+            className="icon-button"
+            title="Go forward"
+            disabled={!future.current.length}
+            onClick={forward}
+          >
+            <HistoryChevron back={false} />
           </button>
         </div>
         <div className="search-group">

@@ -2915,8 +2915,8 @@ export function HistoryChevron({ back }: { back: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="27"
-      height="27"
+      width="25"
+      height="25"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"

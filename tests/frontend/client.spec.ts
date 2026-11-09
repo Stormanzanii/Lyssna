@@ -16893,6 +16893,38 @@ test("Browse all opens categories with shelves, subcategories and more", async (
   await expect(page.locator(".browse-category-hero h1")).toHaveText("Music");
 });
 
+test("top bar matches Spotify's sizes and spacing", async ({ page }) => {
+  await page.setViewportSize({ width: 1536, height: 864 });
+  await startClient(page);
+  const box = async (selector: string) =>
+    (await page.locator(selector).first().boundingBox())!;
+  const near = (value: number, target: number) =>
+    expect(Math.abs(value - target)).toBeLessThan(1.5);
+  // Measured from Spotify's Windows client, in CSS pixels.
+  near((await box(".topbar")).height, 63);
+  near((await box("main")).y, 63);
+  const dots = await box(".app-menu-button svg");
+  near(dots.x + dots.width / 2, 31.8);
+  near(dots.y + dots.height / 2, 31.2);
+  const back = await box(".history-buttons button:first-child svg");
+  const forward = await box(".history-buttons button:last-child svg");
+  near(back.x + (back.width * 11) / 24, 77.9);
+  near(forward.x + (forward.width * 13) / 24, 112.1);
+  near(back.height * (16 / 24), 16.7);
+  const home = await box(".home-button");
+  const search = await box(".search-box");
+  near(home.width, 48);
+  near(home.height, 48);
+  near(search.height, 48);
+  near(search.width, 471.5);
+  near(search.x - (home.x + home.width), 8);
+  near((home.x + search.x + search.width) / 2, 768);
+  await page.screenshot({
+    path: "target/diagnostics/topbar.png",
+    clip: { x: 0, y: 0, width: 1536, height: 90 },
+  });
+});
+
 test("a suggested song has the song menu, a tick when saved and an inline E", async ({
   page,
 }) => {

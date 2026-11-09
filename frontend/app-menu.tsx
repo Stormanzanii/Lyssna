@@ -52,7 +52,7 @@ export function AppMenu({ groups }: { groups: AppMenuGroup[] }) {
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <MoreHorizontal size={22} />
+        <MoreHorizontal size={25} />
       </button>
       {open && (
         <div className="app-menu" role="menu" aria-label="Menu">

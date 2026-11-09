@@ -1556,3 +1556,67 @@
   font-weight: 700;
   text-align: center;
 }
+
+.shortcuts-dialog {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.shortcuts-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+}
+.shortcuts-dialog h2 {
+  margin: 0;
+}
+.shortcuts-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 40px;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+}
+.shortcuts-section h3 {
+  margin: 16px 0 8px;
+  font-size: 16px;
+}
+.shortcuts-section dl {
+  margin: 0;
+}
+.shortcuts-section dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.shortcuts-section dt {
+  color: light-dark(#4c4c4c, #b3b3b3);
+}
+.shortcuts-section dd {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.shortcuts-section kbd {
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: light-dark(#e3e3e3, #2a2a2a);
+  color: light-dark(#000, #fff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .shortcuts-body {
+    grid-template-columns: 1fr;
+  }
+}

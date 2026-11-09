@@ -96,6 +96,8 @@ import {
 import { CoverViewer } from "./cover-viewer";
 import { Logo, MicLoader } from "./brand";
 import { playingRoute } from "./playing-context";
+import { keys, shortcutFor, type Shortcut } from "./shortcuts";
+import { ShortcutsDialog } from "./shortcuts-dialog";
 import {
   emptyState,
   reducer,
@@ -607,6 +609,7 @@ function App() {
   const animatorFullscreen = useRef(false);
   useEffect(() => setSettingsTab(null), [state.profile?.id]);
   const [about, setAbout] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Let WebView2 drop its caches once the user rests after browsing.
   useEffect(
     () => startIdleTrim(() => void rpc("trim_memory").catch(() => {})),
@@ -1800,10 +1803,8 @@ function App() {
         },
         {
           label: "Keyboard shortcuts",
-          onSelect: () =>
-            notify(
-              `Space play or pause · ${MODIFIER}+K search · ${MODIFIER}+= / ${MODIFIER}+- / ${MODIFIER}+0 zoom · F5 refresh · F11 full screen · Esc close menus`,
-            ),
+          shortcut: `${MODIFIER}+/`,
+          onSelect: () => setShortcutsOpen(true),
         },
       ],
     },
@@ -2395,6 +2396,265 @@ function App() {
     state.playback.context,
     !!state.dj_context,
   );
+  // Spotify's desktop shortcuts. The reference dialog shows this same
+  // list, so what it lists is what works.
+  const seekBy = (ms: number) =>
+    play({ command: "seek", positionMs: Math.max(0, songPosition() + ms) });
+  const libraryChip = (key: string) => () => {
+    if (state.settings.compact_library)
+      updateSettings({ compact_library: false });
+    setLibraryFilter(key);
+  };
+  const playingItem = state.playback.item;
+  const shortcuts: Shortcut[] = [
+    {
+      keys: keys("Ctrl+N"),
+      label: "Create new playlist",
+      section: "Basic",
+      disabled: !signedIn,
+      run: menuGroups[0].items[0].onSelect,
+    },
+    {
+      keys: keys("Ctrl+Shift+N"),
+      label: "Create new folder",
+      section: "Basic",
+      disabled: !signedIn,
+      run: () => setFolderDialog(true),
+    },
+    {
+      keys: keys("Ctrl+K"),
+      label: "Search",
+      section: "Basic",
+      listed: true,
+    },
+    {
+      keys: IS_MAC ? "Cmd+," : ["Ctrl+P", "Ctrl+,"],
+      label: "Settings",
+      section: "Basic",
+      whileTyping: true,
+      run: () =>
+        setSettingsTab(
+          lastSettingsTab(state.settings.settings_remember_place !== false),
+        ),
+    },
+    {
+      keys: keys("Ctrl+Shift+W"),
+      label: "Log out",
+      section: "Basic",
+      disabled: !signedIn,
+      run: () => void call("sign_out"),
+    },
+    {
+      keys: keys("Ctrl+/"),
+      label: "Keyboard shortcuts",
+      section: "Basic",
+      whileTyping: true,
+      run: () => setShortcutsOpen((open) => !open),
+    },
+    { keys: "Space", label: "Play or pause", section: "Playback", listed: true },
+    {
+      keys: keys("Alt+Shift+B"),
+      label: "Like or unlike the song",
+      section: "Playback",
+      disabled: !signedIn || !playingItem,
+      run: () => {
+        if (playingItem) save(playingItem);
+      },
+    },
+    {
+      keys: keys("Ctrl+S"),
+      label: "Shuffle",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () =>
+        play({ command: "shuffle", enabled: !state.playback.shuffle_state }),
+    },
+    {
+      keys: keys("Ctrl+R"),
+      label: "Repeat",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () =>
+        play({
+          command: "repeat",
+          repeat:
+            state.playback.repeat_state === "context"
+              ? "track"
+              : state.playback.repeat_state === "track"
+                ? "off"
+                : "context",
+        }),
+    },
+    {
+      keys: keys("Ctrl+Left"),
+      label: "Skip to previous",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () => play({ command: "previous" }),
+    },
+    {
+      keys: keys("Ctrl+Right"),
+      label: "Skip to next",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () => play({ command: "next" }),
+    },
+    {
+      keys: keys("Shift+Left", "Cmd+Shift+Left"),
+      label: "Seek backward",
+      section: "Playback",
+      disabled: !playingItem,
+      run: () => seekBy(-5_000),
+    },
+    {
+      keys: keys("Shift+Right", "Cmd+Shift+Right"),
+      label: "Seek forward",
+      section: "Playback",
+      disabled: !playingItem,
+      run: () => seekBy(5_000),
+    },
+    {
+      keys: keys("Ctrl+Up"),
+      label: "Raise volume",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () =>
+        play({ command: "volume", volume: Math.min(100, volume + 10) }),
+    },
+    {
+      keys: keys("Ctrl+Down"),
+      label: "Lower volume",
+      section: "Playback",
+      disabled: !signedIn,
+      run: () =>
+        play({ command: "volume", volume: Math.max(0, volume - 10) }),
+    },
+    {
+      keys: keys("Alt+Shift+H"),
+      label: "Home",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: () => {
+        setCenter("browse");
+        navigate("home");
+      },
+    },
+    {
+      keys: keys("Alt+Left", "Cmd+["),
+      label: "Back",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: back,
+    },
+    {
+      keys: keys("Alt+Right", "Cmd+]"),
+      label: "Forward",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: forward,
+    },
+    {
+      keys: keys("Alt+Shift+J"),
+      label: "Currently playing",
+      section: "Navigation",
+      disabled: !signedIn || !nowPlayingRoute,
+      run: () => {
+        if (!nowPlayingRoute) return;
+        setCenter("browse");
+        navigate(nowPlayingRoute);
+      },
+    },
+    {
+      keys: keys("Alt+Shift+S"),
+      label: "Liked Songs",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: () => {
+        setCenter("browse");
+        navigate("liked");
+      },
+    },
+    {
+      keys: keys("Alt+Shift+Q"),
+      label: "Queue",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: toggleQueue,
+    },
+    {
+      keys: keys("Alt+Shift+1"),
+      label: "Your playlists",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: libraryChip("playlists"),
+    },
+    {
+      keys: keys("Alt+Shift+3"),
+      label: "Your artists",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: libraryChip("artists"),
+    },
+    {
+      keys: keys("Alt+Shift+4"),
+      label: "Your albums",
+      section: "Navigation",
+      disabled: !signedIn,
+      run: libraryChip("albums"),
+    },
+    {
+      keys: keys("Alt+Shift+L"),
+      label: "Collapse or expand Your Library",
+      section: "Layout",
+      run: () =>
+        updateSettings({ compact_library: !state.settings.compact_library }),
+    },
+    {
+      keys: keys("Alt+Shift+R"),
+      label: "Show or hide Now playing view",
+      section: "Layout",
+      run: () => {
+        setSidebar(!sidebar);
+        setPanel("now");
+      },
+    },
+    { keys: "F11", label: "Full screen", section: "Layout", listed: true },
+    { keys: keys("Ctrl+="), label: "Zoom in", section: "Layout", listed: true },
+    { keys: keys("Ctrl+-"), label: "Zoom out", section: "Layout", listed: true },
+    { keys: keys("Ctrl+0"), label: "Reset zoom", section: "Layout", listed: true },
+    { keys: "F5", label: "Refresh", section: "Layout", listed: true },
+  ];
+  const shortcutList = useRef(shortcuts);
+  shortcutList.current = shortcuts;
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      const found = shortcutFor(
+        event,
+        shortcutList.current,
+        isTextInput(event.target),
+      );
+      // TTML Creator seeks and moves its own cursor with these keys.
+      if (
+        !found ||
+        (found.section === "Playback" && document.querySelector(".ttml-creator"))
+      )
+        return;
+      // Even when it cannot run, the webview must not reload, print or
+      // save the page on Ctrl+R, Ctrl+P and Ctrl+S.
+      event.preventDefault();
+      const repeats = found.label.startsWith("Seek") || /volume/.test(found.label);
+      if (
+        found.disabled ||
+        (event.repeat && !repeats) ||
+        (document.querySelector("dialog[open], [aria-modal=\"true\"]") &&
+          found.label !== "Keyboard shortcuts")
+      )
+        return;
+      found.run?.();
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, []);
   const playingMark = (route: string) =>
     nowPlayingRoute === route &&
     state.playback.is_playing && (
@@ -5718,6 +5978,12 @@ function App() {
             </div>
           </form>
         </div>
+      )}
+      {shortcutsOpen && (
+        <ShortcutsDialog
+          shortcuts={shortcuts}
+          onClose={() => setShortcutsOpen(false)}
+        />
       )}
       {about && (
         <AboutDialog

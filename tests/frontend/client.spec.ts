@@ -164,6 +164,39 @@ test("playing on another device does not silently redirect local Play", async ({
     .toBe("native");
 });
 
+test("Spotify's keyboard shortcuts work and list themselves", async ({
+  page,
+}) => {
+  await startClient(page);
+  const players = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request),
+    );
+  await page.keyboard.press("Control+ArrowRight");
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.press("Control+s");
+  await expect
+    .poll(async () => (await players()).map((request: any) => request.command))
+    .toEqual(["next", "seek", "shuffle"]);
+  await page.keyboard.press("Alt+Shift+s");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Liked Songs",
+  );
+  // Typing in search keeps the keys for the text.
+  await page.getByPlaceholder("What do you want to play?").click();
+  await page.keyboard.press("Shift+ArrowLeft");
+  expect((await players()).length).toBe(3);
+  await page.keyboard.press("Control+/");
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Skip to next");
+  await expect(dialog).toContainText("Liked Songs");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
 test("controls stay on this computer after a phone hands playback over", async ({
   page,
 }) => {

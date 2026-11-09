@@ -16122,6 +16122,34 @@ test("Now playing lyrics card folds while the TTML Creator is open", async ({
   );
 });
 
+test("TTML Creator holds crossfade so its repeat never fades into itself", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const creator = page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true });
+  const holds = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "hold_crossfade")
+        .map((entry: any) => entry.args.held)
+        .at(-1),
+    );
+  await creator.click();
+  await expect.poll(holds).toBe(true);
+  await page.getByRole("button", { name: "Show the player bar" }).click();
+  await creator.click();
+  await expect.poll(holds).toBe(false);
+});
+
 test("TTML Creator Sync follows the playing line", async ({ page }) => {
   await startClient(page);
   await playLyricTrack(page, false);

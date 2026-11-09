@@ -397,10 +397,16 @@ export function TtmlCreator({
   playerRef.current = onPlayer;
   useEffect(() => {
     if (!here) return;
+    void rpc("hold_crossfade", { held: true }).catch(() => undefined);
+    const release = () =>
+      void rpc("hold_crossfade", { held: false }).catch(() => undefined);
     const before = repeatRef.current ?? "off";
-    if (before === "track") return;
+    if (before === "track") return release;
     playerRef.current({ command: "repeat", repeat: "track" });
-    return () => playerRef.current({ command: "repeat", repeat: before });
+    return () => {
+      release();
+      playerRef.current({ command: "repeat", repeat: before });
+    };
   }, [here]);
 
   const lastPosition = useRef(0);

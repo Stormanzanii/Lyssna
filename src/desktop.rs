@@ -2886,6 +2886,30 @@ async fn track_waveform(
     .map_err(|_| "Waveform worker unavailable".to_owned())?
     .map_err(error)
 }
+/// TTML Creator repeats one song and stops at its end; a crossfade would
+/// fade out its last seconds into its own start.
+static CROSSFADE_HELD: AtomicBool = AtomicBool::new(false);
+fn apply_crossfade(
+    controls: &crate::native::NativeControls,
+    account: &str,
+    settings: &crate::config::Settings,
+) {
+    let seconds = if CROSSFADE_HELD.load(Ordering::Acquire) {
+        0
+    } else {
+        settings.active_crossfade_seconds()
+    };
+    controls.set_crossfade(account, seconds, settings.crossfade_picked);
+}
+#[tauri::command]
+fn hold_crossfade(held: bool, state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    CROSSFADE_HELD.store(held, Ordering::Release);
+    let snapshot = lock(&state.0.snapshot).map_err(error)?;
+    if let Some(profile) = snapshot.profile.as_ref() {
+        apply_crossfade(&state.0.controls, &profile.id, &snapshot.settings);
+    }
+    Ok(())
+}
 #[tauri::command]
 fn playback_speed(percent: u32, state: State<'_, Desktop>) -> std::result::Result<u32, String> {
     if percent != 100 && lock(&state.0.jam_commands).map_err(error)?.is_some() {
@@ -3029,11 +3053,7 @@ fn save_settings(
                 .set_audio_output(&profile.id, settings.audio_output.clone());
         }
         if let Some(profile) = snapshot.profile.as_ref() {
-            state.0.controls.set_crossfade(
-                &profile.id,
-                settings.active_crossfade_seconds(),
-                settings.crossfade_picked,
-            );
+            apply_crossfade(&state.0.controls, &profile.id, &settings);
         }
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_visible(settings.keep_playing_on_close);
@@ -5776,6 +5796,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             nightly_build,
             nightly_check,
             nightly_cancel,
+            hold_crossfade,
             nightly_clear_cache,
             page_shown,
             nightly_status,

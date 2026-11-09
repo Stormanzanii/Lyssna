@@ -2647,6 +2647,7 @@ async fn run(
     let mut unavailable = crate::playback_intent::UnavailableWatch::default();
     let mut intent_tick = tokio::time::interval(Duration::from_millis(20));
     let mut session_watch = tokio::time::interval(Duration::from_secs(1));
+    let mut internet_watch = tokio::time::interval(Duration::from_secs(2));
     let mut dj_prewarm = tokio::time::interval(Duration::from_secs(300));
     dj_prewarm.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut volume_sync: Option<(u8, std::time::Instant)> = None;
@@ -2701,6 +2702,17 @@ async fn run(
                 let _ = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
                 connection_lost = true;
                 break;
+            }
+            // A pulled cable leaves Spotify's connection hanging for ~20s
+            // before it reports closed; Windows knows at once.
+            _ = internet_watch.tick() => {
+                if offline_run::internet_lost().await {
+                    diagnostic("audio connection dropped: no internet");
+                    let _ = spirc.shutdown();
+                    let _ = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+                    connection_lost = true;
+                    break;
+                }
             }
             Some(action) = commands.recv() => {
                 if let Some(kind) = command_kind(&action) {

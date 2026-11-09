@@ -9,6 +9,35 @@ use librespot_playback::player::PlayerEvent;
 
 pub(crate) const OFFLINE_DEVICE: &str = "offline";
 const PROBE_EVERY: Duration = Duration::from_secs(15);
+const HINT_EVERY: Duration = Duration::from_secs(1);
+
+/// Windows' own view of internet access: false only when it sees none.
+/// Answers instantly, unlike a Spotify connection timing out.
+fn internet_hint() -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::NetworkManagement::IpHelper::GetNetworkConnectivityHint;
+        use windows::Win32::Networking::WinSock::{
+            NL_NETWORK_CONNECTIVITY_HINT, NetworkConnectivityLevelHintLocalAccess,
+            NetworkConnectivityLevelHintNone,
+        };
+        let mut hint = NL_NETWORK_CONNECTIVITY_HINT::default();
+        // SAFETY: the hint is a plain struct the call fills in.
+        if unsafe { GetNetworkConnectivityHint(&mut hint) }.is_err() {
+            return true;
+        }
+        hint.ConnectivityLevel != NetworkConnectivityLevelHintNone
+            && hint.ConnectivityLevel != NetworkConnectivityLevelHintLocalAccess
+    }
+    #[cfg(not(windows))]
+    true
+}
+
+/// Windows reports no internet and Spotify cannot be reached. The hint
+/// alone can be wrong on networks that block Windows' own check.
+pub(super) async fn internet_lost() -> bool {
+    !internet_hint() && !spotify_reachable().await
+}
 
 async fn spotify_reachable() -> bool {
     matches!(
@@ -34,6 +63,7 @@ struct Offline<'a, E: Fn(NativeEvent)> {
     // The song sounding through the dropout; the app's takeover adopts it
     // instead of reloading, so it plays on without a gap.
     carrying: bool,
+    account: &'a str,
     emit: &'a E,
 }
 
@@ -196,7 +226,32 @@ impl<E: Fn(NativeEvent)> Offline<'_, E> {
         }
     }
 
+    /// A song carried over from the dropped connection has no offline queue
+    /// yet; the saved queue gives it one, so the next download follows.
+    fn adopt_queue(&mut self, uri: &str) {
+        if self.queue.current().is_some() {
+            return;
+        }
+        let playable: Vec<String> = crate::resume::queue(self.account)
+            .into_iter()
+            .filter(|track| track == uri || crate::offline_sync::playable(track))
+            .collect();
+        let index = playable.iter().position(|track| track == uri);
+        match index {
+            Some(index) => self.queue.start(playable, index),
+            None => self.queue.start(vec![uri.to_owned()], 0),
+        };
+    }
+
     fn heard(&mut self, event: PlayerEvent) {
+        if let Some((kind, uri)) = event_summary(&event) {
+            diagnostic(&format!("offline event {kind} {uri}"));
+        }
+        if let PlayerEvent::Playing { track_id, .. }
+        | PlayerEvent::PositionChanged { track_id, .. } = &event
+        {
+            self.adopt_queue(&track_id.to_uri());
+        }
         match event {
             event @ PlayerEvent::TrackChanged { .. } => {
                 if let Some(track) = public_track_change(&event) {
@@ -323,6 +378,7 @@ pub(super) async fn run(
         player: kit.player.clone(),
         playing: kit.playing.clone(),
         carrying,
+        account,
         queue: OfflineQueue::new(
             modes.shuffle,
             Repeat::parse(&modes.repeat),
@@ -334,14 +390,29 @@ pub(super) async fn run(
     diagnostic("audio offline: playing downloads");
     emit(NativeEvent::Ready(OFFLINE_DEVICE.into()));
     offline.modes();
+    // Closing the dead connection can leave the carried song paused.
+    if carrying {
+        offline.player.play();
+    }
     let mut probe = tokio::time::interval(PROBE_EVERY);
     probe.tick().await;
+    let mut hint = tokio::time::interval(HINT_EVERY);
+    let mut had_internet = internet_hint();
     let online = loop {
         tokio::select! {
             _ = &mut *stopped => break false,
             _ = probe.tick() => {
                 if spotify_reachable().await {
                     diagnostic("audio offline: Spotify reachable again");
+                    break true;
+                }
+            }
+            _ = hint.tick() => {
+                let internet = internet_hint();
+                let returned = internet && !had_internet;
+                had_internet = internet;
+                if returned && spotify_reachable().await {
+                    diagnostic("audio offline: internet back, Spotify reachable");
                     break true;
                 }
             }

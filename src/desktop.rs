@@ -1203,6 +1203,9 @@ impl Desktop {
                         Event::Notice(message) => {
                             emit(json!({"type":"notice","message":message,"error":false}))
                         }
+                        // Offline, background work fails for want of Spotify;
+                        // the banner already says so.
+                        Event::Error(_) if snapshot.native_status.starts_with("Offline") => {}
                         Event::Error(message) => {
                             snapshot.notice = message.clone();
                             emit(json!({"type":"notice","message":message,"error":true}));
@@ -1349,6 +1352,17 @@ impl Desktop {
                             if let Ok(mut current) = pump.native_id.lock() {
                                 was_offline = current.as_deref() == Some(OFFLINE_DEVICE);
                                 *current = Some(id);
+                            }
+                            if offline != was_offline {
+                                emit(json!({
+                                    "type": "notice",
+                                    "message": if offline {
+                                        "You're offline. Downloaded songs keep playing."
+                                    } else {
+                                        "You're back online."
+                                    },
+                                    "error": false,
+                                }));
                             }
                             snapshot.native_ready = true;
                             if !offline {

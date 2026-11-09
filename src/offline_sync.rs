@@ -5,7 +5,7 @@ use librespot_core::{Session, SpotifyId, SpotifyUri};
 use librespot_metadata::audio::{AudioFileFormat, AudioItem};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     io::Read,
     sync::{
         LazyLock, Mutex, RwLock,
@@ -24,6 +24,7 @@ static TRACKS: LazyLock<RwLock<HashMap<String, crate::model::Track>>> =
     LazyLock::new(Default::default);
 static DOWNLOADING: Mutex<()> = Mutex::new(());
 static SIGN_OUTS: AtomicUsize = AtomicUsize::new(0);
+static RUNNING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
 
 fn with<R>(account: &str, change: impl FnOnce(&Store, &mut Manifest) -> R) -> Result<R> {
     let mut loaded = LOADED
@@ -114,6 +115,7 @@ pub struct Progress {
     pub uri: String,
     pub done: usize,
     pub total: usize,
+    pub downloading: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -126,6 +128,10 @@ pub struct Status {
 
 pub fn status(account: &str) -> Result<Status> {
     let now = crate::offline::now();
+    let running = RUNNING
+        .lock()
+        .map(|running| running.clone())
+        .unwrap_or_default();
     with(account, |store, manifest| Status {
         collections: manifest
             .collections
@@ -136,6 +142,7 @@ pub fn status(account: &str) -> Result<Status> {
                     uri: collection.uri.clone(),
                     done,
                     total,
+                    downloading: running.contains(&collection.uri),
                 })
             })
             .collect(),
@@ -143,6 +150,29 @@ pub fn status(account: &str) -> Result<Status> {
         songs: manifest.tracks.len(),
         bytes: store.size(),
     })
+}
+
+pub fn downloaded_songs(account: &str) -> Result<Vec<String>> {
+    with(account, |_, manifest| {
+        manifest.tracks.keys().cloned().collect()
+    })
+}
+
+/// Downloads that stopped short, to pick up again once Spotify is reachable.
+pub fn unfinished(account: &str) -> Vec<Collection> {
+    with(account, |_, manifest| {
+        manifest
+            .collections
+            .iter()
+            .filter(|collection| {
+                manifest
+                    .is_downloaded(&collection.uri)
+                    .is_some_and(|(done, total)| done < total)
+            })
+            .cloned()
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 pub fn remove(account: &str, uri: &str) -> Result<()> {
@@ -173,17 +203,39 @@ pub fn download(
         store.save(manifest)?;
         anyhow::Ok(missing)
     })??;
+    if missing.is_empty() {
+        progress();
+        return Ok(());
+    }
+    if let Ok(mut running) = RUNNING.lock() {
+        running.insert(uri.clone());
+    }
     progress();
+    let finished = fetch_missing(session, &account, &uri, missing, cancelled, &mut progress);
+    if let Ok(mut running) = RUNNING.lock() {
+        running.remove(&uri);
+    }
+    finished
+}
+
+fn fetch_missing(
+    session: &Session,
+    account: &str,
+    uri: &str,
+    missing: Vec<String>,
+    cancelled: impl Fn() -> bool,
+    progress: &mut impl FnMut(),
+) -> Result<()> {
+    let account = account.to_owned();
     let _turn = DOWNLOADING
         .lock()
         .map_err(|_| anyhow::anyhow!("Downloads unavailable"))?;
-    let mut failures = 0;
     for track in missing {
         if cancelled() {
             return Ok(());
         }
         let wanted = with(&account, |_, manifest| {
-            manifest.is_downloaded(&uri).is_some() && !manifest.tracks.contains_key(&track)
+            manifest.is_downloaded(uri).is_some() && !manifest.tracks.contains_key(&track)
         })?;
         if !wanted {
             continue;
@@ -201,16 +253,34 @@ pub fn download(
                 publish(&account);
                 progress();
             }
+            // Spotify leaves a song it cannot fetch for a later attempt
+            // without telling the listener.
             Err(error) => {
-                failures += 1;
                 crate::native::diagnostic(&format!("event download skipped {track}: {error:#}"));
             }
         }
     }
-    if failures > 0 {
-        bail!("{failures} songs could not be downloaded");
-    }
     Ok(())
+}
+
+/// Spotify relinks a song unavailable in this country to another release of
+/// it; the player plays that one, so the download keeps it too.
+async fn playable_item(session: &Session, uri: SpotifyUri) -> Result<AudioItem> {
+    let item = AudioItem::get_file(session, uri).await?;
+    item.availability
+        .map_err(|_| anyhow::anyhow!("Song unavailable"))?;
+    if !item.files.is_empty() {
+        return Ok(item);
+    }
+    for alternative in item.alternatives.map(|tracks| tracks.0).unwrap_or_default() {
+        if let Ok(other) = AudioItem::get_file(session, alternative).await
+            && other.availability.is_ok()
+            && !other.files.is_empty()
+        {
+            return Ok(other);
+        }
+    }
+    bail!("No playable audio file")
 }
 
 fn fetch(session: &Session, uri: &str) -> Result<(String, Vec<u8>, Download)> {
@@ -223,16 +293,15 @@ fn fetch(session: &Session, uri: &str) -> Result<(String, Vec<u8>, Download)> {
         .enable_all()
         .build()?;
     let (item, format, file_id, file, key) = runtime.block_on(async {
-        let item = AudioItem::get_file(session, track_uri).await?;
-        item.availability
-            .map_err(|_| anyhow::anyhow!("Song unavailable"))?;
+        let item = playable_item(session, track_uri).await?;
         let (format, file_id, rate) = crate::waveform::FORMATS
             .iter()
             .find_map(|&(format, rate)| item.files.get(&format).map(|&id| (format, id, rate)))
             .context("No playable audio file")?;
+        let audio_id = SpotifyId::try_from(&item.track_id).unwrap_or(track_id);
         let (file, key) = tokio::join!(
             AudioFile::open(session, file_id, rate),
-            session.audio_key().request(track_id, file_id),
+            session.audio_key().request(audio_id, file_id),
         );
         anyhow::Ok((item, format, file_id, file?, key?))
     })?;
@@ -245,12 +314,13 @@ fn fetch(session: &Session, uri: &str) -> Result<(String, Vec<u8>, Download)> {
     if bytes.len() != length {
         bail!("Audio download stopped");
     }
-    let track = crate::native::public_track(&item).unwrap_or_else(|| crate::model::Track {
-        uri: uri.to_owned(),
+    let mut track = crate::native::public_track(&item).unwrap_or_else(|| crate::model::Track {
         name: item.name.clone(),
         duration_ms: item.duration_ms.into(),
         ..crate::model::Track::default()
     });
+    track.uri = uri.to_owned();
+    track.id = uri.rsplit(':').next().map(str::to_owned);
     Ok((
         file_id.to_base16(),
         bytes,

@@ -1348,6 +1348,9 @@ impl Desktop {
                             }
                             snapshot.native_ready = true;
                             snapshot.native_status = "Ready · this computer".into();
+                            if let Some(profile) = snapshot.profile.as_ref() {
+                                resume_downloads(&app, &pump.controls, &profile.id);
+                            }
                             // Reload playlists from Spotify's own library list.
                             let _ = pump.commands.send(Command::Library);
                             let clicked = send_queued_native(&pump.queued_native, &pump.controls);
@@ -4795,7 +4798,16 @@ fn offline_download(
         image,
         tracks,
     };
-    std::thread::Builder::new()
+    start_download(app, session, account, collection);
+    Ok(())
+}
+fn start_download(
+    app: tauri::AppHandle,
+    session: librespot_core::Session,
+    account: String,
+    collection: crate::offline::Collection,
+) {
+    let _ = std::thread::Builder::new()
         .name("lyssna-downloads".into())
         .spawn(move || {
             let result = crate::offline_sync::download(&session, collection, || {
@@ -4808,9 +4820,30 @@ fn offline_download(
                     json!({"type":"notice","message":format!("{failure:#}"),"error":true}),
                 );
             }
-        })
-        .map_err(error)?;
-    Ok(())
+        });
+}
+fn resume_downloads(
+    app: &tauri::AppHandle,
+    controls: &crate::native::NativeControls,
+    account: &str,
+) {
+    let unfinished = crate::offline_sync::unfinished(account);
+    if unfinished.is_empty() {
+        return;
+    }
+    let Ok(session) = controls
+        .scoped(account)
+        .and_then(|controls| controls.session())
+    else {
+        return;
+    };
+    for collection in unfinished {
+        start_download(app.clone(), session.clone(), account.to_owned(), collection);
+    }
+}
+#[tauri::command]
+fn offline_songs(state: State<'_, Desktop>) -> std::result::Result<Vec<String>, String> {
+    crate::offline_sync::downloaded_songs(&signed_in_account(&state).map_err(error)?).map_err(error)
 }
 #[tauri::command]
 async fn search_warm(state: State<'_, Desktop>, query: String) -> std::result::Result<(), String> {
@@ -5645,6 +5678,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             offline_status,
             offline_remove,
             offline_download,
+            offline_songs,
             browse_categories,
             browse_page,
             app_update,

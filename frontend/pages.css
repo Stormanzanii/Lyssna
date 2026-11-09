@@ -1498,3 +1498,32 @@
 .download-button.done:hover svg circle {
   filter: brightness(1.1);
 }
+
+.downloaded-mark {
+  display: inline-block;
+  flex: none;
+  vertical-align: -1px;
+  margin-right: 6px;
+}
+.downloading-bar {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 4px;
+  font-size: 13px;
+}
+.downloading-bar > div:first-child {
+  display: flex;
+  justify-content: space-between;
+}
+.downloading-track {
+  height: 4px;
+  border-radius: 2px;
+  background: light-dark(#d9d9d9, #4d4d4d);
+  overflow: hidden;
+}
+.downloading-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--spotify-green);
+  transition: width 0.3s ease;
+}

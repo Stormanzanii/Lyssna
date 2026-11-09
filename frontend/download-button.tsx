@@ -9,8 +9,11 @@ const empty: DownloadStatus = {
   bytes: 0,
 };
 
-export function useDownloads(signedIn: boolean) {
+export type Downloads = { status: DownloadStatus; songs: Set<string> };
+
+export function useDownloads(signedIn: boolean): Downloads {
   const [status, setStatus] = useState<DownloadStatus>(empty);
+  const [songs, setSongs] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     if (!signedIn) {
       setStatus(empty);
@@ -28,8 +31,26 @@ export function useDownloads(signedIn: boolean) {
       void stop.then((unlisten) => unlisten());
     };
   }, [signedIn]);
-  return status;
+  useEffect(() => {
+    if (!signedIn || !status.songs) {
+      setSongs(new Set());
+      return;
+    }
+    let live = true;
+    rpc<string[]>("offline_songs")
+      .then((uris) => live && uris && setSongs(new Set(uris)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [signedIn, status.songs]);
+  return { status, songs };
 }
+
+export const isDownloaded = (status: DownloadStatus, uri: string) =>
+  status.collections.some((item) => item.uri === uri && !item.downloading);
+
+const arrow = "M12 7v10.3m-3.5-3.5 3.5 3.5 3.5-3.5";
 
 export function DownloadButton({
   status,
@@ -45,16 +66,16 @@ export function DownloadButton({
   tracks: string[];
 }) {
   const progress = status.collections.find((item) => item.uri === uri);
-  const done = !!progress && progress.done >= progress.total;
-  const share = progress && progress.total ? progress.done / progress.total : 0;
-  const label = done
-    ? "Remove from Downloads"
+  const running = !!progress?.downloading;
+  const share = progress?.total ? progress.done / progress.total : 0;
+  const label = running
+    ? "Stop download"
     : progress
-      ? `Downloading ${progress.done} of ${progress.total}`
+      ? "Remove from Downloads"
       : "Download";
   return (
     <button
-      className={`icon-button action-icon download-button ${done ? "done" : progress ? "running" : ""}`}
+      className={`icon-button action-icon download-button ${running ? "running" : progress ? "done" : ""}`}
       title={label}
       aria-label={`${label}: ${name}`}
       aria-pressed={!!progress}
@@ -73,11 +94,11 @@ export function DownloadButton({
       }}
     >
       <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
-        {done ? (
+        {progress && !running ? (
           <>
             <circle cx="12" cy="12" r="11" fill="var(--download-done)" />
             <path
-              d="M12 7v10.3m-3.5-3.5 3.5 3.5 3.5-3.5"
+              d={arrow}
               stroke="var(--download-arrow)"
               strokeWidth="2"
               fill="none"
@@ -94,30 +115,40 @@ export function DownloadButton({
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              opacity={progress ? 0.3 : 1}
             />
-            {progress && (
-              <circle
-                className="download-ring"
-                cx="12"
-                cy="12"
-                r="10"
-                fill="none"
-                stroke="var(--download-done)"
+            {running ? (
+              <>
+                <circle
+                  className="download-ring"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  fill="none"
+                  stroke="var(--download-done)"
+                  strokeWidth="2"
+                  pathLength={100}
+                  strokeDasharray={`${Math.max(2, share * 100)} 100`}
+                  transform="rotate(-90 12 12)"
+                />
+                <rect
+                  x="8.5"
+                  y="8.5"
+                  width="7"
+                  height="7"
+                  rx="1"
+                  fill="var(--download-done)"
+                />
+              </>
+            ) : (
+              <path
+                d={arrow}
+                stroke="currentColor"
                 strokeWidth="2"
-                pathLength={100}
-                strokeDasharray={`${Math.max(2, share * 100)} 100`}
-                transform="rotate(-90 12 12)"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             )}
-            <path
-              d="M12 7v10.3m-3.5-3.5 3.5 3.5 3.5-3.5"
-              stroke="currentColor"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
           </>
         )}
       </svg>
@@ -125,7 +156,47 @@ export function DownloadButton({
   );
 }
 
-export function isDownloaded(status: DownloadStatus, uri: string) {
-  const progress = status.collections.find((item) => item.uri === uri);
-  return !!progress && progress.done >= progress.total;
+/** The small green arrow Spotify puts beside downloaded songs and lists. */
+export function DownloadedMark() {
+  return (
+    <svg
+      className="downloaded-mark"
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      role="img"
+      aria-label="Downloaded"
+    >
+      <circle cx="12" cy="12" r="12" fill="var(--spotify-green)" />
+      <path
+        d="M12 6v11.5m-4.5-4.5 4.5 4.5 4.5-4.5"
+        stroke="#000"
+        strokeWidth="3"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Spotify's "Downloading 8 of 11" strip above Your Library. */
+export function DownloadingBar({ status }: { status: DownloadStatus }) {
+  const running = status.collections.filter((item) => item.downloading);
+  if (!running.length) return null;
+  const done = running.reduce((sum, item) => sum + item.done, 0);
+  const total = running.reduce((sum, item) => sum + item.total, 0);
+  return (
+    <div className="downloading-bar" role="status">
+      <div>
+        <strong>Downloading</strong>
+        <strong>
+          {done} of {total}
+        </strong>
+      </div>
+      <div className="downloading-track">
+        <div style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+      </div>
+    </div>
+  );
 }

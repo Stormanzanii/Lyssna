@@ -87,7 +87,13 @@ import {
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
-import { DownloadButton, useDownloads } from "./download-button";
+import {
+  DownloadButton,
+  DownloadedMark,
+  DownloadingBar,
+  isDownloaded,
+  useDownloads,
+} from "./download-button";
 import { CoverViewer } from "./cover-viewer";
 import { Logo, MicLoader } from "./brand";
 import { playingRoute } from "./playing-context";
@@ -2422,6 +2428,10 @@ function App() {
             {accountOrder(state).pinned.includes(playlist.id) && (
               <Pin size={12} className="pinned-mark" />
             )}
+            {isDownloaded(
+              downloads.status,
+              `spotify:playlist:${playlist.id}`,
+            ) && <DownloadedMark />}
             {playlist.id === DJ_ID
               ? "Click to start listening"
               : playlist.owner.display_name
@@ -2500,6 +2510,10 @@ function App() {
         <div>
           <strong>{item.name}</strong>
           <small>
+            {kind === "album" &&
+              isDownloaded(downloads.status, `spotify:album:${item.id}`) && (
+                <DownloadedMark />
+              )}
             {kind === "album"
               ? `Album · ${((item as Album).artists ?? []).map((artist) => artist.name).join(", ")}`
               : "Artist"}
@@ -3152,6 +3166,7 @@ function App() {
         <aside
           className={`library-panel ${state.settings.compact_library ? "compact-library" : ""}`}
         >
+          <DownloadingBar status={downloads.status} />
           <div className="library-heading">
             <button
               className="text-link"
@@ -3242,7 +3257,13 @@ function App() {
                 </div>
                 <div>
                   <strong>Liked Songs</strong>
-                  <small>Playlist · Pinned</small>
+                  <small>
+                    {isDownloaded(
+                      downloads.status,
+                      `spotify:user:${state.profile?.id}:collection`,
+                    ) && <DownloadedMark />}
+                    Playlist · Pinned
+                  </small>
                 </div>
               </button>
               {playingMark("liked")}
@@ -3887,7 +3908,7 @@ function App() {
                         {(/^(playlist|album):/.test(state.route) ||
                           (state.route === "liked" && state.profile)) && (
                           <DownloadButton
-                            status={downloads}
+                            status={downloads.status}
                             uri={
                               state.route === "liked"
                                 ? `spotify:user:${state.profile?.id}:collection`
@@ -4201,6 +4222,9 @@ function App() {
                                       {track.name}
                                     </button>
                                     <div className="track-artists">
+                                      {downloads.songs.has(track.uri) && (
+                                        <DownloadedMark />
+                                      )}
                                       <ExplicitBadge track={track} />
                                       {!entity?.artist && (
                                         <ArtistLinks

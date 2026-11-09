@@ -20,7 +20,7 @@ const track: Track = {
   duration_ms: 180_000,
   is_local: false,
 };
-test("Download sits after Shuffle and turns green once every song is down", async ({
+test("Download behaves like Spotify's: progress, stop, green, remove", async ({
   page,
 }) => {
   await startClient(page);
@@ -28,32 +28,59 @@ test("Download sits after Shuffle and turns green once every song is down", asyn
   await expect(download).toBeVisible();
   const order = await page
     .locator(".browse-actions > button")
-    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("title")));
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("title")),
+    );
   expect(order.indexOf("Download")).toBe(
     order.findIndex((title) => /shuffle/i.test(title ?? "")) + 1,
   );
   await download.click();
-  const sent = await page.evaluate(() =>
-    (window as any).__clientTest.commands.find(
-      (entry: any) => entry.command === "offline_download",
-    )?.args,
+  const sent = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands.find(
+        (entry: any) => entry.command === "offline_download",
+      )?.args,
   );
   expect(sent.uri).toMatch(/^spotify:user:.+:collection$/);
   expect(sent.tracks.length).toBeGreaterThan(0);
   await page.evaluate((uri) => {
-    (window as any).__clientTest.emit({
-      type: "downloads",
-      status: {
-        collections: [{ uri, done: 1, total: 1 }],
-        locked: false,
-        songs: 1,
-        bytes: 1,
-      },
-    });
-  }, sent.uri);
+    (window as any).__clientTest.downloaded = [uri];
+  }, sent.tracks[0]);
+  const emit = (done: number, downloading: boolean) =>
+    page.evaluate(
+      ({ uri, done, downloading }) =>
+        (window as any).__clientTest.emit({
+          type: "downloads",
+          status: {
+            collections: [{ uri, done, total: 2, downloading }],
+            locked: false,
+            songs: done,
+            bytes: done,
+          },
+        }),
+      { uri: sent.uri, done, downloading },
+    );
+  await emit(1, true);
   await expect(
-    page.getByRole("button", { name: /^Remove from Downloads: / }),
-  ).toHaveClass(/done/);
+    page.getByRole("button", { name: /^Stop download: / }),
+  ).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Downloading1 of 2");
+  await expect(page.getByLabel("Downloaded").first()).toBeVisible();
+  await emit(1, false);
+  await expect(page.getByRole("status")).toHaveCount(0);
+  const remove = page.getByRole("button", { name: /^Remove from Downloads: / });
+  await expect(remove).toHaveClass(/done/);
+  await remove.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands.find(
+            (entry: any) => entry.command === "offline_remove",
+          )?.args.uri,
+      ),
+    )
+    .toBe(sent.uri);
 });
 
 test("playing on another device does not silently redirect local Play", async ({
@@ -657,6 +684,7 @@ async function startClient(
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
           if (command === "playback_speed") return args.percent;
+          if (command === "offline_songs") return host.__clientTest.downloaded ?? [];
           if (command === "track_waveform")
             return Array.from(
               { length: args.buckets },

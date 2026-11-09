@@ -450,7 +450,12 @@ export type PlayerRequest = {
   repeat?: string;
   track?: Track;
 };
-export type DownloadProgress = { uri: string; done: number; total: number };
+export type DownloadProgress = {
+  uri: string;
+  done: number;
+  total: number;
+  downloading: boolean;
+};
 export type DownloadStatus = {
   collections: DownloadProgress[];
   locked: boolean;

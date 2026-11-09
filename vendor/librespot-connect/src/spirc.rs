@@ -2767,16 +2767,20 @@ impl SpircTask {
         Ok(())
     }
 
+    // Repeat changes which song follows; preload it so it can still crossfade.
     fn handle_repeat_context(&mut self, repeat: bool) -> Result<(), Error> {
         self.player
             .emit_repeat_changed_event(repeat, self.connect_state.repeat_track());
-        self.connect_state.handle_set_repeat_context(repeat)
+        self.connect_state.handle_set_repeat_context(repeat)?;
+        self.refresh_preload();
+        Ok(())
     }
 
     fn handle_repeat_track(&mut self, repeat: bool) {
         self.player
             .emit_repeat_changed_event(self.connect_state.repeat_context(), repeat);
         self.connect_state.set_repeat_track(repeat);
+        self.refresh_preload();
     }
 
     async fn handle_add_to_queue(&mut self, uri: SpotifyUri) {

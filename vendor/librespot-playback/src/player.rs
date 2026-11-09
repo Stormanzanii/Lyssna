@@ -94,6 +94,9 @@ struct PlayerInternal {
 
     state: PlayerState,
     preload: PlayerPreload,
+    /// The next song is the one playing (repeat one): no second copy loads,
+    /// but a crossfading sink may still hold its end for its own start.
+    repeats_current: bool,
     sink: Box<dyn Sink>,
     sink_status: SinkStatus,
     sink_event_callback: Option<SinkEventCallback>,
@@ -580,6 +583,7 @@ impl Player {
 
                 state: PlayerState::Stopped,
                 preload: PlayerPreload::None,
+                repeats_current: false,
                 sink: sink_builder(),
                 sink_status: SinkStatus::Closed,
                 sink_event_callback: None,
@@ -2025,7 +2029,7 @@ impl PlayerInternal {
                 // one, so only offer it when that song is ready to follow.
                 let remaining_ms = match self.state {
                     PlayerState::Playing { duration_ms, .. }
-                        if matches!(self.preload, PlayerPreload::Ready { .. }) =>
+                        if next_can_follow(self.repeats_current, &self.preload) =>
                     {
                         Some(duration_ms.saturating_sub(position.position_ms))
                     }
@@ -2459,6 +2463,7 @@ impl PlayerInternal {
         let loader = self.preload.take_loading(&track_id, position_ms);
 
         self.preload = PlayerPreload::None;
+        self.repeats_current = false;
 
         // If we don't have a loader yet, create one from scratch.
         let loader =
@@ -2478,6 +2483,7 @@ impl PlayerInternal {
     fn handle_command_preload(&mut self, track_id: SpotifyUri, position_ms: u32) {
         debug!("Preloading track");
         let mut preload_track = true;
+        self.repeats_current = false;
         // check whether the track is already loaded somewhere or being loaded.
         if let PlayerPreload::Loading {
             track_id: currently_loading,
@@ -2513,6 +2519,7 @@ impl PlayerInternal {
             if *current_track_id == track_id && self.speaks_current_lines(&track_id) {
                 // we already have the requested track loaded.
                 preload_track = false;
+                self.repeats_current = true;
             }
         }
 
@@ -2846,10 +2853,21 @@ impl Drop for PlayerInternal {
     }
 }
 
+/// A crossfading sink holds a song's end only when something will follow it.
+fn next_can_follow(repeats_current: bool, preload: &PlayerPreload) -> bool {
+    repeats_current || matches!(preload, PlayerPreload::Ready { .. })
+}
+
 #[cfg(test)]
 mod resume_tests {
     use super::*;
     use futures_util::FutureExt;
+
+    #[test]
+    fn repeat_one_offers_its_own_start_for_a_crossfade() {
+        assert!(next_can_follow(true, &PlayerPreload::None));
+        assert!(!next_can_follow(false, &PlayerPreload::None));
+    }
 
     #[tokio::test]
     async fn resume_reuses_only_the_matching_inflight_position_once() {

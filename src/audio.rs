@@ -869,6 +869,29 @@ mod tests {
     }
 
     #[test]
+    fn a_repeated_song_crossfades_into_its_own_start() {
+        let buffer = AudioBuffer::default();
+        buffer.set_crossfade(1);
+        let (ready, _) = tokio::sync::mpsc::unbounded_channel();
+        let mut audio = AudioSink::new(Arc::new(AtomicBool::new(false)), ready, buffer);
+        let mut output = audio.test_output();
+        let mut converter = Converter::new(None);
+        audio.set_track(&track(1));
+        audio.crossfade_hint(Some(900));
+        audio
+            .write(AudioPacket::Samples(vec![0.5; 400]), &mut converter)
+            .unwrap();
+        assert!(audio.is_empty());
+        audio.set_track(&track(1));
+        audio
+            .write(AudioPacket::Samples(vec![1.0; 800]), &mut converter)
+            .unwrap();
+        let mixed: Vec<f32> = (0..800).filter_map(|_| output.next()).collect();
+        assert!((mixed[0] - 0.5).abs() < 1e-6);
+        assert!(mixed[400..].iter().all(|sample| *sample == 1.0));
+    }
+
+    #[test]
     fn dj_speech_waits_for_the_songs_held_end_and_never_crossfades() {
         let buffer = AudioBuffer::default();
         buffer.set_crossfade(1);

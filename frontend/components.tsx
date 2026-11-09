@@ -405,7 +405,7 @@ function WriterCredits({ names }: { names: string[] }) {
  * left a typed E off centre at small sizes. */
 export const EXPLICIT_MARK = (
   <svg viewBox="0 0 16 16" aria-hidden="true">
-    <path d="M5.5 4.2h5.1v1.7H7.3v1.25h3v1.7h-3v1.25h3.3v1.7H5.5z" />
+    <path d="M5.3 3.7h5.2v1.6H6.9v1.9h3.3v1.6H6.9v1.9h3.6v1.6H5.3z" />
   </svg>
 );
 /** Spotify's mint verified badge, its tick cut out so the background shows

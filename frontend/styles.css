@@ -95,8 +95,8 @@
   /* The drawn E gives no text baseline, so the box aligns by its bottom
      edge; this centres it on the artist's capitals. */
   vertical-align: -0.23em;
-  background: light-dark(#3a3a3a, #c5c5c5);
-  color: light-dark(#eaeaea, #151515);
+  background: light-dark(#e3e3e3, #2a2a2a);
+  color: light-dark(#000, #fff);
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;

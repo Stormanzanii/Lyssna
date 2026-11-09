@@ -826,6 +826,7 @@ async function startClient(
                     id: "0123456789abcdefghij01",
                     uri: "spotify:track:0123456789abcdefghij01",
                     name: "Suggested song",
+                    explicit: true,
                     duration_ms: 180000,
                     artists: [{ id: "0123456789abcdefghij02", uri: "spotify:artist:0123456789abcdefghij02", name: "Suggested artist" }],
                     album: { id: "0123456789abcdefghij03", uri: "spotify:album:0123456789abcdefghij03", name: "Suggested album", images: [] },
@@ -16890,6 +16891,59 @@ test("Browse all opens categories with shelves, subcategories and more", async (
   await expect(page.locator(".browse-category-hero h1")).toHaveText("Pop");
   await page.getByTitle("Go back", { exact: true }).click();
   await expect(page.locator(".browse-category-hero h1")).toHaveText("Music");
+});
+
+test("a suggested song has the song menu, a tick when saved and an inline E", async ({
+  page,
+}) => {
+  await startClient(page);
+  const search = page.getByPlaceholder("What do you want to play?");
+  await search.fill("song");
+  const list = page.getByRole("listbox", { name: "Search suggestions" });
+  const row = list.locator(".recent-search", { hasText: "Suggested song" });
+  const badge = row.locator(".explicit-badge");
+  const subtitle = row.locator("small");
+  const [mark, line] = [
+    (await badge.boundingBox())!,
+    (await subtitle.boundingBox())!,
+  ];
+  expect(mark.height).toBeLessThan(line.height + 1);
+  expect(Math.abs(mark.x - line.x)).toBeLessThan(1);
+  expect(
+    Math.abs(mark.y + mark.height / 2 - (line.y + line.height / 2)),
+  ).toBeLessThan(4);
+
+  await row
+    .getByRole("button", { name: "Save Suggested song to Liked Songs" })
+    .click();
+  const tick = row.getByRole("button", {
+    name: "Remove Suggested song from Liked Songs",
+  });
+  await expect(tick.locator("svg")).toHaveAttribute("stroke", "#000");
+  await page.mouse.move(700, 600);
+  await expect(tick).toHaveCSS("color", "rgb(30, 215, 96)");
+  await page.screenshot({ path: "target/diagnostics/suggestion-saved.png" });
+
+  await row.click({ button: "right" });
+  const queue = page.getByRole("menuitem", {
+    name: "Add to queue",
+    exact: true,
+  });
+  await expect(queue).toBeVisible();
+  await page.screenshot({ path: "target/diagnostics/suggestion-menu.png" });
+  await queue.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "player" &&
+            call.args?.request?.command === "enqueue" &&
+            call.args.request.uri === "spotify:track:0123456789abcdefghij01",
+        ),
+      ),
+    )
+    .toBe(true);
 });
 
 test("typing shows Spotify's suggestions; only Enter opens the search page", async ({

@@ -844,6 +844,15 @@ small {
 .search-suggestion-save.saved {
   color: #1ed760;
 }
+.search-suggestion-save.saved:hover {
+  color: #3be477;
+}
+/* Inline before the subtitle, not stacked like the row's other spans. */
+.recent-search small > span.explicit-badge {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 0;
+}
 .search-box > input {
   background: transparent;
   border: 0;

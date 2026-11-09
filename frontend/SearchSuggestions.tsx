@@ -83,6 +83,7 @@ export function SearchSuggestions({
   open,
   save,
   saved,
+  menu,
 }: {
   query: string;
   keys: Ref<SuggestionKeys>;
@@ -90,6 +91,7 @@ export function SearchSuggestions({
   open: (entry: SearchEntry) => void;
   save: (track: Track) => void;
   saved: Record<string, boolean>;
+  menu: (track: Track, x: number, y: number) => void;
 }) {
   const term = query.trim();
   const [rows, setRows] = useState<Row[]>(() => cache.get(term) ?? []);
@@ -222,11 +224,23 @@ export function SearchSuggestions({
           );
         const { entry } = row;
         const liked = !!saved[entry.uri];
+        const [, kind, id] = entry.uri.split(":");
         return (
           <div
             className={`recent-search ${selected ? "active" : ""}`}
             key={entry.uri}
             data-row={index}
+            data-context-route={
+              !entry.track && ["album", "artist", "playlist"].includes(kind)
+                ? `${kind}:${id}`
+                : undefined
+            }
+            data-context-name={entry.name}
+            onContextMenu={(event) => {
+              if (!entry.track) return;
+              event.preventDefault();
+              menu(entry.track, event.clientX, event.clientY);
+            }}
           >
             <button
               role="option"
@@ -261,7 +275,7 @@ export function SearchSuggestions({
                 onClick={() => save(entry.track!)}
               >
                 {liked ? (
-                  <CircleCheck size={18} fill="currentColor" />
+                  <CircleCheck size={18} fill="currentColor" stroke="#000" />
                 ) : (
                   <CirclePlus size={18} />
                 )}

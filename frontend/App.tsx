@@ -3369,6 +3369,10 @@ function App() {
                   keys={suggestionKeys}
                   saved={state.saved}
                   save={save}
+                  menu={(track, x, y) => {
+                    setEntityMenu(null);
+                    setSongMenu({ track, x, y });
+                  }}
                   searchFor={(term) => {
                     setQuery(term);
                     setSuggestionsClosed(true);

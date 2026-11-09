@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { rpc, subscribe } from "./bridge";
 import type { DownloadStatus } from "./types";
 
@@ -79,86 +80,124 @@ export function DownloadButton({
     : progress
       ? "Remove from Downloads"
       : "Download";
+  const [confirming, setConfirming] = useState(false);
+  const remove = () => {
+    setConfirming(false);
+    void rpc("offline_remove", { uri }).catch(() => undefined);
+  };
   return (
-    <button
-      className={`icon-button action-icon download-button ${running ? "running" : progress ? "done" : ""}`}
-      title={label}
-      aria-label={`${label}: ${name}`}
-      aria-pressed={!!progress}
-      onClick={() => {
-        if (progress)
-          void rpc("offline_remove", { uri }).catch(() => undefined);
-        else
-          void rpc("offline_download", {
-            uri,
-            name,
-            image: image ?? null,
-            tracks: tracks.filter((track) =>
-              track.startsWith("spotify:track:"),
-            ),
-          }).catch(() => undefined);
-      }}
-    >
-      <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
-        {progress && !running ? (
-          <>
-            <circle cx="12" cy="12" r="11" fill="var(--download-done)" />
-            <path
-              d={arrow}
-              stroke="var(--download-arrow)"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </>
-        ) : (
-          <>
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-            {running ? (
-              <>
-                <circle
-                  className="download-ring"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  fill="none"
-                  stroke="var(--download-done)"
-                  strokeWidth="2"
-                  pathLength={100}
-                  strokeDasharray={`${Math.max(2, share * 100)} 100`}
-                  transform="rotate(-90 12 12)"
-                />
-                <rect
-                  x="8.5"
-                  y="8.5"
-                  width="7"
-                  height="7"
-                  rx="1"
-                  fill="var(--download-done)"
-                />
-              </>
-            ) : (
+    <>
+      <button
+        className={`icon-button action-icon download-button ${running ? "running" : progress ? "done" : ""}`}
+        title={label}
+        aria-label={`${label}: ${name}`}
+        aria-pressed={!!progress}
+        onClick={() => {
+          if (running) remove();
+          else if (progress) setConfirming(true);
+          else
+            void rpc("offline_download", {
+              uri,
+              name,
+              image: image ?? null,
+              tracks: tracks.filter((track) =>
+                track.startsWith("spotify:track:"),
+              ),
+            }).catch(() => undefined);
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+          {progress && !running ? (
+            <>
+              <circle cx="12" cy="12" r="11" fill="var(--download-done)" />
               <path
                 d={arrow}
-                stroke="currentColor"
+                stroke="var(--download-arrow)"
                 strokeWidth="2"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-            )}
-          </>
+            </>
+          ) : (
+            <>
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              {running ? (
+                <>
+                  <circle
+                    className="download-ring"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    fill="none"
+                    stroke="var(--download-done)"
+                    strokeWidth="2"
+                    pathLength={100}
+                    strokeDasharray={`${Math.max(2, share * 100)} 100`}
+                    transform="rotate(-90 12 12)"
+                  />
+                  <rect
+                    x="8.5"
+                    y="8.5"
+                    width="7"
+                    height="7"
+                    rx="1"
+                    fill="var(--download-done)"
+                  />
+                </>
+              ) : (
+                <path
+                  d={arrow}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+            </>
+          )}
+        </svg>
+      </button>
+      {confirming &&
+        createPortal(
+          <div className="modal-backdrop" onClick={() => setConfirming(false)}>
+            <section
+              className="dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="remove-download-title"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setConfirming(false);
+              }}
+            >
+              <h2 id="remove-download-title">Remove from Downloads?</h2>
+              <p>You won't be able to play this offline.</p>
+              <div className="inline-actions">
+                <button
+                  className="pill"
+                  autoFocus
+                  onClick={() => setConfirming(false)}
+                >
+                  Cancel
+                </button>
+                <button className="pill primary" onClick={remove}>
+                  Remove
+                </button>
+              </div>
+            </section>
+          </div>,
+          document.body,
         )}
-      </svg>
-    </button>
+    </>
   );
 }
 

@@ -84,7 +84,24 @@ test("Download behaves like Spotify's: progress, stop, green, remove", async ({
     .toBe(sent.uri);
   const remove = page.getByRole("button", { name: /^Remove from Downloads: / });
   await expect(remove).toHaveClass(/done/);
+  const removals = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "offline_remove",
+        ).length,
+    );
   await remove.click();
+  const confirm = page.getByRole("alertdialog", {
+    name: "Remove from Downloads?",
+  });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeHidden();
+  expect(await removals()).toBe(0);
+  await remove.click();
+  await confirm.getByRole("button", { name: "Remove" }).click();
+  await expect(confirm).toBeHidden();
   await expect
     .poll(() =>
       page.evaluate(

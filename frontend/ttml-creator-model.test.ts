@@ -10,6 +10,7 @@ import {
   metaProblem,
   duplicateLine,
   editUnit,
+  replaceMatching,
   appendWords,
   dropTrailingSpace,
   formatTime,
@@ -237,6 +238,18 @@ describe("TTML Creator card editing", () => {
     lines = editUnit(lines, { line: 0, unit: 0 }, "");
     expect(words(lines)).toEqual(["t|o o"]);
     expect(editUnit(parseText("x"), { line: 0, unit: 0 }, " ")).toEqual([]);
+  });
+
+  it("replaces every identical word, with or without matching case", () => {
+    const lines = timeAll("Hey hey you\nhey Hey");
+    expect(words(replaceMatching(lines, "Hey", "Oh", true))).toEqual([
+      "Oh hey you",
+      "hey Oh",
+    ]);
+    const all = replaceMatching(lines, "Hey", "Oh", false);
+    expect(words(all)).toEqual(["Oh Oh you", "Oh Oh"]);
+    expect(all[0].units[1].start).toBe(lines[0].units[1].start);
+    expect(words(replaceMatching(lines, "hey", "", false))).toEqual(["you"]);
   });
 
   it("moves several picked words together in reading order", () => {

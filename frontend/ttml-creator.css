@@ -551,6 +551,26 @@
 .ttml-dialog-row.end {
   justify-content: flex-end;
 }
+.ttml-field {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.ttml-field input {
+  min-height: 38px;
+  padding: 6px 12px;
+  border: 1px solid #ffffff1a;
+  border-radius: 8px;
+  color: #f3f3f3;
+  background: #00000040;
+  font: inherit;
+  font-size: 15px;
+}
+.ttml-field input:focus {
+  border-color: #1ed76099;
+  outline: none;
+  background: #00000066;
+}
 .ttml-check {
   display: flex;
   align-items: center;

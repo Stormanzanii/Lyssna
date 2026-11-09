@@ -75,6 +75,7 @@ import {
   removeLine,
   setLineText,
   splitMatching,
+  replaceMatching,
   splitUnit,
   timed,
   toLyrics,
@@ -136,6 +137,8 @@ import {
   type MenuAction,
   type SplitChoice,
   SplitDialog,
+  ReplaceDialog,
+  type ReplaceChoice,
   WordMenu,
 } from "./ttml-word-menu";
 import "./ttml-creator.css";
@@ -662,6 +665,7 @@ export function TtmlCreator({
     null,
   );
   const [splitting, setSplitting] = useState<Cursor | null>(null);
+  const [replacing, setReplacing] = useState<Cursor | null>(null);
   const openMenu = (event: ReactMouseEvent, at: Cursor) => {
     event.preventDefault();
     setCursor(at);
@@ -927,10 +931,7 @@ export function TtmlCreator({
         },
         {
           label: "Replace word…",
-          run: () => {
-            toCards();
-            setEditing(at);
-          },
+          run: () => setReplacing(at),
         },
         ...(unit.joined
           ? [
@@ -991,6 +992,15 @@ export function TtmlCreator({
         },
       ],
     ];
+  };
+  const confirmReplace = (at: Cursor, choice: ReplaceChoice) => {
+    const unit = lines[at.line]?.units[at.unit];
+    setReplacing(null);
+    if (!unit) return;
+    if (!choice.replaceAll) return commitWord(at, choice.value);
+    restructure(
+      replaceMatching(lines, unit.text, choice.value, choice.matchCase),
+    );
   };
   const confirmSplit = (at: Cursor, choice: SplitChoice) => {
     const unit = lines[at.line]?.units[at.unit];
@@ -2321,6 +2331,13 @@ export function TtmlCreator({
           learned={learned}
           onClose={() => setSplitting(null)}
           onConfirm={(choice) => confirmSplit(splitting, choice)}
+        />
+      )}
+      {replacing && lines[replacing.line]?.units[replacing.unit] && (
+        <ReplaceDialog
+          word={lines[replacing.line].units[replacing.unit].text}
+          onClose={() => setReplacing(null)}
+          onConfirm={(choice) => confirmReplace(replacing, choice)}
         />
       )}
       {savesDialog}

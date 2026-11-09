@@ -431,6 +431,22 @@ export function editUnit(
     : lines.filter((_, index) => index !== at.line);
 }
 
+export function replaceMatching(
+  lines: CreatorLine[],
+  text: string,
+  value: string,
+  matchCase: boolean,
+): CreatorLine[] {
+  const same = (other: string) =>
+    matchCase ? other === text : other.toLowerCase() === text.toLowerCase();
+  let next = lines;
+  for (let line = lines.length - 1; line >= 0; line--)
+    for (let unit = lines[line].units.length - 1; unit >= 0; unit--)
+      if (same(lines[line].units[unit].text))
+        next = editUnit(next, { line, unit }, value);
+  return next;
+}
+
 export function appendWords(
   lines: CreatorLine[],
   lineIndex: number,

@@ -15962,6 +15962,62 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await expect(last.locator(".ttml-chip").first()).toHaveText(tail);
 });
 
+test("TTML Creator replaces one word or every identical word", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-card");
+  const menu = page.getByRole("menu", { name: "Word actions" });
+  const dialog = page.getByRole("dialog", { name: "Replace word" });
+  const field = dialog.getByRole("textbox", { name: "New word:" });
+  const matchCase = dialog.getByRole("checkbox", { name: "Match case" });
+
+  await cards
+    .first()
+    .getByRole("button", { name: "lyric", exact: true })
+    .click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Replace word…" }).click();
+  await expect(field).toHaveValue("lyric");
+  await expect(field).toBeFocused();
+  await expect(matchCase).toBeDisabled();
+  await page.keyboard.type("song");
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(cards.first().locator(".ttml-chip")).toHaveText(
+    "I am just a song line number 1".split(" "),
+  );
+  await expect(cards.nth(1).locator(".ttml-chip")).toHaveText(
+    "I am just a lyric line number 2".split(" "),
+  );
+
+  await cards
+    .first()
+    .getByRole("button", { name: "line", exact: true })
+    .click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Replace word…" }).click();
+  await field.fill("verse");
+  await dialog
+    .getByRole("checkbox", { name: "Replace all identical words" })
+    .check();
+  await expect(matchCase).toBeEnabled();
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(cards.nth(1).locator(".ttml-chip")).toHaveText(
+    "I am just a lyric verse number 2".split(" "),
+  );
+});
+
 test("TTML Creator word menu splits words and moves them to new lines", async ({
   page,
 }) => {

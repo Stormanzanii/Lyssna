@@ -101,6 +101,90 @@ export interface SplitChoice {
   learned?: { key: string; offsets: number[] };
 }
 
+export interface ReplaceChoice {
+  value: string;
+  replaceAll: boolean;
+  matchCase: boolean;
+}
+
+export function ReplaceDialog({
+  word,
+  onConfirm,
+  onClose,
+}: {
+  word: string;
+  onConfirm: (choice: ReplaceChoice) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(word);
+  const [replaceAll, setReplaceAll] = useState(false);
+  const [matchCase, setMatchCase] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => input.current?.select(), []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+  const confirm = () => onConfirm({ value, replaceAll, matchCase });
+
+  return (
+    <div className="ttml-dialog-backdrop" onClick={onClose}>
+      <form
+        className="ttml-dialog"
+        role="dialog"
+        aria-label="Replace word"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          confirm();
+        }}
+      >
+        <h3>Replace word</h3>
+        <label className="ttml-field">
+          New word:
+          <input
+            ref={input}
+            value={value}
+            spellCheck={false}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </label>
+        <label className="ttml-check">
+          <input
+            type="checkbox"
+            checked={replaceAll}
+            onChange={(event) => setReplaceAll(event.target.checked)}
+          />
+          Replace all identical words
+        </label>
+        <label className={`ttml-check${replaceAll ? "" : " off"}`}>
+          <input
+            type="checkbox"
+            checked={matchCase}
+            disabled={!replaceAll}
+            onChange={(event) => setMatchCase(event.target.checked)}
+          />
+          Match case
+        </label>
+        <div className="ttml-dialog-row end">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary">
+            Confirm
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function SplitDialog({
   word,
   learned,

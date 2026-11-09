@@ -87,6 +87,7 @@ import {
 import { HomePage, Shelf } from "./HomePage";
 import { SearchPage } from "./SearchPage";
 import { SpotifyText } from "./SpotifyText";
+import { DownloadButton, useDownloads } from "./download-button";
 import { CoverViewer } from "./cover-viewer";
 import { Logo, MicLoader } from "./brand";
 import { playingRoute } from "./playing-context";
@@ -778,6 +779,7 @@ function App() {
   navigateRef.current = navigate;
   // Songs found in Local Files folders, for Your Library's row.
   const [localCount, setLocalCount] = useState(0);
+  const downloads = useDownloads(!!state.profile);
   const hasProfile = !!state.profile;
   useEffect(() => {
     if (!hasProfile) return;
@@ -3882,6 +3884,20 @@ function App() {
                         >
                           <Shuffle size={28} />
                         </button>
+                        {(/^(playlist|album):/.test(state.route) ||
+                          (state.route === "liked" && state.profile)) && (
+                          <DownloadButton
+                            status={downloads}
+                            uri={
+                              state.route === "liked"
+                                ? `spotify:user:${state.profile?.id}:collection`
+                                : `spotify:${state.route}`
+                            }
+                            name={title}
+                            image={heroImages?.[0]?.url}
+                            tracks={state.tracks.map((track) => track.uri)}
+                          />
+                        )}
                         {/^(playlist|album):/.test(state.route) && (
                           <button
                             className="icon-button action-icon"

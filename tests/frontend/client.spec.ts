@@ -20,6 +20,42 @@ const track: Track = {
   duration_ms: 180_000,
   is_local: false,
 };
+test("Download sits after Shuffle and turns green once every song is down", async ({
+  page,
+}) => {
+  await startClient(page);
+  const download = page.getByRole("button", { name: /^Download: / });
+  await expect(download).toBeVisible();
+  const order = await page
+    .locator(".browse-actions > button")
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("title")));
+  expect(order.indexOf("Download")).toBe(
+    order.findIndex((title) => /shuffle/i.test(title ?? "")) + 1,
+  );
+  await download.click();
+  const sent = await page.evaluate(() =>
+    (window as any).__clientTest.commands.find(
+      (entry: any) => entry.command === "offline_download",
+    )?.args,
+  );
+  expect(sent.uri).toMatch(/^spotify:user:.+:collection$/);
+  expect(sent.tracks.length).toBeGreaterThan(0);
+  await page.evaluate((uri) => {
+    (window as any).__clientTest.emit({
+      type: "downloads",
+      status: {
+        collections: [{ uri, done: 1, total: 1 }],
+        locked: false,
+        songs: 1,
+        bytes: 1,
+      },
+    });
+  }, sent.uri);
+  await expect(
+    page.getByRole("button", { name: /^Remove from Downloads: / }),
+  ).toHaveClass(/done/);
+});
+
 test("playing on another device does not silently redirect local Play", async ({
   page,
 }) => {

@@ -450,7 +450,15 @@ export type PlayerRequest = {
   repeat?: string;
   track?: Track;
 };
+export type DownloadProgress = { uri: string; done: number; total: number };
+export type DownloadStatus = {
+  collections: DownloadProgress[];
+  locked: boolean;
+  songs: number;
+  bytes: number;
+};
 export type AppEvent =
+  | { type: "downloads"; status: DownloadStatus }
   | { type: "window_activity"; minimized: boolean; focused: boolean }
   | { type: "window_moved"; x: number; y: number }
   | { type: "login_failed"; issue: { message: string; retry_saved: boolean } }

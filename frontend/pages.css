@@ -1481,3 +1481,20 @@
 .reduce-motion .cover-viewer.closing img {
   animation: none;
 }
+
+.download-button {
+  --download-done: var(--spotify-green);
+  --download-arrow: #000;
+}
+.download-button:hover {
+  color: light-dark(#000, #fff);
+}
+.download-button svg {
+  display: block;
+}
+.download-button .download-ring {
+  transition: stroke-dasharray 0.3s ease;
+}
+.download-button.done:hover svg circle {
+  filter: brightness(1.1);
+}

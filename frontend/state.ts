@@ -335,6 +335,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "play_uri":
     case "link":
     case "local_files":
+    case "downloads":
       return state;
     case "creator_profile":
       return { ...state, creator_profile_open: action.open };

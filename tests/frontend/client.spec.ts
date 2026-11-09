@@ -10087,6 +10087,44 @@ for (const canvas of [false, true]) {
   });
 }
 
+test("full screen Canvas with the artwork on the right keeps the song details right-aligned", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await startClient(page);
+  await showLyrics(page);
+  await page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("import_lyrics"),
+  );
+  await emitCanvas(page);
+  const section = page.locator(".lyrics-page");
+  await section
+    .locator(".lyrics-toolbar")
+    .getByTitle("Artwork on the right", { exact: true })
+    .click();
+  await expect(section).toHaveClass(/artwork-right/);
+  await page.keyboard.press("F11");
+  await expect(page.locator(".application")).toHaveClass(/immersive/);
+  const controls = section.locator(".lyrics-fullscreen-controls");
+  await expect
+    .poll(async () => {
+      await page.mouse.move(1480, 480);
+      await page.mouse.move(1500, 500);
+      return controls.evaluate((element) => getComputedStyle(element).opacity);
+    })
+    .toBe("1");
+  const dock = (await controls.boundingBox())!;
+  for (const part of [
+    ".lyrics-title .marquee-content",
+    ".lyrics-artists .marquee-content",
+  ]) {
+    const box = (await section.locator(part).first().boundingBox())!;
+    expect(Math.abs(box.x + box.width - (dock.x + dock.width))).toBeLessThan(
+      24,
+    );
+  }
+});
+
 test("fullscreen seek stays usable through idle and commits once on release", async ({
   page,
 }) => {

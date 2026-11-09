@@ -164,6 +164,45 @@ test("playing on another device does not silently redirect local Play", async ({
     .toBe("native");
 });
 
+test("controls stay on this computer after a phone hands playback over", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(
+    ({ track, base }) => {
+      const host = (window as any).__clientTest;
+      host.emit({
+        type: "devices",
+        devices: [{ id: "phone", name: "Phone", is_active: true }],
+      });
+      host.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          device: { id: "here", name: "Lyssna (test)", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      });
+    },
+    { track, base: emptyState.playback },
+  );
+  await page.waitForTimeout(100);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.target,
+      ),
+    )
+    .toBe("native");
+});
+
 test("artist links show the artist immediately while metadata is pending", async ({
   page,
 }) => {

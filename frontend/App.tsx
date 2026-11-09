@@ -488,9 +488,18 @@ function App() {
   const [deviceMenu, setDeviceMenu] = useState(false);
   // Controls follow the device Spotify reports active, so a failed
   // transfer does not leave them aimed at an unreachable speaker.
+  // The device list can lag a handoff from a phone; playback moving to
+  // this computer wins, or seeks go to the phone that gave it up.
+  const here =
+    !!state.local_device_name &&
+    state.playback.device.name === state.local_device_name;
+  const playingHere = here && state.playback.is_playing;
+  useEffect(() => {
+    if (here) setTarget("native");
+  }, [here]);
   useEffect(() => {
     const active = state.devices.find((device) => device.is_active);
-    if (!active) return;
+    if (!active || playingHere) return;
     setTarget(
       active.name === state.local_device_name || !active.id
         ? "native"

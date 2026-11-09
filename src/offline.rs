@@ -97,7 +97,8 @@ impl Manifest {
         self.prune()
     }
 
-    fn prune(&mut self) -> Vec<String> {
+    /// Drops songs no download lists any more; returns their unused files.
+    pub fn prune(&mut self) -> Vec<String> {
         let wanted: BTreeSet<String> = self.wanted().into_iter().map(str::to_owned).collect();
         let mut unused = Vec::new();
         self.tracks.retain(|uri, download| {
@@ -460,6 +461,16 @@ mod tests {
                 .unwrap(),
             ["t3"]
         );
+        manifest
+            .add_collection(collection("spotify:album:a", &["t1"]))
+            .unwrap();
+        assert!(
+            manifest.prune().is_empty(),
+            "a song still listed elsewhere keeps its file"
+        );
+        manifest
+            .add_collection(collection("spotify:album:a", &["t1", "t2"]))
+            .unwrap();
         assert_eq!(manifest.remove_collection("spotify:album:a"), ["aa"]);
         assert!(manifest.tracks.contains_key("t2"));
         assert_eq!(manifest.remove_collection("spotify:playlist:p"), ["bb"]);

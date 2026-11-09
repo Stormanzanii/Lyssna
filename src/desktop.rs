@@ -4823,13 +4823,27 @@ fn start_download(
             }
         });
 }
+/// Brings downloads up to date with Spotify, as its client does: songs
+/// added to a downloaded list download, removed ones are deleted, and
+/// unfinished downloads carry on.
 fn resume_downloads(
     app: &tauri::AppHandle,
     controls: &crate::native::NativeControls,
     account: &str,
 ) {
-    let unfinished = crate::offline_sync::unfinished(account);
-    if unfinished.is_empty() {
+    sync_downloads(app, controls, account, None);
+}
+fn sync_downloads(
+    app: &tauri::AppHandle,
+    controls: &crate::native::NativeControls,
+    account: &str,
+    only: Option<String>,
+) {
+    let collections: Vec<_> = crate::offline_sync::collections(account)
+        .into_iter()
+        .filter(|collection| only.as_ref().is_none_or(|uri| &collection.uri == uri))
+        .collect();
+    if collections.is_empty() {
         return;
     }
     let Ok(session) = controls
@@ -4838,8 +4852,31 @@ fn resume_downloads(
     else {
         return;
     };
-    for collection in unfinished {
-        start_download(app.clone(), session.clone(), account.to_owned(), collection);
+    let app = app.clone();
+    let account = account.to_owned();
+    let _ = std::thread::Builder::new()
+        .name("lyssna-download-sync".into())
+        .spawn(move || {
+            for collection in collections {
+                let collection = match crate::offline_sync::refreshed(&session, collection.clone())
+                {
+                    Ok(current) => current,
+                    Err(failure) => {
+                        crate::native::diagnostic(&format!(
+                            "event download list not refreshed {}: {failure:#}",
+                            collection.uri
+                        ));
+                        collection
+                    }
+                };
+                start_download(app.clone(), session.clone(), account.clone(), collection);
+            }
+        });
+}
+#[tauri::command]
+fn offline_refresh(state: State<'_, Desktop>, app: tauri::AppHandle, uri: String) {
+    if let Ok(account) = signed_in_account(&state) {
+        sync_downloads(&app, &state.0.controls, &account, Some(uri));
     }
 }
 #[tauri::command]
@@ -5738,6 +5775,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             offline_remove,
             offline_download,
             offline_songs,
+            offline_refresh,
             offline_location,
             offline_move,
             offline_remove_all,

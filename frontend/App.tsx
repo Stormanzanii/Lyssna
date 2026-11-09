@@ -2276,6 +2276,20 @@ function App() {
     libraryFilter,
   );
   const likedUri = `spotify:user:${state.profile?.id}:collection`;
+  const routeUri =
+    state.route === "liked"
+      ? likedUri
+      : /^(playlist|album):/.test(state.route)
+        ? `spotify:${state.route}`
+        : "";
+  const routeDownloaded =
+    !!routeUri && inDownloads(downloads.status, routeUri);
+  // Opening a downloaded list catches up with changes made since, as
+  // Spotify keeps downloaded playlists in step.
+  useEffect(() => {
+    if (routeDownloaded && state.native_ready)
+      void rpc("offline_refresh", { uri: routeUri }).catch(() => undefined);
+  }, [routeUri, routeDownloaded, state.native_ready]);
   // Saving or following elsewhere changes what these chips list.
   const collectionKey = Object.keys(state.saved)
     .filter((uri) => state.saved[uri] && /^spotify:(album|artist):/.test(uri))

@@ -206,21 +206,45 @@ pub fn downloaded_songs(account: &str) -> Result<Vec<String>> {
     })
 }
 
-/// Downloads that stopped short, to pick up again once Spotify is reachable.
-pub fn unfinished(account: &str) -> Vec<Collection> {
-    with(account, |_, manifest| {
-        manifest
-            .collections
-            .iter()
-            .filter(|collection| {
-                manifest
-                    .is_downloaded(&collection.uri)
-                    .is_some_and(|(done, total)| done < total)
-            })
-            .cloned()
-            .collect()
-    })
-    .unwrap_or_default()
+pub fn collections(account: &str) -> Vec<Collection> {
+    with(account, |_, manifest| manifest.collections.clone()).unwrap_or_default()
+}
+
+fn list_key(uri: &str) -> Option<String> {
+    if uri.starts_with("spotify:user:") && uri.ends_with(":collection") {
+        return Some("liked".into());
+    }
+    uri.strip_prefix("spotify:")
+        .filter(|key| key.starts_with("playlist:") || key.starts_with("album:"))
+        .map(str::to_owned)
+}
+
+/// The list as Spotify has it now, read whole so a partly loaded page
+/// never removes downloads.
+pub fn refreshed(session: &Session, mut collection: Collection) -> Result<Collection> {
+    let key = list_key(&collection.uri).context("Not a downloadable list")?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let tracks = runtime.block_on(async {
+        let limit = crate::native_browse::READ_LIMIT;
+        let mut tracks = Vec::new();
+        loop {
+            let page = crate::native_browse::read_range(session, &key, tracks.len(), limit).await?;
+            let full = page.len() == limit;
+            tracks.extend(page);
+            if !full {
+                break anyhow::Ok(tracks);
+            }
+        }
+    })?;
+    let mut seen = BTreeSet::new();
+    collection.tracks = tracks
+        .into_iter()
+        .map(|track| track.uri)
+        .filter(|uri| uri.starts_with("spotify:track:") && seen.insert(uri.clone()))
+        .collect();
+    Ok(collection)
 }
 
 pub fn remove(account: &str, uri: &str) -> Result<()> {
@@ -248,8 +272,12 @@ pub fn download(
             manifest.last_online = crate::offline::now();
         }
         manifest.add_collection(collection)?;
+        // Songs taken off the list since it was downloaded go too.
+        let unused = manifest.prune();
+        store.remove_files(&unused);
         store.save(manifest)
     })??;
+    publish(&account);
     // One worker per list: a second press while one runs leaves the songs
     // to it, since it rereads what is missing each round.
     let first = RUNNING

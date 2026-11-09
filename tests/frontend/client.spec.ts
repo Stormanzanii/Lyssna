@@ -1535,6 +1535,48 @@ async function emitCanvas(page: Page) {
   }, track.uri);
 }
 
+test("Downloaded chip lists only downloaded playlists, as in Spotify", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const test = (window as any).__clientTest;
+    test.emit({
+      type: "library",
+      playlists: Array.from({ length: 3 }, (_, index) => ({
+        id: String(index).padStart(22, "0"),
+        name: `Playlist ${index}`,
+        images: [],
+        owner: { id: "test-user" },
+        collaborative: false,
+      })),
+    });
+  });
+  const chip = page.getByRole("button", { name: "Downloaded", exact: true });
+  await expect(chip).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "downloads",
+      status: {
+        collections: [
+          {
+            uri: `spotify:playlist:${"1".padStart(22, "0")}`,
+            done: 3,
+            total: 3,
+            downloading: false,
+          },
+        ],
+        locked: false,
+        songs: 3,
+        bytes: 3,
+      },
+    }),
+  );
+  await chip.click();
+  await expect(page.locator(".library-row strong")).toHaveText(["Playlist 1"]);
+  await expect(page.locator(".library-liked")).toBeHidden();
+});
+
 test("sidebar preserves pins and changes recents only after manual playback", async ({
   page,
 }) => {

@@ -91,6 +91,7 @@ import {
   DownloadButton,
   DownloadedMark,
   DownloadingBar,
+  inDownloads,
   isDownloaded,
   useDownloads,
 } from "./download-button";
@@ -2258,14 +2259,23 @@ function App() {
     .filter((playlist) =>
       libraryFilter === "owned"
         ? playlist.owner.id === state.profile?.id
-        : libraryFilter === "collaborative"
+        : libraryFilter === "downloaded"
+          ? inDownloads(downloads.status, `spotify:playlist:${playlist.id}`)
+          : libraryFilter === "collaborative"
           ? playlist.collaborative
           : libraryFilter === "" || libraryFilter === "playlists",
     );
-  const showingPlaylists = ["", "playlists", "owned", "collaborative"].includes(
+  const showingPlaylists = [
+    "",
+    "playlists",
+    "owned",
+    "collaborative",
+    "downloaded",
+  ].includes(libraryFilter);
+  const showingCollection = ["", "albums", "artists", "downloaded"].includes(
     libraryFilter,
   );
-  const showingCollection = ["", "albums", "artists"].includes(libraryFilter);
+  const likedUri = `spotify:user:${state.profile?.id}:collection`;
   // Saving or following elsewhere changes what these chips list.
   const collectionKey = Object.keys(state.saved)
     .filter((uri) => state.saved[uri] && /^spotify:(album|artist):/.test(uri))
@@ -2316,9 +2326,16 @@ function App() {
               .toLowerCase()
               .includes(libraryQuery.toLowerCase()),
           )
+          .filter(
+            (album) =>
+              libraryFilter !== "downloaded" ||
+              inDownloads(downloads.status, `spotify:album:${album.id}`),
+          )
           .map((item) => ({ kind: "album" as const, item }))
       : []),
-    ...(libraryFilter !== "albums" && showingCollection
+    ...(libraryFilter !== "albums" &&
+    libraryFilter !== "downloaded" &&
+    showingCollection
       ? (savedCollection?.artists ?? [])
           .filter((artist) =>
             artist.name.toLowerCase().includes(libraryQuery.toLowerCase()),
@@ -3196,6 +3213,10 @@ function App() {
               ["collaborative", "Collaborative"],
               ["albums", "Albums"],
               ["artists", "Artists"],
+              // Spotify offers this chip once something is downloaded.
+              ...(downloads.status.collections.length
+                ? [["downloaded", "Downloaded"]]
+                : []),
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -3243,7 +3264,12 @@ function App() {
             )}
             <div
               className={`library-liked ${nowPlayingRoute === "liked" ? "playing" : ""}`}
-              hidden={!!openFolder || !showingPlaylists}
+              hidden={
+                !!openFolder ||
+                !showingPlaylists ||
+                (libraryFilter === "downloaded" &&
+                  !inDownloads(downloads.status, likedUri))
+              }
             >
               <button
                 className={`library-item ${state.route === "liked" ? "current" : ""}`}
@@ -3260,7 +3286,7 @@ function App() {
                   <small>
                     {isDownloaded(
                       downloads.status,
-                      `spotify:user:${state.profile?.id}:collection`,
+                        likedUri,
                     ) && <DownloadedMark />}
                     Playlist · Pinned
                   </small>
@@ -3362,7 +3388,9 @@ function App() {
                 <p className="empty-library">
                   {libraryFilter === ""
                     ? "Nothing matches."
-                    : "No playlists match."}
+                    : libraryFilter === "downloaded" && !libraryQuery
+                      ? "Playlists and albums you download appear here."
+                      : "No playlists match."}
                 </p>
               )}
           </div>

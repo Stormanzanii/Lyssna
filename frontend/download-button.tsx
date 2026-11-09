@@ -50,6 +50,9 @@ export function useDownloads(signedIn: boolean): Downloads {
 const pending = (item: { done: number; total: number; downloading: boolean }) =>
   item.downloading || item.done < item.total;
 
+export const inDownloads = (status: DownloadStatus, uri: string) =>
+  status.collections.some((item) => item.uri === uri);
+
 export const isDownloaded = (status: DownloadStatus, uri: string) =>
   status.collections.some((item) => item.uri === uri && !pending(item));
 

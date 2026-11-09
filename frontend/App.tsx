@@ -2175,7 +2175,11 @@ function App() {
         `playlist:${item.id}` === state.route &&
         (item.owner.id === state.profile?.id || item.collaborative),
     );
-  const displayTracks = entity?.artist
+  // Spotify's offline mode: only downloaded songs (and local files) play.
+  const offline = state.native_status.startsWith("Offline");
+  const notDownloaded = (track: Track) =>
+    offline && !track.is_local && !downloads.songs.has(track.uri);
+  const pageTracks = entity?.artist
     ? (entity.overview?.popular.map((item) => item.track) ?? [])
     : collection
       ? collectionTracks(state.tracks, state.facts, {
@@ -2186,6 +2190,11 @@ function App() {
           seed: shuffleSeed,
         })
       : state.tracks;
+  const displayTracks = offline
+    ? pageTracks.map((track) =>
+        notDownloaded(track) ? { ...track, unavailable: true } : track,
+      )
+    : pageTracks;
   const playTrack = useCallback(
     (track: Track, index?: number) => {
       if (!playable(track)) return;
@@ -3417,6 +3426,11 @@ function App() {
         <main
           className={`center-panel ${center === "lyrics" ? "showing-lyrics" : ""}`}
         >
+          {offline && (
+            <div className="offline-banner" role="status">
+              You're offline. Only downloaded songs play.
+            </div>
+          )}
           {center === "ttml" ? (
             <TtmlCreator
               state={state}
@@ -4100,9 +4114,11 @@ function App() {
                             return (
                               <div
                                 title={
-                                  track.unavailable
-                                    ? "This song is not available on Spotify"
-                                    : undefined
+                                  notDownloaded(track)
+                                    ? "Not downloaded. Connect to the internet to play it."
+                                    : track.unavailable
+                                      ? "This song is not available on Spotify"
+                                      : undefined
                                 }
                                 aria-selected={selected.has(track.uri)}
                                 data-uri={track.uri}
@@ -5004,7 +5020,7 @@ function App() {
             <div>
               <strong>This computer</strong>
               <small>
-                {state.native_ready
+                {state.native_ready && !offline
                   ? "Ready for native playback"
                   : state.native_status}
               </small>

@@ -66,6 +66,18 @@ fn previous_profile() -> Result<Option<Profile>> {
     Ok(auth::Tokens::load(&settings.client_id)?.and_then(|tokens| tokens.profile))
 }
 
+/// The saved account, when Spotify cannot be reached but it signed in here
+/// before and its downloads may still play (the user-approved exception to
+/// unlocking only after a verified sign-in).
+pub fn offline_profile() -> Option<Profile> {
+    if cfg!(test) {
+        return None;
+    }
+    let profile = native::saved_profile().ok()??;
+    native::load_credentials(&profile.id).ok()??;
+    crate::offline_sync::usable(&profile.id).then_some(profile)
+}
+
 pub fn authenticate(
     client: &reqwest::blocking::Client,
     restoring: bool,

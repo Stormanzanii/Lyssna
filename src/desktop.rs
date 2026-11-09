@@ -816,7 +816,7 @@ impl Desktop {
                                 match connection {
                                     NativeEvent::Ready(id) => {
                                         snapshot.native_ready = true;
-                                        snapshot.native_status = "Ready · this computer".into();
+                                        snapshot.native_status = ready_status(&id);
                                         if let Ok(mut current) = pump.native_id.lock() {
                                             *current = Some(id);
                                         }
@@ -1343,16 +1343,19 @@ impl Desktop {
                             {
                                 continue;
                             }
+                            let offline = id == OFFLINE_DEVICE;
+                            snapshot.native_status = ready_status(&id);
                             if let Ok(mut current) = pump.native_id.lock() {
                                 *current = Some(id);
                             }
                             snapshot.native_ready = true;
-                            snapshot.native_status = "Ready · this computer".into();
-                            if let Some(profile) = snapshot.profile.as_ref() {
-                                resume_downloads(&app, &pump.controls, &profile.id);
+                            if !offline {
+                                if let Some(profile) = snapshot.profile.as_ref() {
+                                    resume_downloads(&app, &pump.controls, &profile.id);
+                                }
+                                // Reload playlists from Spotify's own library list.
+                                let _ = pump.commands.send(Command::Library);
                             }
-                            // Reload playlists from Spotify's own library list.
-                            let _ = pump.commands.send(Command::Library);
                             let clicked = send_queued_native(&pump.queued_native, &pump.controls);
                             if clicked && let Ok(mut last) = pump.last_native.lock() {
                                 *last = Some(Instant::now());
@@ -2699,7 +2702,7 @@ fn player(
                 .connection_event(snapshot.profile.as_ref().map(|profile| profile.id.as_str()))
             {
                 snapshot.native_ready = true;
-                snapshot.native_status = "Ready · this computer".into();
+                snapshot.native_status = ready_status(&id);
                 *lock(&state.0.native_id)? = Some(id);
                 state.0.controls.send(action.clone()).map_err(|_| {
                     anyhow::anyhow!(
@@ -4727,6 +4730,15 @@ async fn search_page(
     .await
     .map_err(error)?
     .map_err(|_| "More results are unavailable right now. Try again shortly.".to_owned())
+}
+use crate::native::OFFLINE_DEVICE;
+/// The offline status line is how the window knows to show its banner.
+fn ready_status(device: &str) -> String {
+    if device == OFFLINE_DEVICE {
+        "Offline · playing downloads".into()
+    } else {
+        "Ready · this computer".into()
+    }
 }
 fn signed_in_controls(
     state: &State<'_, Desktop>,

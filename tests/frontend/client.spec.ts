@@ -1545,6 +1545,34 @@ async function emitCanvas(page: Page) {
   }, track.uri);
 }
 
+test("offline mode shows a banner and greys out songs that are not downloaded", async ({
+  page,
+}) => {
+  await startClient(page);
+  const rows = page.locator(".track-row");
+  await expect(rows.first()).toBeVisible();
+  const uris = await rows.evaluateAll((items) =>
+    items.map((item) => item.getAttribute("data-uri")),
+  );
+  await page.evaluate((uri) => {
+    const test = (window as any).__clientTest;
+    test.downloaded = [uri];
+    test.emit({
+      type: "downloads",
+      status: { collections: [], locked: false, songs: 1, bytes: 1 },
+    });
+    test.emit({
+      type: "native",
+      ready: true,
+      status: "Offline · playing downloads",
+    });
+  }, uris[0]);
+  await expect(page.getByRole("status").filter({ hasText: "You're offline" })).toBeVisible();
+  await expect(rows.first()).not.toHaveClass(/unavailable/);
+  if (uris.length > 1)
+    await expect(rows.nth(1)).toHaveClass(/unavailable/);
+});
+
 test("Downloaded chip lists only downloaded playlists, as in Spotify", async ({
   page,
 }) => {

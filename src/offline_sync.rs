@@ -118,6 +118,44 @@ pub fn track(uri: &str) -> Option<crate::model::Track> {
     TRACKS.read().ok()?.get(uri).cloned()
 }
 
+pub fn playable(uri: &str) -> bool {
+    TRACKS.read().is_ok_and(|tracks| tracks.contains_key(uri))
+}
+
+/// Downloads can stand in for Spotify: some exist and the 30-day window
+/// is still open.
+pub fn usable(account: &str) -> bool {
+    let now = crate::offline::now();
+    with(account, |_, manifest| {
+        !manifest.tracks.is_empty() && !manifest.locked(now)
+    })
+    .unwrap_or(false)
+}
+
+/// A downloaded list's playable songs in its order, for use offline.
+pub fn list(account: &str, uri: &str) -> Option<(Collection, Vec<crate::model::Track>)> {
+    let now = crate::offline::now();
+    with(account, |_, manifest| {
+        if manifest.locked(now) {
+            return None;
+        }
+        let collection = manifest
+            .collections
+            .iter()
+            .find(|collection| collection.uri == uri)?
+            .clone();
+        let tracks = collection
+            .tracks
+            .iter()
+            .filter_map(|track| manifest.tracks.get(track))
+            .map(|download| download.track.clone())
+            .collect();
+        Some((collection, tracks))
+    })
+    .ok()
+    .flatten()
+}
+
 /// Removes every account's downloads, as Spotify does when you sign out.
 pub fn forget_all() -> Result<()> {
     STOPS.fetch_add(1, Ordering::AcqRel);

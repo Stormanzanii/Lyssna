@@ -797,6 +797,29 @@ impl Backend {
         Ok(())
     }
 
+    /// Spotify cannot be reached: open with the saved account so downloads
+    /// play. Audio keeps trying Spotify and switches over once it answers.
+    fn establish_offline(&mut self, profile: Profile) -> Result<()> {
+        if let Some(previous) = self.spotify.take() {
+            previous.cancel_background();
+        }
+        self.client_id = crate::config::Settings::load()
+            .map(|settings| settings.client_id)
+            .unwrap_or_default();
+        self.profile = profile;
+        self.start_audio()?;
+        self.spotify = Some(Spotify::native(
+            self.client.clone(),
+            self.native_controls.clone(),
+            self.profile.clone(),
+        )?);
+        self.emit(Event::Session(self.profile.clone()));
+        if let Some(playlists) = crate::library_cache::load(&self.profile.id) {
+            self.emit(Event::Library(playlists));
+        }
+        Ok(())
+    }
+
     fn scoped_native(&self) -> NativeControls {
         self.native_controls
             .scoped(&self.profile.id)
@@ -1001,7 +1024,14 @@ impl Backend {
                         self.establish_native(*login)?;
                     }
                     Ok(None) => self.emit(Event::SignedOut),
-                    Err(issue) => self.emit(Event::LoginFailed(issue)),
+                    Err(issue) => match issue
+                        .retry_saved
+                        .then(crate::native_login::offline_profile)
+                        .flatten()
+                    {
+                        Some(profile) => self.establish_offline(profile)?,
+                        None => self.emit(Event::LoginFailed(issue)),
+                    },
                 }
             }
             Command::Restore(client_id) => {

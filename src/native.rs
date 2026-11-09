@@ -23,6 +23,9 @@ use librespot_protocol::authentication::AuthenticationType;
 use tokio::sync::mpsc as async_channel;
 use tokio::sync::oneshot;
 
+mod offline_run;
+pub(crate) use offline_run::OFFLINE_DEVICE;
+
 const CREDENTIAL_SERVICE: &str = "Lyssna/SpotifyAudio";
 static CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
@@ -2346,6 +2349,33 @@ impl NativePlayer {
                 if let Outcome::Failed(failure) = outcome
                     && !cancel.load(Ordering::Relaxed)
                 {
+                    if failure.retryable && crate::offline_sync::usable(&account) {
+                        let online_again = runtime.block_on(offline_run::run(
+                            &account,
+                            &mut stopped,
+                            PlaybackServices {
+                                devices: &devices,
+                                audio_buffer: &audio_buffer,
+                                commands: &mut commands,
+                                playlists: &mut playlists,
+                                metadata: &mut metadata,
+                                latest_volume: &latest_volume,
+                                shared_session: &shared_session,
+                                loaded: &loaded,
+                                queue_snapshot: &queue_snapshot,
+                                carried: &carried,
+                                kept: &mut kept,
+                            },
+                            &thread_ready,
+                            &emit,
+                        ));
+                        loaded.store(false, Ordering::Release);
+                        if online_again {
+                            backoff = crate::reconnect::ReconnectBackoff::default();
+                            continue;
+                        }
+                        break;
+                    }
                     if failure.retryable {
                         let delay = backoff.next(started.elapsed());
                         emit(NativeEvent::Reconnecting(delay.as_secs()));
@@ -2368,6 +2398,55 @@ impl NativePlayer {
             ready,
         }
     }
+}
+
+/// Points the kept player at `session`, or builds the player and its audio
+/// path the first time.
+fn keep_player(
+    kept: &mut Option<KeptPlayer>,
+    session: &Session,
+    audio_buffer: &crate::audio::AudioBuffer,
+) -> std::result::Result<(), Failure> {
+    if let Some(kit) = kept.as_ref() {
+        // The song from before the dropout may still be playing; later
+        // songs load through the new connection.
+        kit.player.set_session(session.clone());
+        return Ok(());
+    }
+    let mixer = SoftMixer::open(MixerConfig::default())
+        .map(Arc::new)
+        .map_err(|_| Failure::other("Cannot initialize audio mixer"))?;
+    let flush_audio = Arc::new(AtomicBool::new(false));
+    let sink_flush = flush_audio.clone();
+    let (seek_ready, audible_seeks) = async_channel::unbounded_channel();
+    let sink_buffer = audio_buffer.clone();
+    let sink_mixer = mixer.clone();
+    let player = Player::new(
+        PlayerConfig {
+            position_update_interval: Some(Duration::from_millis(250)),
+            ..PlayerConfig::default()
+        },
+        session.clone(),
+        Box::new(librespot_playback::mixer::NoOpVolume),
+        move || {
+            let mut sink = crate::audio::AudioSink::new(
+                sink_flush.clone(),
+                seek_ready.clone(),
+                sink_buffer.clone(),
+            )
+            .with_mixer(sink_mixer.clone());
+            let _ = sink.prepare_output();
+            Box::new(sink)
+        },
+    );
+    *kept = Some(KeptPlayer {
+        player,
+        mixer,
+        flush_audio,
+        audible_seeks,
+        playing: Arc::default(),
+    });
+    Ok(())
 }
 
 struct ConnectionLogin {
@@ -2406,47 +2485,8 @@ async fn run(
         ),
     };
     let reconnected = kept.is_some();
-    if let Some(kit) = kept.as_ref() {
-        // The song from before the dropout may still be playing; later
-        // songs load through the new connection.
-        kit.player.set_session(session.clone());
-    } else {
-        let mixer = match SoftMixer::open(MixerConfig::default()) {
-            Ok(mixer) => Arc::new(mixer),
-            Err(_) => {
-                return Outcome::Failed(Failure::other("Cannot initialize audio mixer"));
-            }
-        };
-        let flush_audio = Arc::new(AtomicBool::new(false));
-        let sink_flush = flush_audio.clone();
-        let (seek_ready, audible_seeks) = async_channel::unbounded_channel();
-        let sink_buffer = audio_buffer.clone();
-        let sink_mixer = mixer.clone();
-        let player = Player::new(
-            PlayerConfig {
-                position_update_interval: Some(Duration::from_millis(250)),
-                ..PlayerConfig::default()
-            },
-            session.clone(),
-            Box::new(librespot_playback::mixer::NoOpVolume),
-            move || {
-                let mut sink = crate::audio::AudioSink::new(
-                    sink_flush.clone(),
-                    seek_ready.clone(),
-                    sink_buffer.clone(),
-                )
-                .with_mixer(sink_mixer.clone());
-                let _ = sink.prepare_output();
-                Box::new(sink)
-            },
-        );
-        *kept = Some(KeptPlayer {
-            player,
-            mixer,
-            flush_audio,
-            audible_seeks,
-            playing: Arc::default(),
-        });
+    if let Err(failure) = keep_player(kept, &session, audio_buffer) {
+        return Outcome::Failed(failure);
     }
     let Some(kit) = kept.as_mut() else {
         return Outcome::Failed(Failure::other("Cannot initialize audio"));

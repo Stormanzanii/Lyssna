@@ -16930,8 +16930,12 @@ test("a suggested song has the song menu, a tick when saved and an inline E", as
     exact: true,
   });
   await expect(queue).toBeVisible();
+  await expect(list).toBeVisible();
   await page.screenshot({ path: "target/diagnostics/suggestion-menu.png" });
   await queue.click();
+  await expect(queue).toBeHidden();
+  await expect(list).toBeVisible();
+  await expect(search).toBeFocused();
   await expect
     .poll(() =>
       page.evaluate(() =>

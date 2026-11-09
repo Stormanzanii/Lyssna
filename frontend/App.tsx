@@ -361,6 +361,9 @@ function App() {
   }, [state.profile?.id]);
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  // A suggestion's song menu borrows focus; the suggestions stay open and
+  // get it back once the menu closes.
+  const menuFromSearch = useRef(false);
   const [suggestionsClosed, setSuggestionsClosed] = useState(false);
   const suggestionKeys = useRef<SuggestionKeys>(null);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
@@ -1052,6 +1055,11 @@ function App() {
         notify(done);
       })
       .catch((error) => notify(String(error), true));
+  useEffect(() => {
+    if (songMenu || !menuFromSearch.current) return;
+    menuFromSearch.current = false;
+    searchInput.current?.focus();
+  }, [songMenu]);
   useLayoutEffect(() => {
     if (!entityMenu && !songMenu) return;
     const position = () => {
@@ -3284,7 +3292,15 @@ function App() {
                 setSearchFocused(true);
                 setSuggestionsClosed(false);
               }}
-              onBlur={() => setSearchFocused(false)}
+              onBlur={(event) => {
+                if (
+                  (event.relatedTarget as HTMLElement | null)?.closest(
+                    ".song-menu",
+                  )
+                )
+                  return;
+                setSearchFocused(false);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") event.currentTarget.blur();
                 if (
@@ -3370,6 +3386,7 @@ function App() {
                   saved={state.saved}
                   save={save}
                   menu={(track, x, y) => {
+                    menuFromSearch.current = true;
                     setEntityMenu(null);
                     setSongMenu({ track, x, y });
                   }}

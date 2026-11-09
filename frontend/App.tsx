@@ -263,6 +263,7 @@ const isTextInput = (target: EventTarget | null) =>
     (target instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(target.type)));
 
 type Center = "browse" | "lyrics" | "profile" | "ttml";
+const LAYOUT_BEFORE_TTML = "lyssna.layout-before-ttml";
 type EntityMenu = {
   kind: "playlist" | "album" | "artist" | "liked";
   id: string;
@@ -907,21 +908,45 @@ function App() {
     [call],
   );
   // The TTML Creator takes the room of Now playing and a full library, and
-  // gives back whatever layout was there before it opened.
+  // gives back whatever layout was there before it opened. That layout is
+  // kept on disk too, since closing the app inside the Creator never leaves it.
   const layoutBeforeTtml = useRef<Partial<Settings> | null>(null);
   useEffect(() => {
+    if (!state.booted) return;
+    const kept = () => {
+      try {
+        return JSON.parse(
+          localStorage.getItem(LAYOUT_BEFORE_TTML) ?? "null",
+        ) as Partial<Settings> | null;
+      } catch {
+        return null;
+      }
+    };
+    const keep = (layout: Partial<Settings> | null) => {
+      try {
+        if (layout)
+          localStorage.setItem(LAYOUT_BEFORE_TTML, JSON.stringify(layout));
+        else localStorage.removeItem(LAYOUT_BEFORE_TTML);
+      } catch {
+        // The layout still comes back within this session.
+      }
+    };
     const settings = stateRef.current.settings;
     if (center === "ttml" && !layoutBeforeTtml.current) {
-      layoutBeforeTtml.current = {
+      layoutBeforeTtml.current = kept() ?? {
         now_playing_open: settings.now_playing_open !== false,
         compact_library: !!settings.compact_library,
       };
+      keep(layoutBeforeTtml.current);
       updateSettings({ now_playing_open: false, compact_library: true });
-    } else if (center !== "ttml" && layoutBeforeTtml.current) {
-      updateSettings(layoutBeforeTtml.current);
+    } else if (center !== "ttml") {
+      const before = layoutBeforeTtml.current ?? kept();
+      if (!before) return;
+      updateSettings(before);
       layoutBeforeTtml.current = null;
+      keep(null);
     }
-  }, [center, updateSettings]);
+  }, [center, updateSettings, state.booted]);
   // Styles that differ between animator presets key off the root.
   const cacheAction = state.settings.lyrics_cache_action ?? "song";
   useEffect(() => {

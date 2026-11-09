@@ -15918,6 +15918,57 @@ test("TTML Creator spectrogram retimes words while the song plays", async ({
   ).toHaveAttribute("title", "one 00:00.300 – 00:00.700");
 });
 
+test("layout the TTML Creator borrowed comes back after a restart", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("restarted")) return;
+    sessionStorage.setItem("restarted", "1");
+    localStorage.setItem(
+      "lyssna.layout-before-ttml",
+      JSON.stringify({ now_playing_open: true, compact_library: false }),
+    );
+  });
+  await startClient(page);
+  const saved = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "save_settings")
+        .map((entry: any) => ({
+          now_playing_open: entry.args.settings.now_playing_open,
+          compact_library: entry.args.settings.compact_library,
+        })),
+    );
+  await expect
+    .poll(async () => (await saved()).at(-1))
+    .toEqual({ now_playing_open: true, compact_library: false });
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.layout-before-ttml")),
+  ).toBe(null);
+
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const creator = page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true });
+  await creator.click();
+  await expect
+    .poll(async () => (await saved()).at(-1))
+    .toEqual({ now_playing_open: false, compact_library: true });
+  expect(
+    JSON.parse(
+      (await page.evaluate(() =>
+        localStorage.getItem("lyssna.layout-before-ttml"),
+      ))!,
+    ),
+  ).toEqual({ now_playing_open: true, compact_library: false });
+});
+
 test("TTML Creator swaps the player bar for a waveform bar", async ({
   page,
 }) => {

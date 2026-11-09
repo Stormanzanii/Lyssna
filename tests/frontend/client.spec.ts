@@ -67,6 +67,10 @@ test("Download behaves like Spotify's: progress, stop, green, remove", async ({
   await expect(page.getByRole("status")).toContainText("Downloading1 of 2");
   await expect(page.getByLabel("Downloaded").first()).toBeVisible();
   await emit(1, false);
+  await expect(
+    page.getByRole("button", { name: /^Stop download: / }),
+  ).toBeVisible();
+  await emit(2, false);
   await expect(page.getByRole("status")).toHaveCount(0);
   const remove = page.getByRole("button", { name: /^Remove from Downloads: / });
   await expect(remove).toHaveClass(/done/);

@@ -47,8 +47,11 @@ export function useDownloads(signedIn: boolean): Downloads {
   return { status, songs };
 }
 
+const pending = (item: { done: number; total: number; downloading: boolean }) =>
+  item.downloading || item.done < item.total;
+
 export const isDownloaded = (status: DownloadStatus, uri: string) =>
-  status.collections.some((item) => item.uri === uri && !item.downloading);
+  status.collections.some((item) => item.uri === uri && !pending(item));
 
 const arrow = "M12 7v10.3m-3.5-3.5 3.5 3.5 3.5-3.5";
 
@@ -66,7 +69,7 @@ export function DownloadButton({
   tracks: string[];
 }) {
   const progress = status.collections.find((item) => item.uri === uri);
-  const running = !!progress?.downloading;
+  const running = !!progress && pending(progress);
   const share = progress?.total ? progress.done / progress.total : 0;
   const label = running
     ? "Stop download"
@@ -182,7 +185,7 @@ export function DownloadedMark() {
 
 /** Spotify's "Downloading 8 of 11" strip above Your Library. */
 export function DownloadingBar({ status }: { status: DownloadStatus }) {
-  const running = status.collections.filter((item) => item.downloading);
+  const running = status.collections.filter(pending);
   if (!running.length) return null;
   const done = running.reduce((sum, item) => sum + item.done, 0);
   const total = running.reduce((sum, item) => sum + item.total, 0);

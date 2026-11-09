@@ -41,7 +41,13 @@ pub struct Manifest {
     pub collections: Vec<Collection>,
     #[serde(default)]
     pub tracks: BTreeMap<String, Download>,
+    /// Sealed keys by audio file, kept after a download is removed so
+    /// downloading it again does not ask Spotify, which throttles keys.
+    #[serde(default)]
+    pub keys: BTreeMap<String, String>,
 }
+
+const KEPT_KEYS: usize = 20_000;
 
 impl Manifest {
     pub fn locked(&self, now: u64) -> bool {
@@ -110,10 +116,31 @@ impl Manifest {
         unused
     }
 
+    pub fn missing(&self, collection: &str) -> Option<Vec<String>> {
+        let collection = self
+            .collections
+            .iter()
+            .find(|kept| kept.uri == collection)?;
+        let mut seen = BTreeSet::new();
+        Some(
+            collection
+                .tracks
+                .iter()
+                .filter(|uri| !self.tracks.contains_key(*uri) && seen.insert(uri.as_str()))
+                .cloned()
+                .collect(),
+        )
+    }
+
     pub fn record(&mut self, uri: &str, download: Download) -> bool {
         if !self.wanted().contains(uri) {
             return false;
         }
+        if self.keys.len() >= KEPT_KEYS {
+            self.keys.clear();
+        }
+        self.keys
+            .insert(download.file_id.clone(), download.sealed_key.clone());
         self.tracks.insert(uri.to_owned(), download);
         true
     }
@@ -437,6 +464,10 @@ mod tests {
         assert!(manifest.tracks.contains_key("t2"));
         assert_eq!(manifest.remove_collection("spotify:playlist:p"), ["bb"]);
         assert!(manifest.tracks.is_empty());
+        assert!(
+            manifest.keys.contains_key("aa"),
+            "keys outlive the download so it can come back without asking Spotify"
+        );
     }
 
     #[test]

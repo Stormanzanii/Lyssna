@@ -2436,8 +2436,10 @@ impl PlayerInternal {
         } = self.state
         {
             if *current_track_id == track_id && speaks_current_lines {
-                // we can use the current decoder. Ensure it's at the correct position.
-                if position_ms != *stream_position_ms {
+                // A takeover after a reconnect names where the song was when it
+                // was sent; the song has played on since, and seeking back would
+                // repeat that moment.
+                if position_ms.abs_diff(*stream_position_ms) > 1500 {
                     // This may be blocking.
                     *stream_position_ms = decoder.seek(position_ms)?;
                 }

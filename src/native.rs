@@ -155,6 +155,7 @@ struct ControlConnection {
     metadata: Option<async_channel::UnboundedSender<MetadataRead>>,
     /// The player still sounding the song while audio reconnects.
     carried: Arc<Mutex<Option<Arc<Player>>>>,
+    takeover: Arc<Mutex<Option<String>>>,
 }
 struct MetadataRead {
     offset: usize,
@@ -280,6 +281,7 @@ impl NativeControls {
             metadata: None,
             queue_snapshot: Arc::new(Mutex::new(Some(Vec::new()))),
             carried: Default::default(),
+            takeover: Default::default(),
         }))));
         (controls, receiver)
     }
@@ -430,6 +432,16 @@ impl NativeControls {
                     .is_ok_and(|player| player.is_some())
             })
         })
+    }
+    /// The next load of this song continues the one already sounding, so
+    /// its buffered audio is kept instead of cut.
+    pub fn taking_over(&self, uri: &str) {
+        if let Ok(connection) = self.0.lock()
+            && let Some(connection) = connection.as_ref()
+            && let Ok(mut takeover) = connection.takeover.lock()
+        {
+            *takeover = Some(uri.to_owned());
+        }
     }
     /// Pauses the song playing on while audio reconnects. False if none was.
     pub fn pause_carried(&self) -> bool {
@@ -960,7 +972,17 @@ impl NativeControls {
         if loading {
             connection.loaded.store(true, Ordering::Release);
         }
-        if loading {
+        let continuing = loading
+            && connection
+                .takeover
+                .lock()
+                .ok()
+                .and_then(|mut takeover| takeover.take())
+                .is_some_and(|uri| {
+                    matches!(&action, PlayerAction::Resume { .. })
+                        && selected_track(&action).as_deref() == Some(uri.as_str())
+                });
+        if loading && !continuing {
             connection.audio_buffer.interrupt(selected_track(&action));
         } else if matches!(
             action,
@@ -2223,6 +2245,7 @@ impl NativePlayer {
                 loaded: loaded.clone(),
                 queue_snapshot: queue_snapshot.clone(),
                 carried: carried.clone(),
+                takeover: Default::default(),
                 playlists: Some(playlist_sender),
                 metadata: Some(metadata_sender),
             });
@@ -3303,6 +3326,7 @@ mod tests {
             metadata: Some(metadata),
             queue_snapshot: Default::default(),
             carried: Default::default(),
+            takeover: Default::default(),
         });
         let service = thread::spawn(move || {
             if let Some(request) = requests.blocking_recv() {
@@ -3714,6 +3738,7 @@ mod tests {
                 metadata: None,
                 queue_snapshot: Default::default(),
                 carried: Default::default(),
+                takeover: Default::default(),
             });
             assert!(controls.send(action).is_ok());
             assert!(
@@ -4141,6 +4166,7 @@ mod tests {
             metadata: None,
             queue_snapshot: Default::default(),
             carried: Default::default(),
+            takeover: Default::default(),
         });
         assert!(controls.send(PlayerAction::Pause).is_ok());
         assert!(controls.connected_or_connecting("listener"));

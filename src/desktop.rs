@@ -1389,6 +1389,9 @@ impl Desktop {
                                 } else {
                                     "taking over the song from before the dropped connection"
                                 });
+                                if !ended && let Some(track) = snapshot.playback.item.as_ref() {
+                                    pump.controls.taking_over(&track.uri);
+                                }
                                 emit(json!({
                                     "type": "media_control",
                                     "action": if ended { "next" } else { "play" },

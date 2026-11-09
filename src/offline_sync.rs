@@ -27,6 +27,25 @@ static TRACKS: LazyLock<RwLock<HashMap<String, crate::model::Track>>> =
 static DOWNLOADING: Mutex<()> = Mutex::new(());
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 static RUNNING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+/// Rounds in which Spotify refused each song's key. Some songs are always
+/// refused to this player; after two rounds they are set aside until the
+/// next start so the rest of the list can finish.
+static REFUSALS: LazyLock<Mutex<HashMap<String, u8>>> = LazyLock::new(Default::default);
+const REFUSED_ROUNDS: u8 = 2;
+
+fn set_aside(track: &str) -> bool {
+    REFUSALS.lock().is_ok_and(|refusals| {
+        refusals
+            .get(track)
+            .is_some_and(|rounds| *rounds >= REFUSED_ROUNDS)
+    })
+}
+
+fn note_refusal(track: &str) {
+    if let Ok(mut refusals) = REFUSALS.lock() {
+        *refusals.entry(track.to_owned()).or_default() += 1;
+    }
+}
 
 fn with<R>(account: &str, change: impl FnOnce(&Store, &mut Manifest) -> R) -> Result<R> {
     let mut loaded = LOADED
@@ -105,6 +124,9 @@ pub fn forget_all() -> Result<()> {
     if let Ok(mut loaded) = LOADED.lock() {
         *loaded = None;
     }
+    if let Ok(mut refusals) = REFUSALS.lock() {
+        refusals.clear();
+    }
     librespot_playback::set_downloads(HashMap::new());
     if let Ok(mut shared) = TRACKS.write() {
         shared.clear();
@@ -157,6 +179,13 @@ pub fn status(account: &str) -> Result<Status> {
             .iter()
             .filter_map(|collection| {
                 let (done, total) = manifest.is_downloaded(&collection.uri)?;
+                let aside = manifest
+                    .missing(&collection.uri)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|track| set_aside(track))
+                    .count();
+                let total = total - aside;
                 Some(Progress {
                     uri: collection.uri.clone(),
                     done,
@@ -233,7 +262,8 @@ pub fn download(
     }
     let mut round = 0;
     let finished = loop {
-        let missing = with(&account, |_, manifest| manifest.missing(&uri))?.unwrap_or_default();
+        let mut missing = with(&account, |_, manifest| manifest.missing(&uri))?.unwrap_or_default();
+        missing.retain(|track| !set_aside(track));
         if missing.is_empty() || cancelled() {
             break Ok(());
         }
@@ -341,6 +371,7 @@ fn fetch_missing(
             Err(error) => {
                 crate::native::diagnostic(&format!("event download skipped {track}: {error:#}"));
                 if refused(&error) {
+                    note_refusal(&track);
                     refusals += 1;
                     if refusals >= 2 {
                         return Ok(true);
@@ -435,6 +466,15 @@ fn fetch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_song_refused_twice_is_set_aside() {
+        let track = "spotify:track:refusedrefusedrefused1";
+        note_refusal(track);
+        assert!(!set_aside(track));
+        note_refusal(track);
+        assert!(set_aside(track));
+    }
 
     #[test]
     fn stored_format_names_round_trip() {

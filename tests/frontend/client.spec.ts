@@ -15827,6 +15827,97 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
   ).toBe(null);
 });
 
+test("TTML Creator spectrogram retimes words while the song plays", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.qrc",
+    mimeType: "text/plain",
+    buffer: Buffer.from("[300,1500]one (300,500)two (800,400)three (1200,600)"),
+  });
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await panel.getByRole("button", { name: "Follow playback" }).click();
+  await panel.locator(".ttml-spectrum-plot").hover();
+  for (let turn = 0; turn < 6; turn++) await page.mouse.wheel(0, -2000);
+  await expect(panel.locator(".ttml-spectrum-content")).toHaveAttribute(
+    "style",
+    /translate3d\(0px/,
+  );
+  const two = panel.locator(".ttml-spectrum-word", { hasText: "two" });
+  await expect(two).toHaveAttribute("title", "two 00:00.800 – 00:01.200");
+
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: true,
+        progress_ms: 3000,
+        shuffle_state: false,
+        repeat_state: "off",
+        device: { name: "Lyssna (test)", id: "local-device", is_active: true },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          artists: [{ id: "a", name: "Juice WRLD" }],
+          album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+          duration_ms: 180000,
+        },
+      },
+    });
+  });
+  const time = page.locator(".ttml-bar-time").first();
+  const before = await time.textContent();
+  await expect.poll(() => time.textContent()).not.toBe(before);
+  // 200 px per second: 20 px is 100 ms.
+  const edge = (await two.getByLabel("Move the end of two").boundingBox())!;
+  await page.mouse.move(edge.x + 4, edge.y + 20);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    await page.mouse.move(edge.x + 4 + step * 5, edge.y + 20);
+    await page.waitForTimeout(60);
+  }
+  // Holding still lets the playhead move on before letting go.
+  await page.waitForTimeout(400);
+  await page.mouse.up();
+  await expect(two).toHaveAttribute("title", "two 00:00.800 – 00:01.300");
+  await expect(
+    panel.locator(".ttml-spectrum-word", { hasText: "three" }),
+  ).toHaveAttribute("title", "three 00:01.300 – 00:01.800");
+
+  const body = (await two.boundingBox())!;
+  await page.mouse.move(body.x + body.width / 2, body.y + 60);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    await page.mouse.move(body.x + body.width / 2 - step * 5, body.y + 60);
+    await page.waitForTimeout(60);
+  }
+  // Holding still lets the playhead move on before letting go.
+  await page.waitForTimeout(400);
+  await page.mouse.up();
+  await expect(two).toHaveAttribute("title", "two 00:00.700 – 00:01.200");
+  await expect(
+    panel.locator(".ttml-spectrum-word", { hasText: "one" }),
+  ).toHaveAttribute("title", "one 00:00.300 – 00:00.700");
+});
+
 test("TTML Creator swaps the player bar for a waveform bar", async ({
   page,
 }) => {

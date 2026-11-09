@@ -12,6 +12,7 @@ import {
   editUnit,
   replaceMatching,
   moveEdge,
+  panUnit,
   appendWords,
   dropTrailingSpace,
   formatTime,
@@ -284,6 +285,49 @@ describe("TTML Creator card editing", () => {
       [600, 900],
     ]);
     expect(moveEdge(apart, { line: 0, unit: 0 }, "start", -50)).toBe(apart);
+  });
+
+  it("slides a syllable, stretching neighbours that share its edges", () => {
+    const line = (units: [number, number][]): CreatorLine[] => [
+      {
+        background: false,
+        opposite: false,
+        units: units.map(([start, end], index) => ({
+          text: `w${index}`,
+          joined: false,
+          start,
+          end,
+        })),
+      },
+    ];
+    const times = (lines: CreatorLine[]) =>
+      lines[0].units.map((unit) => [unit.start, unit.end]);
+    const joined = line([
+      [0, 500],
+      [500, 900],
+      [900, 1500],
+    ]);
+    expect(times(panUnit(joined, { line: 0, unit: 1 }, 650))).toEqual([
+      [0, 650],
+      [650, 1050],
+      [1050, 1500],
+    ]);
+    expect(times(panUnit(joined, { line: 0, unit: 1 }, 5000))).toEqual([
+      [0, 1090],
+      [1090, 1490],
+      [1490, 1500],
+    ]);
+    const apart = line([
+      [0, 400],
+      [600, 900],
+      [1200, 1500],
+    ]);
+    expect(times(panUnit(apart, { line: 0, unit: 1 }, 100))).toEqual([
+      [0, 400],
+      [400, 700],
+      [1200, 1500],
+    ]);
+    expect(panUnit(apart, { line: 0, unit: 1 }, 600)).toBe(apart);
   });
 
   it("replaces every identical word, with or without matching case", () => {

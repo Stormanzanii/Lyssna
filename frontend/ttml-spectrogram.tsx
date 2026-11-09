@@ -7,6 +7,7 @@ import {
   formatTime,
   lineSpan,
   moveEdge,
+  panUnit,
 } from "./ttml-creator-model";
 
 const TILE_MS = 5000;
@@ -158,7 +159,7 @@ function Tile({
 
 interface Drag {
   at: Cursor;
-  edge: "start" | "end";
+  edge: "start" | "end" | "word";
   from: number;
   x: number;
 }
@@ -419,31 +420,42 @@ export function TtmlSpectrogram({
     window.addEventListener("pointerup", up);
   };
 
-  const grab = (
-    event: React.PointerEvent,
-    at: Cursor,
-    edge: "start" | "end",
-  ) => {
+  const grab = (event: React.PointerEvent, at: Cursor, edge: Drag["edge"]) => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const from = lines[at.line]?.units[at.unit]?.[edge];
+    const from =
+      lines[at.line]?.units[at.unit]?.[edge === "end" ? "end" : "start"];
     if (from === undefined) return;
     setDrag({ at, edge, from, x: event.clientX });
   };
+  // Playback moves the playhead every frame; reading it through refs keeps
+  // the drag listeners, and the edit in progress, alive while it plays.
+  const dragging = useRef({ lines, zoom, position, onLines });
+  dragging.current = { lines, zoom, position, onLines };
   useEffect(() => {
     if (!drag) return;
     let latest: CreatorLine[] | null = null;
+    let moved = false;
     const move = (event: PointerEvent) => {
-      let time = drag.from + ((event.clientX - drag.x) / zoom) * 1000;
+      const { lines, zoom, position } = dragging.current;
+      const shift = event.clientX - drag.x;
+      if (!moved && Math.abs(shift) < 3) return;
+      moved = true;
+      let time = drag.from + (shift / zoom) * 1000;
       if (
         !event.shiftKey &&
         Math.abs(((time - position) / 1000) * zoom) < SNAP_PX
       )
         time = position;
-      latest = moveEdge(lines, drag.at, drag.edge, time);
+      latest =
+        drag.edge === "word"
+          ? panUnit(lines, drag.at, time)
+          : moveEdge(lines, drag.at, drag.edge, time);
       setPreview(latest);
     };
     const up = () => {
+      const { lines, onLines } = dragging.current;
       if (latest && latest !== lines) onLines(latest);
       setDrag(null);
       setPreview(null);
@@ -454,7 +466,7 @@ export function TtmlSpectrogram({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, lines, zoom, position, onLines]);
+  }, [drag]);
 
   const shownLines = preview ?? lines;
   const ms = (time: number) => (time / 1000) * zoom;
@@ -614,6 +626,7 @@ export function TtmlSpectrogram({
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   onCursor(segment.at);
+                  grab(event, segment.at, "word");
                 }}
               >
                 {segment.roman && <small>{segment.roman}</small>}

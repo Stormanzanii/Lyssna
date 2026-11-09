@@ -476,6 +476,45 @@ export function moveEdge(
   );
 }
 
+/**
+ * Slides a timed syllable to start at `time`, keeping its length. A
+ * neighbour sharing an edge stretches or shrinks with it; any other
+ * neighbour stops it.
+ */
+export function panUnit(
+  lines: CreatorLine[],
+  at: Cursor,
+  time: number,
+): CreatorLine[] {
+  const units = lines[at.line]?.units;
+  const unit = units?.[at.unit];
+  if (!unit || unit.start === undefined || unit.end === undefined) return lines;
+  const length = unit.end - unit.start;
+  const before = units[at.unit - 1];
+  const after = units[at.unit + 1];
+  const sharedBefore = before?.end !== undefined && before.end === unit.start;
+  const sharedAfter = after?.start !== undefined && after.start === unit.end;
+  const low = sharedBefore
+    ? (before.start ?? 0) + SHORTEST_MS
+    : (before?.end ?? before?.start ?? 0);
+  const high =
+    (sharedAfter
+      ? (after.end ?? Infinity) - SHORTEST_MS
+      : (after?.start ?? Infinity)) - length;
+  const start = Math.round(Math.min(high, Math.max(low, Math.max(0, time))));
+  if (start === unit.start || high < low) return lines;
+  const next = units.map((each, index) => {
+    if (index === at.unit) return { ...each, start, end: start + length };
+    if (sharedBefore && index === at.unit - 1) return { ...each, end: start };
+    if (sharedAfter && index === at.unit + 1)
+      return { ...each, start: start + length };
+    return each;
+  });
+  return lines.map((line, index) =>
+    index === at.line ? { ...line, units: next } : line,
+  );
+}
+
 export function replaceMatching(
   lines: CreatorLine[],
   text: string,

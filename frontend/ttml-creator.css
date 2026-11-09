@@ -1660,7 +1660,7 @@
   color: #ffffffe6;
   font-size: 15px;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: grab;
   box-shadow:
     inset 1px 0 0 #ffffff40,
     inset -1px 0 0 #ffffff40;

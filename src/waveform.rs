@@ -103,7 +103,7 @@ pub(crate) fn track_spectrogram(
     ))
 }
 
-/// Little-endian `f32` mono samples of exactly `from_ms..to_ms`, at
+/// Mono samples of exactly `from_ms..to_ms`, at
 /// `librespot_playback::SAMPLE_RATE`, so a word plays without the player's
 /// seek and pause latency.
 pub(crate) fn track_clip(
@@ -111,21 +111,18 @@ pub(crate) fn track_clip(
     uri: &str,
     from_ms: f64,
     to_ms: f64,
-) -> Result<Vec<u8>> {
-    Ok(clip_of(&track_pcm(session, uri)?, from_ms, to_ms))
+) -> Result<Vec<f32>> {
+    Ok(clip_of(&track_pcm(session, uri)?, from_ms, to_ms).to_vec())
 }
 
 const LONGEST_CLIP_MS: f64 = 60_000.0;
 
-fn clip_of(samples: &[f32], from_ms: f64, to_ms: f64) -> Vec<u8> {
+fn clip_of(samples: &[f32], from_ms: f64, to_ms: f64) -> &[f32] {
     let rate = f64::from(librespot_playback::SAMPLE_RATE);
     let at = |ms: f64| ((ms.max(0.0) / 1000.0 * rate).round() as usize).min(samples.len());
     let from = at(from_ms);
     let to = at(to_ms.min(from_ms + LONGEST_CLIP_MS)).max(from);
-    samples[from..to]
-        .iter()
-        .flat_map(|sample| sample.to_le_bytes())
-        .collect()
+    &samples[from..to]
 }
 
 fn mono_of(mut decoder: impl AudioDecoder) -> Result<Vec<f32>> {
@@ -380,11 +377,7 @@ mod tests {
     fn a_clip_holds_exactly_its_range() {
         let rate = librespot_playback::SAMPLE_RATE as usize;
         let samples: Vec<f32> = (0..rate * 2).map(|index| index as f32).collect();
-        let clip = clip_of(&samples, 500.0, 750.0);
-        let values: Vec<f32> = clip
-            .chunks(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
-            .collect();
+        let values = clip_of(&samples, 500.0, 750.0);
         assert_eq!(values.len(), rate / 4);
         assert_eq!(values[0], (rate / 2) as f32);
         assert_eq!(*values.last().unwrap(), (rate * 3 / 4 - 1) as f32);

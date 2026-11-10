@@ -2905,22 +2905,34 @@ async fn track_spectrogram(
     .map(tauri::ipc::Response::new)
     .map_err(error)
 }
+/// Plays exactly `from_ms..to_ms` of a song through Lyssna's own output,
+/// at the player's volume, without moving the player.
 #[tauri::command]
-async fn track_clip(
+async fn play_clip(
     uri: String,
     from_ms: f64,
     to_ms: f64,
     state: State<'_, Desktop>,
-) -> std::result::Result<tauri::ipc::Response, String> {
+) -> std::result::Result<(), String> {
     let controls = state.0.controls.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let session = controls.session()?;
-        crate::waveform::track_clip(&session, &uri, from_ms, to_ms)
+        let samples = crate::waveform::track_clip(&session, &uri, from_ms, to_ms)?;
+        controls
+            .audio_buffer()?
+            .play_clip(&samples)
+            .map_err(|error| anyhow::anyhow!("{error}"))
     })
     .await
     .map_err(|_| "Clip worker unavailable".to_owned())?
-    .map(tauri::ipc::Response::new)
     .map_err(error)
+}
+#[tauri::command]
+fn stop_clip(state: State<'_, Desktop>) -> std::result::Result<(), String> {
+    if let Ok(buffer) = state.0.controls.audio_buffer() {
+        buffer.stop_clip();
+    }
+    Ok(())
 }
 /// TTML Creator repeats one song and stops at its end; a crossfade would
 /// fade out its last seconds into its own start.
@@ -5801,7 +5813,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             playback_speed,
             track_waveform,
             track_spectrogram,
-            track_clip,
+            play_clip,
+            stop_clip,
             test_audio_output,
             refresh,
             save_item,

@@ -2434,11 +2434,13 @@ fn keep_player(
         // The song from before the dropout may still be playing; later
         // songs load through the new connection.
         kit.player.set_session(session.clone());
+        audio_buffer.set_mixer(kit.mixer.clone());
         return Ok(());
     }
     let mixer = SoftMixer::open(MixerConfig::default())
         .map(Arc::new)
         .map_err(|_| Failure::other("Cannot initialize audio mixer"))?;
+    audio_buffer.set_mixer(mixer.clone());
     let flush_audio = Arc::new(AtomicBool::new(false));
     let sink_flush = flush_audio.clone();
     let (seek_ready, audible_seeks) = async_channel::unbounded_channel();

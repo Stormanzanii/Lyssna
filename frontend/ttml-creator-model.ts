@@ -986,19 +986,6 @@ export function toLyrics(lines: CreatorLine[]): Lyrics {
   };
 }
 
-/**
- * The output level Lyssna's player gives a volume percent: librespot's
- * default logarithmic mapping over 60 dB, so 100% is 1 and 50% is -30 dB.
- */
-export function playerGain(percent: number): number {
-  const volume = Math.round(
-    (Math.min(100, Math.max(0, percent)) * 65535) / 100,
-  );
-  if (volume === 0) return 0;
-  if (volume === 65535) return 1;
-  return Math.pow(10, (60 / 20) * (volume / 65535 - 1));
-}
-
 export function formatTime(ms: number): string {
   const total = Math.max(0, Math.round(ms));
   const minutes = Math.floor(total / 60000);

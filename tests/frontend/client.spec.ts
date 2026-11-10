@@ -805,11 +805,6 @@ async function startClient(
             return "C:\Users\listener\AppData\Local\Lyssna\data\offline";
           if (command === "offline_move") return "E:\Music\Lyssna Downloads";
           if (command === "offline_songs") return host.__clientTest.downloaded ?? [];
-          if (command === "track_clip")
-            return Array.from(
-              { length: Math.round(((args.toMs - args.fromMs) * 44100) / 1000) },
-              (_, index) => Math.sin(index / 10) / 4,
-            );
           if (command === "track_spectrogram")
             return Array.from(
               { length: args.columns * args.rows },
@@ -16063,7 +16058,7 @@ test("line-synced lyrics show as whole lines on the TTML Creator spectrogram", a
     .poll(() =>
       page.evaluate(() =>
         (window as any).__clientTest.commands
-          .filter((entry: any) => entry.command === "track_clip")
+          .filter((entry: any) => entry.command === "play_clip")
           .map((entry: any) => [entry.args.fromMs, entry.args.toMs]),
       ),
     )
@@ -16073,26 +16068,6 @@ test("line-synced lyrics show as whole lines on the TTML Creator spectrogram", a
 test("right-clicking a word on the TTML Creator spectrogram plays only that word", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    const start = AudioBufferSourceNode.prototype.start;
-    const createGain = BaseAudioContext.prototype.createGain;
-    (window as any).__gains = [];
-    BaseAudioContext.prototype.createGain = function () {
-      const node = createGain.call(this);
-      (window as any).__gains.push(node);
-      return node;
-    };
-    (window as any).__clips = [];
-    AudioBufferSourceNode.prototype.start = function (...args: any[]) {
-      (window as any).__clips.push({
-        seconds: this.buffer!.duration,
-        rate: this.buffer!.sampleRate,
-        offset: args[1] ?? 0,
-        stop: args[2],
-      });
-      return start.apply(this, args as any);
-    };
-  });
   await startClient(page);
   await playLyricTrack(page, false);
   await openSettings(page, "Lyrics");
@@ -16151,8 +16126,8 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
         .filter((entry: any) => entry.command === "player")
         .map((entry: any) => entry.args.request),
     );
-  // The song pauses at the word, and the word plays from its own samples:
-  // exactly 800 to 1000 ms, whatever the player's buffering.
+  // The song pauses at the word, and Lyssna's own output plays exactly
+  // 800 to 1000 ms of it, whatever the player's buffering.
   await emit(1300);
   const before = (await requests()).length;
   await two.click({ button: "right" });
@@ -16163,7 +16138,7 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
     .poll(() =>
       page.evaluate(() =>
         (window as any).__clientTest.commands
-          .filter((entry: any) => entry.command === "track_clip")
+          .filter((entry: any) => entry.command === "play_clip")
           .map((entry: any) => entry.args),
       ),
     )
@@ -16188,16 +16163,6 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
     };
     requestAnimationFrame(sample);
   });
-  await expect
-    .poll(() => page.evaluate(() => (window as any).__clips))
-    .toEqual([{ seconds: 0.2, rate: 44100, offset: 0, stop: undefined }]);
-  // Same loudness as the player at its 70% volume: its 60 dB curve, not a
-  // straight line.
-  const volume = 70;
-  const gain = await page.evaluate(
-    () => (window as any).__gains.at(-1).gain.value,
-  );
-  expect(gain).toBeCloseTo(Math.pow(10, 3 * (volume / 100 - 1)), 2);
   // The song waits at the word's end, where the playhead stopped.
   await expect
     .poll(async () => (await requests()).slice(before))

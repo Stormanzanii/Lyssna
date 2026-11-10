@@ -54,7 +54,6 @@ import {
   insertBlankLine,
   keepTimings,
   lineSpan,
-  playerGain,
   singingAt,
   markEnd,
   markNext,
@@ -154,8 +153,6 @@ const clampSpeed = (value: number) =>
 const SPLITS_KEY = "lyssna.ttml-splits";
 const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
 const SPECTROGRAM_KEY = "lyssna.ttml-spectrogram";
-// librespot decodes every track at this rate.
-const CLIP_RATE = 44100;
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
@@ -1049,12 +1046,9 @@ export function TtmlCreator({
   );
   // Right-clicking a word on the spectrogram plays only that word, as in
   // AMLL's tool. Seeking and pausing the player is late by its buffering,
-  // so the word plays from its decoded samples, cut at its exact edges.
-  const clip = useRef<{
-    context?: AudioContext;
-    source?: AudioBufferSourceNode;
-    asked: number;
-  }>({ asked: 0 });
+  // so Lyssna's own output plays the word's decoded samples, cut at its
+  // exact edges, at the player's volume.
+  const clipAsked = useRef(0);
   const [clipping, setClipping] = useState<{
     start: number;
     end: number;
@@ -1069,15 +1063,22 @@ export function TtmlCreator({
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [clipping]);
+    // The song waits where the word ends, as the playhead does.
+    const done = window.setTimeout(() => {
+      seek(clipping.end);
+      setClipping(null);
+    }, clipping.end - clipping.start);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(done);
+    };
+  }, [clipping, seek]);
   const shownPosition = clipping
     ? Math.min(
         clipping.end,
         clipping.start + Math.max(0, clipNow - clipping.began),
       )
     : position;
-  const volumeRef = useRef(70);
   const playUnit = useCallback(
     (at: Cursor) => {
       const unit = lines[at.line]?.units[at.unit];
@@ -1087,65 +1088,32 @@ export function TtmlCreator({
           : lines[at.line] && lineSpan(lines[at.line]);
       if (!track || !range || range.end <= range.start) return;
       setCursor(at);
+      setClipping(null);
       if (state.playback.is_playing) onPlayer({ command: "pause" });
       seek(range.start);
-      const asked = ++clip.current.asked;
-      rpc<ArrayBuffer | number[]>("track_clip", {
+      const asked = ++clipAsked.current;
+      rpc("play_clip", {
         uri: track.uri,
         fromMs: range.start,
         toMs: range.end,
       })
-        .then((result) => {
-          if (asked !== clip.current.asked) return;
-          const samples = Array.isArray(result)
-            ? Float32Array.from(result)
-            : new Float32Array(result);
-          if (!samples.length) return;
-          const previous = clip.current.source;
-          clip.current.source = undefined;
-          previous?.stop();
-          const context = (clip.current.context ??= new AudioContext());
-          const buffer = context.createBuffer(1, samples.length, CLIP_RATE);
-          buffer.copyToChannel(samples, 0);
-          const source = context.createBufferSource();
-          const gain = context.createGain();
-          gain.gain.value = playerGain(volumeRef.current);
-          source.buffer = buffer;
-          source.connect(gain).connect(context.destination);
-          clip.current.source = source;
-          // The song waits where the word ends, as the playhead does.
-          source.onended = () => {
-            if (clip.current.source !== source) return;
-            clip.current.source = undefined;
-            seek(range.end);
-            setClipping(null);
-          };
-          void context.resume().then(() => {
-            if (clip.current.source !== source) return;
-            source.start();
-            const began = performance.now();
-            setClipNow(began);
-            setClipping({ ...range, began });
-          });
+        .then(() => {
+          if (asked !== clipAsked.current) return;
+          const began = performance.now();
+          setClipNow(began);
+          setClipping({ ...range, began });
         })
         .catch((error) => notify(`Couldn't play the word: ${error}`, true));
     },
     [lines, seek, track, state.playback.is_playing, onPlayer, notify],
   );
   useEffect(() => {
-    if (!state.playback.is_playing || !clip.current.source) return;
-    const playing = clip.current.source;
-    clip.current.source = undefined;
-    playing.stop();
+    if (!state.playback.is_playing) return;
+    clipAsked.current++;
     setClipping(null);
+    void rpc("stop_clip").catch(() => undefined);
   }, [state.playback.is_playing]);
-  useEffect(
-    () => () => {
-      clip.current.source?.stop();
-      void clip.current.context?.close();
-    },
-    [],
-  );
+  useEffect(() => () => void rpc("stop_clip").catch(() => undefined), []);
   const changeSpeed = useCallback(
     (next: number) => {
       void onSpeed(next).catch((error) => notify(String(error), true));
@@ -1180,7 +1148,6 @@ export function TtmlCreator({
     state.playback.device.volume_percent ??
     state.settings.volume_percent ??
     70;
-  volumeRef.current = barVolume;
 
   const [keys, setKeys] = useState<KeyMap>(loadKeys);
   const keysRef = useRef(keys);

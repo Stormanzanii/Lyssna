@@ -46,8 +46,65 @@ pub struct AudioBuffer {
     /// on, the old song plays on until it fades out under the chosen one.
     fading_generation: Arc<AtomicUsize>,
     temporary_volume: Arc<AtomicU32>,
+    mixer: Arc<Mutex<Option<Arc<dyn Mixer>>>>,
+    clip: Arc<Mutex<ClipOutput>>,
+}
+/// A short excerpt played beside the song, on the song's own output and at
+/// its level, so Windows and the volume slider treat it as Lyssna's audio.
+#[derive(Default)]
+struct ClipOutput {
+    stream: Option<(OutputStream, u64)>,
+    sink: Option<rodio::Sink>,
 }
 impl AudioBuffer {
+    pub(crate) fn set_mixer(&self, mixer: Arc<dyn Mixer>) {
+        if let Ok(mut slot) = self.mixer.lock() {
+            *slot = Some(mixer);
+        }
+    }
+    /// Plays mono samples at `SAMPLE_RATE` once, replacing any clip still
+    /// sounding, at the player's volume.
+    pub(crate) fn play_clip(&self, mono: &[f32]) -> SinkResult<()> {
+        let mut clip = self
+            .clip
+            .lock()
+            .map_err(|_| SinkError::OnWrite("Clip output unavailable".into()))?;
+        if let Some(sink) = clip.sink.take() {
+            sink.stop();
+        }
+        let applied = clip.stream.as_ref().map(|(_, revision)| *revision);
+        if let Some(opened) = self.output.open(applied)? {
+            clip.stream = Some(opened);
+            #[cfg(windows)]
+            let _ = configure_session_identity();
+        }
+        let Some((stream, _)) = &clip.stream else {
+            return Err(SinkError::NotConnected("No audio output".into()));
+        };
+        let sink = rodio::Sink::connect_new(stream.mixer());
+        let stereo = mono
+            .iter()
+            .flat_map(|&sample| std::iter::repeat_n(sample, usize::from(CHANNELS)))
+            .collect();
+        sink.append(self.clip_packet(stereo));
+        clip.sink = Some(sink);
+        Ok(())
+    }
+    pub(crate) fn stop_clip(&self) {
+        if let Ok(mut clip) = self.clip.lock()
+            && let Some(sink) = clip.sink.take()
+        {
+            sink.stop();
+        }
+    }
+    fn clip_packet(&self, samples: Vec<f32>) -> QueuedPacket {
+        let mut packet = QueuedPacket::new(samples, Arc::new(AtomicUsize::new(0)));
+        if let Some(mixer) = self.mixer.lock().ok().and_then(|slot| slot.clone()) {
+            packet.volume = mixer.get_soft_volume();
+        }
+        packet.temporary_volume = Some(self.temporary_volume.clone());
+        packet
+    }
     pub(crate) fn same_output(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.temporary_volume, &other.temporary_volume)
     }
@@ -1180,6 +1237,21 @@ mod tests {
             buffer.output.take_issue(),
             Some(crate::audio_output::OutputIssue::Unavailable)
         );
+    }
+    #[test]
+    fn a_clip_plays_at_the_players_level() {
+        use librespot_playback::mixer::{MixerConfig, softmixer::SoftMixer};
+        let buffer = AudioBuffer::default();
+        let unmixed: Vec<f32> = buffer.clip_packet(vec![1.0; 4]).collect();
+        assert_eq!(unmixed, vec![1.0; 4]);
+        let mixer = Arc::new(SoftMixer::open(MixerConfig::default()).unwrap());
+        mixer.set_volume((u32::from(u16::MAX) * 70 / 100) as u16);
+        buffer.set_mixer(mixer);
+        let level = buffer.clip_packet(vec![1.0; 2]).next().unwrap();
+        // The player's 60 dB curve: 70% is about -18 dB.
+        assert!((level - 10f32.powf(3.0 * (0.7 - 1.0))).abs() < 0.002);
+        buffer.set_temporary_volume(Some(25));
+        assert_eq!(buffer.clip_packet(vec![1.0; 2]).next(), Some(0.25));
     }
     #[test]
     fn volume_changes_affect_already_buffered_audio() {

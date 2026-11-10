@@ -16075,7 +16075,7 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
   await creator.getByLabel("Lyric file to import").setInputFiles({
     name: "song.qrc",
     mimeType: "text/plain",
-    buffer: Buffer.from("[300,1500]one (300,500)two (800,400)three (1200,600)"),
+    buffer: Buffer.from("[300,1500]one (300,500)two (800,200)three (1000,800)"),
   });
   await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
   const panel = page.getByRole("region", { name: "Spectrogram" });
@@ -16083,7 +16083,7 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
   await panel.locator(".ttml-spectrum-plot").hover();
   for (let turn = 0; turn < 6; turn++) await page.mouse.wheel(0, -2000);
   const two = panel.locator(".ttml-spectrum-word", { hasText: "two" });
-  await expect(two).toHaveAttribute("title", "two 00:00.800 – 00:01.200");
+  await expect(two).toHaveAttribute("title", "two 00:00.800 – 00:01.000");
   const emit = (progress: number) =>
     page.evaluate((progress) => {
       (window as any).__clientTest.emit({
@@ -16117,17 +16117,37 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
         .filter((entry: any) => entry.command === "player")
         .map((entry: any) => entry.args.request),
     );
+  // Playing past the word: the stale position must not end it early.
+  await emit(1300);
   const before = (await requests()).length;
   await two.click({ button: "right" });
   await expect
-    .poll(async () => (await requests()).slice(before))
-    .toEqual([{ command: "seek", positionMs: 800 }, { command: "play" }]);
-  await emit(800);
-  await page.waitForTimeout(700);
-  await emit(1250);
+    .poll(async () => (await requests()).slice(before), { intervals: [10] })
+    .toEqual([{ command: "seek", positionMs: 800 }]);
+  const landed = Date.now();
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "native_position",
+      uri: "spotify:track:0123456789abcdefghijkl",
+      position_ms: 800,
+      playing: true,
+      observed_at: Date.now(),
+      seeked: true,
+    }),
+  );
   await expect
-    .poll(async () => (await requests()).slice(before).at(-1))
+    .poll(async () => (await requests()).slice(before).at(-1), {
+      intervals: [20],
+    })
     .toEqual({ command: "pause" });
+  // The word lasts 200 ms; the pause comes then, not a beat later.
+  const heard = Date.now() - landed;
+  expect(heard).toBeGreaterThan(120);
+  expect(heard).toBeLessThan(400);
+  expect((await requests()).slice(before)).toEqual([
+    { command: "seek", positionMs: 800 },
+    { command: "pause" },
+  ]);
 });
 
 test("TTML Creator spectrogram retimes words while the song plays", async ({

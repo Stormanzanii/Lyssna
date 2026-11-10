@@ -1045,10 +1045,22 @@ export function TtmlCreator({
     [onPlayer],
   );
   // Right-clicking a word on the spectrogram plays only that word, as in
-  // AMLL's tool. Positions right after the seek may still be the old ones.
-  const wordStop = useRef<{ start: number; end: number; at: number } | null>(
-    null,
-  );
+  // AMLL's tool. The pause is timed from the first position that lands at
+  // the word's start, so stale positions from before the seek cannot end it
+  // early and the next word is not heard.
+  const wordStop = useRef<{
+    start: number;
+    end: number;
+    at: number;
+    landed: boolean;
+  } | null>(null);
+  const wordTimer = useRef(0);
+  const endWord = useCallback(() => {
+    clearTimeout(wordTimer.current);
+    if (!wordStop.current) return;
+    wordStop.current = null;
+    onPlayer({ command: "pause" });
+  }, [onPlayer]);
   const playUnit = useCallback(
     (at: Cursor) => {
       const unit = lines[at.line]?.units[at.unit];
@@ -1057,26 +1069,42 @@ export function TtmlCreator({
           ? { start: unit.start, end: unit.end }
           : lines[at.line] && lineSpan(lines[at.line]);
       if (!range || range.end <= range.start) return;
+      clearTimeout(wordTimer.current);
       setCursor(at);
       seek(range.start);
       if (!state.playback.is_playing) onPlayer({ command: "play" });
-      wordStop.current = { ...range, at: performance.now() };
+      wordStop.current = { ...range, at: performance.now(), landed: false };
     },
     [lines, seek, state.playback.is_playing, onPlayer],
   );
   useEffect(() => {
     const stop = wordStop.current;
-    if (!stop || performance.now() - stop.at < 600) return;
-    if (!state.playback.is_playing) {
+    if (!stop || !state.playback.is_playing) return;
+    // Until the seek lands, positions still describe the old spot.
+    if (!stop.landed) {
+      if (position >= stop.start - 100 && position < stop.start + 300)
+        stop.landed = true;
+      else {
+        if (performance.now() - stop.at > 3000) wordStop.current = null;
+        return;
+      }
+    }
+    if (position >= stop.end - 5) {
+      if (position < stop.end + 2000) endWord();
+      else wordStop.current = null;
+      return;
+    }
+    if (position < stop.start - 100) {
       wordStop.current = null;
       return;
     }
-    if (position >= stop.end && position < stop.end + 1500) {
-      wordStop.current = null;
-      onPlayer({ command: "pause" });
-    } else if (position < stop.start - 500 || position >= stop.end + 1500)
-      wordStop.current = null;
-  }, [position, state.playback.is_playing, onPlayer]);
+    clearTimeout(wordTimer.current);
+    wordTimer.current = window.setTimeout(
+      endWord,
+      (stop.end - position) / (rate || 1),
+    );
+  }, [position, state.playback.is_playing, rate, endWord]);
+  useEffect(() => () => clearTimeout(wordTimer.current), []);
   const changeSpeed = useCallback(
     (next: number) => {
       void onSpeed(next).catch((error) => notify(String(error), true));

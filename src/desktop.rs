@@ -2920,7 +2920,7 @@ async fn play_clip(
         let samples = crate::waveform::track_clip(&session, &uri, from_ms, to_ms)?;
         controls
             .audio_buffer()?
-            .play_clip(&samples)
+            .play_clip(samples)
             .map_err(|error| anyhow::anyhow!("{error}"))
     })
     .await

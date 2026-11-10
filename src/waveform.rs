@@ -7,6 +7,7 @@ use std::{
     collections::VecDeque,
     f64::consts::TAU,
     io::{Cursor, Read},
+    ops::Range,
     sync::{Arc, Mutex},
 };
 use symphonia::core::probe::Hint;
@@ -64,11 +65,12 @@ pub(crate) fn track_peaks(session: &Session, uri: &str, buckets: usize) -> Resul
     })
 }
 
-type Pcm = (String, Arc<Vec<f32>>);
+// Interleaved stereo, 16-bit to keep two whole songs small.
+type Pcm = (String, Arc<Vec<i16>>);
 // Held while decoding so tiles asked for together share one decode.
 static PCM: Mutex<VecDeque<Pcm>> = Mutex::new(VecDeque::new());
 
-fn track_pcm(session: &Session, uri: &str) -> Result<Arc<Vec<f32>>> {
+fn track_pcm(session: &Session, uri: &str) -> Result<Arc<Vec<i16>>> {
     let mut kept = PCM
         .lock()
         .map_err(|_| anyhow::anyhow!("Spectrogram cache unavailable"))?;
@@ -76,7 +78,7 @@ fn track_pcm(session: &Session, uri: &str) -> Result<Arc<Vec<f32>>> {
         return Ok(samples.clone());
     }
     let (decoder, _) = open_track(session, uri)?;
-    let samples = Arc::new(mono_of(decoder)?);
+    let samples = Arc::new(stereo_of(decoder)?);
     kept.push_front((uri.to_owned(), samples.clone()));
     kept.truncate(KEPT_PCM);
     Ok(samples)
@@ -93,17 +95,16 @@ pub(crate) fn track_spectrogram(
     columns: usize,
     rows: usize,
 ) -> Result<Vec<u8>> {
-    let samples = track_pcm(session, uri)?;
+    let stereo = track_pcm(session, uri)?;
+    let mono = mono_of(&stereo[frames(&stereo, from_ms, to_ms)]);
     Ok(spectrogram_tile(
-        &samples,
-        from_ms,
-        to_ms,
+        &mono,
         columns.clamp(1, 8192),
         rows.clamp(8, 1024),
     ))
 }
 
-/// Mono samples of exactly `from_ms..to_ms`, at
+/// Interleaved stereo of exactly `from_ms..to_ms`, at
 /// `librespot_playback::SAMPLE_RATE`, so a word plays without the player's
 /// seek and pause latency.
 pub(crate) fn track_clip(
@@ -112,33 +113,68 @@ pub(crate) fn track_clip(
     from_ms: f64,
     to_ms: f64,
 ) -> Result<Vec<f32>> {
-    Ok(clip_of(&track_pcm(session, uri)?, from_ms, to_ms).to_vec())
+    let stereo = track_pcm(session, uri)?;
+    let to_ms = to_ms.min(from_ms + LONGEST_CLIP_MS);
+    Ok(faded(
+        stereo[frames(&stereo, from_ms, to_ms)]
+            .iter()
+            .map(|&sample| f32::from(sample) / FULL_SCALE)
+            .collect(),
+    ))
 }
 
 const LONGEST_CLIP_MS: f64 = 60_000.0;
+const CHANNELS: usize = librespot_playback::NUM_CHANNELS as usize;
+const FULL_SCALE: f32 = 32768.0;
+// A word cut mid-wave clicks; a few milliseconds of ramp inside its own
+// bounds removes the click without starting or ending anywhere else.
+const EDGE_FRAMES: usize = librespot_playback::SAMPLE_RATE as usize * 3 / 1000;
 
-fn clip_of(samples: &[f32], from_ms: f64, to_ms: f64) -> &[f32] {
+/// Sample indexes of whole frames from `from_ms` to `to_ms`.
+fn frames(stereo: &[i16], from_ms: f64, to_ms: f64) -> Range<usize> {
     let rate = f64::from(librespot_playback::SAMPLE_RATE);
-    let at = |ms: f64| ((ms.max(0.0) / 1000.0 * rate).round() as usize).min(samples.len());
+    let count = stereo.len() / CHANNELS;
+    let at = |ms: f64| ((ms.max(0.0) / 1000.0 * rate).round() as usize).min(count);
     let from = at(from_ms);
-    let to = at(to_ms.min(from_ms + LONGEST_CLIP_MS)).max(from);
-    &samples[from..to]
+    from * CHANNELS..at(to_ms).max(from) * CHANNELS
 }
 
-fn mono_of(mut decoder: impl AudioDecoder) -> Result<Vec<f32>> {
-    let channels = usize::from(librespot_playback::NUM_CHANNELS);
-    let mut mono = Vec::new();
+fn faded(mut stereo: Vec<f32>) -> Vec<f32> {
+    let count = stereo.len() / CHANNELS;
+    let edge = EDGE_FRAMES.min(count / 4);
+    for frame in 0..edge {
+        let gain = (0.5 - 0.5 * (std::f32::consts::PI * frame as f32 / edge as f32).cos()).max(0.0);
+        for channel in 0..CHANNELS {
+            stereo[frame * CHANNELS + channel] *= gain;
+            stereo[(count - 1 - frame) * CHANNELS + channel] *= gain;
+        }
+    }
+    stereo
+}
+
+fn mono_of(stereo: &[i16]) -> Vec<f32> {
+    stereo
+        .chunks(CHANNELS)
+        .map(|pair| {
+            pair.iter().map(|&sample| f32::from(sample)).sum::<f32>()
+                / (pair.len() as f32 * FULL_SCALE)
+        })
+        .collect()
+}
+
+fn stereo_of(mut decoder: impl AudioDecoder) -> Result<Vec<i16>> {
+    let mut stereo = Vec::new();
     while let Some((_, packet)) = decoder.next_packet()? {
         let AudioPacket::Samples(samples) = packet else {
             continue;
         };
-        mono.extend(
-            samples
-                .chunks(channels)
-                .map(|values| (values.iter().sum::<f64>() / values.len() as f64) as f32),
-        );
+        stereo.extend(samples.iter().map(|&sample| {
+            (sample * f64::from(FULL_SCALE))
+                .round()
+                .clamp(-32768.0, 32767.0) as i16
+        }));
     }
-    Ok(mono)
+    Ok(stereo)
 }
 
 fn open_track(session: &Session, uri: &str) -> Result<(impl AudioDecoder, u32)> {
@@ -207,23 +243,12 @@ fn peaks_of(mut decoder: impl AudioDecoder, duration_ms: u32, buckets: usize) ->
         .collect())
 }
 
-fn spectrogram_tile(
-    samples: &[f32],
-    from_ms: f64,
-    to_ms: f64,
-    columns: usize,
-    rows: usize,
-) -> Vec<u8> {
+fn spectrogram_tile(slice: &[f32], columns: usize, rows: usize) -> Vec<u8> {
     let rate = f64::from(librespot_playback::SAMPLE_RATE);
     let mut tile = vec![0u8; columns * rows * 2];
-    let start = (from_ms / 1000.0 * rate).floor().max(0.0) as usize;
-    let end = ((to_ms / 1000.0 * rate).ceil() as usize).min(samples.len());
-    let Some(slice) = samples
-        .get(start..end)
-        .filter(|slice| slice.len() >= WINDOW)
-    else {
+    if slice.len() < WINDOW {
         return tile;
-    };
+    }
     let times = (slice.len() - WINDOW) / HOP + 1;
     let bins = ((TOP_HZ / (rate / WINDOW as f64)).round() as usize).min(WINDOW / 2);
     let scale = 9.0 / (2.0 * WINDOW as f64).sqrt();
@@ -356,7 +381,7 @@ mod tests {
         let samples: Vec<f32> = (0..rate as usize)
             .map(|index| (TAU * 5000.0 * index as f64 / rate).sin() as f32)
             .collect();
-        let tile = levels(&spectrogram_tile(&samples, 0.0, 1000.0, 10, 16));
+        let tile = levels(&spectrogram_tile(&samples, 10, 16));
         assert_eq!(tile.len(), 160);
         let column: Vec<u16> = (0..16).map(|row| tile[row * 10 + 5]).collect();
         let loudest = (0..16).max_by_key(|&row| column[row]).unwrap();
@@ -368,7 +393,9 @@ mod tests {
 
     #[test]
     fn a_tile_past_the_end_stays_silent() {
-        let tile = spectrogram_tile(&[0.5; 100], 5000.0, 6000.0, 4, 8);
+        let stereo = [1000i16; 200];
+        let mono = mono_of(&stereo[frames(&stereo, 5000.0, 6000.0)]);
+        let tile = spectrogram_tile(&mono, 4, 8);
         assert_eq!(tile.len(), 64);
         assert!(tile.iter().all(|&level| level == 0));
     }
@@ -376,24 +403,44 @@ mod tests {
     #[test]
     fn a_clip_holds_exactly_its_range() {
         let rate = librespot_playback::SAMPLE_RATE as usize;
-        let samples: Vec<f32> = (0..rate * 2).map(|index| index as f32).collect();
-        let values = clip_of(&samples, 500.0, 750.0);
-        assert_eq!(values.len(), rate / 4);
-        assert_eq!(values[0], (rate / 2) as f32);
-        assert_eq!(*values.last().unwrap(), (rate * 3 / 4 - 1) as f32);
-        assert!(clip_of(&samples, 5000.0, 6000.0).is_empty());
-        assert!(clip_of(&samples, 900.0, 800.0).is_empty());
+        let stereo: Vec<i16> = (0..rate * 2)
+            .flat_map(|frame| [(frame / 4) as i16, -((frame / 4) as i16)])
+            .collect();
+        let range = frames(&stereo, 500.0, 750.0);
+        assert_eq!(range, rate..rate * 3 / 2);
+        assert_eq!(stereo[range.start], (rate / 8) as i16);
+        assert_eq!(stereo[range.start + 1], -((rate / 8) as i16));
+        assert!(frames(&stereo, 5000.0, 6000.0).is_empty());
+        assert!(frames(&stereo, 900.0, 800.0).is_empty());
     }
 
     #[test]
-    fn decoded_mono_covers_the_fixture() {
+    fn a_clip_ramps_in_and_out_inside_its_bounds() {
+        let clip = faded(vec![1.0; 2000 * CHANNELS]);
+        assert_eq!(clip.len(), 2000 * CHANNELS);
+        assert_eq!(clip[0], 0.0);
+        assert_eq!(*clip.last().unwrap(), 0.0);
+        assert_eq!(clip[1000 * CHANNELS], 1.0);
+        let ramp: Vec<f32> = clip
+            .iter()
+            .step_by(CHANNELS)
+            .take(EDGE_FRAMES)
+            .copied()
+            .collect();
+        assert!(ramp.windows(2).all(|pair| pair[0] <= pair[1]));
+    }
+
+    #[test]
+    fn decoded_audio_keeps_both_channels() {
         let decoder = SymphoniaDecoder::new(
             Cursor::new(&include_bytes!("../tests/fixtures/dj-mono.mp3")[..]),
             Hint::new(),
         )
         .unwrap();
-        let mono = mono_of(decoder).unwrap();
-        assert!(!mono.is_empty());
-        assert!(mono.iter().any(|&sample| sample.abs() > 0.01));
+        let stereo = stereo_of(decoder).unwrap();
+        assert_eq!(stereo.len() % CHANNELS, 0);
+        assert!(stereo.iter().any(|&sample| sample.unsigned_abs() > 300));
+        let mono = mono_of(&stereo);
+        assert_eq!(mono.len(), stereo.len() / CHANNELS);
     }
 }

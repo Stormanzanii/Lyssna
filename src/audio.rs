@@ -62,9 +62,9 @@ impl AudioBuffer {
             *slot = Some(mixer);
         }
     }
-    /// Plays mono samples at `SAMPLE_RATE` once, replacing any clip still
-    /// sounding, at the player's volume.
-    pub(crate) fn play_clip(&self, mono: &[f32]) -> SinkResult<()> {
+    /// Plays interleaved stereo at `SAMPLE_RATE` once, replacing any clip
+    /// still sounding, at the player's volume.
+    pub(crate) fn play_clip(&self, stereo: Vec<f32>) -> SinkResult<()> {
         let mut clip = self
             .clip
             .lock()
@@ -82,10 +82,6 @@ impl AudioBuffer {
             return Err(SinkError::NotConnected("No audio output".into()));
         };
         let sink = rodio::Sink::connect_new(stream.mixer());
-        let stereo = mono
-            .iter()
-            .flat_map(|&sample| std::iter::repeat_n(sample, usize::from(CHANNELS)))
-            .collect();
         sink.append(self.clip_packet(stereo));
         clip.sink = Some(sink);
         Ok(())

@@ -17077,6 +17077,78 @@ test("top bar matches Spotify's sizes and spacing", async ({ page }) => {
   });
 });
 
+test("recent searches open the song or artist menu on right-click", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const track = {
+      id: "0123456789abcdefghij01",
+      uri: "spotify:track:0123456789abcdefghij01",
+      name: "Recent song",
+      duration_ms: 180000,
+      artists: [{ id: "0123456789abcdefghij02", name: "Recent artist" }],
+      album: { id: "0123456789abcdefghij03", name: "Album", images: [] },
+    };
+    localStorage.setItem(
+      "lyssna.recent-searches.test-user",
+      JSON.stringify([
+        {
+          uri: track.uri,
+          route: "track:0123456789abcdefghij01",
+          name: track.name,
+          subtitle: "Recent artist",
+          kind: "Song",
+          images: [],
+          track,
+        },
+        {
+          uri: "spotify:artist:0123456789abcdefghij02",
+          route: "artist:0123456789abcdefghij02",
+          name: "Recent artist",
+          subtitle: "",
+          kind: "Artist",
+          images: [],
+        },
+      ]),
+    );
+  });
+  await startClient(page);
+  const search = page.getByPlaceholder("What do you want to play?");
+  await search.focus();
+  const list = page.getByRole("listbox", { name: "Recent searches" });
+  await list
+    .locator(".recent-search", { hasText: "Recent song" })
+    .click({ button: "right" });
+  const queue = page.getByRole("menuitem", {
+    name: "Add to queue",
+    exact: true,
+  });
+  await expect(queue).toBeVisible();
+  await expect(list).toBeVisible();
+  await queue.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands.some(
+          (call: any) =>
+            call.command === "player" &&
+            call.args?.request?.command === "enqueue" &&
+            call.args.request.uri === "spotify:track:0123456789abcdefghij01",
+        ),
+      ),
+    )
+    .toBe(true);
+  await expect(list).toBeVisible();
+  await expect(search).toBeFocused();
+  await list
+    .locator('.recent-search[data-context-name="Recent artist"]')
+    .click({ button: "right" });
+  await expect(
+    page.getByRole("menu", { name: "artist actions" }),
+  ).toBeVisible();
+  await expect(list).toBeVisible();
+});
+
 test("a suggested song has the song menu, a tick when saved and an inline E", async ({
   page,
 }) => {

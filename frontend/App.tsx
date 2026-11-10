@@ -1056,10 +1056,10 @@ function App() {
       })
       .catch((error) => notify(String(error), true));
   useEffect(() => {
-    if (songMenu || !menuFromSearch.current) return;
+    if (songMenu || entityMenu || !menuFromSearch.current) return;
     menuFromSearch.current = false;
     searchInput.current?.focus();
-  }, [songMenu]);
+  }, [songMenu, entityMenu]);
   useLayoutEffect(() => {
     if (!entityMenu && !songMenu) return;
     const position = () => {
@@ -3176,6 +3176,7 @@ function App() {
           return;
         }
         if (match || route === "liked") {
+          if (target.closest(".recent-searches")) menuFromSearch.current = true;
           setSongMenu(null);
           setEntityMenu({
             kind:
@@ -3411,7 +3412,23 @@ function App() {
               >
                 <h3>Recent searches</h3>
                 {recentSearches.map((item) => (
-                  <div className="recent-search" key={item.uri}>
+                  <div
+                    className="recent-search"
+                    key={item.uri}
+                    data-context-route={item.track ? undefined : item.route}
+                    data-context-name={item.name}
+                    onContextMenu={(event) => {
+                      if (!item.track) return;
+                      event.preventDefault();
+                      menuFromSearch.current = true;
+                      setEntityMenu(null);
+                      setSongMenu({
+                        track: item.track,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
+                  >
                     <button
                       role="option"
                       aria-selected={false}

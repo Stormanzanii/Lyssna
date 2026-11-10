@@ -16075,6 +16075,13 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
 }) => {
   await page.addInitScript(() => {
     const start = AudioBufferSourceNode.prototype.start;
+    const createGain = BaseAudioContext.prototype.createGain;
+    (window as any).__gains = [];
+    BaseAudioContext.prototype.createGain = function () {
+      const node = createGain.call(this);
+      (window as any).__gains.push(node);
+      return node;
+    };
     (window as any).__clips = [];
     AudioBufferSourceNode.prototype.start = function (...args: any[]) {
       (window as any).__clips.push({
@@ -16167,11 +16174,46 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
         toMs: 1000,
       },
     ]);
+  // The playhead runs across the word while it plays.
+  const playhead = panel.locator(".ttml-spectrum-playhead");
+  await page.evaluate(() => {
+    const seen: number[] = [];
+    (window as any).__playhead = seen;
+    const sample = () => {
+      const line = document.querySelector<HTMLElement>(
+        ".ttml-spectrum-playhead",
+      );
+      if (line) seen.push(parseFloat(line.style.left));
+      if (seen.length < 120) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   await expect
     .poll(() => page.evaluate(() => (window as any).__clips))
     .toEqual([{ seconds: 0.2, rate: 44100, offset: 0, stop: undefined }]);
-  await page.waitForTimeout(400);
-  expect((await requests()).slice(before)).toHaveLength(2);
+  // Same loudness as the player at its 70% volume: its 60 dB curve, not a
+  // straight line.
+  const volume = 70;
+  const gain = await page.evaluate(
+    () => (window as any).__gains.at(-1).gain.value,
+  );
+  expect(gain).toBeCloseTo(Math.pow(10, 3 * (volume / 100 - 1)), 2);
+  // The song waits at the word's end, where the playhead stopped.
+  await expect
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([
+      { command: "pause" },
+      { command: "seek", positionMs: 800 },
+      { command: "seek", positionMs: 1000 },
+    ]);
+  const lefts: number[] = await page.evaluate(() => (window as any).__playhead);
+  const start = (await two.boundingBox())!;
+  const moving = [...new Set(lefts)];
+  expect(moving.length).toBeGreaterThan(4);
+  expect(Math.max(...lefts) - Math.min(...lefts)).toBeGreaterThan(
+    start.width * 0.4,
+  );
+  await expect(playhead).toBeAttached();
 });
 
 test("TTML Creator spectrogram retimes words while the song plays", async ({

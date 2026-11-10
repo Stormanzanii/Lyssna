@@ -54,6 +54,7 @@ import {
   insertBlankLine,
   keepTimings,
   lineSpan,
+  playerGain,
   singingAt,
   markEnd,
   markNext,
@@ -1054,6 +1055,28 @@ export function TtmlCreator({
     source?: AudioBufferSourceNode;
     asked: number;
   }>({ asked: 0 });
+  const [clipping, setClipping] = useState<{
+    start: number;
+    end: number;
+    began: number;
+  } | null>(null);
+  const [clipNow, setClipNow] = useState(0);
+  useEffect(() => {
+    if (!clipping) return;
+    let frame = 0;
+    const tick = (time: number) => {
+      setClipNow(time);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [clipping]);
+  const shownPosition = clipping
+    ? Math.min(
+        clipping.end,
+        clipping.start + Math.max(0, clipNow - clipping.began),
+      )
+    : position;
   const volumeRef = useRef(70);
   const playUnit = useCallback(
     (at: Cursor) => {
@@ -1078,22 +1101,44 @@ export function TtmlCreator({
             ? Float32Array.from(result)
             : new Float32Array(result);
           if (!samples.length) return;
-          clip.current.source?.stop();
+          const previous = clip.current.source;
+          clip.current.source = undefined;
+          previous?.stop();
           const context = (clip.current.context ??= new AudioContext());
           const buffer = context.createBuffer(1, samples.length, CLIP_RATE);
           buffer.copyToChannel(samples, 0);
           const source = context.createBufferSource();
           const gain = context.createGain();
-          gain.gain.value = volumeRef.current / 100;
+          gain.gain.value = playerGain(volumeRef.current);
           source.buffer = buffer;
           source.connect(gain).connect(context.destination);
           clip.current.source = source;
-          void context.resume().then(() => source.start());
+          // The song waits where the word ends, as the playhead does.
+          source.onended = () => {
+            if (clip.current.source !== source) return;
+            clip.current.source = undefined;
+            seek(range.end);
+            setClipping(null);
+          };
+          void context.resume().then(() => {
+            if (clip.current.source !== source) return;
+            source.start();
+            const began = performance.now();
+            setClipNow(began);
+            setClipping({ ...range, began });
+          });
         })
         .catch((error) => notify(`Couldn't play the word: ${error}`, true));
     },
     [lines, seek, track, state.playback.is_playing, onPlayer, notify],
   );
+  useEffect(() => {
+    if (!state.playback.is_playing || !clip.current.source) return;
+    const playing = clip.current.source;
+    clip.current.source = undefined;
+    playing.stop();
+    setClipping(null);
+  }, [state.playback.is_playing]);
   useEffect(
     () => () => {
       clip.current.source?.stop();
@@ -2427,7 +2472,7 @@ export function TtmlCreator({
       {barSlot &&
         createPortal(
           <TtmlBar
-            position={position}
+            position={shownPosition}
             duration={track.duration_ms}
             playing={state.playback.is_playing}
             peaks={peaks?.uri === track.uri ? peaks.values : null}
@@ -2435,8 +2480,8 @@ export function TtmlCreator({
               <TtmlSpectrogram
                 uri={track.uri}
                 duration={track.duration_ms}
-                position={position}
-                playing={state.playback.is_playing}
+                position={shownPosition}
+                playing={state.playback.is_playing || !!clipping}
                 lines={lines}
                 cursor={cursor}
                 picked={picked}

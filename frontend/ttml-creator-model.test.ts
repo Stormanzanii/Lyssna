@@ -13,6 +13,7 @@ import {
   replaceMatching,
   moveEdge,
   panUnit,
+  playerGain,
   appendWords,
   dropTrailingSpace,
   formatTime,
@@ -285,6 +286,13 @@ describe("TTML Creator card editing", () => {
       [600, 900],
     ]);
     expect(moveEdge(apart, { line: 0, unit: 0 }, "start", -50)).toBe(apart);
+  });
+
+  it("matches the player's logarithmic volume", () => {
+    expect(playerGain(0)).toBe(0);
+    expect(playerGain(100)).toBe(1);
+    expect(playerGain(50)).toBeCloseTo(0.0316, 3);
+    expect(playerGain(70)).toBeCloseTo(0.1259, 3);
   });
 
   it("slides a syllable, stretching neighbours that share its edges", () => {

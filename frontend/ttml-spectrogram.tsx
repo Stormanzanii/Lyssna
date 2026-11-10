@@ -70,6 +70,52 @@ export function noteName(hz: number) {
   return `${NOTES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
 
+export type VocalKind = "main" | "overlap" | "background";
+
+/**
+ * Header rows for each line's words: lead vocals share the top row, a lead
+ * line sung over another drops to the next free row, and background vocals
+ * sit in rows under the lead lines they overlap.
+ */
+export function vocalLanes(
+  lines: CreatorLine[],
+): { lane: number; kind: VocalKind }[] {
+  const spans = lines.map(lineSpan);
+  const lanes = lines.map(() => ({ lane: 0, kind: "main" as VocalKind }));
+  const order = (background: boolean) =>
+    lines
+      .map((line, index) => index)
+      .filter((index) => lines[index].background === background && spans[index])
+      .sort((a, b) => spans[a]!.start - spans[b]!.start);
+  const place = (ends: number[], index: number, from: number) => {
+    const span = spans[index]!;
+    let lane = from;
+    while ((ends[lane] ?? -Infinity) > span.start) lane++;
+    ends[lane] = span.end;
+    return lane;
+  };
+  const leadEnds: number[] = [];
+  for (const index of order(false)) {
+    const lane = place(leadEnds, index, 0);
+    lanes[index] = { lane, kind: lane ? "overlap" : "main" };
+  }
+  const backingEnds: number[] = [];
+  for (const index of order(true)) {
+    const span = spans[index]!;
+    const under = order(false)
+      .filter(
+        (other) =>
+          spans[other]!.start < span.end && spans[other]!.end > span.start,
+      )
+      .reduce((deepest, other) => Math.max(deepest, lanes[other].lane), 0);
+    lanes[index] = {
+      lane: place(backingEnds, index, under + 1),
+      kind: "background",
+    };
+  }
+  return lanes;
+}
+
 export function rulerStep(zoom: number) {
   return (
     [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 15000, 30000].find(
@@ -474,6 +520,7 @@ export function TtmlSpectrogram({
   const ms = (time: number) => (time / 1000) * zoom;
   const fromMs = (scroll / zoom) * 1000;
   const toMs = ((scroll + width) / zoom) * 1000;
+  const lanes = useMemo(() => vocalLanes(shownLines), [shownLines]);
   const bands = shownLines.flatMap((line, lineIndex) => {
     const chosen = lineIndex === cursor.line || picked.has(lineIndex);
     const span = everyLine || chosen ? lineSpan(line) : null;
@@ -493,6 +540,7 @@ export function TtmlSpectrogram({
         : [
             {
               key: `${lineIndex}:${unitIndex}`,
+              ...lanes[lineIndex],
               at: { line: lineIndex, unit: unitIndex },
               text: unit.text,
               start: unit.start,
@@ -619,11 +667,14 @@ export function TtmlSpectrogram({
             {segments.map((segment) => (
               <div
                 key={segment.key}
-                className={`ttml-spectrum-word${segment.chosen ? " chosen" : ""}${segment.current ? " current" : ""}`}
-                style={{
-                  left: ms(segment.start),
-                  width: Math.max(1, ms(segment.end) - ms(segment.start)),
-                }}
+                className={`ttml-spectrum-word ${segment.kind}${segment.chosen ? " chosen" : ""}${segment.current ? " current" : ""}`}
+                style={
+                  {
+                    left: ms(segment.start),
+                    width: Math.max(1, ms(segment.end) - ms(segment.start)),
+                    "--lane": segment.lane,
+                  } as React.CSSProperties
+                }
                 title={`${segment.text} ${formatTime(segment.start)} – ${formatTime(segment.end)}`}
                 onPointerDown={(event) => {
                   event.stopPropagation();
@@ -636,8 +687,10 @@ export function TtmlSpectrogram({
                   onPlayUnit(segment.at);
                 }}
               >
-                {segment.roman && <small>{segment.roman}</small>}
-                <span>{segment.text}</span>
+                <div className="ttml-spectrum-head">
+                  {segment.roman && <small>{segment.roman}</small>}
+                  <span>{segment.text}</span>
+                </div>
                 <i
                   className="ttml-spectrum-edge start"
                   aria-label={`Move the start of ${segment.text}`}

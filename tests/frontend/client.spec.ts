@@ -15936,6 +15936,60 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
   ).toBe(null);
 });
 
+test("TTML Creator spectrogram gives each vocal its own header row", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.lys",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      [
+        "[4]one (300,500)two (800,400)three(1200,600)",
+        "[7](ooh (900,500)ah)(1400,500)",
+        "[5]over (1000,600)lap(1600,800)",
+      ].join(String.fromCharCode(10)),
+    ),
+  });
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await panel.getByRole("button", { name: "Follow playback" }).click();
+  await panel.locator(".ttml-spectrum-plot").hover();
+  for (let turn = 0; turn < 6; turn++) await page.mouse.wheel(0, -2000);
+  const word = (text: string) =>
+    panel.locator(".ttml-spectrum-word", { hasText: text });
+  await expect(word("two")).toHaveClass(/\bmain\b/);
+  await expect(word("over")).toHaveClass(/\boverlap\b/);
+  await expect(word("ooh")).toHaveClass(/\bbackground\b/);
+  const head = async (text: string) =>
+    (await word(text).locator(".ttml-spectrum-head").boundingBox())!;
+  const column = async (text: string) => (await word(text).boundingBox())!;
+  const [lead, over, backing] = [
+    await head("two"),
+    await head("over"),
+    await head("ooh"),
+  ];
+  expect(over.y).toBeGreaterThanOrEqual(lead.y + lead.height);
+  expect(backing.y).toBeGreaterThanOrEqual(over.y + over.height);
+  const plot = (await panel.locator(".ttml-spectrum-plot").boundingBox())!;
+  for (const text of ["two", "over", "ooh"]) {
+    const box = await column(text);
+    expect(box.y + box.height).toBeGreaterThan(plot.y + plot.height - 2);
+  }
+});
+
 test("right-clicking a word on the TTML Creator spectrogram plays only that word", async ({
   page,
 }) => {

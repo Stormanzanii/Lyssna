@@ -4,6 +4,7 @@ import {
   noteName,
   paletteTable,
   rulerStep,
+  vocalLanes,
 } from "./ttml-spectrogram";
 
 test("gain scales a level onto the palette and stops at the top", () => {
@@ -30,4 +31,29 @@ test("hover readout names notes and the ruler keeps labels apart", () => {
   expect(noteName(261.63)).toBe("C4");
   expect(rulerStep(200)).toBe(500);
   expect(rulerStep(2000)).toBe(50);
+});
+
+test("vocal headers stack overlapping leads and put backing vocals below", () => {
+  const line = (start: number, end: number, background = false) => ({
+    background,
+    opposite: false,
+    units: [{ text: "la", joined: false, start, end }],
+  });
+  expect(
+    vocalLanes([
+      line(0, 1000),
+      line(500, 1500),
+      line(600, 900, true),
+      line(1200, 2000, true),
+      line(2000, 3000),
+      line(2200, 2600, true),
+    ]),
+  ).toEqual([
+    { lane: 0, kind: "main" },
+    { lane: 1, kind: "overlap" },
+    { lane: 2, kind: "background" },
+    { lane: 2, kind: "background" },
+    { lane: 0, kind: "main" },
+    { lane: 1, kind: "background" },
+  ]);
 });

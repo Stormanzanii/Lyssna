@@ -15936,6 +15936,80 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
   ).toBe(null);
 });
 
+test("right-clicking a word on the TTML Creator spectrogram plays only that word", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.qrc",
+    mimeType: "text/plain",
+    buffer: Buffer.from("[300,1500]one (300,500)two (800,400)three (1200,600)"),
+  });
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await panel.getByRole("button", { name: "Follow playback" }).click();
+  await panel.locator(".ttml-spectrum-plot").hover();
+  for (let turn = 0; turn < 6; turn++) await page.mouse.wheel(0, -2000);
+  const two = panel.locator(".ttml-spectrum-word", { hasText: "two" });
+  await expect(two).toHaveAttribute("title", "two 00:00.800 – 00:01.200");
+  const emit = (progress: number) =>
+    page.evaluate((progress) => {
+      (window as any).__clientTest.emit({
+        type: "playback",
+        changed: false,
+        observed_at: Date.now(),
+        playback: {
+          is_playing: true,
+          progress_ms: progress,
+          shuffle_state: false,
+          repeat_state: "track",
+          device: {
+            name: "Lyssna (test)",
+            id: "local-device",
+            is_active: true,
+          },
+          item: {
+            id: "0123456789abcdefghijkl",
+            uri: "spotify:track:0123456789abcdefghijkl",
+            name: "Come & Go (with Marshmello)",
+            artists: [{ id: "a", name: "Juice WRLD" }],
+            album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+            duration_ms: 180000,
+          },
+        },
+      });
+    }, progress);
+  const requests = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request),
+    );
+  const before = (await requests()).length;
+  await two.click({ button: "right" });
+  await expect
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([{ command: "seek", positionMs: 800 }, { command: "play" }]);
+  await emit(800);
+  await page.waitForTimeout(700);
+  await emit(1250);
+  await expect
+    .poll(async () => (await requests()).slice(before).at(-1))
+    .toEqual({ command: "pause" });
+});
+
 test("TTML Creator spectrogram retimes words while the song plays", async ({
   page,
 }) => {

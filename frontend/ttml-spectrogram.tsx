@@ -175,6 +175,7 @@ export function TtmlSpectrogram({
   onSeek,
   onLines,
   onCursor,
+  onPlayUnit,
 }: {
   uri: string;
   duration: number;
@@ -186,6 +187,7 @@ export function TtmlSpectrogram({
   onSeek: (ms: number) => void;
   onLines: (lines: CreatorLine[]) => void;
   onCursor: (at: Cursor) => void;
+  onPlayUnit: (at: Cursor) => void;
 }) {
   const [height, setHeight] = useStored(
     "lyssna.ttml-spectrum-height",
@@ -627,6 +629,11 @@ export function TtmlSpectrogram({
                   event.stopPropagation();
                   onCursor(segment.at);
                   grab(event, segment.at, "word");
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onPlayUnit(segment.at);
                 }}
               >
                 {segment.roman && <small>{segment.roman}</small>}

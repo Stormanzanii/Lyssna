@@ -1044,6 +1044,39 @@ export function TtmlCreator({
       onPlayer({ command: "seek", positionMs: Math.max(0, Math.round(ms)) }),
     [onPlayer],
   );
+  // Right-clicking a word on the spectrogram plays only that word, as in
+  // AMLL's tool. Positions right after the seek may still be the old ones.
+  const wordStop = useRef<{ start: number; end: number; at: number } | null>(
+    null,
+  );
+  const playUnit = useCallback(
+    (at: Cursor) => {
+      const unit = lines[at.line]?.units[at.unit];
+      if (unit?.start === undefined || unit.end === undefined) return;
+      setCursor(at);
+      seek(unit.start);
+      if (!state.playback.is_playing) onPlayer({ command: "play" });
+      wordStop.current = {
+        start: unit.start,
+        end: unit.end,
+        at: performance.now(),
+      };
+    },
+    [lines, seek, state.playback.is_playing, onPlayer],
+  );
+  useEffect(() => {
+    const stop = wordStop.current;
+    if (!stop || performance.now() - stop.at < 600) return;
+    if (!state.playback.is_playing) {
+      wordStop.current = null;
+      return;
+    }
+    if (position >= stop.end && position < stop.end + 1500) {
+      wordStop.current = null;
+      onPlayer({ command: "pause" });
+    } else if (position < stop.start - 500 || position >= stop.end + 1500)
+      wordStop.current = null;
+  }, [position, state.playback.is_playing, onPlayer]);
   const changeSpeed = useCallback(
     (next: number) => {
       void onSpeed(next).catch((error) => notify(String(error), true));
@@ -2385,6 +2418,7 @@ export function TtmlCreator({
                 onSeek={seek}
                 onLines={setLines}
                 onCursor={setCursor}
+                onPlayUnit={playUnit}
               />
             }
             spectrogram={spectrogram}

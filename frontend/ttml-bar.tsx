@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AudioLines,
+  ChevronDown,
   ChevronUp,
+  PanelBottom,
   FilePenLine,
   Music2,
   Pause,
@@ -269,13 +270,12 @@ export function TtmlBar({
       <span className="ttml-bar-time">{formatTime(duration)}</span>
       <div className="player-extras ttml-bar-extras">
         <button
-          className={`icon-button${spectrogram ? " active" : ""}`}
-          aria-label="Spectrogram"
-          aria-pressed={spectrogram}
-          title={spectrogram ? "Hide the spectrogram" : "Show the spectrogram"}
-          onClick={() => onSpectrogram(!spectrogram)}
+          className="icon-button"
+          onClick={onShowPlayer}
+          title="Show the player bar"
+          aria-label="Show the player bar"
         >
-          <AudioLines size={18} />
+          <PanelBottom size={18} />
         </button>
         {onClose && (
           <button
@@ -288,11 +288,12 @@ export function TtmlBar({
         )}
         <button
           className="icon-button"
-          onClick={onShowPlayer}
-          title="Show the player bar"
-          aria-label="Show the player bar"
+          aria-label="Spectrogram"
+          aria-pressed={spectrogram}
+          title={spectrogram ? "Hide the spectrogram" : "Show the spectrogram"}
+          onClick={() => onSpectrogram(!spectrogram)}
         >
-          <ChevronUp size={18} />
+          {spectrogram ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
         </button>
       </div>
     </div>

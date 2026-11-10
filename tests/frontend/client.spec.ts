@@ -15862,10 +15862,19 @@ test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
     );
   const wave = page.getByRole("slider", { name: "Song position" });
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(toggle.locator(".lucide-chevron-up")).toHaveCount(1);
+  await expect(page.locator(".ttml-bar-extras button").last()).toHaveAttribute(
+    "aria-label",
+    "Spectrogram",
+  );
+  await expect(
+    page.locator(".ttml-bar-extras .lucide-audio-lines"),
+  ).toHaveCount(0);
   await expect(panel).toHaveCount(0);
   await expect(wave).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle.locator(".lucide-chevron-down")).toHaveCount(1);
   await expect(panel).toBeVisible();
   await expect(wave).toHaveCount(0);
   await expect

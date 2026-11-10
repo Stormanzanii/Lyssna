@@ -16142,8 +16142,23 @@ test("TTML Creator swaps the player bar for a waveform bar", async ({
     .toEqual({ command: "volume", volume: 30 });
   await page.keyboard.press("Escape");
   await expect(controls).toHaveCount(0);
+  const pen = page.locator(".ttml-bar-extras").getByTitle("TTML Creator", {
+    exact: true,
+  });
+  const inBar = (await pen.boundingBox())!;
   await page.getByRole("button", { name: "Show the player bar" }).click();
   await expect(page.locator(".player-song")).toHaveCount(1);
+  const extras = page.locator(".player-extras button");
+  const titles = await extras.evaluateAll((buttons) =>
+    buttons.map((button) => button.getAttribute("title")),
+  );
+  expect(titles.slice(-2)).toEqual(["TTML Creator", "Full screen lyrics"]);
+  expect(titles.indexOf("Lyrics popout")).toBe(titles.indexOf("Lyrics") - 1);
+  const inPlayer = (await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .boundingBox())!;
+  expect(Math.abs(inPlayer.x - inBar.x)).toBeLessThan(6);
   await page
     .locator(".player-extras")
     .getByTitle("Show the TTML bar", { exact: true })

@@ -6702,15 +6702,14 @@ function PlayerBar({
             <AudioWaveform size={19} />
           </button>
         )}
-        {onTtml && (
-          <button
-            className={`icon-button ttml-button ${ttmlActive ? "active" : ""}`}
-            title="TTML Creator"
-            onClick={onTtml}
-          >
-            <FilePenLine size={19} />
-          </button>
-        )}
+        <button
+          className="icon-button"
+          title="Lyrics popout"
+          aria-label="Lyrics popout"
+          onClick={() => void rpc("open_lyrics_popout").catch(() => {})}
+        >
+          <PopoutIcon />
+        </button>
         <button
           className={`icon-button ${lyricsActive ? "active" : ""}`}
           title="Lyrics"
@@ -6780,14 +6779,15 @@ function PlayerBar({
             <CinemaIcon />
           </button>
         )}
-        <button
-          className="icon-button"
-          title="Lyrics popout"
-          aria-label="Lyrics popout"
-          onClick={() => void rpc("open_lyrics_popout").catch(() => {})}
-        >
-          <PopoutIcon />
-        </button>
+        {onTtml && (
+          <button
+            className={`icon-button ttml-button ${ttmlActive ? "active" : ""}`}
+            title="TTML Creator"
+            onClick={onTtml}
+          >
+            <FilePenLine size={19} />
+          </button>
+        )}
         <button
           className="icon-button"
           title="Full screen lyrics"

@@ -81,15 +81,17 @@ export type VocalKind = "main" | "overlap" | "background";
 export function vocalLanes(
   lines: CreatorLine[],
 ): { lane: number; kind: VocalKind }[] {
-  const words = lines.map((line) =>
-    line.units.flatMap((unit) =>
+  const words = lines.map((line) => {
+    const timed = line.units.flatMap((unit) =>
       unit.start !== undefined &&
       unit.end !== undefined &&
       unit.end > unit.start
         ? [{ start: unit.start, end: unit.end }]
         : [],
-    ),
-  );
+    );
+    const span = timed.length ? null : lineSpan(line);
+    return span && span.end > span.start ? [span] : timed;
+  });
   const clash = (a: number, b: number) =>
     words[a].some((one) =>
       words[b].some((two) => one.start < two.end && two.start < one.end),
@@ -543,6 +545,32 @@ export function TtmlSpectrogram({
   const segments = shownLines.flatMap((line, lineIndex) => {
     const chosen = lineIndex === cursor.line || picked.has(lineIndex);
     if (!everyLine && !chosen) return [];
+    const timed = line.units.some(
+      (unit) => unit.start !== undefined && unit.end !== undefined,
+    );
+    const span = timed ? null : lineSpan(line);
+    // Line-synced lyrics only time the line, so it shows as one block.
+    if (span)
+      return span.end > span.start && span.end >= fromMs && span.start <= toMs
+        ? [
+            {
+              key: `${lineIndex}:line`,
+              ...lanes[lineIndex],
+              at: { line: lineIndex, unit: 0 },
+              text: line.units
+                .map((unit, index) =>
+                  index && !unit.joined ? ` ${unit.text}` : unit.text,
+                )
+                .join(""),
+              start: span.start,
+              end: span.end,
+              roman: line.romanization,
+              chosen,
+              current: false,
+              whole: true,
+            },
+          ]
+        : [];
     return line.units.flatMap((unit, unitIndex) =>
       unit.start === undefined ||
       unit.end === undefined ||
@@ -560,6 +588,7 @@ export function TtmlSpectrogram({
               roman: unit.roman,
               chosen,
               current: lineIndex === cursor.line && unitIndex === cursor.unit,
+              whole: false,
             },
           ],
     );
@@ -679,7 +708,7 @@ export function TtmlSpectrogram({
             {segments.map((segment) => (
               <div
                 key={segment.key}
-                className={`ttml-spectrum-word ${segment.kind}${segment.chosen ? " chosen" : ""}${segment.current ? " current" : ""}`}
+                className={`ttml-spectrum-word ${segment.kind}${segment.whole ? " whole" : ""}${segment.chosen ? " chosen" : ""}${segment.current ? " current" : ""}`}
                 style={
                   {
                     left: ms(segment.start),
@@ -691,7 +720,7 @@ export function TtmlSpectrogram({
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   onCursor(segment.at);
-                  grab(event, segment.at, "word");
+                  if (!segment.whole) grab(event, segment.at, "word");
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -703,16 +732,22 @@ export function TtmlSpectrogram({
                   {segment.roman && <small>{segment.roman}</small>}
                   <span>{segment.text}</span>
                 </div>
-                <i
-                  className="ttml-spectrum-edge start"
-                  aria-label={`Move the start of ${segment.text}`}
-                  onPointerDown={(event) => grab(event, segment.at, "start")}
-                />
-                <i
-                  className="ttml-spectrum-edge end"
-                  aria-label={`Move the end of ${segment.text}`}
-                  onPointerDown={(event) => grab(event, segment.at, "end")}
-                />
+                {!segment.whole && (
+                  <>
+                    <i
+                      className="ttml-spectrum-edge start"
+                      aria-label={`Move the start of ${segment.text}`}
+                      onPointerDown={(event) =>
+                        grab(event, segment.at, "start")
+                      }
+                    />
+                    <i
+                      className="ttml-spectrum-edge end"
+                      aria-label={`Move the end of ${segment.text}`}
+                      onPointerDown={(event) => grab(event, segment.at, "end")}
+                    />
+                  </>
+                )}
               </div>
             ))}
             <div

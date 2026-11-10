@@ -1718,6 +1718,16 @@
   background: #4aa3ff24;
   box-shadow: inset 0 -2px 0 #6cb6ffb3;
 }
+.ttml-spectrum-word.whole {
+  cursor: pointer;
+}
+.ttml-spectrum-word.whole .ttml-spectrum-head {
+  align-items: flex-start;
+  padding-inline: 6px;
+}
+.ttml-spectrum-word.whole :is(span, small) {
+  text-align: left;
+}
 .ttml-spectrum-word span,
 .ttml-spectrum-word small {
   width: 100%;

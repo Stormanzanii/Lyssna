@@ -1052,15 +1052,15 @@ export function TtmlCreator({
   const playUnit = useCallback(
     (at: Cursor) => {
       const unit = lines[at.line]?.units[at.unit];
-      if (unit?.start === undefined || unit.end === undefined) return;
+      const range =
+        unit?.start !== undefined && unit.end !== undefined
+          ? { start: unit.start, end: unit.end }
+          : lines[at.line] && lineSpan(lines[at.line]);
+      if (!range || range.end <= range.start) return;
       setCursor(at);
-      seek(unit.start);
+      seek(range.start);
       if (!state.playback.is_playing) onPlayer({ command: "play" });
-      wordStop.current = {
-        start: unit.start,
-        end: unit.end,
-        at: performance.now(),
-      };
+      wordStop.current = { ...range, at: performance.now() };
     },
     [lines, seek, state.playback.is_playing, onPlayer],
   );

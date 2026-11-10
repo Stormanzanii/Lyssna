@@ -798,6 +798,8 @@ async function startClient(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: any = {}) => {
           commands.push({ command, args });
+          const answers = host.__clientTest?.answers;
+          if (answers && command in answers) return answers[command];
           if (command === "playback_speed") return args.percent;
           if (command === "offline_location")
             return "C:\Users\listener\AppData\Local\Lyssna\data\offline";
@@ -15988,6 +15990,70 @@ test("TTML Creator spectrogram gives each vocal its own header row", async ({
     const box = await column(text);
     expect(box.y + box.height).toBeGreaterThan(plot.y + plot.height - 2);
   }
+});
+
+test("line-synced lyrics show as whole lines on the TTML Creator spectrogram", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await page.evaluate(() => {
+    const line = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+      words: [],
+      romanization: "",
+      translation: "",
+      background: false,
+      opposite: false,
+    });
+    (window as any).__clientTest.answers = {
+      parse_lyric_file: {
+        lines: [line("one two three", 300, 1800), line("four five", 1800, 3000)],
+        source: "file",
+        instrumental: false,
+        synced: true,
+      },
+    };
+  });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.lrc",
+    mimeType: "text/plain",
+    buffer: Buffer.from("[00:00.30]one two three"),
+  });
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await panel.getByRole("button", { name: "Follow playback" }).click();
+  const whole = panel.locator(".ttml-spectrum-word.whole");
+  await expect(whole).toHaveCount(2);
+  await expect(whole.first()).toHaveText("one two three");
+  await expect(whole.first()).toHaveAttribute(
+    "title",
+    "one two three 00:00.300 – 00:01.800",
+  );
+  const requests = () =>
+    page.evaluate(() =>
+      (window as any).__clientTest.commands
+        .filter((entry: any) => entry.command === "player")
+        .map((entry: any) => entry.args.request),
+    );
+  const before = (await requests()).length;
+  await whole.nth(1).click({ button: "right" });
+  await expect
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([{ command: "seek", positionMs: 1800 }, { command: "play" }]);
 });
 
 test("right-clicking a word on the TTML Creator spectrogram plays only that word", async ({

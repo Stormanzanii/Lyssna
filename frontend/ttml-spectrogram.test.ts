@@ -57,3 +57,28 @@ test("vocal headers stack overlapping leads and put backing vocals below", () =>
     { lane: 1, kind: "background" },
   ]);
 });
+
+test("a line sung in another line's gap stays on the top row", () => {
+  const line = (words: [number, number][]) => ({
+    background: false,
+    opposite: false,
+    units: words.map(([start, end]) => ({
+      text: "la",
+      joined: false,
+      start,
+      end,
+    })),
+  });
+  const lanes = vocalLanes([
+    line([
+      [0, 400],
+      [2000, 2400],
+    ]),
+    line([
+      [900, 1300],
+      [1300, 1600],
+    ]),
+    line([[2200, 2600]]),
+  ]);
+  expect(lanes.map((each) => each.lane)).toEqual([0, 0, 1]);
+});

@@ -74,42 +74,54 @@ export type VocalKind = "main" | "overlap" | "background";
 
 /**
  * Header rows for each line's words: lead vocals share the top row, a lead
- * line sung over another drops to the next free row, and background vocals
- * sit in rows under the lead lines they overlap.
+ * line whose words are sung over another's drops to the next free row, and
+ * background vocals sit in rows under the lead lines they overlap. Overlap
+ * counts timed words only; a line's span can reach past its last word.
  */
 export function vocalLanes(
   lines: CreatorLine[],
 ): { lane: number; kind: VocalKind }[] {
-  const spans = lines.map(lineSpan);
+  const words = lines.map((line) =>
+    line.units.flatMap((unit) =>
+      unit.start !== undefined &&
+      unit.end !== undefined &&
+      unit.end > unit.start
+        ? [{ start: unit.start, end: unit.end }]
+        : [],
+    ),
+  );
+  const clash = (a: number, b: number) =>
+    words[a].some((one) =>
+      words[b].some((two) => one.start < two.end && two.start < one.end),
+    );
   const lanes = lines.map(() => ({ lane: 0, kind: "main" as VocalKind }));
   const order = (background: boolean) =>
     lines
       .map((line, index) => index)
-      .filter((index) => lines[index].background === background && spans[index])
-      .sort((a, b) => spans[a]!.start - spans[b]!.start);
-  const place = (ends: number[], index: number, from: number) => {
-    const span = spans[index]!;
+      .filter(
+        (index) =>
+          lines[index].background === background && words[index].length,
+      )
+      .sort((a, b) => words[a][0].start - words[b][0].start);
+  const place = (rows: number[][], index: number, from: number) => {
     let lane = from;
-    while ((ends[lane] ?? -Infinity) > span.start) lane++;
-    ends[lane] = span.end;
+    while (rows[lane]?.some((other) => clash(index, other))) lane++;
+    (rows[lane] ??= []).push(index);
     return lane;
   };
-  const leadEnds: number[] = [];
-  for (const index of order(false)) {
-    const lane = place(leadEnds, index, 0);
+  const leads = order(false);
+  const leadRows: number[][] = [];
+  for (const index of leads) {
+    const lane = place(leadRows, index, 0);
     lanes[index] = { lane, kind: lane ? "overlap" : "main" };
   }
-  const backingEnds: number[] = [];
+  const backingRows: number[][] = [];
   for (const index of order(true)) {
-    const span = spans[index]!;
-    const under = order(false)
-      .filter(
-        (other) =>
-          spans[other]!.start < span.end && spans[other]!.end > span.start,
-      )
+    const under = leads
+      .filter((other) => clash(index, other))
       .reduce((deepest, other) => Math.max(deepest, lanes[other].lane), 0);
     lanes[index] = {
-      lane: place(backingEnds, index, under + 1),
+      lane: place(backingRows, index, under + 1),
       kind: "background",
     };
   }

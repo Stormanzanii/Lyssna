@@ -153,6 +153,8 @@ const clampSpeed = (value: number) =>
 const SPLITS_KEY = "lyssna.ttml-splits";
 const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
 const SPECTROGRAM_KEY = "lyssna.ttml-spectrogram";
+// librespot decodes every track at this rate.
+const CLIP_RATE = 44100;
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
@@ -1045,22 +1047,14 @@ export function TtmlCreator({
     [onPlayer],
   );
   // Right-clicking a word on the spectrogram plays only that word, as in
-  // AMLL's tool. The pause is timed from the first position that lands at
-  // the word's start, so stale positions from before the seek cannot end it
-  // early and the next word is not heard.
-  const wordStop = useRef<{
-    start: number;
-    end: number;
-    at: number;
-    landed: boolean;
-  } | null>(null);
-  const wordTimer = useRef(0);
-  const endWord = useCallback(() => {
-    clearTimeout(wordTimer.current);
-    if (!wordStop.current) return;
-    wordStop.current = null;
-    onPlayer({ command: "pause" });
-  }, [onPlayer]);
+  // AMLL's tool. Seeking and pausing the player is late by its buffering,
+  // so the word plays from its decoded samples, cut at its exact edges.
+  const clip = useRef<{
+    context?: AudioContext;
+    source?: AudioBufferSourceNode;
+    asked: number;
+  }>({ asked: 0 });
+  const volumeRef = useRef(70);
   const playUnit = useCallback(
     (at: Cursor) => {
       const unit = lines[at.line]?.units[at.unit];
@@ -1068,43 +1062,45 @@ export function TtmlCreator({
         unit?.start !== undefined && unit.end !== undefined
           ? { start: unit.start, end: unit.end }
           : lines[at.line] && lineSpan(lines[at.line]);
-      if (!range || range.end <= range.start) return;
-      clearTimeout(wordTimer.current);
+      if (!track || !range || range.end <= range.start) return;
       setCursor(at);
+      if (state.playback.is_playing) onPlayer({ command: "pause" });
       seek(range.start);
-      if (!state.playback.is_playing) onPlayer({ command: "play" });
-      wordStop.current = { ...range, at: performance.now(), landed: false };
+      const asked = ++clip.current.asked;
+      rpc<ArrayBuffer | number[]>("track_clip", {
+        uri: track.uri,
+        fromMs: range.start,
+        toMs: range.end,
+      })
+        .then((result) => {
+          if (asked !== clip.current.asked) return;
+          const samples = Array.isArray(result)
+            ? Float32Array.from(result)
+            : new Float32Array(result);
+          if (!samples.length) return;
+          clip.current.source?.stop();
+          const context = (clip.current.context ??= new AudioContext());
+          const buffer = context.createBuffer(1, samples.length, CLIP_RATE);
+          buffer.copyToChannel(samples, 0);
+          const source = context.createBufferSource();
+          const gain = context.createGain();
+          gain.gain.value = volumeRef.current / 100;
+          source.buffer = buffer;
+          source.connect(gain).connect(context.destination);
+          clip.current.source = source;
+          void context.resume().then(() => source.start());
+        })
+        .catch((error) => notify(`Couldn't play the word: ${error}`, true));
     },
-    [lines, seek, state.playback.is_playing, onPlayer],
+    [lines, seek, track, state.playback.is_playing, onPlayer, notify],
   );
-  useEffect(() => {
-    const stop = wordStop.current;
-    if (!stop || !state.playback.is_playing) return;
-    // Until the seek lands, positions still describe the old spot.
-    if (!stop.landed) {
-      if (position >= stop.start - 100 && position < stop.start + 300)
-        stop.landed = true;
-      else {
-        if (performance.now() - stop.at > 3000) wordStop.current = null;
-        return;
-      }
-    }
-    if (position >= stop.end - 5) {
-      if (position < stop.end + 2000) endWord();
-      else wordStop.current = null;
-      return;
-    }
-    if (position < stop.start - 100) {
-      wordStop.current = null;
-      return;
-    }
-    clearTimeout(wordTimer.current);
-    wordTimer.current = window.setTimeout(
-      endWord,
-      (stop.end - position) / (rate || 1),
-    );
-  }, [position, state.playback.is_playing, rate, endWord]);
-  useEffect(() => () => clearTimeout(wordTimer.current), []);
+  useEffect(
+    () => () => {
+      clip.current.source?.stop();
+      void clip.current.context?.close();
+    },
+    [],
+  );
   const changeSpeed = useCallback(
     (next: number) => {
       void onSpeed(next).catch((error) => notify(String(error), true));
@@ -1139,6 +1135,7 @@ export function TtmlCreator({
     state.playback.device.volume_percent ??
     state.settings.volume_percent ??
     70;
+  volumeRef.current = barVolume;
 
   const [keys, setKeys] = useState<KeyMap>(loadKeys);
   const keysRef = useRef(keys);

@@ -805,6 +805,11 @@ async function startClient(
             return "C:\Users\listener\AppData\Local\Lyssna\data\offline";
           if (command === "offline_move") return "E:\Music\Lyssna Downloads";
           if (command === "offline_songs") return host.__clientTest.downloaded ?? [];
+          if (command === "track_clip")
+            return Array.from(
+              { length: Math.round(((args.toMs - args.fromMs) * 44100) / 1000) },
+              (_, index) => Math.sin(index / 10) / 4,
+            );
           if (command === "track_spectrogram")
             return Array.from(
               { length: args.columns * args.rows },
@@ -16053,12 +16058,34 @@ test("line-synced lyrics show as whole lines on the TTML Creator spectrogram", a
   await whole.nth(1).click({ button: "right" });
   await expect
     .poll(async () => (await requests()).slice(before))
-    .toEqual([{ command: "seek", positionMs: 1800 }, { command: "play" }]);
+    .toEqual([{ command: "seek", positionMs: 1800 }]);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "track_clip")
+          .map((entry: any) => [entry.args.fromMs, entry.args.toMs]),
+      ),
+    )
+    .toEqual([[1800, 3000]]);
 });
 
 test("right-clicking a word on the TTML Creator spectrogram plays only that word", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    const start = AudioBufferSourceNode.prototype.start;
+    (window as any).__clips = [];
+    AudioBufferSourceNode.prototype.start = function (...args: any[]) {
+      (window as any).__clips.push({
+        seconds: this.buffer!.duration,
+        rate: this.buffer!.sampleRate,
+        offset: args[1] ?? 0,
+        stop: args[2],
+      });
+      return start.apply(this, args as any);
+    };
+  });
   await startClient(page);
   await playLyricTrack(page, false);
   await openSettings(page, "Lyrics");
@@ -16117,37 +16144,34 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
         .filter((entry: any) => entry.command === "player")
         .map((entry: any) => entry.args.request),
     );
-  // Playing past the word: the stale position must not end it early.
+  // The song pauses at the word, and the word plays from its own samples:
+  // exactly 800 to 1000 ms, whatever the player's buffering.
   await emit(1300);
   const before = (await requests()).length;
   await two.click({ button: "right" });
   await expect
-    .poll(async () => (await requests()).slice(before), { intervals: [10] })
-    .toEqual([{ command: "seek", positionMs: 800 }]);
-  const landed = Date.now();
-  await page.evaluate(() =>
-    (window as any).__clientTest.emit({
-      type: "native_position",
-      uri: "spotify:track:0123456789abcdefghijkl",
-      position_ms: 800,
-      playing: true,
-      observed_at: Date.now(),
-      seeked: true,
-    }),
-  );
+    .poll(async () => (await requests()).slice(before))
+    .toEqual([{ command: "pause" }, { command: "seek", positionMs: 800 }]);
   await expect
-    .poll(async () => (await requests()).slice(before).at(-1), {
-      intervals: [20],
-    })
-    .toEqual({ command: "pause" });
-  // The word lasts 200 ms; the pause comes then, not a beat later.
-  const heard = Date.now() - landed;
-  expect(heard).toBeGreaterThan(120);
-  expect(heard).toBeLessThan(400);
-  expect((await requests()).slice(before)).toEqual([
-    { command: "seek", positionMs: 800 },
-    { command: "pause" },
-  ]);
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__clientTest.commands
+          .filter((entry: any) => entry.command === "track_clip")
+          .map((entry: any) => entry.args),
+      ),
+    )
+    .toEqual([
+      {
+        uri: "spotify:track:0123456789abcdefghijkl",
+        fromMs: 800,
+        toMs: 1000,
+      },
+    ]);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__clips))
+    .toEqual([{ seconds: 0.2, rate: 44100, offset: 0, stop: undefined }]);
+  await page.waitForTimeout(400);
+  expect((await requests()).slice(before)).toHaveLength(2);
 });
 
 test("TTML Creator spectrogram retimes words while the song plays", async ({

@@ -3119,6 +3119,12 @@ small {
 .lyrics-page.narrow .lyrics-message {
   padding-top: 30px;
 }
+.lyrics-page.narrow .lyrics-message h2 {
+  font-size: 28px;
+}
+.lyrics-page.narrow .lyrics-message p {
+  font-size: 15px;
+}
 .lyrics-body {
   height: 100%;
   min-width: 0;
@@ -3630,27 +3636,66 @@ small {
   justify-content: center;
   flex-direction: column;
   text-align: center;
-  gap: 13px;
+  gap: 16px;
   padding: 25px;
   color: light-dark(#090909, #f6f6f6);
   position: relative;
   z-index: 1;
 }
 .lyrics-message > svg {
-  width: 30px;
-  height: 30px;
-  opacity: 0.65;
+  width: 52px;
+  height: 52px;
+  stroke-width: 1.5;
+  opacity: 0.7;
+  margin-bottom: 4px;
 }
 .lyrics-message h2 {
-  font-size: 24px;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .lyrics-message p {
-  font-size: 14px;
+  font-size: 17px;
+  line-height: 1.45;
   color: light-dark(#0e0e0eb0, #f1f1f1b0);
-  max-width: 300px;
+  max-width: 440px;
+  text-wrap: balance;
 }
 .lyrics-message > .inline-actions {
-  margin-top: 8px;
+  margin-top: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.lyrics-message > .inline-actions .pill {
+  gap: 10px;
+  padding: 14px 28px;
+  font-size: 15px;
+  border: 1px solid light-dark(#00000014, #ffffff1f);
+  background: light-dark(#0000000f, #ffffff1a);
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    filter 0.2s,
+    transform 0.12s;
+}
+.lyrics-message > .inline-actions .pill:hover {
+  transform: none;
+  background: light-dark(#0000001c, #ffffff2b);
+  border-color: light-dark(#00000024, #ffffff33);
+}
+.lyrics-message > .inline-actions .pill.primary {
+  color: light-dark(#f6f6f6, #0d0d0d);
+  background: light-dark(#111111, #f6f6f6);
+  border-color: transparent;
+}
+.lyrics-message > .inline-actions .pill.primary:hover {
+  background: light-dark(#111111, #f6f6f6);
+  filter: brightness(1.12);
+}
+.lyrics-message > .inline-actions .pill:active {
+  transform: scale(0.97);
 }
 .lyrics-toolbar {
   position: absolute;
@@ -5385,7 +5430,7 @@ input[type="range"]:hover {
   .application:not(.macos) .avatar {
     display: none;
   }
-  .application:not(.macos) .player-extras > .icon-button:[title="Queue"],
+  .application:not(.macos) .player-extras > .icon-button[title="Queue"],
   .application:not(.macos) .player-extras > .icon-button[title="Now playing"],
   .application:not(.macos) .player-extras > .icon-button:last-child {
     display: none;

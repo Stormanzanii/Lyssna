@@ -1912,12 +1912,12 @@ function SongLyricsPage({
                 </p>
                 {state.lyric_error && (
                   <div className="inline-actions">
-                    <button className="pill" onClick={onRetry}>
-                      <RotateCw size={16} />
+                    <button className="pill primary" onClick={onRetry}>
+                      <RotateCw size={18} />
                       Retry
                     </button>
                     <button className="pill" onClick={onImport}>
-                      <Upload size={16} />
+                      <Upload size={18} />
                       Import lyrics
                     </button>
                   </div>

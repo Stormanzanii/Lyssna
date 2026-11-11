@@ -2948,7 +2948,12 @@ impl SpircTask {
         if self.position() < 3000 {
             let repeat_context = self.connect_state.repeat_context();
             match self.connect_state.prev_track()? {
-                None if repeat_context => self.connect_state.reset_playback_to_position(None)?,
+                // The reset picks the context's first song but leaves the
+                // player on the old one; load it so they agree.
+                None if repeat_context => {
+                    self.connect_state.reset_playback_to_position(None)?;
+                    self.load_track(play || self.connect_state.is_playing(), 0)?
+                }
                 None => {
                     self.connect_state.reset_playback_to_position(None)?;
                     self.handle_stop()

@@ -9111,7 +9111,7 @@ test("the top-left menu opens File, Edit, View, Playback and Help", async ({
       async () =>
         (await commands("save_settings")).at(-1)?.args.settings.ui_zoom_percent,
     )
-    .toBe(135);
+    .toBe(120);
   await menu.click();
   await page.getByRole("menuitem", { name: "Playback" }).click();
   await page

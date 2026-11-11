@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
-export const DEFAULT_ZOOM = 125;
+export const DEFAULT_ZOOM = 110;
 
 function clampZoom(percent: number): number {
   return Math.min(

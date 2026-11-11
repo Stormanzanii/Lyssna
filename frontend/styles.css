@@ -5385,8 +5385,8 @@ input[type="range"]:hover {
   .application:not(.macos) .avatar {
     display: none;
   }
-  .application:not(.macos) .player-extras > .icon-button:nth-child(2),
-  .application:not(.macos) .player-extras > .icon-button:nth-child(4),
+  .application:not(.macos) .player-extras > .icon-button:[title="Queue"],
+  .application:not(.macos) .player-extras > .icon-button[title="Now playing"],
   .application:not(.macos) .player-extras > .icon-button:last-child {
     display: none;
   }

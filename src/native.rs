@@ -605,10 +605,11 @@ impl NativeControls {
         }
         let uris: Vec<String> = entries.iter().map(|entry| entry.uri.clone()).collect();
         let session = self.session()?;
-        let tracks = tokio::runtime::Builder::new_current_thread()
+        let mut tracks = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
             .block_on(crate::native_browse::resolve_tracks(&session, &uris))?;
+        tracks.retain(|track| !track.unavailable);
         let added = added_count(&entries, &tracks);
         Ok((tracks, added))
     }
@@ -1150,6 +1151,20 @@ fn log_librespot() {
 /// How many of the resolved songs, from the front, the listener queued.
 /// Songs Spotify could not describe are left out of `tracks`, so they are
 /// skipped here too.
+// Connect's list also holds its end-of-list marker (`spotify:delimiter`)
+// and songs Spotify can't play here; neither belongs in the queue.
+fn queue_entries(next_tracks: &[librespot_playback::player::QueueTrack]) -> Vec<QueueEntry> {
+    next_tracks
+        .iter()
+        .filter(|track| track.provider != "unavailable" && queue_uri(&track.uri).is_ok())
+        .take(50)
+        .map(|track| QueueEntry {
+            uri: track.uri.clone(),
+            added: track.provider == "queue",
+        })
+        .collect()
+}
+
 fn added_count(entries: &[QueueEntry], tracks: &[crate::model::Track]) -> usize {
     let mut entries = entries.iter();
     let mut added = 0;
@@ -1258,6 +1273,29 @@ mod dj_queue_tests {
             crate::resume::skip_action(&queue[1], &queue, 0, true),
             Some(PlayerAction::Resume { offset: 2, .. })
         ));
+    }
+
+    #[test]
+    fn the_queue_leaves_out_the_end_of_list_marker_and_unplayable_songs() {
+        let track = |uri: &str, provider: &str| librespot_playback::player::QueueTrack {
+            uri: uri.into(),
+            provider: provider.into(),
+        };
+        let entries = queue_entries(&[
+            track("spotify:track:0000000000000000000001", "queue"),
+            track("spotify:delimiter", "context"),
+            track("spotify:track:0000000000000000000002", "unavailable"),
+            track("spotify:track:0000000000000000000003", "context"),
+        ]);
+        let uris: Vec<_> = entries.iter().map(|entry| entry.uri.as_str()).collect();
+        assert_eq!(
+            uris,
+            [
+                "spotify:track:0000000000000000000001",
+                "spotify:track:0000000000000000000003"
+            ]
+        );
+        assert!(entries[0].added && !entries[1].added);
     }
 
     #[test]
@@ -2747,7 +2785,7 @@ async fn run(
                         if let PlayerEvent::SetQueue { next_tracks, .. } = &event
                             && let Ok(mut queue) = queue_snapshot.lock()
                         {
-                            *queue = Some(next_tracks.iter().take(50).map(|track| QueueEntry { uri: track.uri.clone(), added: track.provider == "queue" }).collect());
+                            *queue = Some(queue_entries(next_tracks));
                         }
                         if let PlayerEvent::SetQueue { next_tracks, .. } = &event {
                             let queued = next_tracks.iter().filter(|track| track.provider == "queue").count();

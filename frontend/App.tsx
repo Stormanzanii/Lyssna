@@ -5458,7 +5458,8 @@ function App() {
                 ListMusic,
                 () => {
                   for (const track of songMenu.tracks ?? [songMenu.track])
-                    play({ command: "enqueue", uri: track.uri });
+                    if (!track.unavailable)
+                      play({ command: "enqueue", uri: track.uri });
                 },
               ],
               ...(jam

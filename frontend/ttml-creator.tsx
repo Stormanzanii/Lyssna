@@ -2218,14 +2218,13 @@ export function TtmlCreator({
                         }
                         onDrop={(event) => {
                           if (drag?.kind !== "word") return;
-                          const word = wordBounds(line.units, unitIndex);
                           land(
                             event,
                             moveDragged(drag, {
                               line: lineIndex,
                               unit: firstHalf(event, false)
-                                ? word.start
-                                : word.end,
+                                ? unitIndex
+                                : unitIndex + 1,
                             }),
                           );
                         }}

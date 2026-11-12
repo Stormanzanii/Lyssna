@@ -785,6 +785,8 @@ export function moveWord(
   if (kept[0]) kept[0] = { ...kept[0], joined: false };
   const into = same ? kept : target.units;
   const at = same && to.unit > start ? to.unit - word.length : to.unit;
+  // Dropped between two syllables, it becomes a syllable of that word.
+  if (into[at]?.joined) word[0] = { ...word[0], joined: true };
   const placed = [...into.slice(0, at), ...word, ...into.slice(at)];
   return lines
     .map((line, index) =>
@@ -825,7 +827,14 @@ export function moveWords(
   return lines
     .map((line, index) => {
       const units = line.units.filter((unit) => !taken.has(unit));
-      if (index === to.line) units.splice(at, 0, ...words);
+      if (index === to.line)
+        units.splice(
+          at,
+          0,
+          ...(units[at]?.joined
+            ? [{ ...words[0], joined: true }, ...words.slice(1)]
+            : words),
+        );
       if (units[0]?.joined) units[0] = { ...units[0], joined: false };
       return units.length === line.units.length &&
         units.every((unit, position) => unit === line.units[position])

@@ -614,6 +614,19 @@ describe("TTML Creator word menu", () => {
     expect(toText([line])).toBe("Ooh-|ooh-|ooh yeah");
   });
 
+  it("drops a word between syllables as a syllable of that word", () => {
+    const lines = parseText("Eigh-|eigh-|eighty eigh- in");
+    expect(
+      toText(moveWord(lines, { line: 0, unit: 3 }, { line: 0, unit: 1 })),
+    ).toBe("Eigh-|eigh-|eigh-|eighty in");
+    expect(
+      toText(moveWord(lines, { line: 0, unit: 3 }, { line: 0, unit: 0 })),
+    ).toBe("eigh- Eigh-|eigh-|eighty in");
+    expect(
+      toText(moveWords(lines, [{ line: 0, unit: 4 }], { line: 0, unit: 2 })),
+    ).toBe("Eigh-|eigh-|in|eighty eigh-");
+  });
+
   it("keeps a duplicated line apart from its original", () => {
     const copied = duplicateLine(parseText("one two three"), 0);
     const words = [

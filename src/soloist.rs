@@ -26,6 +26,7 @@ const DOWNLOAD_URL: &str =
 const KEY_TARGET: &str = "Lyssna/Soloist";
 #[cfg(not(target_os = "macos"))]
 const KEY_USER: &str = "api-key";
+#[cfg(windows)]
 const SIGNER: &str = "Spotify AB";
 const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
 /// Soloist exits with this once its build is older than 90 days.

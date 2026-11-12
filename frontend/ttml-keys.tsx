@@ -240,8 +240,8 @@ export function KeysDialog({
         </header>
         <div className="ttml-meta-body ttml-settings-body">
           {[
-            ["Timing", "Always"],
-            ["Moving", "Speed", "Layout"],
+            ["Timing", "Always", "Layout"],
+            ["Moving", "Speed"],
             ["Editing"],
           ].map((column) => (
             <div key={column[0]} className="ttml-settings-col">

@@ -4329,6 +4329,30 @@ test("animated covers stay off until turned on, then play over the artwork", asy
   expect(asked.uri).toMatch(/^spotify:track:/);
   expect(asked).toHaveProperty("albumName");
 
+
+  await page.locator(".album-link").first().click();
+  await page.evaluate((track) => {
+    const host = (window as any).__clientTest;
+    const command = host.commands
+      .filter((call: any) => call.command === "browse")
+      .at(-1);
+    host.emit({
+      type: "browse_info",
+      generation: command.args.generation,
+      info: {
+        key: command.args.key,
+        title: "Test album",
+        subtitle: "Test artist",
+        images: track.album.images,
+        albums: [],
+      },
+    });
+  }, track);
+  await expect(page.locator(".hero-cover .cover-motion")).toHaveAttribute(
+    "src",
+    "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
+  );
+
   await showLyrics(page);
   await expect(page.locator(".lyrics-media .cover-motion")).toHaveCount(1);
   expect(await lookups()).toBe(1);

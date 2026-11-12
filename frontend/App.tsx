@@ -149,6 +149,7 @@ import {
   VerifiedBadge,
   usePosition,
 } from "./components";
+import { useMotionCover } from "./motion-cover";
 import "./styles.css";
 import "./pages.css";
 import "./settings.css";
@@ -3052,6 +3053,17 @@ function App() {
     state.route !== "home" && (!entity?.artist || displayTracks.length > 0);
   const listedTracks =
     entity?.artist && !popularMore ? displayTracks.slice(0, 5) : displayTracks;
+  const albumId = state.route.startsWith("album:") ? state.route.slice(6) : "";
+  const albumTrack = albumId
+    ? displayTracks.find((track) => track.uri.startsWith("spotify:track:"))
+    : undefined;
+  const heroMotion = useMotionCover(
+    albumTrack && {
+      ...albumTrack,
+      album: { ...albumTrack.album, id: albumId, name: entity?.title ?? "" },
+    },
+    !!state.settings.animated_covers && !state.settings.reduce_motion,
+  );
   const rows = useRowWindow(
     mainScroll,
     trackTable,
@@ -4199,6 +4211,7 @@ function App() {
                           >
                             <Cover
                               images={heroImages}
+                              motion={heroMotion}
                               contextRoute={state.route}
                               contextName={title}
                             />

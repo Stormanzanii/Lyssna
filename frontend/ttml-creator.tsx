@@ -56,6 +56,7 @@ import {
   formatTime,
   fromLyrics,
   insertBlankLine,
+  joinHyphenated,
   keepTimings,
   lineSpan,
   singingAt,
@@ -310,7 +311,7 @@ export function TtmlCreator({
   useEffect(() => {
     if (!track) return;
     const draft = loadDraft(track.uri);
-    setLinesRaw(draft?.lines ?? []);
+    setLinesRaw(joinHyphenated(draft?.lines ?? []));
     setText(draft?.text ?? "");
     setMetadata(draft?.metadata);
     setSavedAt(draft?.savedAt);
@@ -349,7 +350,7 @@ export function TtmlCreator({
     )
       return;
     if (lines.length || text.trim() || loadDraft(track.uri)) return;
-    const seeded = fromLyrics(lyrics);
+    const seeded = joinHyphenated(fromLyrics(lyrics));
     if (!seeded.length) return;
     setLinesRaw(seeded);
     setText(toText(seeded));
@@ -434,7 +435,9 @@ export function TtmlCreator({
   const setLines = useCallback(
     (next: CreatorLine[] | ((previous: CreatorLine[]) => CreatorLine[])) =>
       setLinesRaw((previous) => {
-        const value = typeof next === "function" ? next(previous) : next;
+        const value = joinHyphenated(
+          typeof next === "function" ? next(previous) : next,
+        );
         if (value !== previous) {
           history.current.past = [
             ...history.current.past.slice(-HISTORY_LIMIT),
@@ -1772,8 +1775,7 @@ export function TtmlCreator({
                 disabled={value !== "write" && !lines.length}
                 onClick={() => {
                   setTextMode(false);
-                  if (tab === "preview" && value !== "preview")
-                    selectPlaying();
+                  if (tab === "preview" && value !== "preview") selectPlaying();
                   setTab(value);
                 }}
               >

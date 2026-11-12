@@ -14,6 +14,7 @@ import {
   moveEdge,
   panUnit,
   appendWords,
+  joinHyphenated,
   dropTrailingSpace,
   formatTime,
   fromLyrics,
@@ -655,6 +656,25 @@ describe("TTML Creator word menu", () => {
     expect(
       toText(moveWords(lines, [{ line: 0, unit: 4 }], { line: 0, unit: 2 })),
     ).toBe("Eigh-|eigh-|in|eighty oh");
+  });
+
+  it("joins words saved with a space after a hyphen", () => {
+    const old: CreatorLine[] = [
+      {
+        background: false,
+        opposite: false,
+        units: ["Ooh-", "ooh-", "ooh", "yeah"].map((text) => ({
+          text,
+          joined: false,
+          start: 1,
+          end: 2,
+        })),
+      },
+    ];
+    const fixed = joinHyphenated(old);
+    expect(toText(fixed)).toBe("Ooh-|ooh-|ooh yeah");
+    expect(fixed[0].units[1].start).toBe(1);
+    expect(joinHyphenated(fixed)).toBe(fixed);
   });
 
   it("runs a word left open with a hyphen into the next", () => {

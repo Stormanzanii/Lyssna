@@ -150,6 +150,29 @@ export function parseText(text: string): CreatorLine[] {
 /** "eigh-" runs straight on into the next word, with no space. */
 export const runsOn = (text: string) => /[\p{L}\p{N}’']-$/u.test(text);
 
+/**
+ * Joins every word that follows one left open with a hyphen, fixing drafts
+ * and files written before such words ran on. The same lines come back
+ * when nothing needed joining.
+ */
+export function joinHyphenated(lines: CreatorLine[]): CreatorLine[] {
+  let changed = false;
+  const fixed = lines.map((line) => {
+    if (!line.units.some((unit, index) => openBefore(line.units, index)))
+      return line;
+    changed = true;
+    return {
+      ...line,
+      units: line.units.map((unit, index) =>
+        openBefore(line.units, index) ? { ...unit, joined: true } : unit,
+      ),
+    };
+  });
+  return changed ? fixed : lines;
+}
+const openBefore = (units: CreatorUnit[], index: number) =>
+  index > 0 && !units[index].joined && runsOn(units[index - 1].text);
+
 export function toText(lines: CreatorLine[]): string {
   return lines
     .map((line) => {

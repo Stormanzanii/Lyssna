@@ -1145,6 +1145,14 @@
    under the first two columns. */
 .ttml-settings-body > .ttml-settings-col:nth-child(3) {
   grid-row: 1 / 3;
+  align-self: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+.ttml-settings-body > .ttml-settings-col:nth-child(3) .ttml-settings-group {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.ttml-settings-body > .ttml-settings-col:nth-child(3) .ttml-settings-rows {
+  grid-auto-rows: 1fr;
 }
 .ttml-settings-layout {
   grid-column: 1 / 3;

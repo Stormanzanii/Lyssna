@@ -16139,6 +16139,19 @@ test("TTML Creator spectrogram gives each vocal its own header row", async ({
     const box = await column(text);
     expect(box.y + box.height).toBeGreaterThan(plot.y + plot.height - 2);
   }
+  // Overlapping words in lower rows must not cover the rows above them.
+  for (const text of ["two", "over", "ooh"]) {
+    const box = await head(text);
+    const hit = await page.evaluate(
+      ({ x, y }) =>
+        document
+          .elementFromPoint(x, y)
+          ?.closest(".ttml-spectrum-word")
+          ?.querySelector(".ttml-spectrum-head span")?.textContent,
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hit).toBe(text);
+  }
 });
 
 test("a lyric file dropped on the TTML Creator loads into it with word timings", async ({

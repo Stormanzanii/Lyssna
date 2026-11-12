@@ -1714,9 +1714,13 @@
     inset -1px 0 0 #ffffff40;
 }
 /* Each vocal's header takes its own row; the word still spans the height. */
+/* A word starts at its own row, and lower rows stack on top, so a press
+   on a row's label always reaches that row's word. */
 .ttml-spectrum-word {
   --row: 26px;
-  padding-top: calc(4px + var(--lane, 0) * var(--row));
+  top: calc(var(--lane, 0) * var(--row));
+  z-index: var(--lane, 0);
+  padding-top: 4px;
 }
 .ttml-spectrum-word:has(small) {
   --row: 38px;

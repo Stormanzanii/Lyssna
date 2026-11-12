@@ -36,10 +36,11 @@ export const DEFAULT_KEYS: KeyMap = {
   slower: "[",
   faster: "]",
   normalSpeed: "'",
-  clear: "delete",
+  clear: "c",
 };
-// Arrows, Space, Backspace and Ctrl shortcuts stay fixed.
+// Arrows, Space, Backspace, Delete and Ctrl shortcuts stay fixed.
 const RESERVED = new Set([
+  "delete",
   " ",
   "arrowleft",
   "arrowright",
@@ -62,7 +63,11 @@ export function loadKeys(): KeyMap {
     const saved = JSON.parse(localStorage.getItem(KEYS_STORAGE) ?? "{}");
     const keys = { ...DEFAULT_KEYS };
     for (const [action] of KEY_ACTIONS)
-      if (typeof saved?.[action] === "string" && saved[action])
+      if (
+        typeof saved?.[action] === "string" &&
+        saved[action] &&
+        !RESERVED.has(saved[action])
+      )
         keys[action] = saved[action];
     return keys;
   } catch {
@@ -147,7 +152,7 @@ const EDIT_TIPS: [string, ReactNode][] = [
   ["Add a line below", caps("Enter")],
   [
     "Delete the selected word",
-    [...caps(MODIFIER), plus, ...caps(IS_MAC ? "Backspace" : "Del")],
+    IS_MAC ? [...caps("Cmd"), plus, ...caps("Backspace")] : caps("Del"),
   ],
   ["Split a word into syllables", [<em key="t">type</em>, ...caps("|")]],
   ["Pick several words", modClick("words")],

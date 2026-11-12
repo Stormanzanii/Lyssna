@@ -1088,10 +1088,14 @@ export function TtmlCreator({
       const erase = event.key === "Delete" || event.key === "Backspace";
       const words = groupRef.current,
         gaps = spacesRef.current;
+      const linesPicked = pickedRef.current.size > 0 && !words.length;
       let handled = true;
       if (ctrl && key === "z") (event.shiftKey ? redo : undo)();
       else if (ctrl && key === "y") redo();
-      else if (ctrl && erase) {
+      else if (
+        (ctrl && erase) ||
+        (!ctrl && event.key === "Delete" && !linesPicked)
+      ) {
         const next =
           words.length || gaps.length
             ? deletePicked(lines, words, gaps)
@@ -1102,7 +1106,7 @@ export function TtmlCreator({
         setSpaces([]);
       } else if (ctrl && key === "e") wordField.current?.focus();
       else if (ctrl) handled = false;
-      else if (erase && pickedRef.current.size && !words.length) {
+      else if (erase && linesPicked) {
         const next = removeLines(lines, pickedRef.current);
         setLines(next);
         setCursor(clampCursor(next, cursor));

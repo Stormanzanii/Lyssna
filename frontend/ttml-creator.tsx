@@ -2192,7 +2192,7 @@ export function TtmlCreator({
                         key={unitIndex}
                         className={`ttml-unit${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : unit.start !== undefined ? " started" : ""}${selected ? " selected" : ""}${live ? " live" : ""}${inGroup(at) ? " chosen" : ""}${drag?.kind === "word" && ((drag.at.line === lineIndex && drag.at.unit === unitIndex) || (drag.group && inGroup(at))) ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
                         aria-label={unit.text}
-                        title={`Double-click to replay, right-click for word options, ${IS_MAC ? "Cmd+E" : "F2"} to edit, drag to move`}
+                        title={`Double-click to edit, or to replay while playing, right-click for word options, ${IS_MAC ? "Cmd+E" : "F2"} to edit, drag to move`}
                         draggable
                         onDragStart={(event) => dragWords(event, at)}
                         onDragOver={(event) =>
@@ -2226,6 +2226,14 @@ export function TtmlCreator({
                           setCursor(at);
                         }}
                         onDoubleClick={() => {
+                          if (!state.playback.is_playing) {
+                            setCursor(at);
+                            requestAnimationFrame(() => {
+                              wordField.current?.focus();
+                              wordField.current?.select();
+                            });
+                            return;
+                          }
                           if (unit.start === undefined) return;
                           holdLine.current = lineIndex;
                           seek(unit.start - 1000);

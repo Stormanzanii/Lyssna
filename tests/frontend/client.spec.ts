@@ -17102,6 +17102,73 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   ).toHaveAttribute("title", "just");
 });
 
+test("double-clicking a TTML Creator word edits it when paused and replays while playing", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await page.evaluate(() => {
+    (window as any).__clientTest.answers = {
+      parse_lyric_file: {
+        lines: [
+          {
+            text: "hello there",
+            start_ms: 5000,
+            end_ms: 6000,
+            words: [
+              { text: "hello ", start_ms: 5000, end_ms: 5500 },
+              { text: "there", start_ms: 5500, end_ms: 6000 },
+            ],
+            romanization: "",
+            translation: "",
+            background: false,
+            opposite: false,
+          },
+        ],
+        source: "file",
+        instrumental: false,
+        synced: true,
+      },
+    };
+  });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.ttml",
+    mimeType: "application/ttml+xml",
+    buffer: Buffer.from("<tt></tt>"),
+  });
+  const seeks = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) =>
+            entry.command === "player" && entry.args.request.command === "seek",
+        ).length,
+    );
+  const field = creator.locator('input[aria-label="Selected word"]');
+  const before = await seeks();
+  await creator.locator(".ttml-unit").nth(1).dblclick();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("there");
+  expect(await seeks()).toBe(before);
+  await page.keyboard.press("Escape");
+
+  await playLyricTrack(page, true);
+  await creator.locator(".ttml-unit").nth(1).dblclick();
+  await expect.poll(seeks).toBe(before + 1);
+  await expect(field).not.toBeFocused();
+});
+
 test("right-clicking a TTML Creator line opens line actions", async ({
   page,
 }) => {

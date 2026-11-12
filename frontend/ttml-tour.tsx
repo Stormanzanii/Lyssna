@@ -46,7 +46,8 @@ function steps(keys: KeyMap): Step[] {
       body: (
         <>
           Each word gets a start and an end time. Click a word to select it,
-          double-click to replay from it, and drag to move it.
+          double-click to edit it, or to replay from it while the song plays,
+          and drag to move it.
         </>
       ),
     },

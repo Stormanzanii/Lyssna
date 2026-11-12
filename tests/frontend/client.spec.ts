@@ -17169,6 +17169,45 @@ test("double-clicking a TTML Creator word edits it when paused and replays while
   await expect(field).not.toBeFocused();
 });
 
+test("clicking away from Type word here leaves the box", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const box = creator.locator(".ttml-chip-add:visible").first();
+  const card = box.locator("xpath=ancestor::*[contains(@class,'ttml-line')][1]");
+  await box.click();
+  await expect(box).toBeFocused();
+  await card.locator(".ttml-unit").first().click();
+  await expect(box).not.toBeFocused();
+  await box.click();
+  await expect(box).toBeFocused();
+  const edge = (await card.boundingBox())!;
+  await page.mouse.click(edge.x + edge.width - 12, edge.y + edge.height / 2);
+  await expect(box).not.toBeFocused();
+  await box.click();
+  await expect(box).toBeFocused();
+  await page.getByRole("slider", { name: "Song position" }).click();
+  await expect(box).not.toBeFocused();
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  await box.click();
+  await expect(box).toBeFocused();
+  await page
+    .getByRole("region", { name: "Spectrogram" })
+    .locator(".ttml-spectrum-plot")
+    .click();
+  await expect(box).not.toBeFocused();
+});
+
 test("right-clicking a TTML Creator line opens line actions", async ({
   page,
 }) => {

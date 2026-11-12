@@ -554,6 +554,20 @@ export function TtmlCreator({
       ?.focus();
     setFocusLine(null);
   }, [focusLine, lines]);
+  // Word and line drags cancel the press, which would leave the box focused.
+  useEffect(() => {
+    const away = (event: PointerEvent) => {
+      const box = document.activeElement;
+      if (
+        box instanceof HTMLInputElement &&
+        box.classList.contains("ttml-chip-add") &&
+        !box.contains(event.target as Node)
+      )
+        box.blur();
+    };
+    window.addEventListener("pointerdown", away, true);
+    return () => window.removeEventListener("pointerdown", away, true);
+  }, []);
   const applyText = () => {
     const parsed = keepTimings(lines, parseText(text));
     setLines(parsed);

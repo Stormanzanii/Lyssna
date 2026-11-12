@@ -1887,6 +1887,7 @@
 .ttml-edit-tools {
   display: flex;
   flex-wrap: wrap;
+  align-self: center;
   gap: 6px;
   margin-left: auto;
 }

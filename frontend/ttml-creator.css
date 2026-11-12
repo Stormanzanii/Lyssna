@@ -1137,23 +1137,35 @@
   box-shadow: 0 1px 2px #0006;
 }
 .ttml-settings-body {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 16px;
 }
-/* Each column's last section runs to the bottom, so the columns end level
-   around the Layout switch. */
+/* Editing runs down the right while Layout takes the space it leaves
+   under the first two columns. */
+.ttml-settings-body > .ttml-settings-col:nth-child(3) {
+  grid-row: 1 / 3;
+}
+.ttml-settings-layout {
+  grid-column: 1 / 3;
+  grid-row: 2;
+}
+@media (max-width: 900px) {
+  .ttml-settings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ttml-settings-body > .ttml-settings-col:nth-child(3),
+  .ttml-settings-layout {
+    grid-row: auto;
+    grid-column: auto;
+  }
+}
+.ttml-settings-row .toggle {
+  margin: 0 4px 0 0;
+}
 .ttml-settings-col {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 12px;
-}
-.ttml-settings-col > .ttml-settings-group:last-child {
-  flex: 1;
-  grid-template-rows: auto 1fr;
-}
-.ttml-settings-col > .ttml-settings-group:last-child .ttml-settings-rows {
-  align-content: start;
 }
 .ttml-settings-group {
   display: grid;
@@ -1184,9 +1196,6 @@
   padding: 4px 8px 4px 12px;
   font-size: 13px;
   transition: background 0.15s;
-}
-.ttml-settings-row .toggle {
-  margin: 0 4px 0 0;
 }
 .ttml-settings-row + .ttml-settings-row {
   border-top: 1px solid #ffffff0d;

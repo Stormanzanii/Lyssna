@@ -117,11 +117,11 @@ const caps = (...names: string[]) =>
 const plus = <i key="+">+</i>;
 
 const or = <i key="or">or</i>;
-const modClick = [
+const modClick = (what: string) => [
   ...caps(MODIFIER),
   <i key="/">/</i>,
   ...caps("Shift"),
-  <em key="c">+ click</em>,
+  <em key="c">+ click {what}</em>,
 ];
 
 const FIXED_KEYS: [string, ReactNode][] = [
@@ -156,7 +156,8 @@ const EDIT_TIPS: [string, ReactNode][] = [
     IS_MAC ? [...caps("Cmd"), plus, ...caps("Backspace")] : caps("Del"),
   ],
   ["Split a word into syllables", [<em key="t">type</em>, ...caps("|")]],
-  ["Pick several words or lines", modClick],
+  ["Pick several words", modClick("words")],
+  ["Pick several lines", modClick("a line")],
   ["Move words or lines", <em>Drag</em>],
 ];
 
@@ -239,62 +240,64 @@ export function KeysDialog({
           </button>
         </header>
         <div className="ttml-meta-body ttml-settings-body">
-          {[
-            ["Timing", "Always", "Layout"],
-            ["Moving", "Speed"],
-            ["Editing"],
-          ].map((column) => (
-            <div key={column[0]} className="ttml-settings-col">
-              {column.map((title) =>
-                title === "Layout" ? (
-                  <Rows
-                    key={title}
-                    title={title}
-                    rows={
-                      <label className="ttml-settings-row">
-                        <span>Separate Lyrics, Sync and Preview tabs</span>
-                        <Toggle
-                          label="Separate Lyrics, Sync and Preview tabs"
-                          checked={classic}
-                          onChange={onClassic}
-                        />
-                      </label>
-                    }
+          {[["Timing", "Always"], ["Moving", "Speed"], ["Editing"]].map(
+            (column) => (
+              <div key={column[0]} className="ttml-settings-col">
+                {column.map((title) =>
+                  title === "Editing" ? (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={comboRows(EDIT_TIPS)}
+                    />
+                  ) : title === "Always" ? (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={comboRows(FIXED_KEYS)}
+                    />
+                  ) : (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={GROUPS[title].map((action) => (
+                        <div key={action} className="ttml-settings-row">
+                          <span>{LABELS[action]}</span>
+                          <button
+                            className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
+                            aria-label={`${LABELS[action]} key`}
+                            title="Click, then press a new key"
+                            onClick={() =>
+                              setListening(listening === action ? null : action)
+                            }
+                          >
+                            {listening === action
+                              ? "Press a key"
+                              : keyLabel(keys[action])}
+                          </button>
+                        </div>
+                      ))}
+                    />
+                  ),
+                )}
+              </div>
+            ),
+          )}
+          <div className="ttml-settings-layout">
+            <Rows
+              title="Layout"
+              rows={
+                <label className="ttml-settings-row">
+                  <span>Separate Lyrics, Sync and Preview tabs</span>
+                  <Toggle
+                    label="Separate Lyrics, Sync and Preview tabs"
+                    checked={classic}
+                    onChange={onClassic}
                   />
-                ) : title === "Editing" ? (
-                  <Rows key={title} title={title} rows={comboRows(EDIT_TIPS)} />
-                ) : title === "Always" ? (
-                  <Rows
-                    key={title}
-                    title={title}
-                    rows={comboRows(FIXED_KEYS)}
-                  />
-                ) : (
-                  <Rows
-                    key={title}
-                    title={title}
-                    rows={GROUPS[title].map((action) => (
-                      <div key={action} className="ttml-settings-row">
-                        <span>{LABELS[action]}</span>
-                        <button
-                          className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
-                          aria-label={`${LABELS[action]} key`}
-                          title="Click, then press a new key"
-                          onClick={() =>
-                            setListening(listening === action ? null : action)
-                          }
-                        >
-                          {listening === action
-                            ? "Press a key"
-                            : keyLabel(keys[action])}
-                        </button>
-                      </div>
-                    ))}
-                  />
-                ),
-              )}
-            </div>
-          ))}
+                </label>
+              }
+            />
+          </div>
         </div>
         <footer className="ttml-meta-actions">
           <span className="ttml-settings-note">

@@ -448,16 +448,20 @@ export function moveEdge(
   at: Cursor,
   edge: "start" | "end",
   time: number,
+  detach = false,
 ): CreatorLine[] {
   const units = lines[at.line]?.units;
   const unit = units?.[at.unit];
   if (!unit || unit.start === undefined || unit.end === undefined) return lines;
   const before = units[at.unit - 1];
   const after = units[at.unit + 1];
+  // Detached, a touching neighbour stays where it is and the edge can only
+  // pull away from it, leaving a gap.
   const shared =
-    edge === "start"
+    !detach &&
+    (edge === "start"
       ? before?.end !== undefined && before.end === unit.start
-      : after?.start !== undefined && after.start === unit.end;
+      : after?.start !== undefined && after.start === unit.end);
   const [low, high] =
     edge === "start"
       ? [
@@ -494,6 +498,7 @@ export function panUnit(
   lines: CreatorLine[],
   at: Cursor,
   time: number,
+  detach = false,
 ): CreatorLine[] {
   const units = lines[at.line]?.units;
   const unit = units?.[at.unit];
@@ -501,8 +506,10 @@ export function panUnit(
   const length = unit.end - unit.start;
   const before = units[at.unit - 1];
   const after = units[at.unit + 1];
-  const sharedBefore = before?.end !== undefined && before.end === unit.start;
-  const sharedAfter = after?.start !== undefined && after.start === unit.end;
+  const sharedBefore =
+    !detach && before?.end !== undefined && before.end === unit.start;
+  const sharedAfter =
+    !detach && after?.start !== undefined && after.start === unit.end;
   const low = sharedBefore
     ? (before.start ?? 0) + SHORTEST_MS
     : (before?.end ?? before?.start ?? 0);

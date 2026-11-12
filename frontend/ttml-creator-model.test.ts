@@ -285,6 +285,29 @@ describe("TTML Creator card editing", () => {
       [600, 900],
     ]);
     expect(moveEdge(apart, { line: 0, unit: 0 }, "start", -50)).toBe(apart);
+
+    expect(
+      times(moveEdge(shared, { line: 0, unit: 1 }, "start", 700, true)),
+    ).toEqual([
+      [0, 500],
+      [700, 900],
+    ]);
+    expect(
+      times(moveEdge(shared, { line: 0, unit: 1 }, "start", 300, true)),
+    ).toEqual([
+      [0, 500],
+      [500, 900],
+    ]);
+    expect(
+      times(moveEdge(shared, { line: 0, unit: 0 }, "end", 350, true)),
+    ).toEqual([
+      [0, 350],
+      [500, 900],
+    ]);
+    expect(times(panUnit(shared, { line: 0, unit: 1 }, 650, true))).toEqual([
+      [0, 500],
+      [650, 1050],
+    ]);
   });
 
   it("slides a syllable, stretching neighbours that share its edges", () => {

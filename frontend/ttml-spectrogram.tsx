@@ -517,10 +517,11 @@ export function TtmlSpectrogram({
         Math.abs(((time - position) / 1000) * zoom) < SNAP_PX
       )
         time = position;
+      // Alt drags the word or edge free of the syllable touching it.
       latest =
         drag.edge === "word"
-          ? panUnit(lines, drag.at, time)
-          : moveEdge(lines, drag.at, drag.edge, time);
+          ? panUnit(lines, drag.at, time, event.altKey)
+          : moveEdge(lines, drag.at, drag.edge, time, event.altKey);
       setPreview(latest);
     };
     const up = () => {

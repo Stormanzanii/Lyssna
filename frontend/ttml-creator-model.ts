@@ -645,9 +645,18 @@ export function breakLine(
   ];
 }
 
+// Picked words are found by identity, so the copy needs its own words or
+// an edit to either line would land on both.
 export const duplicateLine = (lines: CreatorLine[], index: number) =>
   lines[index]
-    ? [...lines.slice(0, index + 1), lines[index], ...lines.slice(index + 1)]
+    ? [
+        ...lines.slice(0, index + 1),
+        {
+          ...lines[index],
+          units: lines[index].units.map((unit) => ({ ...unit })),
+        },
+        ...lines.slice(index + 1),
+      ]
     : lines;
 
 export function toggleJoin(lines: CreatorLine[], at: Cursor): CreatorLine[] {

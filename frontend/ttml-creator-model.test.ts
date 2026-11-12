@@ -602,6 +602,20 @@ describe("TTML Creator word menu", () => {
     expect(breakLine(lines, { line: 0, unit: 0 }, false)).toBe(lines);
     expect(toText(duplicateLine(parseText("a\nb"), 0))).toBe("a\na\nb");
   });
+
+  it("keeps a duplicated line apart from its original", () => {
+    const copied = duplicateLine(parseText("one two three"), 0);
+    const words = [
+      { line: 1, unit: 0 },
+      { line: 1, unit: 1 },
+    ];
+    expect(toText(deletePicked(copied, words, []))).toBe(
+      "one two three\nthree",
+    );
+    expect(toText(moveWords(copied, words, { line: 0, unit: 0 }))).toBe(
+      "one two one two three\nthree",
+    );
+  });
 });
 
 describe("TTML Creator metadata", () => {

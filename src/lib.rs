@@ -37,6 +37,7 @@ mod macos_audio;
 #[cfg(feature = "desktop")]
 pub mod media;
 pub mod model;
+pub mod motion_cover;
 pub mod native;
 pub mod native_browse;
 mod native_login;

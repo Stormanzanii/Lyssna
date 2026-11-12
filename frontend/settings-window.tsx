@@ -1327,6 +1327,12 @@ export function SettingsWindow({
           "video background",
         ),
         flag(
+          "animated_covers",
+          "Animated covers",
+          "Play Apple Music's animated album covers where an album has one. Lyssna looks each album up on Apple Music, so Apple sees which albums you play.",
+          "motion artwork animated album cover video apple music",
+        ),
+        flag(
           "npv_ambience",
           "Dynamic background in Now playing",
           "Draw the moving artwork, or the Canvas, behind the Now playing panel.",

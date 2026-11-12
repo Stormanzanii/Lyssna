@@ -194,6 +194,8 @@ pub struct Settings {
     /// "dark", "light" or "system".
     pub theme: String,
     pub canvas_lyrics: bool,
+    /// Apple Music's animated album covers, looked up per album.
+    pub animated_covers: bool,
     /// The Now playing panel draws the moving artwork behind itself.
     pub npv_ambience: bool,
     /// The full screen seek bar is frosted glass with a glowing fill.
@@ -368,6 +370,7 @@ impl Default for Settings {
             liquid_glass: false,
             theme: "dark".into(),
             canvas_lyrics: true,
+            animated_covers: false,
             npv_ambience: true,
             glass_seek: true,
             space_gravity: false,

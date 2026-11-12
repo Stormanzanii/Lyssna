@@ -64,6 +64,7 @@ import type { AppState } from "./state";
 import { activeLines, endsOnRight, formatTime } from "./state";
 import { PlaybackClock } from "./playback-clock";
 import { rpc } from "./bridge";
+import { useMotionCover } from "./motion-cover";
 import { CreditsDialog } from "./credits-dialog";
 import {
   PROFILE_WINDOW,
@@ -124,6 +125,7 @@ export function Cover({
   contextRoute,
   contextName,
   fade = false,
+  motion,
 }: {
   images?: { url: string; width?: number | null }[];
   className?: string;
@@ -132,6 +134,8 @@ export function Cover({
   contextName?: string;
   /** Crossfade from the old artwork when it changes (Cover Art Animation). */
   fade?: boolean;
+  /** An animated cover video that plays over the artwork once it can. */
+  motion?: string | null;
 }) {
   const src = imageOf(images);
   const picture = useRef<HTMLImageElement>(null);
@@ -209,6 +213,7 @@ export function Cover({
         />
       )}
       {failed && <Music2 aria-hidden="true" />}
+      {motion && <MotionVideo key={motion} url={motion} />}
     </>
   ) : (
     <Music2 aria-hidden="true" />
@@ -235,6 +240,52 @@ export function Cover({
 }
 import { Ambience } from "./ambience";
 export { Ambience };
+
+// Plays only while on screen and the window is visible, and stays hidden
+// until its first frame so the still artwork never flashes black.
+function MotionVideo({ url }: { url: string }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [shown, setShown] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    // Set here rather than as a prop so the cleanup's release can be undone.
+    element.src = url;
+    let visible = false;
+    const update = () => {
+      if (visible && !document.hidden) void element.play().catch(() => {});
+      else element.pause();
+    };
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? false;
+      update();
+    });
+    observer.observe(element);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", update);
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+    };
+  }, [url]);
+  if (failed) return null;
+  return (
+    <video
+      ref={video}
+      className={`cover-motion${shown ? " shown" : ""}`}
+      muted
+      loop
+      playsInline
+      preload="auto"
+      aria-hidden="true"
+      onPlaying={() => setShown(true)}
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export function Marquee({
   children,
@@ -1480,6 +1531,10 @@ function SongLyricsPage({
   // This page renders every frame; stable click handlers stop React from
   // rewriting them each time.
   const playing = state.playback.is_playing;
+  const motion = useMotionCover(
+    track,
+    !!state.settings.animated_covers && !state.settings.reduce_motion,
+  );
   const previousSong = useCallback(
     () => onPlayer({ command: "previous" }),
     [onPlayer],
@@ -1796,6 +1851,7 @@ function SongLyricsPage({
                 <Cover
                   images={track.album.images}
                   fade={coverFade(state.settings)}
+                  motion={motion}
                   onClick={() => onAlbum(track.album)}
                 />
                 {immersive &&
@@ -2117,12 +2173,14 @@ function CanvasArtwork({
   url,
   playing,
   reduceMotion,
+  motion,
   onOpen,
 }: {
   track: Track;
   url?: string;
   playing: boolean;
   reduceMotion: boolean;
+  motion?: string | null;
   onOpen: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -2154,6 +2212,7 @@ function CanvasArtwork({
       <Cover
         images={track.album.images}
         className="now-artwork"
+        motion={motion}
         onClick={onOpen}
       />
     );
@@ -2227,6 +2286,10 @@ export function NowPlaying({
   const next = state.details.queue[0];
   const saved = track && state.saved[track.uri];
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
+  const motion = useMotionCover(
+    track,
+    !!state.settings.animated_covers && !state.settings.reduce_motion,
+  );
   if (state.narrating)
     return (
       <aside className="now-playing dj-view">
@@ -2302,6 +2365,7 @@ export function NowPlaying({
                   url={state.canvas_url}
                   playing={state.playback.is_playing}
                   reduceMotion={state.settings.reduce_motion}
+                  motion={motion}
                   onOpen={() => onAlbum(track.album)}
                 />
                 <div className="canvas-hero-shade" />
@@ -2314,6 +2378,7 @@ export function NowPlaying({
                 url={canvasInLyrics ? undefined : state.canvas_url}
                 playing={state.playback.is_playing}
                 reduceMotion={state.settings.reduce_motion}
+                motion={motion}
                 onOpen={() => onAlbum(track.album)}
               />
             )}

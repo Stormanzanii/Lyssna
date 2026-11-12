@@ -150,6 +150,7 @@ export interface Settings {
   liquid_glass?: boolean;
   theme?: "dark" | "light" | "system";
   canvas_lyrics?: boolean;
+  animated_covers?: boolean;
   npv_ambience?: boolean;
   glass_seek?: boolean;
   space_gravity?: boolean;

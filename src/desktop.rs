@@ -2023,6 +2023,42 @@ fn valid_route(key: &str) -> bool {
     })
 }
 #[tauri::command]
+async fn motion_cover(
+    uri: String,
+    album_id: Option<String>,
+    album_name: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Option<crate::motion_cover::MotionCover>, String> {
+    let valid_id = |id: &str| id.len() == 22 && id.bytes().all(|byte| byte.is_ascii_alphanumeric());
+    if !uri.strip_prefix("spotify:track:").is_some_and(valid_id)
+        || album_id.as_deref().is_some_and(|id| !valid_id(id))
+        || album_name.len() > 400
+    {
+        return Err("Invalid track".into());
+    }
+    let inner = state.0.clone();
+    let account = {
+        let snapshot = lock(&inner.snapshot).map_err(error)?;
+        if !snapshot.native_ready {
+            return Ok(None);
+        }
+        snapshot
+            .profile
+            .as_ref()
+            .context("Sign in first")
+            .map_err(error)?
+            .id
+            .clone()
+    };
+    let controls = inner.controls.scoped(&account).map_err(error)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::motion_cover::resolve(&controls, &uri, album_id.as_deref(), &album_name)
+    })
+    .await
+    .map_err(error)?
+    .map_err(error)
+}
+#[tauri::command]
 async fn home(
     timezone: String,
     app: tauri::AppHandle,
@@ -5801,6 +5837,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             cancel_sign_in,
             retry_sign_in,
             prefetch_canvas,
+            motion_cover,
             prefetch_page,
             trim_memory,
             audio_cache_size,

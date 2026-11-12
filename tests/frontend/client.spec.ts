@@ -4286,6 +4286,54 @@ test("the Now playing card fades its top only once lyrics scroll", async ({
     .toMatch(/min\((1[0-9]{2}|[1-9][0-9])px/);
 });
 
+test("animated covers stay off until turned on, then play over the artwork", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    (window as any).__clientTest.answers = {
+      motion_cover: {
+        avc: "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
+        hevc: null,
+      },
+    };
+  });
+  await playLyricTrack(page);
+  const lookups = () =>
+    page.evaluate(
+      () =>
+        (window as any).__clientTest.commands.filter(
+          (entry: any) => entry.command === "motion_cover",
+        ).length,
+    );
+  const video = page.locator(".now-playing .cover-motion");
+  await expect(page.locator(".now-playing .now-artwork")).toBeVisible();
+  expect(await lookups()).toBe(0);
+  await expect(video).toHaveCount(0);
+
+  await openSettings(page, "Effects");
+  const toggle = page.getByLabel("Animated covers");
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.keyboard.press("Escape");
+  await expect(video).toHaveAttribute(
+    "src",
+    "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
+  );
+  const asked = await page.evaluate(
+    () =>
+      (window as any).__clientTest.commands.findLast(
+        (entry: any) => entry.command === "motion_cover",
+      ).args,
+  );
+  expect(asked.uri).toMatch(/^spotify:track:/);
+  expect(asked).toHaveProperty("albumName");
+
+  await showLyrics(page);
+  await expect(page.locator(".lyrics-media .cover-motion")).toHaveCount(1);
+  expect(await lookups()).toBe(1);
+});
+
 test("the lyrics ambience rebuilds after the GPU loses its canvas", async ({
   page,
 }) => {

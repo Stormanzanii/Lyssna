@@ -162,6 +162,7 @@ export const emptyState: AppState = {
     liquid_glass: false,
     theme: "dark",
     canvas_lyrics: true,
+    animated_covers: false,
     npv_ambience: true,
     glass_seek: true,
     space_gravity: false,

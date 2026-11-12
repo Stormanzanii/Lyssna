@@ -829,6 +829,20 @@ impl NativeControls {
         let track = librespot_metadata::Track::try_from(&message)?;
         metadata_track(&track, None).context("Track metadata unavailable")
     }
+    pub fn isrc(&self, uri: &str) -> Result<Option<String>> {
+        use protobuf::Message;
+        let bytes = self.metadata(
+            uri,
+            librespot_protocol::extension_kind::ExtensionKind::TRACK_V4,
+        )?;
+        let message = librespot_protocol::metadata::Track::parse_from_bytes(&bytes)?;
+        Ok(message
+            .external_id
+            .iter()
+            .find(|id| id.type_().eq_ignore_ascii_case("isrc"))
+            .map(|id| id.id().trim().to_ascii_uppercase())
+            .filter(|id| id.len() == 12 && id.chars().all(|c| c.is_ascii_alphanumeric())))
+    }
     fn request_metadata(
         &self,
         uri: &str,

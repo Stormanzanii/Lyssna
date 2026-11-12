@@ -615,16 +615,25 @@ describe("TTML Creator word menu", () => {
   });
 
   it("drops a word between syllables as a syllable of that word", () => {
-    const lines = parseText("Eigh-|eigh-|eighty eigh- in");
+    const lines = parseText("Eigh-|eigh-|eighty oh in");
     expect(
       toText(moveWord(lines, { line: 0, unit: 3 }, { line: 0, unit: 1 })),
-    ).toBe("Eigh-|eigh-|eigh-|eighty in");
+    ).toBe("Eigh-|oh|eigh-|eighty in");
     expect(
       toText(moveWord(lines, { line: 0, unit: 3 }, { line: 0, unit: 0 })),
-    ).toBe("eigh- Eigh-|eigh-|eighty in");
+    ).toBe("oh Eigh-|eigh-|eighty in");
     expect(
       toText(moveWords(lines, [{ line: 0, unit: 4 }], { line: 0, unit: 2 })),
-    ).toBe("Eigh-|eigh-|in|eighty eigh-");
+    ).toBe("Eigh-|eigh-|in|eighty oh");
+  });
+
+  it("runs a word left open with a hyphen into the next", () => {
+    expect(toText(parseText("eigh- eighty, ooh - yeah"))).toBe(
+      "eigh-|eighty, ooh - yeah",
+    );
+    const typed = appendWords(parseText("Eigh-"), 0, "eighty");
+    expect(toText(typed)).toBe("Eigh-|eighty");
+    expect(toText(appendWords(typed, 0, "now"))).toBe("Eigh-|eighty now");
   });
 
   it("keeps a duplicated line apart from its original", () => {

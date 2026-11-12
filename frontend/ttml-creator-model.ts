@@ -134,13 +134,21 @@ export function parseText(text: string): CreatorLine[] {
         .flatMap(symbolPieces)
         .flatMap(repeatedPieces)
         .forEach((text, index) =>
-          units.push({ text, joined: index > 0 && units.length > 0 }),
+          units.push({
+            text,
+            joined:
+              units.length > 0 &&
+              (index > 0 || runsOn(units[units.length - 1].text)),
+          }),
         );
     }
     if (units.length) lines.push({ units, background, opposite });
   }
   return lines;
 }
+
+/** "eigh-" runs straight on into the next word, with no space. */
+export const runsOn = (text: string) => /[\p{L}\p{N}’']-$/u.test(text);
 
 export function toText(lines: CreatorLine[]): string {
   return lines
@@ -543,11 +551,14 @@ export function appendWords(
   const spaceAfter = /\s$/.test(clean);
   if (!line || (!added.length && (!spaceAfter || line.spaceAfter)))
     return lines;
-  // A leading | continues the last word as a syllable.
+  // A leading | continues the last word as a syllable, as does anything
+  // after a word left open with a hyphen.
+  const last = line.units[line.units.length - 1];
   if (added.length)
     added[0] = {
       ...added[0],
-      joined: !!line.units.length && !line.spaceAfter && /^\|/.test(clean),
+      joined:
+        !!last && !line.spaceAfter && (/^\|/.test(clean) || runsOn(last.text)),
     };
   const { spaceAfter: _, ...rest } = line;
   const next: CreatorLine = { ...rest, units: [...line.units, ...added] };

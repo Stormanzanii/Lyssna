@@ -2817,7 +2817,7 @@ test("timed syllables lift independently and font choices apply separately", asy
             ? 0
             : parseFloat(style.translate.split(" ")[1] ?? "0"),
         scale: style.scale === "none" ? 1 : parseFloat(style.scale),
-        glow: style.textShadow,
+        glow: style.filter,
       };
     });
   const syllable = page.locator(".lyrics-page .lyric-syllable").first(),
@@ -9811,7 +9811,7 @@ test("custom font lyric fill covers tall letters at every sweep position", async
   await expect(line).toHaveCount(1);
   await page.addStyleTag({
     content:
-      ".lyric-line { text-shadow:none !important; filter:none !important; transition:none !important } .lyric-syllable { text-shadow:none !important; translate:none !important; scale:none !important }",
+      ".lyric-line { text-shadow:none !important; filter:none !important; transition:none !important } .lyric-syllable { text-shadow:none !important; filter:none !important; translate:none !important; scale:none !important }",
   });
   await line.screenshot({
     path: "target/diagnostics/custom-font-fill-before.png",

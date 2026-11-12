@@ -3486,9 +3486,11 @@ small {
    whose 20% soft edge sweeps across as it is sung. LyricAnimator sets the
    edge and a white glow while a line is sung or settling; other text rests
    fully unsung or fully sung. */
+/* A filter, not text-shadow: Chromium re-lays out the page for every
+   text-shadow change, which the per-frame glow made hundreds a second. */
 .lyric-syllable:not(.emphasis),
 .lyric-letter {
-  text-shadow: var(--glow, none);
+  filter: drop-shadow(var(--glow));
 }
 /* Italics and display fonts can paint beyond their advance width. Keep that
    ink inside the gradient without widening syllables or changing line wraps.

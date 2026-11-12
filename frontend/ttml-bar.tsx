@@ -83,6 +83,7 @@ export function TtmlBar({
   const canvas = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
@@ -108,48 +109,77 @@ export function TtmlBar({
     context.clearRect(0, 0, width, height);
     const span = Math.max(1, duration);
     const x = (ms: number) => (Math.min(span, Math.max(0, ms)) / span) * width;
-    // Like AMLL: each timed line shades the waveform full height, with a
-    // hairline at its edges so neighbouring lines stay apart.
-    const regions = spans
-      .map((line) => ({
-        left: x(line.start),
-        right: Math.max(x(line.start) + 1, x(line.end)),
-        current: line.current,
-      }))
-      .sort((a, b) => a.left - b.left);
+    // A filled envelope with the played part tinted and the current line
+    // shaded, after the AMLL TTML Tool's timeline.
     const played = x(shown);
     const middle = height / 2;
-    const reach = middle - 3;
-    const step = 3;
-    let region = 0;
-    for (let left = 0; left < width; left += step) {
-      let loud = 0.03;
+    const reach = middle - 4;
+    const columns = Math.ceil(width);
+    const level = new Float32Array(columns + 1);
+    for (let left = 0; left <= columns; left++) {
+      let loud = 0;
       if (peaks?.length) {
         const from = Math.floor((left / width) * peaks.length);
         const to = Math.max(
           from + 1,
-          Math.floor(((left + step) / width) * peaks.length),
+          Math.floor(((left + 1) / width) * peaks.length),
         );
         for (let index = from; index < to && index < peaks.length; index++)
           loud = Math.max(loud, peaks[index] / 255);
       }
-      while (region < regions.length && regions[region].right <= left) region++;
-      const inside = region < regions.length && regions[region].left <= left;
-      const half = Math.max(1, loud * reach);
-      context.fillStyle =
-        left < played ? "#ffffffe6" : inside ? "#ffffff99" : "#ffffff33";
-      context.fillRect(left, middle - half, step - 1, half * 2);
+      level[left] = loud;
     }
-    for (const region of regions) {
-      context.fillStyle = region.current ? "#1ed76033" : "#ffffff1a";
-      context.fillRect(region.left, 0, region.right - region.left, height);
-      context.fillStyle = region.current ? "#1ed760" : "#ffffffa6";
-      context.fillRect(region.left, 0, 1, height);
-      context.fillRect(region.right - 1, 0, 1, height);
+    context.beginPath();
+    context.moveTo(0, middle);
+    for (let left = 0; left <= columns; left++) {
+      const near =
+        (level[Math.max(0, left - 1)] +
+          level[left] * 2 +
+          level[Math.min(columns, left + 1)]) /
+        4;
+      context.lineTo(left, middle - Math.max(0.5, near * reach));
     }
-    context.fillStyle = "#fff";
+    for (let left = columns; left >= 0; left--) {
+      const near =
+        (level[Math.max(0, left - 1)] +
+          level[left] * 2 +
+          level[Math.min(columns, left + 1)]) /
+        4;
+      context.lineTo(left, middle + Math.max(0.5, near * reach));
+    }
+    context.closePath();
+    context.fillStyle = "#1ed76066";
+    context.fill();
+    context.fillStyle = "#1ed7601f";
+    context.fillRect(0, 0, played, height);
+    for (const line of spans) {
+      if (!line.current) continue;
+      const left = x(line.start);
+      const right = Math.max(left + 1, x(line.end));
+      context.fillStyle = "#1ed76033";
+      context.fillRect(left, 0, right - left, height);
+      context.fillStyle = "#1ed76099";
+      context.fillRect(left, 0, 1, height);
+      context.fillRect(right - 1, 0, 1, height);
+    }
+    if (hover !== null && dragging === null) {
+      context.fillStyle = "#1ed760a6";
+      context.fillRect(Math.round(hover), 0, 1, height);
+      const label = formatTime((hover / width) * span);
+      context.font = '11px "Cascadia Mono", Consolas, monospace';
+      const box = context.measureText(label).width + 10;
+      const at = hover + box + 4 > width ? hover - box - 4 : hover + 4;
+      context.fillStyle = "#000000b3";
+      context.beginPath();
+      context.roundRect(at, 4, box, 16, 4);
+      context.fill();
+      context.fillStyle = "#fff";
+      context.textBaseline = "middle";
+      context.fillText(label, at + 5, 12.5);
+    }
+    context.fillStyle = "#1ed760";
     context.fillRect(Math.round(played) - 1, 0, 2, height);
-  }, [width, peaks, spans, shown, duration, spectrogram]);
+  }, [width, peaks, spans, shown, duration, spectrogram, hover, dragging]);
 
   const timeAt = (clientX: number) => {
     const box = canvas.current!.getBoundingClientRect();
@@ -250,9 +280,13 @@ export function TtmlBar({
             event.currentTarget.setPointerCapture(event.pointerId);
             setDragging(timeAt(event.clientX));
           }}
-          onPointerMove={(event) =>
-            dragging !== null && setDragging(timeAt(event.clientX))
-          }
+          onPointerMove={(event) => {
+            setHover(
+              event.clientX - event.currentTarget.getBoundingClientRect().left,
+            );
+            if (dragging !== null) setDragging(timeAt(event.clientX));
+          }}
+          onPointerLeave={() => setHover(null)}
           onPointerUp={(event) => {
             if (dragging === null) return;
             onSeek(timeAt(event.clientX));

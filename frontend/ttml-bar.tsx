@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -60,15 +66,51 @@ export function TtmlBar({
   song: ReactNode;
 }) {
   const [panel, setPanel] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
+  // Like AMLL's tool, hovering the button shows the panel too; a click
+  // pins it open.
+  const [hovered, setHovered] = useState(false);
+  const leaving = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pressing = useRef(false);
+  const hoverProps = {
+    onPointerEnter: (event: ReactPointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      clearTimeout(leaving.current);
+      setHovered(true);
+    },
+    onPointerLeave: (event: ReactPointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      clearTimeout(leaving.current);
+      const close = () => {
+        // A slider dragged past the panel's edge keeps it open until let go.
+        if (pressing.current) leaving.current = setTimeout(close, 150);
+        else setHovered(false);
+      };
+      leaving.current = setTimeout(close, 250);
+    },
+  };
   useEffect(() => {
-    if (!panel) return;
+    const release = () => (pressing.current = false);
+    window.addEventListener("pointerup", release, true);
+    return () => {
+      window.removeEventListener("pointerup", release, true);
+      clearTimeout(leaving.current);
+    };
+  }, []);
+  const panelShown = panel || hovered;
+  const root = useRef<HTMLDivElement>(null);
+  const closePanel = () => {
+    clearTimeout(leaving.current);
+    setHovered(false);
+    setPanel(false);
+  };
+  useEffect(() => {
+    if (!panelShown) return;
     const away = (event: PointerEvent) =>
-      !root.current?.contains(event.target as Node) && setPanel(false);
+      !root.current?.contains(event.target as Node) && closePanel();
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      setPanel(false);
+      closePanel();
     };
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", escape, true);
@@ -76,7 +118,7 @@ export function TtmlBar({
       window.removeEventListener("pointerdown", away, true);
       window.removeEventListener("keydown", escape, true);
     };
-  }, [panel]);
+  }, [panelShown]);
   const fill = (value: number, min: number, max: number) => ({
     ["--fill" as string]: `${((value - min) / (max - min)) * 100}%`,
   });
@@ -190,11 +232,13 @@ export function TtmlBar({
   };
   return (
     <div className={`ttml-bar${spectrogram ? " spectral" : ""}`} ref={root}>
-      {panel && (
+      {panelShown && (
         <div
           className="ttml-bar-panel"
           role="dialog"
           aria-label="Playback controls"
+          {...hoverProps}
+          onPointerDown={() => (pressing.current = true)}
         >
           <div className="ttml-bar-panel-row">
             <strong>Playback speed</strong>
@@ -244,11 +288,15 @@ export function TtmlBar({
         </div>
       )}
       <button
-        className={`ttml-bar-round${panel ? " active" : ""}`}
+        className={`ttml-bar-round${panelShown ? " active" : ""}`}
         aria-label="Playback controls"
-        aria-expanded={panel}
+        aria-expanded={panelShown}
         title="Speed and volume"
-        onClick={() => setPanel(!panel)}
+        {...hoverProps}
+        onClick={() => {
+          setHovered(false);
+          setPanel(!panel);
+        }}
       >
         <Music2 size={16} />
       </button>

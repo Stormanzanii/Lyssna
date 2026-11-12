@@ -15869,6 +15869,21 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect(controls.locator("output").first()).toHaveText("0.50×");
   await page.getByRole("button", { name: "Playback controls" }).click();
   await expect(controls).toHaveCount(0);
+  await page.mouse.move(5, 5);
+  await page.getByRole("button", { name: "Playback controls" }).hover();
+  await expect(controls).toBeVisible();
+  const panelBox = (await controls.boundingBox())!;
+  await page.mouse.move(
+    panelBox.x + panelBox.width / 2,
+    panelBox.y + panelBox.height / 2,
+    { steps: 8 },
+  );
+  await page.waitForTimeout(400);
+  await expect(controls).toBeVisible();
+  await controls.getByRole("button", { name: "1.25×" }).click();
+  await expect.poll(() => last("playback_speed")).toEqual({ percent: 125 });
+  await page.mouse.move(5, 5);
+  await expect(controls).toHaveCount(0);
 
   const requests = () =>
     page.evaluate(() =>

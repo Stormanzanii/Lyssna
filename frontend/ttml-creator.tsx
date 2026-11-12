@@ -2,6 +2,7 @@ import {
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -45,6 +46,7 @@ import {
   breakLine,
   clampCursor,
   clearAll,
+  toLyrics,
   clearTiming,
   duplicateLine,
   editUnit,
@@ -152,6 +154,8 @@ const SPECTROGRAM_KEY = "lyssna.ttml-spectrogram";
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
 const OFFSET_KEY = "lyssna.ttml-offset";
+const CLASSIC_KEY = "lyssna.ttml-classic-tabs";
+type Tab = "write" | "sync" | "preview";
 const HISTORY_LIMIT = 200;
 
 type Drag =
@@ -235,6 +239,7 @@ export function TtmlCreator({
   onApply,
   onParse,
   notify,
+  renderPreview,
   barSlot,
   onShowPlayer,
   onClose,
@@ -250,6 +255,7 @@ export function TtmlCreator({
     durationMs: number,
   ) => Promise<Lyrics>;
   notify: (message: string, error?: boolean) => void;
+  renderPreview?: (lyrics: Lyrics) => ReactNode;
   /** Where the creator's own bar replaces the player bar. */
   barSlot?: HTMLElement | null;
   onShowPlayer?: () => void;
@@ -457,6 +463,17 @@ export function TtmlCreator({
   }, []);
 
   const [textMode, setTextMode] = useState(false);
+  const [classic, setClassic] = useState(
+    () => readStorage(CLASSIC_KEY) === "1",
+  );
+  const [tab, setTab] = useState<Tab>("write");
+  const showSync = !classic || tab === "sync";
+  const showEdit = !classic || tab === "write";
+  const previewing = classic && tab === "preview";
+  const preview = useMemo(
+    () => (previewing ? toLyrics(lines) : null),
+    [previewing, lines],
+  );
   // Word starts picked with Ctrl or Shift, dragged as one bunch.
   const [group, setGroup] = useState<Cursor[]>([]);
   const groupRef = useRef(group);
@@ -1057,7 +1074,7 @@ export function TtmlCreator({
   const stateRef = useRef({ lines, cursor });
   stateRef.current = { lines, cursor };
   const wordField = useRef<HTMLInputElement>(null);
-  const editable = !textMode && lines.length > 0;
+  const editable = !textMode && lines.length > 0 && !previewing;
   const selectedLine = lines[cursor.line];
   const selectedUnit = selectedLine?.units[cursor.unit];
   // Enter keeps an edit and Escape drops it; either way the keys go back
@@ -1128,6 +1145,7 @@ export function TtmlCreator({
         seek(read() - 3000);
       else if (event.key === "ArrowRight" && event.shiftKey)
         seek(read() + 3000);
+      else if (!showSync && !event.key.startsWith("Arrow")) handled = false;
       else {
         const arrows: Record<string, KeyAction> = {
           ArrowLeft: "previous",
@@ -1188,6 +1206,7 @@ export function TtmlCreator({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [
     editable,
+    showSync,
     here,
     tap,
     read,
@@ -1591,6 +1610,31 @@ export function TtmlCreator({
           <strong title={track.name}>{track.name}</strong>
           <span>{track.artists.map((artist) => artist.name).join(", ")}</span>
         </div>
+        {classic && (
+          <div className="ttml-tabs" role="tablist">
+            {(
+              [
+                ["write", "Lyrics"],
+                ["sync", "Sync"],
+                ["preview", "Preview"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                role="tab"
+                aria-selected={tab === value}
+                className={tab === value ? "active" : ""}
+                disabled={value !== "write" && !lines.length}
+                onClick={() => {
+                  setTextMode(false);
+                  setTab(value);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="ttml-actions">
           <span className="ttml-saved">
             {savedAt ? `Saved ${savedLabel(savedAt)}` : "Not saved yet"}
@@ -1724,188 +1768,203 @@ export function TtmlCreator({
         </div>
       )}
 
+      {previewing && !textMode && (
+        <div className="ttml-preview">
+          {preview?.lines.length && renderPreview ? (
+            renderPreview(preview)
+          ) : (
+            <p className="ttml-hint">Time some words to see them here.</p>
+          )}
+        </div>
+      )}
       {editable && (
         <>
-          <div className="ttml-transport">
-            <button
-              className="ttml-play"
-              onClick={onToggle}
-              aria-label={state.playback.is_playing ? "Pause" : "Play"}
-            >
-              {state.playback.is_playing ? (
-                <Pause size={16} fill="currentColor" />
-              ) : (
-                <Play size={16} fill="currentColor" />
-              )}
-            </button>
-            <span className="ttml-time">{formatTime(position)}</span>
-            <label
-              className="ttml-offset"
-              title="Shift every tap by this much. Negative taps earlier."
-            >
-              Offset
-              <input
-                type="number"
-                step={10}
-                value={offset}
-                aria-label="Tap offset in milliseconds"
-                onChange={(event) => {
-                  const value = Math.max(
-                    -2000,
-                    Math.min(2000, Number(event.target.value) || 0),
-                  );
-                  setOffset(value);
-                  writeStorage(OFFSET_KEY, String(value));
+          {showSync && (
+            <div className="ttml-transport">
+              <button
+                className="ttml-play"
+                onClick={onToggle}
+                aria-label={state.playback.is_playing ? "Pause" : "Play"}
+              >
+                {state.playback.is_playing ? (
+                  <Pause size={16} fill="currentColor" />
+                ) : (
+                  <Play size={16} fill="currentColor" />
+                )}
+              </button>
+              <span className="ttml-time">{formatTime(position)}</span>
+              <label
+                className="ttml-offset"
+                title="Shift every tap by this much. Negative taps earlier."
+              >
+                Offset
+                <input
+                  type="number"
+                  step={10}
+                  value={offset}
+                  aria-label="Tap offset in milliseconds"
+                  onChange={(event) => {
+                    const value = Math.max(
+                      -2000,
+                      Math.min(2000, Number(event.target.value) || 0),
+                    );
+                    setOffset(value);
+                    writeStorage(OFFSET_KEY, String(value));
+                  }}
+                />
+                ms
+              </label>
+              <button
+                className={`ttml-roman-toggle${syncRoman ? " active" : ""}`}
+                aria-pressed={syncRoman}
+                disabled={!lines.some(hasWordRoman)}
+                onClick={() => {
+                  setSyncRoman(!syncRoman);
+                  writeStorage(SYNC_ROMAN_KEY, syncRoman ? null : "1");
                 }}
-              />
-              ms
-            </label>
-            <button
-              className={`ttml-roman-toggle${syncRoman ? " active" : ""}`}
-              aria-pressed={syncRoman}
-              disabled={!lines.some(hasWordRoman)}
-              onClick={() => {
-                setSyncRoman(!syncRoman);
-                writeStorage(SYNC_ROMAN_KEY, syncRoman ? null : "1");
-              }}
-              title={
-                lines.some(hasWordRoman)
-                  ? "Show each word's romanization instead of its text"
-                  : "Fill in word readings or use Auto romanize first"
-              }
-            >
-              <Languages size={15} />
-              Romanization
-            </button>
-            <span className="ttml-progress">
-              {done}/{total} timed
-            </span>
-            <button
-              onClick={undo}
-              title={`Undo (${MODIFIER}+Z)`}
-              aria-label="Undo"
-            >
-              <Undo2 size={15} />
-            </button>
-            <button
-              onClick={redo}
-              title={IS_MAC ? "Redo (Cmd+Shift+Z)" : "Redo (Ctrl+Y)"}
-              aria-label="Redo"
-            >
-              <Redo2 size={15} />
-            </button>
-            <button
-              onClick={() => setLines(clearAll(lines))}
-              disabled={!done}
-              title="Clear every timing"
-              aria-label="Clear every timing"
-            >
-              <RotateCcw size={15} />
-            </button>
-          </div>
-          <div
-            className="ttml-edit-bar"
-            role="toolbar"
-            aria-label="Edit lyrics"
-          >
-            <label className="ttml-field ttml-field-word">
-              <span>
-                Word <kbd>{IS_MAC ? "⌘E" : "F2"}</kbd>
-                {!IS_MAC && <kbd>Ctrl+E</kbd>}
+                title={
+                  lines.some(hasWordRoman)
+                    ? "Show each word's romanization instead of its text"
+                    : "Fill in word readings or use Auto romanize first"
+                }
+              >
+                <Languages size={15} />
+                Romanization
+              </button>
+              <span className="ttml-progress">
+                {done}/{total} timed
               </span>
-              <input
-                ref={wordField}
-                key={`word:${cursor.line}:${cursor.unit}:${selectedUnit?.text ?? ""}`}
-                aria-label="Selected word"
-                defaultValue={selectedUnit?.text ?? ""}
-                placeholder="No word selected"
-                disabled={!selectedUnit}
-                spellCheck={false}
-                onFocus={(event) => event.currentTarget.select()}
-                onBlur={(event) =>
-                  selectedUnit &&
-                  event.target.value !== selectedUnit.text &&
-                  commitWord(cursor, event.target.value)
-                }
-                onKeyDown={leaveField}
-              />
-            </label>
-            <label className="ttml-field">
-              <span>Reading</span>
-              <input
-                key={`reading:${cursor.line}:${cursor.unit}:${selectedUnit?.roman ?? ""}`}
-                aria-label="Reading of the selected word"
-                defaultValue={selectedUnit?.roman ?? ""}
-                placeholder="–"
-                disabled={!selectedUnit}
-                spellCheck={false}
-                onBlur={(event) =>
-                  selectedUnit &&
-                  event.target.value !== (selectedUnit.roman ?? "") &&
-                  setLines(setUnitRoman(lines, cursor, event.target.value))
-                }
-                onKeyDown={leaveField}
-              />
-            </label>
-            {(["translation", "romanization"] as const).map((key) => (
-              <label key={key} className="ttml-field">
+              <button
+                onClick={undo}
+                title={`Undo (${MODIFIER}+Z)`}
+                aria-label="Undo"
+              >
+                <Undo2 size={15} />
+              </button>
+              <button
+                onClick={redo}
+                title={IS_MAC ? "Redo (Cmd+Shift+Z)" : "Redo (Ctrl+Y)"}
+                aria-label="Redo"
+              >
+                <Redo2 size={15} />
+              </button>
+              <button
+                onClick={() => setLines(clearAll(lines))}
+                disabled={!done}
+                title="Clear every timing"
+                aria-label="Clear every timing"
+              >
+                <RotateCcw size={15} />
+              </button>
+            </div>
+          )}
+          {showEdit && (
+            <div
+              className="ttml-edit-bar"
+              role="toolbar"
+              aria-label="Edit lyrics"
+            >
+              <label className="ttml-field ttml-field-word">
                 <span>
-                  {key === "translation" ? "Translation" : "Line romanization"}
+                  Word <kbd>{IS_MAC ? "⌘E" : "F2"}</kbd>
+                  {!IS_MAC && <kbd>Ctrl+E</kbd>}
                 </span>
                 <input
-                  key={`${key}:${cursor.line}:${selectedLine?.[key] ?? ""}`}
-                  aria-label={`${key === "translation" ? "Translation" : "Romanization"} of line ${cursor.line + 1}`}
-                  defaultValue={selectedLine?.[key] ?? ""}
-                  placeholder="None"
-                  disabled={!selectedLine}
+                  ref={wordField}
+                  key={`word:${cursor.line}:${cursor.unit}:${selectedUnit?.text ?? ""}`}
+                  aria-label="Selected word"
+                  defaultValue={selectedUnit?.text ?? ""}
+                  placeholder="No word selected"
+                  disabled={!selectedUnit}
                   spellCheck={false}
+                  onFocus={(event) => event.currentTarget.select()}
                   onBlur={(event) =>
-                    selectedLine &&
-                    event.target.value.trim() !== (selectedLine[key] ?? "") &&
-                    setLines(
-                      setLineText(
-                        lines,
-                        cursor.line,
-                        key,
-                        event.target.value.trim(),
-                      ),
-                    )
+                    selectedUnit &&
+                    event.target.value !== selectedUnit.text &&
+                    commitWord(cursor, event.target.value)
                   }
                   onKeyDown={leaveField}
                 />
               </label>
-            ))}
-            <span className="ttml-edit-tools">
-              <button
-                onClick={startFromLyrics}
-                disabled={!here || !state.lyrics?.lines.length}
-                title="Use the lyrics Lyssna found for this song as a start"
-              >
-                <Wand2 size={15} />
-                Start from current lyrics
-              </button>
-              <button onClick={openText}>
-                <Type size={15} />
-                Edit as text
-              </button>
-              <label
-                className="ttml-import"
-                title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
-              >
-                <Upload size={15} />
-                Import file
-                {importInput}
+              <label className="ttml-field">
+                <span>Reading</span>
+                <input
+                  key={`reading:${cursor.line}:${cursor.unit}:${selectedUnit?.roman ?? ""}`}
+                  aria-label="Reading of the selected word"
+                  defaultValue={selectedUnit?.roman ?? ""}
+                  placeholder="–"
+                  disabled={!selectedUnit}
+                  spellCheck={false}
+                  onBlur={(event) =>
+                    selectedUnit &&
+                    event.target.value !== (selectedUnit.roman ?? "") &&
+                    setLines(setUnitRoman(lines, cursor, event.target.value))
+                  }
+                  onKeyDown={leaveField}
+                />
               </label>
-              <button
-                onClick={() => void autoRomanize()}
-                disabled={romanNote === "Romanizing…"}
-                title="Fill empty word readings for lyrics in any non-Latin script"
-              >
-                <Languages size={15} />
-                Auto romanize
-              </button>
-            </span>
-          </div>
+              {(["translation", "romanization"] as const).map((key) => (
+                <label key={key} className="ttml-field">
+                  <span>
+                    {key === "translation"
+                      ? "Translation"
+                      : "Line romanization"}
+                  </span>
+                  <input
+                    key={`${key}:${cursor.line}:${selectedLine?.[key] ?? ""}`}
+                    aria-label={`${key === "translation" ? "Translation" : "Romanization"} of line ${cursor.line + 1}`}
+                    defaultValue={selectedLine?.[key] ?? ""}
+                    placeholder="None"
+                    disabled={!selectedLine}
+                    spellCheck={false}
+                    onBlur={(event) =>
+                      selectedLine &&
+                      event.target.value.trim() !== (selectedLine[key] ?? "") &&
+                      setLines(
+                        setLineText(
+                          lines,
+                          cursor.line,
+                          key,
+                          event.target.value.trim(),
+                        ),
+                      )
+                    }
+                    onKeyDown={leaveField}
+                  />
+                </label>
+              ))}
+              <span className="ttml-edit-tools">
+                <button
+                  onClick={startFromLyrics}
+                  disabled={!here || !state.lyrics?.lines.length}
+                  title="Use the lyrics Lyssna found for this song as a start"
+                >
+                  <Wand2 size={15} />
+                  Start from current lyrics
+                </button>
+                <button onClick={openText}>
+                  <Type size={15} />
+                  Edit as text
+                </button>
+                <label
+                  className="ttml-import"
+                  title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
+                >
+                  <Upload size={15} />
+                  Import file
+                  {importInput}
+                </label>
+                <button
+                  onClick={() => void autoRomanize()}
+                  disabled={romanNote === "Romanizing…"}
+                  title="Fill empty word readings for lyrics in any non-Latin script"
+                >
+                  <Languages size={15} />
+                  Auto romanize
+                </button>
+              </span>
+            </div>
+          )}
           {romanNote && (
             <p className="ttml-hint" role="status">
               {romanNote}
@@ -2207,6 +2266,12 @@ export function TtmlCreator({
       {savesDialog}
       {editingKeys && (
         <KeysDialog
+          classic={classic}
+          onClassic={(on) => {
+            setClassic(on);
+            setTab("write");
+            writeStorage(CLASSIC_KEY, on ? "1" : null);
+          }}
           keys={keys}
           onChange={changeKeys}
           onClose={() => setEditingKeys(false)}

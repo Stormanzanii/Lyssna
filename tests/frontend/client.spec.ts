@@ -16446,6 +16446,50 @@ test("TTML Creator swaps the player bar for a waveform bar", async ({
   await expect(page.locator(".player-song")).toHaveCount(1);
 });
 
+test("TTML Creator can bring back separate Lyrics, Sync and Preview tabs", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator.getByRole("tab")).toHaveCount(0);
+  await creator.getByRole("button", { name: "Controls", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "Controls" });
+  const body = help.locator(".ttml-meta-body");
+  expect(
+    await body.evaluate((node) => node.scrollHeight - node.clientHeight),
+  ).toBeLessThanOrEqual(0);
+  const toggle = help.getByRole("switch", {
+    name: "Separate Lyrics, Sync and Preview tabs",
+  });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await help.getByRole("button", { name: "Close controls" }).click();
+  const tab = (name: string) => creator.getByRole("tab", { name });
+  await expect(tab("Lyrics")).toHaveAttribute("aria-selected", "true");
+  await expect(creator.getByRole("toolbar", { name: "Edit lyrics" })).toBeVisible();
+  await expect(creator.locator(".ttml-transport")).toHaveCount(0);
+  await tab("Sync").click();
+  await expect(creator.locator(".ttml-transport")).toBeVisible();
+  await expect(creator.getByRole("toolbar", { name: "Edit lyrics" })).toHaveCount(0);
+  await tab("Preview").click();
+  await expect(creator.locator(".ttml-preview")).toContainText("Come & Go");
+  await expect(creator.locator(".ttml-lines")).toHaveCount(0);
+
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(tab("Lyrics")).toHaveAttribute("aria-selected", "true");
+});
+
 test("TTML Creator offers Type word here on the active or hovered line", async ({
   page,
 }) => {

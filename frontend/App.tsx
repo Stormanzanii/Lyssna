@@ -3804,6 +3804,19 @@ function App() {
               barSlot={ttmlBar ? ttmlBarSlot : null}
               onShowPlayer={() => setTtmlPlayerBar(true)}
               onClose={() => setCenter("lyrics")}
+              renderPreview={(lyrics) => (
+                <LyricsPage
+                  state={{ ...state, lyrics, lyric_error: "" }}
+                  onCanvasActive={setCanvasInLyrics}
+                  immersive={immersive}
+                  onPlayer={play}
+                  onAlbum={openAlbum}
+                  onArtist={openArtist}
+                  onImport={() => {}}
+                  onRetry={() => {}}
+                  onSave={save}
+                />
+              )}
               notify={notify}
               onParse={(filename, contents, durationMs) =>
                 rpc<Lyrics>("parse_lyric_file", {

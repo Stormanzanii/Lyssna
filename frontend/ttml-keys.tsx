@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { Keyboard, RotateCcw, X } from "lucide-react";
 import { IS_MAC, MODIFIER } from "./platform";
+import { Toggle } from "./setting-row";
 
 export const KEY_ACTIONS = [
   ["start", "Start word"],
@@ -181,10 +182,14 @@ const comboRows = (rows: [string, ReactNode][]) =>
   ));
 
 export function KeysDialog({
+  classic,
+  onClassic,
   keys,
   onChange,
   onClose,
 }: {
+  classic: boolean;
+  onClassic: (on: boolean) => void;
   keys: KeyMap;
   onChange: (keys: KeyMap) => void;
   onClose: () => void;
@@ -234,49 +239,62 @@ export function KeysDialog({
           </button>
         </header>
         <div className="ttml-meta-body ttml-settings-body">
-          {[["Timing", "Always"], ["Moving", "Speed"], ["Editing"]].map(
-            (column) => (
-              <div key={column[0]} className="ttml-settings-col">
-                {column.map((title) =>
-                  title === "Editing" ? (
-                    <Rows
-                      key={title}
-                      title={title}
-                      rows={comboRows(EDIT_TIPS)}
-                    />
-                  ) : title === "Always" ? (
-                    <Rows
-                      key={title}
-                      title={title}
-                      rows={comboRows(FIXED_KEYS)}
-                    />
-                  ) : (
-                    <Rows
-                      key={title}
-                      title={title}
-                      rows={GROUPS[title].map((action) => (
-                        <div key={action} className="ttml-settings-row">
-                          <span>{LABELS[action]}</span>
-                          <button
-                            className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
-                            aria-label={`${LABELS[action]} key`}
-                            title="Click, then press a new key"
-                            onClick={() =>
-                              setListening(listening === action ? null : action)
-                            }
-                          >
-                            {listening === action
-                              ? "Press a key"
-                              : keyLabel(keys[action])}
-                          </button>
-                        </div>
-                      ))}
-                    />
-                  ),
-                )}
-              </div>
-            ),
-          )}
+          {[
+            ["Timing", "Always", "Layout"],
+            ["Moving", "Speed"],
+            ["Editing"],
+          ].map((column) => (
+            <div key={column[0]} className="ttml-settings-col">
+              {column.map((title) =>
+                title === "Layout" ? (
+                  <Rows
+                    key={title}
+                    title={title}
+                    rows={
+                      <label className="ttml-settings-row">
+                        <span>Separate Lyrics, Sync and Preview tabs</span>
+                        <Toggle
+                          label="Separate Lyrics, Sync and Preview tabs"
+                          checked={classic}
+                          onChange={onClassic}
+                        />
+                      </label>
+                    }
+                  />
+                ) : title === "Editing" ? (
+                  <Rows key={title} title={title} rows={comboRows(EDIT_TIPS)} />
+                ) : title === "Always" ? (
+                  <Rows
+                    key={title}
+                    title={title}
+                    rows={comboRows(FIXED_KEYS)}
+                  />
+                ) : (
+                  <Rows
+                    key={title}
+                    title={title}
+                    rows={GROUPS[title].map((action) => (
+                      <div key={action} className="ttml-settings-row">
+                        <span>{LABELS[action]}</span>
+                        <button
+                          className={`ttml-keycap${listening === action ? " listening" : ""}${keys[action] !== DEFAULT_KEYS[action] ? " custom" : ""}`}
+                          aria-label={`${LABELS[action]} key`}
+                          title="Click, then press a new key"
+                          onClick={() =>
+                            setListening(listening === action ? null : action)
+                          }
+                        >
+                          {listening === action
+                            ? "Press a key"
+                            : keyLabel(keys[action])}
+                        </button>
+                      </div>
+                    ))}
+                  />
+                ),
+              )}
+            </div>
+          ))}
         </div>
         <footer className="ttml-meta-actions">
           <span className="ttml-settings-note">

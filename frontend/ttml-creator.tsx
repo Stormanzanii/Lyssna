@@ -35,6 +35,7 @@ import type { AppState } from "./state";
 import type { Lyrics, PlayerRequest, Track } from "./types";
 import { forgetWorking, markWorking } from "./ttml-working";
 import { IS_MAC, MODIFIER } from "./platform";
+import { TOUR_KEY, TtmlTour } from "./ttml-tour";
 import {
   type CreatorLine,
   type Cursor,
@@ -1067,6 +1068,10 @@ export function TtmlCreator({
   const keysRef = useRef(keys);
   keysRef.current = keys;
   const [editingKeys, setEditingKeys] = useState(false);
+  const [touring, setTouring] = useState(false);
+  // The list holds still during the walkthrough so its highlights stay put.
+  const touringRef = useRef(touring);
+  touringRef.current = touring;
   const changeKeys = useCallback((next: KeyMap) => {
     setKeys(next);
     saveKeys(next);
@@ -1075,6 +1080,16 @@ export function TtmlCreator({
   stateRef.current = { lines, cursor };
   const wordField = useRef<HTMLInputElement>(null);
   const editable = !textMode && lines.length > 0 && !previewing;
+  useEffect(() => {
+    if (!editable || readStorage(TOUR_KEY)) return;
+    // Seen once is enough, even if the walkthrough is never finished.
+    writeStorage(TOUR_KEY, "1");
+    setTouring(true);
+  }, [editable]);
+  const endTour = useCallback(() => {
+    setTouring(false);
+    writeStorage(TOUR_KEY, "1");
+  }, []);
   const selectedLine = lines[cursor.line];
   const selectedUnit = selectedLine?.units[cursor.unit];
   // Enter keeps an edit and Escape drops it; either way the keys go back
@@ -1263,6 +1278,7 @@ export function TtmlCreator({
       clickedLine.current = false;
       return;
     }
+    if (touringRef.current) return;
     centre(cursor.line);
   }, [cursor.line, centre]);
 
@@ -1350,6 +1366,7 @@ export function TtmlCreator({
   useEffect(() => {
     if (
       playingLine < 0 ||
+      touringRef.current ||
       !state.playback.is_playing ||
       Date.now() - scrolledAt.current < 3000
     )
@@ -1360,6 +1377,20 @@ export function TtmlCreator({
     }
     centre(playingLine);
   }, [playingLine, state.playback.is_playing, centre]);
+  const toured = useRef(false);
+  useEffect(() => {
+    if (touring) {
+      toured.current = true;
+      return;
+    }
+    if (!toured.current) return;
+    toured.current = false;
+    centre(
+      state.playback.is_playing && playingLine >= 0 ? playingLine : cursor.line,
+    );
+    // Only the walkthrough closing moves the list here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touring]);
 
   const issues = useMemo(() => problems(lines), [lines]);
   const { done, total } = progress(lines);
@@ -2264,8 +2295,15 @@ export function TtmlCreator({
         />
       )}
       {savesDialog}
+      {touring && editable && <TtmlTour keys={keys} onClose={endTour} />}
       {editingKeys && (
         <KeysDialog
+          onTour={() => {
+            setEditingKeys(false);
+            setTextMode(false);
+            setTab("write");
+            setTouring(true);
+          }}
           classic={classic}
           onClassic={(on) => {
             setClassic(on);

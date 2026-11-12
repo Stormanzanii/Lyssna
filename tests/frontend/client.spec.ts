@@ -761,6 +761,10 @@ async function startClient(
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#9670a7"/></svg>',
     }),
   );
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("tour-test"))
+      localStorage.setItem("lyssna.ttml-tour-done", "1");
+  });
   await page.addInitScript(
     ({ snapshot, track }) => {
       const host = window as any;
@@ -16488,6 +16492,110 @@ test("TTML Creator can bring back separate Lyrics, Sync and Preview tabs", async
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   await expect(tab("Lyrics")).toHaveAttribute("aria-selected", "true");
+});
+
+test("TTML Creator walkthrough opens once, waits for tried keys and reopens from Controls", async ({
+  page,
+}) => {
+  await page.addInitScript(() => sessionStorage.setItem("tour-test", "1"));
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const tour = page.getByRole("dialog", { name: "Walkthrough" });
+  await expect(tour).toContainText("Welcome to the TTML Creator");
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.ttml-tour-done")),
+  ).toBe("1");
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Your lyrics");
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Play and pause");
+  await page.keyboard.press("Space");
+  await expect(tour).toContainText("Time the words");
+  await expect(tour).toContainText("Press F, G or H");
+  // Playing far into the song leaves the list still while the tour is open.
+  const list = creator.locator(".ttml-lines");
+  const still = await list.evaluate((element) => element.scrollTop);
+  await page.evaluate(() => {
+    (window as any).__clientTest.emit({
+      type: "playback",
+      changed: false,
+      observed_at: Date.now(),
+      playback: {
+        is_playing: true,
+        progress_ms: 70_500,
+        shuffle_state: false,
+        repeat_state: "track",
+        device: { name: "Lyssna (test)", id: "local-device", is_active: true },
+        item: {
+          id: "0123456789abcdefghijkl",
+          uri: "spotify:track:0123456789abcdefghijkl",
+          name: "Come & Go (with Marshmello)",
+          artists: [
+            { id: "a", name: "Juice WRLD" },
+            { id: "b", name: "Marshmello" },
+          ],
+          album: { id: "0123456789abcdefghijkl", name: "Album", images: [] },
+          duration_ms: 180000,
+        },
+      },
+    });
+  });
+  await expect(creator.locator(".ttml-line.playing")).toHaveAttribute(
+    "data-line",
+    "20",
+  );
+  await page.waitForTimeout(800);
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(still);
+  // Playback scrolls lines away from the selected word; the card stays.
+  await creator
+    .locator(".ttml-lines")
+    .evaluate((list) => (list.scrollTop = list.scrollHeight));
+  await page.waitForTimeout(400);
+  await expect(tour).toBeInViewport();
+  await tour.getByRole("button", { name: "Back" }).click();
+  await expect(tour).toContainText("Play and pause");
+  await tour.getByRole("button", { name: "Next" }).click();
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Move around");
+  await page.keyboard.press("ArrowRight");
+  await expect(tour).toContainText("Fix mistakes");
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Edit a word");
+  await page.keyboard.press("F2");
+  await expect(tour).toContainText("Word options");
+  await page.keyboard.press("Escape");
+  await tour.getByRole("button", { name: "Close walkthrough" }).click();
+  await expect(tour).toHaveCount(0);
+  // Closing it brings the playing line back into view.
+  await expect(creator.locator('.ttml-line[data-line="20"]')).toBeInViewport();
+  expect(
+    await page.evaluate(() => localStorage.getItem("lyssna.ttml-tour-done")),
+  ).toBe("1");
+
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  await expect(creator).toBeVisible();
+  await expect(tour).toHaveCount(0);
+  await creator.getByRole("button", { name: "Controls", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Controls" })
+    .getByRole("button", { name: "Walkthrough" })
+    .click();
+  await expect(tour).toContainText("1 of 13");
+  for (let step = 1; step < 13; step++)
+    await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Every control");
+  await tour.getByRole("button", { name: "Finish" }).click();
+  await expect(tour).toHaveCount(0);
 });
 
 test("TTML Creator offers Type word here on the active or hovered line", async ({

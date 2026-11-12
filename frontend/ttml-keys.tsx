@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useEffect, useState } from "react";
-import { Keyboard, RotateCcw, X } from "lucide-react";
+import { GraduationCap, Keyboard, RotateCcw, X } from "lucide-react";
 import { IS_MAC, MODIFIER } from "./platform";
 import { Toggle } from "./setting-row";
 
@@ -183,12 +183,14 @@ const comboRows = (rows: [string, ReactNode][]) =>
   ));
 
 export function KeysDialog({
+  onTour,
   classic,
   onClassic,
   keys,
   onChange,
   onClose,
 }: {
+  onTour: () => void;
   classic: boolean;
   onClassic: (on: boolean) => void;
   keys: KeyMap;
@@ -304,6 +306,10 @@ export function KeysDialog({
             Click a key to change it. A key in use swaps over.
           </span>
           <span className="ttml-meta-spacer" />
+          <button className="ttml-meta-quiet" onClick={onTour}>
+            <GraduationCap size={14} />
+            Walkthrough
+          </button>
           <button
             className="ttml-meta-quiet"
             disabled={!changed}

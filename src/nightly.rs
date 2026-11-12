@@ -1106,20 +1106,9 @@ impl<F: Fn(&Report)> Run<F> {
             Box::new(cargo_progress(units)),
             1,
         ) {
-            // Files left by a different Rust, or by a build folder since
-            // moved (as SpotiFlex's was to Lyssna's: build scripts keep
-            // absolute paths), are cleared once; any other failure is the
+            // Stale files are cleared once; any other failure is the
             // source's and is reported as it is.
-            let stale = format!("{error:#}");
-            if ![
-                "E0514",
-                "E0460",
-                "incompatible version of rustc",
-                "failed to read plugin permissions",
-            ]
-            .iter()
-            .any(|sign| stale.contains(sign))
-            {
+            if !stale_build(&format!("{error:#}")) {
                 return Err(error);
             }
             self.command(
@@ -2232,6 +2221,24 @@ fn command_line_tools() -> bool {
         })
 }
 
+/// Files left by a different Rust, by a build folder since moved (as
+/// SpotiFlex's was to Lyssna's: build scripts keep absolute paths), or by a
+/// compiler since updated away: CMake caches the compiler's full path, which
+/// a Visual Studio update removes.
+fn stale_build(error: &str) -> bool {
+    [
+        "E0514",
+        "E0460",
+        "incompatible version of rustc",
+        "failed to read plugin permissions",
+        "is not a full path to an existing compiler tool",
+        "is different than the directory",
+        "does not match the source",
+    ]
+    .iter()
+    .any(|sign| error.contains(sign))
+}
+
 /// A Visual Studio with the C++ build tools.
 #[cfg(windows)]
 fn visual_studio() -> Option<PathBuf> {
@@ -2463,6 +2470,21 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn clears_builds_left_by_updated_compilers() {
+        assert!(stale_build(
+            "The CMAKE_ASM_COMPILER:
+  C:/VC/bin/cl.exe
+  is not a full path to an existing compiler tool."
+        ));
+        assert!(stale_build(
+            "error[E0514]: found crate `serde` compiled by an incompatible version of rustc"
+        ));
+        assert!(!stale_build(
+            "error[E0425]: cannot find value `x` in this scope"
+        ));
+    }
 
     #[test]
     fn a_silent_download_never_blocks_the_build() {

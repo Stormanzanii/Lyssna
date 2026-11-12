@@ -603,6 +603,17 @@ describe("TTML Creator word menu", () => {
     expect(toText(duplicateLine(parseText("a\nb"), 0))).toBe("a\na\nb");
   });
 
+  it("splits typed repeated sounds into joined syllables", () => {
+    const [line] = parseText("Ooh-ooh-ooh yeah");
+    expect(line.units.map((unit) => [unit.text, unit.joined])).toEqual([
+      ["Ooh-", false],
+      ["ooh-", true],
+      ["ooh", true],
+      ["yeah", false],
+    ]);
+    expect(toText([line])).toBe("Ooh-|ooh-|ooh yeah");
+  });
+
   it("keeps a duplicated line apart from its original", () => {
     const copied = duplicateLine(parseText("one two three"), 0);
     const words = [

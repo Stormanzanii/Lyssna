@@ -1,5 +1,5 @@
 import type { Line, Lyrics, Word } from "./types";
-import { symbolPieces } from "./ttml-syllables";
+import { repeatedPieces, symbolPieces } from "./ttml-syllables";
 
 export interface CreatorUnit {
   text: string;
@@ -132,6 +132,7 @@ export function parseText(text: string): CreatorLine[] {
         .split("|")
         .filter(Boolean)
         .flatMap(symbolPieces)
+        .flatMap(repeatedPieces)
         .forEach((text, index) =>
           units.push({ text, joined: index > 0 && units.length > 0 }),
         );

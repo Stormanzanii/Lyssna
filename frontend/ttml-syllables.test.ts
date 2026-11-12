@@ -1,10 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { cutAt, learnFrom, suggestSplit, symbolPieces } from "./ttml-syllables";
+import {
+  cutAt,
+  learnFrom,
+  repeatedPieces,
+  suggestSplit,
+  symbolPieces,
+} from "./ttml-syllables";
 
 const split = (word: string, learned = {}) =>
   cutAt(word, suggestSplit(word, learned));
 
 describe("TTML syllable splitting", () => {
+  it("splits hyphenated words at their hyphens", () => {
+    expect(split("Ooh-ooh-ooh,")).toEqual(["Ooh-", "ooh-", "ooh,"]);
+    expect(split("twenty-one")).toEqual(["twen", "ty-", "one"]);
+  });
+
+  it("splits only repeated sounds by themselves", () => {
+    expect(repeatedPieces("Ooh-ooh-ooh-ooh-ooh-ooh")).toEqual([
+      "Ooh-",
+      "ooh-",
+      "ooh-",
+      "ooh-",
+      "ooh-",
+      "ooh",
+    ]);
+    expect(repeatedPieces("(na-na-na!")).toEqual(["(na-", "na-", "na!"]);
+    expect(repeatedPieces("twenty-one")).toEqual(["twenty-one"]);
+    expect(repeatedPieces("ooh")).toEqual(["ooh"]);
+  });
+
   it("splits English words by dictionary or speech rules", () => {
     expect(split("everybody")).toEqual(["e", "very", "bo", "dy"]);
     expect(split("here")).toEqual(["here"]);

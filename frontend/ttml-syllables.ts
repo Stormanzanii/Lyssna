@@ -102,10 +102,48 @@ export function suggestSplit(text: string, learned: LearnedSplits): number[] {
   const remembered = learned[learnedKey(text)];
   const inner = remembered
     ? remembered.filter((at) => at > 0 && at < end - start)
-    : /^[\p{L}’']+$/u.test(word) && /[a-z]/i.test(word)
-      ? boundariesFromParts(dictionarySplit(word) ?? speechSplit(word))
-      : [];
+    : HYPHENATED.test(word)
+      ? hyphenSplit(word)
+      : syllableSplit(word);
   return inner.map((at) => at + start);
+}
+
+const HYPHENATED = /^[\p{L}’']+(?:-[\p{L}’']+)+$/u;
+
+function syllableSplit(word: string) {
+  return /^[\p{L}’']+$/u.test(word) && /[a-z]/i.test(word)
+    ? boundariesFromParts(dictionarySplit(word) ?? speechSplit(word))
+    : [];
+}
+
+/** After each hyphen, then within each part, so "twen-ty-one" falls out. */
+function hyphenSplit(word: string) {
+  const out: number[] = [];
+  let at = 0;
+  for (const part of word.split("-")) {
+    if (at) out.push(at);
+    out.push(...syllableSplit(part).map((inside) => inside + at));
+    at += Array.from(part).length + 1;
+  }
+  return out;
+}
+
+/**
+ * A hyphenated run of one sound, like "Ooh-ooh-ooh", as its syllables with
+ * each hyphen kept on the piece before it; anything else stays whole.
+ */
+export function repeatedPieces(text: string): string[] {
+  const { chars, start, end, word } = core(text);
+  if (!HYPHENATED.test(word)) return [text];
+  const parts = word.split("-");
+  const sound = parts[0].toLowerCase();
+  if (!parts.every((part) => part.toLowerCase() === sound)) return [text];
+  const pieces = parts.map((part, index) =>
+    index < parts.length - 1 ? `${part}-` : part,
+  );
+  pieces[0] = chars.slice(0, start).join("") + pieces[0];
+  pieces[pieces.length - 1] += chars.slice(end).join("");
+  return pieces;
 }
 
 /** `text` cut at the given character offsets. */

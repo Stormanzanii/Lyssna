@@ -4358,6 +4358,32 @@ test("animated covers stay off until turned on, then play over the artwork", asy
   expect(await lookups()).toBe(1);
 });
 
+test("an animated cover asked for while Spotify connects arrives on retry", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    let asked = 0;
+    (window as any).__clientTest.answers = {
+      get motion_cover() {
+        asked += 1;
+        return asked === 1
+          ? Promise.reject("Spotify is still connecting")
+          : { avc: "https://mvod.itunes.apple.com/itunes-assets/b/avc.mp4" };
+      },
+    };
+  });
+  await openSettings(page, "Effects");
+  await page.getByLabel("Animated covers").check();
+  await page.keyboard.press("Escape");
+  await playLyricTrack(page);
+  await expect(page.locator(".now-playing .cover-motion")).toHaveAttribute(
+    "src",
+    "https://mvod.itunes.apple.com/itunes-assets/b/avc.mp4",
+    { timeout: 10_000 },
+  );
+});
+
 test("the lyrics ambience rebuilds after the GPU loses its canvas", async ({
   page,
 }) => {

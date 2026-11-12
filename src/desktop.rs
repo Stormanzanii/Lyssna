@@ -2040,7 +2040,7 @@ async fn motion_cover(
     let account = {
         let snapshot = lock(&inner.snapshot).map_err(error)?;
         if !snapshot.native_ready {
-            return Ok(None);
+            return Err("Spotify is still connecting".into());
         }
         snapshot
             .profile

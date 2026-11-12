@@ -3062,7 +3062,7 @@ function App() {
       ...albumTrack,
       album: { ...albumTrack.album, id: albumId, name: entity?.title ?? "" },
     },
-    !!state.settings.animated_covers && !state.settings.reduce_motion,
+    state.settings.animated_covers !== false && !state.settings.reduce_motion,
   );
   const rows = useRowWindow(
     mainScroll,

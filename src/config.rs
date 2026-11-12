@@ -370,7 +370,7 @@ impl Default for Settings {
             liquid_glass: false,
             theme: "dark".into(),
             canvas_lyrics: true,
-            animated_covers: false,
+            animated_covers: true,
             npv_ambience: true,
             glass_seek: true,
             space_gravity: false,

@@ -1533,7 +1533,7 @@ function SongLyricsPage({
   const playing = state.playback.is_playing;
   const motion = useMotionCover(
     track,
-    !!state.settings.animated_covers && !state.settings.reduce_motion,
+    state.settings.animated_covers !== false && !state.settings.reduce_motion,
   );
   const previousSong = useCallback(
     () => onPlayer({ command: "previous" }),
@@ -2288,7 +2288,7 @@ export function NowPlaying({
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
   const motion = useMotionCover(
     track,
-    !!state.settings.animated_covers && !state.settings.reduce_motion,
+    state.settings.animated_covers !== false && !state.settings.reduce_motion,
   );
   if (state.narrating)
     return (

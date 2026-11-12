@@ -786,6 +786,7 @@ async function startClient(
         emitNamed,
         pendingVoice: null,
         resolveVoice: null,
+        answers: host.__presetAnswers,
       };
       host.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
         unregisterListener: (_: string, id: number) => handlers.delete(id),
@@ -4286,18 +4287,18 @@ test("the Now playing card fades its top only once lyrics scroll", async ({
     .toMatch(/min\((1[0-9]{2}|[1-9][0-9])px/);
 });
 
-test("animated covers stay off until turned on, then play over the artwork", async ({
+test("animated covers play over the artwork by default and turn off", async ({
   page,
 }) => {
-  await startClient(page);
-  await page.evaluate(() => {
-    (window as any).__clientTest.answers = {
+  await page.addInitScript(() => {
+    (window as any).__presetAnswers = {
       motion_cover: {
         avc: "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
         hevc: null,
       },
     };
   });
+  await startClient(page);
   await playLyricTrack(page);
   const lookups = () =>
     page.evaluate(
@@ -4307,14 +4308,21 @@ test("animated covers stay off until turned on, then play over the artwork", asy
         ).length,
     );
   const video = page.locator(".now-playing .cover-motion");
-  await expect(page.locator(".now-playing .now-artwork")).toBeVisible();
-  expect(await lookups()).toBe(0);
-  await expect(video).toHaveCount(0);
+  await expect(video).toHaveAttribute(
+    "src",
+    "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
+  );
 
   await openSettings(page, "Effects");
   const toggle = page.getByLabel("Animated covers");
-  await expect(toggle).not.toBeChecked();
-  await toggle.check();
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.keyboard.press("Escape");
+  await expect(video).toHaveCount(0);
+  await expect(page.locator(".now-playing .now-artwork")).toBeVisible();
+
+  await openSettings(page, "Effects");
+  await page.getByLabel("Animated covers").check();
   await page.keyboard.press("Escape");
   await expect(video).toHaveAttribute(
     "src",
@@ -4361,10 +4369,9 @@ test("animated covers stay off until turned on, then play over the artwork", asy
 test("an animated cover asked for while Spotify connects arrives on retry", async ({
   page,
 }) => {
-  await startClient(page);
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     let asked = 0;
-    (window as any).__clientTest.answers = {
+    (window as any).__presetAnswers = {
       get motion_cover() {
         asked += 1;
         return asked === 1
@@ -4373,9 +4380,7 @@ test("an animated cover asked for while Spotify connects arrives on retry", asyn
       },
     };
   });
-  await openSettings(page, "Effects");
-  await page.getByLabel("Animated covers").check();
-  await page.keyboard.press("Escape");
+  await startClient(page);
   await playLyricTrack(page);
   await expect(page.locator(".now-playing .cover-motion")).toHaveAttribute(
     "src",

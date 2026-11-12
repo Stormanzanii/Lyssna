@@ -11,6 +11,7 @@ import {
 } from "./ttml-creator-model";
 
 const TILE_MS = 5000;
+const FOLLOW_AFTER_MS = 5000;
 const DETAIL = [512, 1024, 2048, 4096, 8192];
 const ROWS = 256;
 const TOP_HZ = 20000;
@@ -338,6 +339,7 @@ export function TtmlSpectrogram({
     observer.observe(element);
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
+      browsed.current = performance.now();
       const box = element.getBoundingClientRect();
       const x = event.clientX - box.left;
       const goal = target.current;
@@ -377,6 +379,9 @@ export function TtmlSpectrogram({
 
   const shown = position;
   const last = useRef(position);
+  // Scrolling away while the song plays holds the view for a while before
+  // following the playhead again.
+  const browsed = useRef(-Infinity);
   useEffect(() => {
     const jumped = Math.abs(shown - last.current) > 1000;
     last.current = shown;
@@ -384,7 +389,9 @@ export function TtmlSpectrogram({
     const x = (shown / 1000) * target.current.zoom;
     const view = target.current.scroll;
     const outside = x < view || x > view + width - 24;
-    if (outside && ((follow && playing) || jumped)) jump(x - width * 0.1);
+    const resting = performance.now() - browsed.current >= FOLLOW_AFTER_MS;
+    if (outside && ((follow && playing && resting) || jumped))
+      jump(x - width * 0.1);
   }, [shown, width, follow, playing]);
 
   const tilePx = (TILE_MS / 1000) * zoom;

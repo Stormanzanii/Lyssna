@@ -16404,6 +16404,66 @@ test("right-clicking a word on the TTML Creator spectrogram plays only that word
   await expect(playhead).toBeAttached();
 });
 
+test("TTML Creator spectrogram waits after scrolling before following again", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const emit = host.emit;
+    host.emit = (payload: any) => {
+      if (payload.type === "playback") host.lastPlayback = payload;
+      return emit(payload);
+    };
+  });
+  await playLyricTrack(page, true);
+  const playAt = (progress_ms: number) =>
+    page.evaluate((progress_ms) => {
+      const host = (window as any).__clientTest;
+      const last = host.lastPlayback;
+      host.emit({
+        ...last,
+        observed_at: Date.now(),
+        playback: { ...last.playback, progress_ms },
+      });
+    }, progress_ms);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await expect(
+    panel.getByRole("button", { name: "Follow playback" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const scroll = () =>
+    panel
+      .locator(".ttml-spectrum-content")
+      .evaluate((element) =>
+        Math.round(-new DOMMatrix(getComputedStyle(element).transform).m41),
+      );
+  const box = (await panel.locator(".ttml-spectrum-plot").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 3000);
+  await expect.poll(scroll).toBeGreaterThan(1000);
+  await page.waitForTimeout(500);
+  const away = await scroll();
+  await playAt(3300);
+  await page.waitForTimeout(1500);
+  await playAt(3600);
+  await page.waitForTimeout(500);
+  expect(await scroll()).toBe(away);
+  await page.waitForTimeout(3000);
+  await playAt(3900);
+  await expect.poll(scroll).toBeLessThan(away);
+});
+
 test("TTML Creator spectrogram retimes words while the song plays", async ({
   page,
 }) => {

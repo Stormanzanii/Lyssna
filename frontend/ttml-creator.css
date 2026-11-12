@@ -889,7 +889,7 @@
   gap: 4px;
   min-width: 0;
 }
-.ttml-metadata input {
+.ttml-metadata input:not(.toggle) {
   width: 100%;
   min-width: 0;
   min-height: 36px;
@@ -907,10 +907,10 @@
 .ttml-metadata input::placeholder {
   color: #ffffff38;
 }
-.ttml-metadata input:hover {
+.ttml-metadata input:not(.toggle):hover {
   border-color: #ffffff1a;
 }
-.ttml-metadata input:focus {
+.ttml-metadata input:not(.toggle):focus {
   border-color: #1ed76099;
   outline: none;
   background: #00000066;

@@ -16763,6 +16763,54 @@ test("TTML Creator can bring back separate Lyrics, Sync and Preview tabs", async
   await expect(creator.locator(".ttml-preview")).toContainText("Come & Go");
   await expect(creator.locator(".ttml-lines")).toHaveCount(0);
 
+  await tab("Lyrics").click();
+  await page.evaluate(() => {
+    const line = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+      words: text.split(" ").map((word, index, all) => ({
+        text: index < all.length - 1 ? `${word} ` : word,
+        start_ms: start_ms + index * 500,
+        end_ms: start_ms + (index + 1) * 500,
+      })),
+      romanization: "",
+      translation: "",
+      background: false,
+      opposite: false,
+    });
+    (window as any).__clientTest.answers = {
+      parse_lyric_file: {
+        lines: [
+          line("first one", 0, 1000),
+          line("second one", 1000, 2000),
+          line("third one here", 2600, 4100),
+          line("fourth one", 9000, 10000),
+        ],
+        source: "file",
+        instrumental: false,
+        synced: true,
+      },
+    };
+  });
+  await creator.getByLabel("Lyric file to import").setInputFiles({
+    name: "song.ttml",
+    mimeType: "application/ttml+xml",
+    buffer: Buffer.from("<tt></tt>"),
+  });
+  await tab("Sync").click();
+  await expect(creator.locator(".ttml-line.current")).toHaveAttribute(
+    "data-line",
+    "0",
+  );
+  await tab("Preview").click();
+  await tab("Sync").click();
+  // The song sits between 3 and 4 seconds, in the third line.
+  await expect(creator.locator(".ttml-line.current")).toHaveAttribute(
+    "data-line",
+    "2",
+  );
+
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   await expect(tab("Lyrics")).toHaveAttribute("aria-selected", "true");

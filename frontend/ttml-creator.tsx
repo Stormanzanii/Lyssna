@@ -1436,6 +1436,17 @@ export function TtmlCreator({
     });
     return found;
   }, [lines, position]);
+  // Clicking a line in the preview seeks there, so coming back from it
+  // picks up at the line and word the song is on.
+  const selectPlaying = () => {
+    const line = lines[playingLine];
+    if (!line) return;
+    let unit = 0;
+    line.units.forEach((each, index) => {
+      if (each.start !== undefined && each.start <= position) unit = index;
+    });
+    setCursor({ line: playingLine, unit });
+  };
   const scrolledAt = useRef(0);
   // A double-click replays from just before a word, which can start in the
   // line above; the view stays put until playback reaches the word's line.
@@ -1761,6 +1772,8 @@ export function TtmlCreator({
                 disabled={value !== "write" && !lines.length}
                 onClick={() => {
                   setTextMode(false);
+                  if (tab === "preview" && value !== "preview")
+                    selectPlaying();
                   setTab(value);
                 }}
               >

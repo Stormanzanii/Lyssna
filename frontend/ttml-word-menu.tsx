@@ -13,11 +13,13 @@ export function WordMenu({
   x,
   y,
   groups,
+  label = "Word actions",
   onClose,
 }: {
   x: number;
   y: number;
   groups: MenuAction[][];
+  label?: string;
   onClose: () => void;
 }) {
   const element = useRef<HTMLDivElement>(null);
@@ -53,7 +55,7 @@ export function WordMenu({
         ref={element}
         className="song-menu popover ttml-menu"
         role="menu"
-        aria-label="Word actions"
+        aria-label={label}
         style={place}
       >
         {groups.map((group, index) => (

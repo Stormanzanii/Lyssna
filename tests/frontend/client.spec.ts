@@ -17087,6 +17087,55 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   ).toHaveAttribute("title", "just");
 });
 
+test("right-clicking a TTML Creator line opens line actions", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-line");
+  const count = await cards.count();
+  const menu = page.getByRole("menu", { name: "Line actions" });
+  const lineMenu = async (index: number) => {
+    const box = (await cards.nth(index).boundingBox())!;
+    await page.mouse.click(box.x + box.width - 12, box.y + box.height / 2, {
+      button: "right",
+    });
+  };
+  await lineMenu(1);
+  await expect(menu).toBeVisible();
+  await expect(page.getByRole("menu", { name: "Word actions" })).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: "Insert line below" }).click();
+  await expect(cards).toHaveCount(count + 1);
+  await expect(cards.nth(2)).toHaveClass(/empty/);
+
+  await lineMenu(1);
+  await menu.getByRole("menuitem", { name: "Background vocal" }).click();
+  await expect(cards.nth(1)).toHaveClass(/background/);
+
+  await lineMenu(2);
+  await menu.getByRole("menuitem", { name: "Delete line" }).click();
+  await expect(cards).toHaveCount(count);
+
+  await cards
+    .nth(0)
+    .locator(".ttml-unit")
+    .first()
+    .click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "Word actions" })).toBeVisible();
+  await expect(menu).toHaveCount(0);
+});
+
 test("Now playing lyrics card folds while the TTML Creator is open", async ({
   page,
 }) => {

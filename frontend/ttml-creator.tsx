@@ -591,15 +591,29 @@ export function TtmlCreator({
       return {};
     }
   });
-  const [menu, setMenu] = useState<{ x: number; y: number; at: Cursor } | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    at: Cursor;
+    line?: boolean;
+  } | null>(null);
   const [splitting, setSplitting] = useState<Cursor | null>(null);
   const [replacing, setReplacing] = useState<Cursor | null>(null);
   const openMenu = (event: ReactMouseEvent, at: Cursor) => {
     event.preventDefault();
     setCursor(at);
     setMenu({ x: event.clientX, y: event.clientY, at });
+  };
+  const openLineMenu = (event: ReactMouseEvent, line: number) => {
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    setCursor(clampCursor(lines, { line, unit: 0 }));
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      at: { line, unit: 0 },
+      line: true,
+    });
   };
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   const pickedRef = useRef(picked);
@@ -832,6 +846,56 @@ export function TtmlCreator({
   };
   const dropClass = (key: string) =>
     drop.startsWith(`${key}:`) ? ` drop-${drop.slice(key.length + 1)}` : "";
+  const lineMenuGroups = (index: number): MenuAction[][] => {
+    const line = lines[index];
+    if (!line) return [];
+    const addAt = (after: number) => {
+      setLines(insertBlankLine(lines, after));
+      setCursor({ line: after + 1, unit: 0 });
+      setFocusLine(after + 1);
+    };
+    const span = lineSpan(line);
+    return [
+      [
+        { label: "Insert line above", run: () => addAt(index - 1) },
+        { label: "Insert line below", run: () => addAt(index) },
+        {
+          label: "Duplicate line",
+          run: () => setLines(duplicateLine(lines, index)),
+        },
+      ],
+      [
+        {
+          label: "Background vocal",
+          checked: line.background,
+          run: () => setLines(toggleLine(lines, index, "background")),
+        },
+        {
+          label: "Second singer",
+          checked: line.opposite,
+          run: () => setLines(toggleLine(lines, index, "opposite")),
+        },
+      ],
+      [
+        {
+          label: "Play from this line",
+          disabled: !span,
+          run: () => span && seek(span.start),
+        },
+        {
+          label: "Clear line timing",
+          disabled: !span,
+          run: () => setLines(clearLines(lines, new Set([index]))),
+        },
+      ],
+      [
+        {
+          label: "Delete line",
+          run: () => restructure(removeLine(lines, index)),
+        },
+      ],
+    ];
+  };
   const menuGroups = (at: Cursor): MenuAction[][] => {
     const line = lines[at.line];
     const unit = line?.units[at.unit];
@@ -2052,6 +2116,7 @@ export function TtmlCreator({
                 key={lineIndex}
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
+                onContextMenu={(event) => openLineMenu(event, lineIndex)}
                 className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${line.units.length ? "" : " empty"}${playingLine === lineIndex || liveWords.singing.has(lineIndex) ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onClick={(event) => {
                   const target = event.target as Element;
@@ -2301,7 +2366,10 @@ export function TtmlCreator({
         <WordMenu
           x={menu.x}
           y={menu.y}
-          groups={menuGroups(menu.at)}
+          groups={
+            menu.line ? lineMenuGroups(menu.at.line) : menuGroups(menu.at)
+          }
+          label={menu.line ? "Line actions" : "Word actions"}
           onClose={() => setMenu(null)}
         />
       )}

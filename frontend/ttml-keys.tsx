@@ -1,5 +1,6 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { Keyboard, RotateCcw, X } from "lucide-react";
+import { IS_MAC, MODIFIER } from "./platform";
 
 export const KEY_ACTIONS = [
   ["start", "Start word"],
@@ -109,31 +110,49 @@ const caps = (...names: string[]) =>
   names.map((name, index) => <kbd key={index}>{name}</kbd>);
 const plus = <i key="+">+</i>;
 
+const or = <i key="or">or</i>;
+const modClick = (what: string) => [
+  ...caps(MODIFIER),
+  <i key="/">/</i>,
+  ...caps("Shift"),
+  <em key="c">+ click {what}</em>,
+];
+
 const FIXED_KEYS: [string, ReactNode][] = [
   ["Play or pause", caps("Space")],
   ["Move around", caps("←", "→", "↑", "↓")],
   ["Seek 3 seconds", [...caps("Shift"), plus, ...caps("←", "→")]],
-  ["Undo", [...caps("Ctrl"), plus, ...caps("Z")]],
-  ["Redo", [...caps("Ctrl"), plus, ...caps("Y")]],
+  ["Clear the word's timing", caps("Backspace")],
+  ["Undo", [...caps(MODIFIER), plus, ...caps("Z")]],
+  [
+    "Redo",
+    IS_MAC
+      ? [...caps("Cmd"), plus, ...caps("Shift"), plus, ...caps("Z")]
+      : [...caps("Ctrl"), plus, ...caps("Y")],
+  ],
 ];
 
-const LYRIC_TIPS: [string, ReactNode][] = [
+// Typing only goes into the edit bar's fields, so letter keys stay free for
+// timing everywhere else.
+const EDIT_TIPS: [string, ReactNode][] = [
   ["Select a word", <em>Click</em>],
-  ["Edit a word", <em>Double-click</em>],
-  ["Delete the selected word", caps("Del")],
-  ["Move the selection", caps("←", "→")],
-  ["Split a word into syllables", caps("|")],
-  ["Join two words", <em>Click the gap</em>],
+  ["Replay from a word", <em>Double-click</em>],
+  ["Split, replace, join or move a word", <em>Right-click</em>],
+  ["Play only that word", <em>Right-click it on the spectrogram</em>],
   [
-    "Pick several lines",
-    [
-      ...caps("Ctrl"),
-      <i key="/">/</i>,
-      ...caps("Shift"),
-      <em key="c">+ click</em>,
-    ],
+    "Edit the selected word",
+    [...caps("F2"), or, ...caps(MODIFIER), plus, ...caps("E")],
   ],
-  ["Undo, redo", [...caps("Ctrl"), plus, ...caps("Z", "Y")]],
+  ["Keep or undo the edit", [...caps("Enter"), or, ...caps("Esc")]],
+  ["Add a line below", caps("Enter")],
+  [
+    "Delete the selected word",
+    [...caps(MODIFIER), plus, ...caps(IS_MAC ? "Backspace" : "Del")],
+  ],
+  ["Split a word into syllables", [<em key="t">type</em>, ...caps("|")]],
+  ["Pick several words", modClick("words")],
+  ["Pick several lines", modClick("a line")],
+  ["Move words or lines", <em>Drag</em>],
 ];
 
 function Rows({ title, rows }: { title: string; rows: ReactNode }) {
@@ -149,17 +168,19 @@ const comboRows = (rows: [string, ReactNode][]) =>
   rows.map(([label, combo]) => (
     <div key={label} className="ttml-settings-row">
       <span>{label}</span>
-      <span className="ttml-settings-combo">{combo}</span>
+      <span className="ttml-settings-combo">
+        {Array.isArray(combo)
+          ? combo.map((part, index) => <Fragment key={index}>{part}</Fragment>)
+          : combo}
+      </span>
     </div>
   ));
 
 export function KeysDialog({
-  mode,
   keys,
   onChange,
   onClose,
 }: {
-  mode: "sync" | "lyrics";
   keys: KeyMap;
   onChange: (keys: KeyMap) => void;
   onClose: () => void;
@@ -186,9 +207,9 @@ export function KeysDialog({
   return (
     <div className="ttml-dialog-backdrop" onClick={onClose}>
       <div
-        className={`ttml-dialog ttml-metadata ttml-settings ${mode}`}
+        className="ttml-dialog ttml-metadata ttml-settings"
         role="dialog"
-        aria-label={mode === "sync" ? "Sync settings" : "Lyrics settings"}
+        aria-label="Controls"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.key === "Escape" && !listening && onClose()}
       >
@@ -197,26 +218,29 @@ export function KeysDialog({
             <Keyboard size={18} />
           </span>
           <div>
-            <h3>{mode === "sync" ? "Sync settings" : "Lyrics settings"}</h3>
+            <h3>Controls</h3>
             <p>Keyboard and mouse shortcuts</p>
           </div>
           <button
             className="ttml-meta-close"
             onClick={onClose}
-            aria-label="Close settings"
+            aria-label="Close controls"
           >
             <X size={16} />
           </button>
         </header>
         <div className="ttml-meta-body ttml-settings-body">
-          {mode === "sync" ? (
-            [
-              ["Timing", "Always"],
-              ["Moving", "Speed"],
-            ].map((column) => (
+          {[["Timing", "Always"], ["Moving", "Speed"], ["Editing"]].map(
+            (column) => (
               <div key={column[0]} className="ttml-settings-col">
                 {column.map((title) =>
-                  title === "Always" ? (
+                  title === "Editing" ? (
+                    <Rows
+                      key={title}
+                      title={title}
+                      rows={comboRows(EDIT_TIPS)}
+                    />
+                  ) : title === "Always" ? (
                     <Rows
                       key={title}
                       title={title}
@@ -247,27 +271,23 @@ export function KeysDialog({
                   ),
                 )}
               </div>
-            ))
-          ) : (
-            <Rows title="Lyrics tab" rows={comboRows(LYRIC_TIPS)} />
+            ),
           )}
         </div>
-        {mode === "sync" && (
-          <footer className="ttml-meta-actions">
-            <span className="ttml-settings-note">
-              Click a key to change it. A key in use swaps over.
-            </span>
-            <span className="ttml-meta-spacer" />
-            <button
-              className="ttml-meta-quiet"
-              disabled={!changed}
-              onClick={() => onChange({ ...DEFAULT_KEYS })}
-            >
-              <RotateCcw size={14} />
-              Reset keys
-            </button>
-          </footer>
-        )}
+        <footer className="ttml-meta-actions">
+          <span className="ttml-settings-note">
+            Click a key to change it. A key in use swaps over.
+          </span>
+          <span className="ttml-meta-spacer" />
+          <button
+            className="ttml-meta-quiet"
+            disabled={!changed}
+            onClick={() => onChange({ ...DEFAULT_KEYS })}
+          >
+            <RotateCcw size={14} />
+            Reset keys
+          </button>
+        </footer>
       </div>
     </div>
   );

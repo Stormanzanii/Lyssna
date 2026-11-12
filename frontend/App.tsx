@@ -226,6 +226,7 @@ import { DEFAULT_ZOOM, useAppZoom } from "./app-zoom";
 import { PlaylistFlyout } from "./playlist-flyout";
 import { LoadTtml, type LoadMode, type SavedLyrics } from "./load-ttml";
 import { TtmlCreator } from "./ttml-creator";
+import { dismissDraft, draftPreview } from "./ttml-working";
 import { libraryTree, type LibraryEntry } from "./library-tree";
 import {
   entryAdded,
@@ -609,6 +610,13 @@ function App() {
   const closeCoverView = useCallback(() => setCoverView(false), []);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [ttmlOpen, setTtmlOpen] = useState<false | "load" | "database">(false);
+  // A draft edited in the TTML Creator shows on the Lyrics page behind it.
+  const [draftDismissed, setDraftDismissed] = useState(0);
+  const playingUri = state.playback.item?.uri;
+  const draftLyrics = useMemo(
+    () => (center === "lyrics" ? draftPreview(playingUri) : null),
+    [center, playingUri, draftDismissed],
+  );
   // The Lyssna settings window and the tab it opened on.
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [animatorPanel, setAnimatorPanel] = useState(false);
@@ -3796,19 +3804,6 @@ function App() {
               barSlot={ttmlBar ? ttmlBarSlot : null}
               onShowPlayer={() => setTtmlPlayerBar(true)}
               onClose={() => setCenter("lyrics")}
-              renderPreview={(lyrics) => (
-                <LyricsPage
-                  state={{ ...state, lyrics, lyric_error: "" }}
-                  onCanvasActive={setCanvasInLyrics}
-                  immersive={immersive}
-                  onPlayer={play}
-                  onAlbum={openAlbum}
-                  onArtist={openArtist}
-                  onImport={() => {}}
-                  onRetry={() => {}}
-                  onSave={save}
-                />
-              )}
               notify={notify}
               onParse={(filename, contents, durationMs) =>
                 rpc<Lyrics>("parse_lyric_file", {
@@ -3836,7 +3831,11 @@ function App() {
             />
           ) : center === "lyrics" ? (
             <LyricsPage
-              state={state}
+              state={
+                draftLyrics
+                  ? { ...state, lyrics: draftLyrics, lyric_error: "" }
+                  : state
+              }
               onCanvasActive={setCanvasInLyrics}
               immersive={immersive}
               onPlayer={play}
@@ -3846,6 +3845,22 @@ function App() {
               onRetry={() => void call("retry_lyrics")}
               onSave={save}
             >
+              {draftLyrics && playingUri && (
+                <div className="ttml-draft-banner" role="status">
+                  <span>Showing your TTML draft</span>
+                  <button onClick={() => setCenter("ttml")}>
+                    Back to Creator
+                  </button>
+                  <button
+                    onClick={() => {
+                      dismissDraft(playingUri);
+                      setDraftDismissed((count) => count + 1);
+                    }}
+                  >
+                    Original lyrics
+                  </button>
+                </div>
+              )}
               <div
                 className="lyrics-toolbar"
                 role="toolbar"

@@ -1,8 +1,7 @@
 import {
   type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactNode,
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -30,9 +29,11 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { Cover, LyricsDisplay, usePlaybackClock } from "./components";
+import { Cover, usePlaybackClock } from "./components";
 import type { AppState } from "./state";
 import type { Lyrics, PlayerRequest, Track } from "./types";
+import { forgetWorking, markWorking } from "./ttml-working";
+import { IS_MAC, MODIFIER } from "./platform";
 import {
   type CreatorLine,
   type Cursor,
@@ -59,7 +60,6 @@ import {
   markNext,
   markStart,
   moveLine,
-  moveSpace,
   moveWord,
   moveWords,
   deletePicked,
@@ -78,7 +78,6 @@ import {
   replaceMatching,
   splitUnit,
   timed,
-  toLyrics,
   toText,
   toTtml,
   toggleJoin,
@@ -144,14 +143,11 @@ import {
 } from "./ttml-word-menu";
 import "./ttml-creator.css";
 
-type Tab = "write" | "sync" | "preview";
-
 const MIN_SPEED = 0.25;
 const MAX_SPEED = 1.5;
 const clampSpeed = (value: number) =>
   Math.min(MAX_SPEED, Math.max(MIN_SPEED, Math.round(value * 20) / 20));
 const SPLITS_KEY = "lyssna.ttml-splits";
-const WORD_ROMAN_KEY = "lyssna.ttml-word-roman";
 const SPECTROGRAM_KEY = "lyssna.ttml-spectrogram";
 const SYNC_ROMAN_KEY = "lyssna.ttml-sync-roman";
 const GLIDE_MS = 550;
@@ -239,7 +235,6 @@ export function TtmlCreator({
   onApply,
   onParse,
   notify,
-  renderPreview,
   barSlot,
   onShowPlayer,
   onClose,
@@ -255,7 +250,6 @@ export function TtmlCreator({
     durationMs: number,
   ) => Promise<Lyrics>;
   notify: (message: string, error?: boolean) => void;
-  renderPreview?: (lyrics: Lyrics) => ReactNode;
   /** Where the creator's own bar replaces the player bar. */
   barSlot?: HTMLElement | null;
   onShowPlayer?: () => void;
@@ -267,7 +261,6 @@ export function TtmlCreator({
     if (!track && playing) setTrack(playing);
   }, [track, playing]);
 
-  const [tab, setTab] = useState<Tab>("write");
   const [lines, setLinesRaw] = useState<CreatorLine[]>([]);
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState<Cursor>({ line: 0, unit: 0 });
@@ -326,7 +319,7 @@ export function TtmlCreator({
     versions.current = { changed: false };
     setCursor({ line: 0, unit: 0 });
     history.current = { past: [], future: [] };
-    setTab(draft?.lines.length ? "sync" : "write");
+    setTextMode(false);
     return () => snapshot(true);
   }, [track, snapshot]);
 
@@ -379,6 +372,7 @@ export function TtmlCreator({
     versions.current.changed = true;
     if (!lines.length && !text.trim()) {
       writeDraft(track.uri, null);
+      forgetWorking(track.uri);
       setSavedAt(undefined);
       return;
     }
@@ -391,6 +385,7 @@ export function TtmlCreator({
       song: track,
     });
     setSavedAt(now);
+    markWorking(track.uri);
     snapshot(false);
   }, [track, lines, text, metadata, snapshot]);
 
@@ -462,10 +457,6 @@ export function TtmlCreator({
   }, []);
 
   const [textMode, setTextMode] = useState(false);
-  const [editing, setEditing] = useState<Cursor | null>(null);
-  const [chosen, setChosen] = useState<Cursor | null>(null);
-  const chosenRef = useRef(chosen);
-  chosenRef.current = chosen;
   // Word starts picked with Ctrl or Shift, dragged as one bunch.
   const [group, setGroup] = useState<Cursor[]>([]);
   const groupRef = useRef(group);
@@ -477,22 +468,7 @@ export function TtmlCreator({
   useEffect(() => {
     setGroup([]);
     setSpaces([]);
-  }, [lines, tab]);
-  const isSpace = (at: Cursor) =>
-    spaces.some((each) => each.line === at.line && each.unit === at.unit);
-  const pickSpace = (event: ReactMouseEvent, at: Cursor) => {
-    if (event.shiftKey || event.ctrlKey || event.metaKey)
-      return setSpaces(
-        isSpace(at)
-          ? spaces.filter(
-              (each) => each.line !== at.line || each.unit !== at.unit,
-            )
-          : [...spaces, at],
-      );
-    setSpaces([at]);
-    setGroup([]);
-    setChosen(null);
-  };
+  }, [lines]);
   const wordStart = (at: Cursor) => ({
     line: at.line,
     unit: wordBounds(lines[at.line]?.units ?? [], at.unit).start,
@@ -505,9 +481,9 @@ export function TtmlCreator({
   };
   const pickWord = (at: Cursor, range: boolean) => {
     const start = wordStart(at);
-    const base = group.length || !chosen ? group : [wordStart(chosen)];
-    if (range && chosen) {
-      const from = wordStart(chosen);
+    const base = group.length ? group : [wordStart(cursor)];
+    if (range) {
+      const from = wordStart(cursor);
       const [first, last] =
         from.line < start.line ||
         (from.line === start.line && from.unit <= start.unit)
@@ -535,7 +511,7 @@ export function TtmlCreator({
           )
         : [...base, start],
     );
-    setChosen(at);
+    setCursor(at);
   };
   const moveDragged = (
     dragged: { at: Cursor; group?: Cursor[] },
@@ -560,101 +536,35 @@ export function TtmlCreator({
       ?.focus();
     setFocusLine(null);
   }, [focusLine, lines]);
-  const applyText = (sync: boolean) => {
+  const applyText = () => {
     const parsed = keepTimings(lines, parseText(text));
     setLines(parsed);
-    setCursor((at) => clampCursor(parsed, at));
+    // Timing picks up at the first word still waiting for a tap.
+    const line = parsed.findIndex((each) =>
+      each.units.some((unit) => unit.start === undefined),
+    );
+    setCursor((at) =>
+      line < 0
+        ? clampCursor(parsed, at)
+        : {
+            line,
+            unit: parsed[line].units.findIndex(
+              (unit) => unit.start === undefined,
+            ),
+          },
+    );
     setTextMode(false);
-    if (sync && parsed.length) setTab("sync");
   };
   const openText = () => {
     setText(toText(lines));
     setTextMode(true);
   };
   const commitWord = (at: Cursor, value: string) => {
-    setEditing(null);
     const next = editUnit(lines, at, value);
     if (next === lines) return;
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
   };
-
-  useEffect(() => {
-    if (tab !== "write") return setChosen(null);
-    const onKey = (event: KeyboardEvent) => {
-      const at = chosenRef.current;
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.closest("input, textarea, select, [contenteditable=true]") ||
-        document.querySelector(".ttml-menu, .ttml-dialog")
-      )
-        return;
-      const key = event.key.toLowerCase();
-      if (event.ctrlKey && key === "z") (event.shiftKey ? redo : undo)();
-      else if (event.ctrlKey && key === "y") redo();
-      if (event.ctrlKey && (key === "z" || key === "y")) {
-        event.preventDefault();
-        return;
-      }
-      const lineSet = pickedRef.current;
-      if (
-        lineSet.size &&
-        !at &&
-        !spacesRef.current.length &&
-        !groupRef.current.length &&
-        !event.ctrlKey &&
-        (event.key === "Delete" || event.key === "Backspace")
-      ) {
-        event.preventDefault();
-        const next = removeLines(stateRef.current.lines, lineSet);
-        setLines(next);
-        setCursor((cursor) => clampCursor(next, cursor));
-        setPicked(new Set());
-        return;
-      }
-      const gaps = spacesRef.current;
-      const picked = groupRef.current;
-      if (
-        (gaps.length || picked.length) &&
-        !event.ctrlKey &&
-        (event.key === "Delete" || event.key === "Backspace")
-      ) {
-        event.preventDefault();
-        const next = deletePicked(stateRef.current.lines, picked, gaps);
-        setLines(next);
-        setCursor((cursor) => clampCursor(next, cursor));
-        setChosen(null);
-        setSpaces([]);
-        setGroup([]);
-        return;
-      }
-      if (!at || event.ctrlKey || event.altKey || event.metaKey) return;
-      const { lines } = stateRef.current;
-      if (event.key === "Delete" || event.key === "Backspace") {
-        const next = editUnit(lines, at, "");
-        setLines(next);
-        setCursor((cursor) => clampCursor(next, cursor));
-        // The next word or syllable takes its place, for deleting in a row.
-        const line = next[at.line];
-        setChosen(
-          line && line.units.length && next.length === lines.length
-            ? { line: at.line, unit: Math.min(at.unit, line.units.length - 1) }
-            : null,
-        );
-      } else if (event.key === "Escape") {
-        setChosen(null);
-        setGroup([]);
-        setSpaces([]);
-      } else if (event.key === "Enter") setEditing(at);
-      else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        const move = event.key === "ArrowLeft" ? previousCursor : nextCursor;
-        setChosen(move(lines, at) ?? at);
-      } else return;
-      event.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [tab, setLines, undo, redo]);
 
   const [learned, setLearned] = useState<LearnedSplits>(() => {
     try {
@@ -699,7 +609,7 @@ export function TtmlCreator({
     onClickCapture: (event: ReactMouseEvent) => {
       if (
         (event.shiftKey || event.ctrlKey || event.metaKey) &&
-        !(event.target as Element).closest(".ttml-chip, .ttml-space")
+        !(event.target as Element).closest(".ttml-unit")
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -783,13 +693,6 @@ export function TtmlCreator({
     setLines(next);
     setCursor((cursor) => clampCursor(next, cursor));
   };
-  const [wordRoman, setWordRoman] = useState(
-    () => readStorage(WORD_ROMAN_KEY) === "1",
-  );
-  const showWordRoman = (on: boolean) => {
-    setWordRoman(on);
-    writeStorage(WORD_ROMAN_KEY, on ? "1" : null);
-  };
   const [romanNote, setRomanNote] = useState("");
   const [syncRoman, setSyncRoman] = useState(
     () => readStorage(SYNC_ROMAN_KEY) === "1",
@@ -820,7 +723,6 @@ export function TtmlCreator({
     );
     if (!found) return;
     setLines((current) => applyRomanized(current, request, result));
-    showWordRoman(true);
   };
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState("");
@@ -885,8 +787,7 @@ export function TtmlCreator({
     setDrag(next);
   };
   // The picked words, or the selected word when none are picked.
-  const pickedWords = () =>
-    group.length ? group : chosen ? [wordStart(chosen)] : [];
+  const pickedWords = () => (group.length ? group : [wordStart(cursor)]);
   const dragWords = (event: ReactDragEvent, at: Cursor) => {
     const words = pickedWords();
     const carry = words.some(
@@ -913,10 +814,6 @@ export function TtmlCreator({
   };
   const dropClass = (key: string) =>
     drop.startsWith(`${key}:`) ? ` drop-${drop.slice(key.length + 1)}` : "";
-  const toCards = () => {
-    setTab("write");
-    setTextMode(false);
-  };
   const menuGroups = (at: Cursor): MenuAction[][] => {
     const line = lines[at.line];
     const unit = line?.units[at.unit];
@@ -935,10 +832,12 @@ export function TtmlCreator({
           label: "Replace word…",
           run: () => setReplacing(at),
         },
-        ...(unit.joined
+        ...(at.unit > 0
           ? [
               {
-                label: "Space before this syllable",
+                label: unit.joined
+                  ? "Space before this syllable"
+                  : "Join to the word before",
                 run: () => setLines(toggleJoin(lines, at)),
               },
             ]
@@ -973,14 +872,12 @@ export function TtmlCreator({
         {
           label: "Insert new line before",
           run: () => {
-            toCards();
             addBlankLine(at.line - 1);
           },
         },
         {
           label: "Insert new line after",
           run: () => {
-            toCards();
             addBlankLine(at.line);
           },
         },
@@ -1159,25 +1056,72 @@ export function TtmlCreator({
   }, []);
   const stateRef = useRef({ lines, cursor });
   stateRef.current = { lines, cursor };
+  const wordField = useRef<HTMLInputElement>(null);
+  const editable = !textMode && lines.length > 0;
+  const selectedLine = lines[cursor.line];
+  const selectedUnit = selectedLine?.units[cursor.unit];
+  // Enter keeps an edit and Escape drops it; either way the keys go back
+  // to timing.
+  const leaveField = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" && event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape")
+      event.currentTarget.value = event.currentTarget.defaultValue;
+    event.currentTarget.blur();
+  };
   useEffect(() => {
-    if (tab !== "sync") return;
+    if (!editable) return;
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (document.querySelector(".ttml-menu, .ttml-dialog")) return;
+      // Shortcuts take Cmd on macOS, where Ctrl is no modifier of ours.
       if (
         target?.closest("input, textarea, select, [contenteditable=true]") ||
         event.altKey ||
-        event.metaKey
+        (IS_MAC ? event.ctrlKey : event.metaKey)
       )
         return;
       const { lines, cursor } = stateRef.current;
-      const ctrl = event.ctrlKey;
+      const ctrl = IS_MAC ? event.metaKey : event.ctrlKey;
       const key = event.key.toLowerCase();
+      const erase = event.key === "Delete" || event.key === "Backspace";
+      const words = groupRef.current,
+        gaps = spacesRef.current;
       let handled = true;
       if (ctrl && key === "z") (event.shiftKey ? redo : undo)();
       else if (ctrl && key === "y") redo();
+      else if (ctrl && erase) {
+        const next =
+          words.length || gaps.length
+            ? deletePicked(lines, words, gaps)
+            : editUnit(lines, cursor, "");
+        setLines(next);
+        setCursor(clampCursor(next, cursor));
+        setGroup([]);
+        setSpaces([]);
+      } else if (ctrl && key === "e") wordField.current?.focus();
       else if (ctrl) handled = false;
-      else if (event.key === "ArrowLeft" && event.shiftKey) seek(read() - 3000);
+      else if (erase && pickedRef.current.size && !words.length) {
+        const next = removeLines(lines, pickedRef.current);
+        setLines(next);
+        setCursor(clampCursor(next, cursor));
+        setPicked(new Set());
+      } else if (event.key === "F2") wordField.current?.focus();
+      else if (event.key === "Enter") {
+        // Enter on a focused button presses it.
+        if (target?.closest("button, a")) handled = false;
+        else {
+          setLines(insertBlankLine(lines, cursor.line));
+          setCursor({ line: cursor.line + 1, unit: 0 });
+          setFocusLine(cursor.line + 1);
+        }
+      } else if (event.key === "Escape") {
+        setGroup([]);
+        setSpaces([]);
+        setPicked(new Set());
+      } else if (event.key === "ArrowLeft" && event.shiftKey)
+        seek(read() - 3000);
       else if (event.key === "ArrowRight" && event.shiftKey)
         seek(read() + 3000);
       else {
@@ -1238,7 +1182,18 @@ export function TtmlCreator({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [tab, here, tap, read, seek, undo, redo, setLines, changeSpeed, rate]);
+  }, [
+    editable,
+    here,
+    tap,
+    read,
+    seek,
+    undo,
+    redo,
+    setLines,
+    changeSpeed,
+    rate,
+  ]);
 
   const list = useRef<HTMLDivElement>(null);
   const glide = useRef(0);
@@ -1285,14 +1240,8 @@ export function TtmlCreator({
       clickedLine.current = false;
       return;
     }
-    if (tab === "sync") centre(cursor.line);
-  }, [cursor.line, tab, centre]);
-  const centreOnLyrics = useRef<number | null>(null);
-  useEffect(() => {
-    if (tab !== "write" || centreOnLyrics.current === null) return;
-    centre(centreOnLyrics.current, true);
-    centreOnLyrics.current = null;
-  }, [tab, centre]);
+    centre(cursor.line);
+  }, [cursor.line, centre]);
 
   const shownWord = useRef<(Cursor & { start: number }) | null>(null);
   const liveWord = useMemo(() => {
@@ -1377,7 +1326,6 @@ export function TtmlCreator({
   const holdLine = useRef<number | null>(null);
   useEffect(() => {
     if (
-      tab !== "sync" ||
       playingLine < 0 ||
       !state.playback.is_playing ||
       Date.now() - scrolledAt.current < 3000
@@ -1388,9 +1336,8 @@ export function TtmlCreator({
       holdLine.current = null;
     }
     centre(playingLine);
-  }, [playingLine, tab, state.playback.is_playing, centre]);
+  }, [playingLine, state.playback.is_playing, centre]);
 
-  const preview = useMemo(() => toLyrics(lines), [lines]);
   const issues = useMemo(() => problems(lines), [lines]);
   const { done, total } = progress(lines);
   const entries = useMemo(
@@ -1640,34 +1587,6 @@ export function TtmlCreator({
           <strong title={track.name}>{track.name}</strong>
           <span>{track.artists.map((artist) => artist.name).join(", ")}</span>
         </div>
-        <div className="ttml-tabs" role="tablist">
-          {(
-            [
-              ["write", "Lyrics"],
-              ["sync", "Sync"],
-              ["preview", "Preview"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              role="tab"
-              aria-selected={tab === value}
-              className={tab === value ? "active" : ""}
-              disabled={value !== "write" && !lines.length}
-              onClick={() => {
-                if (tab === "sync" && value === "write") {
-                  const at =
-                    state.playback.is_playing && liveWord ? liveWord : cursor;
-                  setCursor(clampCursor(lines, at));
-                  centreOnLyrics.current = at.line;
-                }
-                setTab(value);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <div className="ttml-actions">
           <span className="ttml-saved">
             {savedAt ? `Saved ${savedLabel(savedAt)}` : "Not saved yet"}
@@ -1675,14 +1594,9 @@ export function TtmlCreator({
           <button onClick={openSaves} title="Saves and earlier versions">
             <History size={15} />
           </button>
-          {tab !== "preview" && (
-            <button
-              onClick={() => setEditingKeys(true)}
-              title={tab === "sync" ? "Sync settings" : "Lyrics settings"}
-            >
-              <Settings size={15} />
-            </button>
-          )}
+          <button onClick={() => setEditingKeys(true)} title="Controls">
+            <Settings size={15} />
+          </button>
           <button onClick={() => setEditingMeta(true)} title="Metadata">
             <Tags size={15} />
           </button>
@@ -1753,394 +1667,7 @@ export function TtmlCreator({
         </div>
       )}
 
-      {tab === "write" && !textMode && lines.length > 0 && (
-        <div className="ttml-write">
-          <div className="ttml-write-actions">
-            <div className="ttml-row">
-              <button
-                onClick={startFromLyrics}
-                disabled={!here || !state.lyrics?.lines.length}
-                title="Use the lyrics Lyssna found for this song as a start"
-              >
-                <Wand2 size={15} />
-                Start from current lyrics
-              </button>
-              <button onClick={openText}>
-                <Type size={15} />
-                Edit as text
-              </button>
-              <label
-                className="ttml-import"
-                title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
-              >
-                <Upload size={15} />
-                Import file
-                {importInput}
-              </label>
-              <button
-                className={wordRoman ? "active" : ""}
-                aria-pressed={wordRoman}
-                onClick={() => showWordRoman(!wordRoman)}
-                title="Show a reading under each word"
-              >
-                Word romanization
-              </button>
-              <button
-                onClick={() => void autoRomanize()}
-                disabled={romanNote === "Romanizing…"}
-                title="Fill empty word readings for lyrics in any non-Latin script"
-              >
-                <Languages size={15} />
-                Auto romanize
-              </button>
-            </div>
-            <button className="primary" onClick={() => setTab("sync")}>
-              Continue to Sync
-            </button>
-          </div>
-          {romanNote && (
-            <p className="ttml-hint" role="status">
-              {romanNote}
-            </p>
-          )}
-          {pickBar}
-          <div
-            className="ttml-lines"
-            ref={list}
-            onClick={(event) => {
-              if ((event.target as Element).closest(".ttml-chip, .ttml-space"))
-                return;
-              setChosen(null);
-              setGroup([]);
-              setSpaces([]);
-            }}
-            onDragEnd={endDrag}
-            onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
-          >
-            {lines.map((line, lineIndex) => (
-              <div
-                key={lineIndex}
-                data-line={lineIndex}
-                {...pickProps(lineIndex)}
-                className={`ttml-card${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${line.units.length ? "" : " empty"}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
-                onClick={(event) => {
-                  setCursor((at) =>
-                    at.line === lineIndex ? at : { line: lineIndex, unit: 0 },
-                  );
-                  // A plain click on the card itself selects the whole line.
-                  if (
-                    !event.shiftKey &&
-                    !event.ctrlKey &&
-                    !event.metaKey &&
-                    !(event.target as Element).closest(
-                      ".ttml-chip, .ttml-space, button, input, label",
-                    )
-                  ) {
-                    pickedFrom.current = lineIndex;
-                    setPicked(new Set([lineIndex]));
-                  }
-                }}
-                onPointerDown={(event) => {
-                  event.currentTarget.draggable = !(
-                    event.target as Element
-                  ).closest("button, input");
-                }}
-                onDragStart={(event) =>
-                  event.target === event.currentTarget &&
-                  startDrag(event, { kind: "line", line: lineIndex })
-                }
-                onDragOver={(event) => {
-                  if (drag?.kind === "line")
-                    over(
-                      event,
-                      `line:${lineIndex}:${firstHalf(event, true) ? "before" : "after"}`,
-                    );
-                  else if (drag?.kind === "word")
-                    over(event, `line:${lineIndex}:end`);
-                }}
-                onDrop={(event) => {
-                  if (drag?.kind === "line")
-                    land(
-                      event,
-                      moveLine(
-                        lines,
-                        drag.line,
-                        firstHalf(event, true) ? lineIndex : lineIndex + 1,
-                      ),
-                    );
-                  else if (drag?.kind === "word")
-                    land(
-                      event,
-                      moveDragged(drag, {
-                        line: lineIndex,
-                        unit: line.units.length,
-                      }),
-                    );
-                }}
-              >
-                <span className="ttml-card-number">{lineIndex + 1}</span>
-                <div className="ttml-card-body">
-                  <div className="ttml-chips">
-                    {line.units.map((unit, unitIndex) => {
-                      const at = { line: lineIndex, unit: unitIndex };
-                      const isEditing =
-                        editing?.line === lineIndex &&
-                        editing.unit === unitIndex;
-                      return (
-                        <Fragment key={unitIndex}>
-                          {unitIndex > 0 && !unit.joined && (
-                            <button
-                              className={`ttml-space${isSpace(at) ? " chosen" : ""}${dropClass(`gap:${lineIndex}:${unitIndex}`)}`}
-                              draggable
-                              onClick={(event) => pickSpace(event, at)}
-                              onDragStart={(event) => {
-                                // A picked space drags the picked words with it.
-                                const words = pickedWords();
-                                if (isSpace(at) && words.length)
-                                  startDrag(event, {
-                                    kind: "word",
-                                    at: words[0],
-                                    ...(words.length > 1 && { group: words }),
-                                  });
-                                else startDrag(event, { kind: "space", at });
-                              }}
-                              onDragOver={(event) =>
-                                drag?.kind === "word" &&
-                                over(
-                                  event,
-                                  `gap:${lineIndex}:${unitIndex}:word`,
-                                )
-                              }
-                              onDrop={(event) =>
-                                drag?.kind === "word" &&
-                                land(event, moveDragged(drag, at))
-                              }
-                            >
-                              Space
-                            </button>
-                          )}
-                          <span
-                            className={
-                              wordRoman ? "ttml-chip-stack" : "ttml-chip-plain"
-                            }
-                          >
-                            {isEditing ? (
-                              <input
-                                className="ttml-chip-edit"
-                                aria-label="Edit word"
-                                autoFocus
-                                defaultValue={unit.text}
-                                size={Math.max(2, unit.text.length + 1)}
-                                onBlur={(event) =>
-                                  commitWord(at, event.target.value)
-                                }
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter")
-                                    event.currentTarget.blur();
-                                  if (event.key === "Escape") setEditing(null);
-                                }}
-                              />
-                            ) : (
-                              <button
-                                className={`ttml-chip${unit.joined ? " joined" : ""}${(chosen?.line === lineIndex && chosen.unit === unitIndex) || inGroup(at) ? " chosen" : ""}${drag?.kind === "word" && ((drag.at.line === lineIndex && drag.at.unit === unitIndex) || (drag.group && inGroup(at))) ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
-                                title={
-                                  unit.joined
-                                    ? "Syllable. Double-click to edit; right-click to make it its own word."
-                                    : "Double-click to edit; drag to move"
-                                }
-                                draggable
-                                onDragStart={(event) => dragWords(event, at)}
-                                onDragOver={(event) => {
-                                  if (drag?.kind === "word")
-                                    over(
-                                      event,
-                                      `unit:${lineIndex}:${unitIndex}:${firstHalf(event, false) ? "before" : "after"}`,
-                                    );
-                                  else if (
-                                    drag?.kind === "space" &&
-                                    unit.joined &&
-                                    drag.at.line === lineIndex
-                                  )
-                                    over(
-                                      event,
-                                      `unit:${lineIndex}:${unitIndex}:space`,
-                                    );
-                                }}
-                                onDrop={(event) => {
-                                  if (drag?.kind === "word") {
-                                    const word = wordBounds(
-                                      line.units,
-                                      unitIndex,
-                                    );
-                                    land(
-                                      event,
-                                      moveDragged(drag, {
-                                        line: lineIndex,
-                                        unit: firstHalf(event, false)
-                                          ? word.start
-                                          : word.end,
-                                      }),
-                                    );
-                                  } else if (
-                                    drag?.kind === "space" &&
-                                    unit.joined
-                                  )
-                                    land(event, moveSpace(lines, drag.at, at));
-                                }}
-                                onClick={(event) => {
-                                  if (
-                                    event.shiftKey ||
-                                    event.ctrlKey ||
-                                    event.metaKey
-                                  )
-                                    return pickWord(at, event.shiftKey);
-                                  setGroup([]);
-                                  setSpaces([]);
-                                  setPicked(new Set());
-                                  setChosen(at);
-                                }}
-                                onDoubleClick={() => setEditing(at)}
-                                onContextMenu={(event) => openMenu(event, at)}
-                              >
-                                {unit.text}
-                              </button>
-                            )}
-                            {wordRoman && (
-                              <input
-                                className="ttml-roman"
-                                key={unit.roman ?? ""}
-                                aria-label={`Romanization of ${unit.text}`}
-                                defaultValue={unit.roman ?? ""}
-                                placeholder="–"
-                                spellCheck={false}
-                                onBlur={(event) =>
-                                  setLines(
-                                    setUnitRoman(lines, at, event.target.value),
-                                  )
-                                }
-                                onKeyDown={(event) =>
-                                  event.key === "Enter" &&
-                                  event.currentTarget.blur()
-                                }
-                              />
-                            )}
-                          </span>
-                        </Fragment>
-                      );
-                    })}
-                    {line.spaceAfter && (
-                      <button
-                        className={`ttml-space${isSpace({ line: lineIndex, unit: line.units.length }) ? " chosen" : ""}`}
-                        onClick={(event) =>
-                          pickSpace(event, {
-                            line: lineIndex,
-                            unit: line.units.length,
-                          })
-                        }
-                      >
-                        Space
-                      </button>
-                    )}
-                    <input
-                      className="ttml-chip-add"
-                      aria-label={`Add words to line ${lineIndex + 1}`}
-                      placeholder="Type word here"
-                      spellCheck={false}
-                      onFocus={() =>
-                        setCursor((at) =>
-                          at.line === lineIndex
-                            ? at
-                            : { line: lineIndex, unit: 0 },
-                        )
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") event.currentTarget.blur();
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const next = appendWords(
-                          lines,
-                          lineIndex,
-                          event.currentTarget.value,
-                        );
-                        event.currentTarget.value = "";
-                        if (next !== lines) setLines(next);
-                      }}
-                    />
-                  </div>
-                  {(["translation", "romanization"] as const).map((key) => (
-                    <label key={key} className="ttml-card-extra">
-                      {key === "translation" ? "Translation:" : "Romanization:"}
-                      <input
-                        key={line[key] ?? ""}
-                        defaultValue={line[key] ?? ""}
-                        placeholder="None"
-                        spellCheck={false}
-                        onBlur={(event) =>
-                          event.target.value !== (line[key] ?? "") &&
-                          setLines(
-                            setLineText(
-                              lines,
-                              lineIndex,
-                              key,
-                              event.target.value.trim(),
-                            ),
-                          )
-                        }
-                        onKeyDown={(event) =>
-                          event.key === "Enter" && event.currentTarget.blur()
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="ttml-line-tools">
-                  <button
-                    className={line.background ? "active" : ""}
-                    aria-pressed={line.background}
-                    title="Background vocal"
-                    onClick={() =>
-                      setLines(toggleLine(lines, lineIndex, "background"))
-                    }
-                  >
-                    BG
-                  </button>
-                  <button
-                    className={line.opposite ? "active" : ""}
-                    aria-pressed={line.opposite}
-                    title="Second singer"
-                    onClick={() =>
-                      setLines(toggleLine(lines, lineIndex, "opposite"))
-                    }
-                  >
-                    v2
-                  </button>
-                  <button
-                    title="Delete line"
-                    aria-label="Delete line"
-                    onClick={() => {
-                      const next = removeLine(lines, lineIndex);
-                      setLines(next);
-                      setCursor((at) => clampCursor(next, at));
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <button
-                    title="Add line below"
-                    aria-label="Add line below"
-                    onClick={() => addBlankLine(lineIndex)}
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab === "write" && (textMode || !lines.length) && (
+      {(textMode || !lines.length) && (
         <div className="ttml-write">
           <p className="ttml-hint">
             One lyric line per line. Split a word into syllables with{" "}
@@ -2179,21 +1706,21 @@ export function TtmlCreator({
             </label>
             <div className="ttml-row">
               {lines.length > 0 && (
-                <button onClick={() => applyText(false)}>Done</button>
+                <button onClick={() => setTextMode(false)}>Cancel</button>
               )}
               <button
                 className="primary"
-                onClick={() => applyText(true)}
+                onClick={applyText}
                 disabled={!text.trim()}
               >
-                Continue to Sync
+                Done
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {tab === "sync" && (
+      {editable && (
         <>
           <div className="ttml-transport">
             <button
@@ -2240,7 +1767,7 @@ export function TtmlCreator({
               title={
                 lines.some(hasWordRoman)
                   ? "Show each word's romanization instead of its text"
-                  : "Add word romanization on the Lyrics tab first"
+                  : "Fill in word readings or use Auto romanize first"
               }
             >
               <Languages size={15} />
@@ -2249,10 +1776,18 @@ export function TtmlCreator({
             <span className="ttml-progress">
               {done}/{total} timed
             </span>
-            <button onClick={undo} title="Undo (Ctrl+Z)" aria-label="Undo">
+            <button
+              onClick={undo}
+              title={`Undo (${MODIFIER}+Z)`}
+              aria-label="Undo"
+            >
               <Undo2 size={15} />
             </button>
-            <button onClick={redo} title="Redo (Ctrl+Y)" aria-label="Redo">
+            <button
+              onClick={redo}
+              title={IS_MAC ? "Redo (Cmd+Shift+Z)" : "Redo (Ctrl+Y)"}
+              aria-label="Redo"
+            >
               <Redo2 size={15} />
             </button>
             <button
@@ -2264,10 +1799,124 @@ export function TtmlCreator({
               <RotateCcw size={15} />
             </button>
           </div>
+          <div
+            className="ttml-edit-bar"
+            role="toolbar"
+            aria-label="Edit lyrics"
+          >
+            <label className="ttml-field ttml-field-word">
+              <span>
+                Word <kbd>{IS_MAC ? "⌘E" : "F2"}</kbd>
+              </span>
+              <input
+                ref={wordField}
+                key={`word:${cursor.line}:${cursor.unit}:${selectedUnit?.text ?? ""}`}
+                aria-label="Selected word"
+                defaultValue={selectedUnit?.text ?? ""}
+                placeholder="No word selected"
+                disabled={!selectedUnit}
+                spellCheck={false}
+                onFocus={(event) => event.currentTarget.select()}
+                onBlur={(event) =>
+                  selectedUnit &&
+                  event.target.value !== selectedUnit.text &&
+                  commitWord(cursor, event.target.value)
+                }
+                onKeyDown={leaveField}
+              />
+            </label>
+            <label className="ttml-field">
+              <span>Reading</span>
+              <input
+                key={`reading:${cursor.line}:${cursor.unit}:${selectedUnit?.roman ?? ""}`}
+                aria-label="Reading of the selected word"
+                defaultValue={selectedUnit?.roman ?? ""}
+                placeholder="–"
+                disabled={!selectedUnit}
+                spellCheck={false}
+                onBlur={(event) =>
+                  selectedUnit &&
+                  event.target.value !== (selectedUnit.roman ?? "") &&
+                  setLines(setUnitRoman(lines, cursor, event.target.value))
+                }
+                onKeyDown={leaveField}
+              />
+            </label>
+            {(["translation", "romanization"] as const).map((key) => (
+              <label key={key} className="ttml-field">
+                <span>
+                  {key === "translation" ? "Translation" : "Line romanization"}
+                </span>
+                <input
+                  key={`${key}:${cursor.line}:${selectedLine?.[key] ?? ""}`}
+                  aria-label={`${key === "translation" ? "Translation" : "Romanization"} of line ${cursor.line + 1}`}
+                  defaultValue={selectedLine?.[key] ?? ""}
+                  placeholder="None"
+                  disabled={!selectedLine}
+                  spellCheck={false}
+                  onBlur={(event) =>
+                    selectedLine &&
+                    event.target.value.trim() !== (selectedLine[key] ?? "") &&
+                    setLines(
+                      setLineText(
+                        lines,
+                        cursor.line,
+                        key,
+                        event.target.value.trim(),
+                      ),
+                    )
+                  }
+                  onKeyDown={leaveField}
+                />
+              </label>
+            ))}
+            <span className="ttml-edit-tools">
+              <button
+                onClick={startFromLyrics}
+                disabled={!here || !state.lyrics?.lines.length}
+                title="Use the lyrics Lyssna found for this song as a start"
+              >
+                <Wand2 size={15} />
+                Start from current lyrics
+              </button>
+              <button onClick={openText}>
+                <Type size={15} />
+                Edit as text
+              </button>
+              <label
+                className="ttml-import"
+                title="TTML, LRC, QRC, YRC, Lyricify Syllable or ESLyric"
+              >
+                <Upload size={15} />
+                Import file
+                {importInput}
+              </label>
+              <button
+                onClick={() => void autoRomanize()}
+                disabled={romanNote === "Romanizing…"}
+                title="Fill empty word readings for lyrics in any non-Latin script"
+              >
+                <Languages size={15} />
+                Auto romanize
+              </button>
+            </span>
+          </div>
+          {romanNote && (
+            <p className="ttml-hint" role="status">
+              {romanNote}
+            </p>
+          )}
           {pickBar}
           <div
             className="ttml-lines"
             ref={list}
+            onClick={(event) => {
+              if ((event.target as Element).closest(".ttml-unit")) return;
+              setGroup([]);
+              setSpaces([]);
+            }}
+            onDragEnd={endDrag}
+            onDragOverCapture={(event) => drag && scrollWhileDragging(event)}
             onWheel={() => {
               scrolledAt.current = Date.now();
               cancelAnimationFrame(glide.current);
@@ -2282,20 +1931,68 @@ export function TtmlCreator({
                 key={lineIndex}
                 data-line={lineIndex}
                 {...pickProps(lineIndex)}
-                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${playingLine === lineIndex || liveWords.singing.has(lineIndex) ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}`}
+                className={`ttml-card ttml-line${line.background ? " background" : ""}${line.opposite ? " opposite" : ""}${cursor.line === lineIndex ? " current" : ""}${line.units.length ? "" : " empty"}${playingLine === lineIndex || liveWords.singing.has(lineIndex) ? " playing" : ""}${picked.has(lineIndex) ? " picked" : ""}${drag?.kind === "line" && drag.line === lineIndex ? " dragging" : ""}${dropClass(`line:${lineIndex}`)}`}
                 onClick={(event) => {
+                  const target = event.target as Element;
                   if (
                     cursor.line !== lineIndex &&
-                    !(event.target as Element).closest("button, input")
+                    !target.closest("button, input")
                   ) {
                     clickedLine.current = true;
                     setCursor(clampCursor(lines, { line: lineIndex, unit: 0 }));
                   }
+                  if (
+                    target.closest(".ttml-card-number") &&
+                    !event.shiftKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey
+                  ) {
+                    pickedFrom.current = lineIndex;
+                    setPicked(new Set([lineIndex]));
+                  }
+                }}
+                onPointerDown={(event) => {
+                  event.currentTarget.draggable = !(
+                    event.target as Element
+                  ).closest("button, input");
+                }}
+                onDragStart={(event) =>
+                  event.target === event.currentTarget &&
+                  startDrag(event, { kind: "line", line: lineIndex })
+                }
+                onDragOver={(event) => {
+                  if (drag?.kind === "line")
+                    over(
+                      event,
+                      `line:${lineIndex}:${firstHalf(event, true) ? "before" : "after"}`,
+                    );
+                  else if (drag?.kind === "word")
+                    over(event, `line:${lineIndex}:end`);
+                }}
+                onDrop={(event) => {
+                  if (drag?.kind === "line")
+                    land(
+                      event,
+                      moveLine(
+                        lines,
+                        drag.line,
+                        firstHalf(event, true) ? lineIndex : lineIndex + 1,
+                      ),
+                    );
+                  else if (drag?.kind === "word")
+                    land(
+                      event,
+                      moveDragged(drag, {
+                        line: lineIndex,
+                        unit: line.units.length,
+                      }),
+                    );
                 }}
               >
                 <span className="ttml-card-number">{lineIndex + 1}</span>
                 <div className="ttml-cells">
                   {line.units.map((unit, unitIndex) => {
+                    const at = { line: lineIndex, unit: unitIndex };
                     const selected =
                       cursor.line === lineIndex && cursor.unit === unitIndex;
                     const live =
@@ -2307,20 +2004,47 @@ export function TtmlCreator({
                     return (
                       <button
                         key={unitIndex}
-                        className={`ttml-unit${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : unit.start !== undefined ? " started" : ""}${selected ? " selected" : ""}${live ? " live" : ""}`}
-                        onClick={() => {
+                        className={`ttml-unit${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : unit.start !== undefined ? " started" : ""}${selected ? " selected" : ""}${live ? " live" : ""}${inGroup(at) ? " chosen" : ""}${drag?.kind === "word" && ((drag.at.line === lineIndex && drag.at.unit === unitIndex) || (drag.group && inGroup(at))) ? " dragging" : ""}${dropClass(`unit:${lineIndex}:${unitIndex}`)}`}
+                        aria-label={unit.text}
+                        title={`Double-click to replay, right-click for word options, ${IS_MAC ? "Cmd+E" : "F2"} to edit, drag to move`}
+                        draggable
+                        onDragStart={(event) => dragWords(event, at)}
+                        onDragOver={(event) =>
+                          drag?.kind === "word" &&
+                          over(
+                            event,
+                            `unit:${lineIndex}:${unitIndex}:${firstHalf(event, false) ? "before" : "after"}`,
+                          )
+                        }
+                        onDrop={(event) => {
+                          if (drag?.kind !== "word") return;
+                          const word = wordBounds(line.units, unitIndex);
+                          land(
+                            event,
+                            moveDragged(drag, {
+                              line: lineIndex,
+                              unit: firstHalf(event, false)
+                                ? word.start
+                                : word.end,
+                            }),
+                          );
+                        }}
+                        onClick={(event) => {
                           if (lineIndex !== cursor.line)
                             clickedLine.current = true;
-                          setCursor({ line: lineIndex, unit: unitIndex });
+                          if (event.shiftKey || event.ctrlKey || event.metaKey)
+                            return pickWord(at, event.shiftKey);
+                          setGroup([]);
+                          setSpaces([]);
+                          setPicked(new Set());
+                          setCursor(at);
                         }}
                         onDoubleClick={() => {
                           if (unit.start === undefined) return;
                           holdLine.current = lineIndex;
                           seek(unit.start - 1000);
                         }}
-                        onContextMenu={(event) =>
-                          openMenu(event, { line: lineIndex, unit: unitIndex })
-                        }
+                        onContextMenu={(event) => openMenu(event, at)}
                       >
                         <TimePill ms={unit.start} />
                         <span
@@ -2335,6 +2059,32 @@ export function TtmlCreator({
                       </button>
                     );
                   })}
+                  <input
+                    className="ttml-chip-add"
+                    aria-label={`Add words to line ${lineIndex + 1}`}
+                    placeholder="Type word here"
+                    spellCheck={false}
+                    onFocus={() =>
+                      setCursor((at) =>
+                        at.line === lineIndex
+                          ? at
+                          : { line: lineIndex, unit: 0 },
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") event.currentTarget.blur();
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const next = appendWords(
+                        lines,
+                        lineIndex,
+                        event.currentTarget.value,
+                      );
+                      event.currentTarget.value = "";
+                      if (next !== lines) setLines(next);
+                    }}
+                  />
                 </div>
                 <div className="ttml-line-side">
                   <TimePill ms={lineSpan(line)?.start} />
@@ -2368,6 +2118,24 @@ export function TtmlCreator({
                   >
                     v2
                   </button>
+                  <button
+                    title="Delete line"
+                    aria-label="Delete line"
+                    onClick={() => {
+                      const next = removeLine(lines, lineIndex);
+                      setLines(next);
+                      setCursor((at) => clampCursor(next, at));
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    title="Add line below"
+                    aria-label="Add line below"
+                    onClick={() => addBlankLine(lineIndex)}
+                  >
+                    <Plus size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -2376,25 +2144,6 @@ export function TtmlCreator({
             <p className="ttml-issues">{issues.join(" ")}</p>
           )}
         </>
-      )}
-
-      {tab === "preview" && (
-        <div className="ttml-preview">
-          {preview.lines.length ? (
-            renderPreview ? (
-              renderPreview(preview)
-            ) : (
-              <LyricsDisplay
-                lyrics={preview}
-                positionMs={position}
-                settings={state.settings}
-                onSeek={seek}
-              />
-            )
-          ) : (
-            <p className="ttml-hint">Time some words to see them here.</p>
-          )}
-        </div>
       )}
       {menu && (
         <WordMenu
@@ -2422,7 +2171,6 @@ export function TtmlCreator({
       {savesDialog}
       {editingKeys && (
         <KeysDialog
-          mode={tab === "sync" ? "sync" : "lyrics"}
           keys={keys}
           onChange={changeKeys}
           onClose={() => setEditingKeys(false)}

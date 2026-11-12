@@ -15616,16 +15616,21 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   const creator = page.getByRole("region", { name: "TTML Creator" });
   await expect(creator).toContainText("Come & Go (with Marshmello)");
   const card = creator.locator(".ttml-card").first();
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "I am just a lyric line number 1".split(" "),
   );
-  await expect(card.locator(".ttml-space")).toHaveCount(7);
-  await creator.getByRole("button", { name: "Lyrics settings" }).click();
-  const lyricSettings = page.getByRole("dialog", { name: "Lyrics settings" });
-  await expect(lyricSettings).toContainText("Split a word into syllables");
-  await expect(lyricSettings).not.toContainText("Start word");
-  await lyricSettings.getByRole("button", { name: "Close settings" }).click();
-  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await creator.getByRole("button", { name: "Controls", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "Controls" });
+  for (const text of [
+    "Split a word into syllables",
+    "Start word",
+    "Replay from a word",
+    "Add a line below",
+    "F2",
+  ])
+    await expect(help).toContainText(text);
+  await help.getByRole("button", { name: "Close controls" }).click();
+  await expect(help).toHaveCount(0);
   const firstLine = creator.locator(".ttml-line").first();
   await expect(firstLine.locator(".ttml-line-side")).toHaveText(
     /00:10\.000\s*00:13\.000/,
@@ -15634,22 +15639,32 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect(firstLine.locator(".ttml-pill.empty").first()).toHaveText(
     "--:--.---",
   );
-  await creator.getByRole("tab", { name: "Lyrics" }).click();
-  await card.locator(".ttml-space").first().click();
-  await expect(card.locator(".ttml-space").first()).toHaveClass(/chosen/);
-  await page.keyboard.press("Delete");
-  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
-  await card.getByLabel("Edit word").fill("song");
-  await card.getByLabel("Edit word").press("Enter");
-  await card.getByPlaceholder("None").first().fill("Hola");
-  await card.getByPlaceholder("None").first().press("Enter");
-  await expect(card.getByPlaceholder("None").first()).toHaveValue("Hola");
+  await card
+    .getByRole("button", { name: "am", exact: true })
+    .click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Word actions" })
+    .getByRole("menuitem", { name: "Join to the word before" })
+    .click();
+  await card.getByRole("button", { name: "lyric", exact: true }).click();
+  await page.keyboard.press("F2");
+  const wordField = creator.getByLabel("Selected word", { exact: true });
+  await expect(wordField).toBeFocused();
+  await expect(wordField).toHaveValue("lyric");
+  await wordField.fill("song");
+  await wordField.press("Enter");
+  await expect(wordField).not.toBeFocused();
+  await expect(card.locator(".ttml-word").nth(4)).toHaveText("song");
+  const translation = creator.getByLabel("Translation of line 1");
+  await translation.fill("Hola");
+  await translation.press("Enter");
+  await expect(translation).toHaveValue("Hola");
   await creator.getByRole("button", { name: "Edit as text" }).click();
   await expect(creator.getByLabel("Lyrics text")).toHaveValue(
     /^I\|am just a song line number 1\nI am just a lyric line number 2\n/,
   );
   await creator.getByLabel("Lyrics text").fill("Hello wor|ld\n(ooh)");
-  await creator.getByRole("button", { name: "Continue to Sync" }).click();
+  await creator.getByRole("button", { name: "Done" }).click();
   await expect(creator.locator(".ttml-word")).toHaveText([
     "Hello",
     "wor",
@@ -15769,21 +15784,18 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
       .poll(async () => (await requests()).at(-1))
       .toEqual({ command: "seek", positionMs });
   }
-  await creator.getByRole("button", { name: "Sync settings" }).click();
-  const keys = page.getByRole("dialog", { name: "Sync settings" });
+  await creator.getByRole("button", { name: "Controls", exact: true }).click();
+  const keys = page.getByRole("dialog", { name: "Controls" });
   await keys.getByRole("button", { name: "Jump to previous word key" }).click();
   await page.keyboard.press("q");
   await expect(
     keys.getByRole("button", { name: "Jump to previous word key" }),
   ).toHaveText("Q");
-  await keys.getByRole("button", { name: "Close settings" }).click();
+  await keys.getByRole("button", { name: "Close controls" }).click();
   await page.keyboard.press("q");
   await expect
     .poll(async () => (await requests()).at(-1))
     .toEqual({ command: "seek", positionMs: 3500 });
-
-  await creator.getByRole("tab", { name: "Preview" }).click();
-  await expect(creator.locator(".ttml-preview")).toContainText("Hello world");
 
   await creator.getByTitle("Metadata").click();
   const metadata = page.getByRole("dialog", { name: "Song metadata" });
@@ -15834,6 +15846,12 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
     repeat: "off",
   });
   await expect.poll(() => last("playback_speed")).toEqual({ percent: 100 });
+  // The draft just worked on stands in for the song's lyrics.
+  const banner = page.locator(".ttml-draft-banner");
+  await expect(banner).toContainText("Showing your TTML draft");
+  await expect(page.getByText("ooh", { exact: true })).toBeVisible();
+  await banner.getByRole("button", { name: "Original lyrics" }).click();
+  await expect(banner).toHaveCount(0);
 });
 
 test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
@@ -16457,37 +16475,36 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await page.mouse.move(0, 0);
   await expect(second.getByPlaceholder("Type word here")).toBeVisible();
   await first.locator(".ttml-card-number").click();
-  const spaces = first.locator(".ttml-space");
-  const before = await spaces.count();
-  await add.pressSequentially(" ");
-  await expect(add).toHaveValue(" ");
-  await add.press("Enter");
-  await expect(spaces).toHaveCount(before + 1);
-  await expect(add).toHaveValue("");
-  await expect(add).toBeFocused();
+  const words = first.locator(".ttml-word");
+  const units = first.locator(".ttml-unit");
+  const before = await words.count();
   await add.pressSequentially("extra wo|rds");
   await add.press("Enter");
-  await expect(spaces).toHaveCount(before + 2);
-  await expect(first.locator(".ttml-chip").last()).toHaveText("rds");
-  await expect(first.locator(".ttml-chip").nth(-3)).toHaveText("extra");
+  await expect(words).toHaveCount(before + 3);
+  await expect(add).toHaveValue("");
+  await expect(add).toBeFocused();
+  await expect(words.last()).toHaveText("rds");
+  await expect(words.nth(-3)).toHaveText("extra");
+  await expect(units.last()).toHaveClass(/joined/);
+  await expect(units.nth(-2)).not.toHaveClass(/joined/);
   await add.pressSequentially("so");
   await add.press("Enter");
-  await expect(first.locator(".ttml-chip").last()).not.toHaveClass(/joined/);
+  await expect(units.last()).not.toHaveClass(/joined/);
   await add.pressSequentially("|y");
   await add.press("Enter");
-  await expect(first.locator(".ttml-chip").last()).toHaveClass(/joined/);
+  await expect(units.last()).toHaveClass(/joined/);
   // The plus adds a blank line holding only Type word here.
   const count = await creator.locator(".ttml-card").count();
   await first.getByRole("button", { name: "Add line below" }).click();
   await expect(creator.locator(".ttml-card")).toHaveCount(count + 1);
   const blank = creator.locator(".ttml-card").nth(1);
-  await expect(blank.locator(".ttml-chip")).toHaveCount(0);
+  await expect(blank.locator(".ttml-unit")).toHaveCount(0);
   await expect(creator.getByPlaceholder("New line, then Enter")).toHaveCount(0);
   const blankAdd = blank.getByPlaceholder("Type word here");
   await expect(blankAdd).toBeFocused();
   await blankAdd.fill("fresh");
   await blankAdd.press("Enter");
-  await expect(blank.locator(".ttml-chip")).toHaveText(["fresh"]);
+  await expect(blank.locator(".ttml-word")).toHaveText(["fresh"]);
 });
 
 test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
@@ -16509,66 +16526,40 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   const card = creator.locator(".ttml-card").first();
   const word = (name: string) =>
     card.getByRole("button", { name, exact: true });
-  await expect(card.locator(".ttml-space").first()).not.toHaveAttribute(
-    "title",
-    /./,
-  );
-  await word("just").click({ modifiers: ["Control"] });
+  await word("just").click();
   await word("lyric").click({ modifiers: ["Control"] });
   await expect(creator.locator(".ttml-pick-bar")).toHaveCount(0);
-  await expect(card.locator(".ttml-chip.chosen")).toHaveText(["just", "lyric"]);
+  await expect(card.locator(".ttml-unit.chosen .ttml-word")).toHaveText([
+    "just",
+    "lyric",
+  ]);
   await word("just").dragTo(word("I"), { targetPosition: { x: 2, y: 10 } });
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "just lyric I am a line number 1".split(" "),
   );
   await word("I").click();
   await word("a").click({ modifiers: ["Shift"] });
-  await expect(card.locator(".ttml-chip.chosen")).toHaveText(["I", "am", "a"]);
-  await expect(card.locator(".ttml-space.chosen")).toHaveCount(2);
+  await expect(card.locator(".ttml-unit.chosen .ttml-word")).toHaveText([
+    "I",
+    "am",
+    "a",
+  ]);
   await word("I").click();
   await word("am").click({ modifiers: ["Control"] });
-  await card
-    .locator(".ttml-space")
-    .nth(3)
-    .click({ modifiers: ["Control"] });
-  await page.keyboard.press("Delete");
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await page.keyboard.press("Control+Delete");
+  await expect(card.locator(".ttml-word")).toHaveText(
     "just lyric a line number 1".split(" "),
   );
   await page.keyboard.press("Control+z");
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "just lyric I am a line number 1".split(" "),
   );
   await word("I").click();
   await word("a").click({ modifiers: ["Shift"] });
   await word("I").dragTo(word("1"));
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "just lyric line number I am a 1".split(" "),
   );
-  const spaces = card.locator(".ttml-space");
-  const count = await spaces.count();
-  await spaces.nth(0).click();
-  await spaces.nth(1).click({ modifiers: ["Control"] });
-  await expect(card.locator(".ttml-space.chosen")).toHaveCount(2);
-  await expect(spaces).toHaveCount(count);
-  await page.keyboard.press("Backspace");
-  await expect(spaces).toHaveCount(count - 2);
-  await expect(card.locator(".ttml-chip").nth(1)).toHaveClass(/joined/);
-  await expect(card.locator(".ttml-chip").nth(2)).toHaveClass(/joined/);
-  // A picked space plus a picked word drags as that word.
-  const last = creator.locator(".ttml-card").nth(1);
-  const lastWord = (name: string) =>
-    last.getByRole("button", { name, exact: true });
-  const before = (await last.locator(".ttml-chip").allTextContents()).join(" ");
-  const tail = before.split(" ").at(-1)!;
-  await last.locator(".ttml-space").last().click();
-  await lastWord(tail).click({ modifiers: ["Control"] });
-  await last
-    .locator(".ttml-space.chosen")
-    .dragTo(last.locator(".ttml-chip").first(), {
-      targetPosition: { x: 2, y: 10 },
-    });
-  await expect(last.locator(".ttml-chip").first()).toHaveText(tail);
 });
 
 test("TTML Creator replaces one word or every identical word", async ({
@@ -16604,10 +16595,10 @@ test("TTML Creator replaces one word or every identical word", async ({
   await page.keyboard.type("song");
   await page.keyboard.press("Enter");
   await expect(dialog).toHaveCount(0);
-  await expect(cards.first().locator(".ttml-chip")).toHaveText(
+  await expect(cards.first().locator(".ttml-word")).toHaveText(
     "I am just a song line number 1".split(" "),
   );
-  await expect(cards.nth(1).locator(".ttml-chip")).toHaveText(
+  await expect(cards.nth(1).locator(".ttml-word")).toHaveText(
     "I am just a lyric line number 2".split(" "),
   );
 
@@ -16622,7 +16613,7 @@ test("TTML Creator replaces one word or every identical word", async ({
     .check();
   await expect(matchCase).toBeEnabled();
   await dialog.getByRole("button", { name: "Confirm" }).click();
-  await expect(cards.nth(1).locator(".ttml-chip")).toHaveText(
+  await expect(cards.nth(1).locator(".ttml-word")).toHaveText(
     "I am just a lyric verse number 2".split(" "),
   );
 });
@@ -16650,7 +16641,7 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     button: "right",
   });
   await menu.getByRole("menuitem", { name: "Auto-segment word" }).click();
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "I am just a lyric line num ber 1".split(" "),
   );
 
@@ -16671,7 +16662,7 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
   await dialog.getByRole("button", { name: "Confirm" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(
-    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+    creator.locator(".ttml-card").nth(1).locator(".ttml-word"),
   ).toHaveText("I am just a ly ric line number 2".split(" "));
   expect(
     await page.evaluate(() => localStorage.getItem("lyssna.ttml-splits")),
@@ -16684,7 +16675,7 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     .getByRole("menuitem", { name: "Move following words to new line" })
     .click();
   await expect(
-    creator.locator(".ttml-card").nth(1).locator(".ttml-chip"),
+    creator.locator(".ttml-card").nth(1).locator(".ttml-word"),
   ).toHaveText("line num ber 1".split(" "));
   await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
 
@@ -16693,15 +16684,20 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     .dragTo(card.getByRole("button", { name: "I", exact: true }), {
       targetPosition: { x: 2, y: 10 },
     });
-  await expect(card.locator(".ttml-chip")).toHaveText(
+  await expect(card.locator(".ttml-word")).toHaveText(
     "am I just a ly ric".split(" "),
   );
 
   const moved = creator.locator(".ttml-card").nth(1);
-  await moved
-    .locator(".ttml-space")
-    .first()
-    .dragTo(moved.getByRole("button", { name: "ber", exact: true }));
+  for (const [name, item] of [
+    ["ber", "Space before this syllable"],
+    ["num", "Join to the word before"],
+  ]) {
+    await moved
+      .getByRole("button", { name, exact: true })
+      .click({ button: "right" });
+    await menu.getByRole("menuitem", { name: item }).click();
+  }
   await expect(
     moved.getByRole("button", { name: "num", exact: true }),
   ).toHaveClass(/joined/);
@@ -16714,23 +16710,22 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     .nth(2)
     .dragTo(card, { targetPosition: { x: 20, y: 2 } });
   await expect(
-    creator.locator(".ttml-card").first().locator(".ttml-chip"),
+    creator.locator(".ttml-card").first().locator(".ttml-word"),
   ).toHaveText("I am just a ly ric line number 2".split(" "));
 
-  await creator.getByRole("button", { name: "Word romanization" }).click();
-  const reading = creator
-    .getByRole("textbox", { name: "Romanization of just" })
-    .first();
+  await creator
+    .locator(".ttml-card")
+    .first()
+    .getByRole("button", { name: "just", exact: true })
+    .click();
+  const reading = creator.getByLabel("Reading of the selected word");
   await reading.fill("jasuto");
   await reading.press("Enter");
-  await creator.getByRole("button", { name: "Word romanization" }).click();
-  await creator.getByRole("button", { name: "Word romanization" }).click();
   await expect(reading).toHaveValue("jasuto");
   await creator.getByRole("button", { name: "Auto romanize" }).click();
   await expect(creator.getByRole("status")).toContainText(
     "Nothing to romanize",
   );
-  await creator.getByRole("tab", { name: "Sync" }).click();
   await creator
     .getByRole("button", { name: "Romanization", exact: true })
     .click();
@@ -16844,7 +16839,6 @@ test("TTML Creator Sync follows the playing line", async ({ page }) => {
     .toBeGreaterThan(200);
   await page.mouse.up();
 
-  await creator.getByRole("button", { name: "Continue to Sync" }).click();
   await page.evaluate(() => {
     (window as any).__clientTest.emit({
       type: "playback",
@@ -16878,7 +16872,7 @@ test("TTML Creator Sync follows the playing line", async ({ page }) => {
   ).not.toBeInViewport();
 });
 
-test("TTML Creator selects a Sync line by its blank space and centres it in Lyrics", async ({
+test("TTML Creator selects a line by its blank space and keeps it in view", async ({
   page,
 }) => {
   await startClient(page);
@@ -16894,7 +16888,6 @@ test("TTML Creator selects a Sync line by its blank space and centres it in Lyri
     .getByTitle("TTML Creator", { exact: true })
     .click();
   const creator = page.getByRole("region", { name: "TTML Creator" });
-  await creator.getByRole("button", { name: "Continue to Sync" }).click();
   const row = creator.locator('.ttml-line[data-line="20"]');
   await row.scrollIntoViewIfNeeded();
   const cells = (await row.locator(".ttml-cells").boundingBox())!;
@@ -16908,8 +16901,6 @@ test("TTML Creator selects a Sync line by its blank space and centres it in Lyri
   await expect(word).toHaveClass(/\bselected\b/);
   await page.waitForTimeout(500);
   expect(await list.evaluate((element) => element.scrollTop)).toBe(scrolled);
-
-  await creator.getByRole("tab", { name: "Lyrics" }).click();
   await expect(creator.locator('.ttml-card[data-line="21"]')).toBeInViewport();
   await expect(creator.locator('.ttml-card[data-line="21"]')).toHaveClass(
     /\bcurrent\b/,
@@ -16958,12 +16949,12 @@ test("TTML Creator changes several selected lines at once", async ({
   await expect(cards).toHaveCount(total - 3);
   await expect(bar).toHaveCount(0);
   // A plain click selects one whole line; Delete removes it.
-  const second = await cards.nth(1).locator(".ttml-chip").allTextContents();
+  const second = await cards.nth(1).locator(".ttml-word").allTextContents();
   await number(0).click();
   await expect(bar).toContainText("1 line selected");
   await page.keyboard.press("Delete");
   await expect(cards).toHaveCount(total - 4);
-  await expect(cards.nth(0).locator(".ttml-chip")).toHaveText(second);
+  await expect(cards.nth(0).locator(".ttml-word")).toHaveText(second);
 });
 
 test("TTML Creator imports and exports other lyric formats", async ({
@@ -16992,22 +16983,24 @@ test("TTML Creator imports and exports other lyric formats", async ({
   const cards = creator.locator(".ttml-card");
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(1)).toHaveClass(/\bbackground\b/);
-  const spaces = cards.first().locator(".ttml-space");
-  await expect(spaces).toHaveCount(1);
-  await cards.first().locator(".ttml-chip.joined").dblclick();
-  await expect(creator.getByLabel("Edit word")).toHaveValue("er");
+  const words = cards.first().locator(".ttml-word");
+  const units = cards.first().locator(".ttml-unit");
+  await expect(words).toHaveText(["For", "ev", "er"]);
+  await expect(units.nth(2)).toHaveClass(/\bjoined\b/);
+  await units.nth(2).click();
+  await page.keyboard.press("F2");
+  const field = creator.getByLabel("Selected word", { exact: true });
+  await expect(field).toHaveValue("er");
+  await field.fill("oops");
   await page.keyboard.press("Escape");
-  await expect(spaces).toHaveCount(1);
-  const chips = cards.first().locator(".ttml-chip");
-  await chips.nth(1).click();
-  await expect(chips.nth(1)).toHaveClass(/\bchosen\b/);
-  await page.keyboard.press("Delete");
-  await expect(chips).toHaveText(["For", "er"]);
-  await expect(chips.nth(1)).not.toHaveClass(/\bjoined\b/);
-  await expect(chips.nth(1)).toHaveClass(/\bchosen\b/);
+  await expect(field).not.toBeFocused();
+  await expect(words).toHaveText(["For", "ev", "er"]);
+  await units.nth(1).click();
+  await page.keyboard.press("Control+Delete");
+  await expect(words).toHaveText(["For", "er"]);
+  await expect(units.nth(1)).not.toHaveClass(/\bjoined\b/);
   await page.keyboard.press("Control+z");
-  await expect(chips).toHaveText(["For", "ev", "er"]);
-  await creator.getByRole("tab", { name: "Sync" }).click();
+  await expect(words).toHaveText(["For", "ev", "er"]);
   await expect(creator.locator(".ttml-progress")).toHaveText("4/4 timed");
 
   await creator.getByTitle("Save lyrics file").click();
@@ -17034,20 +17027,17 @@ test("TTML Creator saves drafts with a time and keeps versions", async ({
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   const creator = page.getByRole("region", { name: "TTML Creator" });
   const card = creator.locator(".ttml-card").first();
-  await expect(card.locator(".ttml-chip").first()).toHaveText("I");
+  await expect(card.locator(".ttml-word").first()).toHaveText("I");
   await expect(creator.locator(".ttml-saved")).toHaveText("Not saved yet");
-  await card.getByRole("button", { name: "lyric", exact: true }).dblclick();
-  await card.getByLabel("Edit word").fill("song");
-  await card.getByLabel("Edit word").press("Enter");
+  await card.getByRole("button", { name: "lyric", exact: true }).click();
+  await page.keyboard.press("F2");
+  await creator.getByLabel("Selected word", { exact: true }).fill("song");
+  await creator.getByLabel("Selected word", { exact: true }).press("Enter");
   await expect(creator.locator(".ttml-saved")).toHaveText(/^Saved \d/);
 
   await bar.getByTitle("TTML Creator", { exact: true }).click();
   await expect(creator).toHaveCount(0);
   await bar.getByTitle("TTML Creator", { exact: true }).click();
-  await expect(creator.getByRole("tab", { name: "Sync" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
   await expect(creator.locator(".ttml-word", { hasText: "song" })).toHaveCount(
     1,
   );

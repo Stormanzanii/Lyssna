@@ -7303,3 +7303,32 @@ button.discography-track:hover {
   background-clip: text;
   -webkit-background-clip: text;
 }
+.ttml-draft-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid light-dark(#00000013, #ffffff13);
+  border-radius: 30px;
+  background: light-dark(#f2f2f06b, #0d0d0f6b);
+  backdrop-filter: blur(15px) brightness(0.85);
+  color: light-dark(#0e0e0e, #f1f1f1);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  translate: -50% 0;
+}
+.ttml-draft-banner button {
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: light-dark(#0000000f, #ffffff17);
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.ttml-draft-banner button:hover {
+  background: light-dark(#0000001f, #ffffff29);
+}

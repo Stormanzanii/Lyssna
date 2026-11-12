@@ -16505,6 +16505,18 @@ test("TTML Creator offers Type word here on the active or hovered line", async (
   await blankAdd.fill("fresh");
   await blankAdd.press("Enter");
   await expect(blank.locator(".ttml-word")).toHaveText(["fresh"]);
+  // Undo and Backspace reach the creator from an empty new line.
+  const lines = await creator.locator(".ttml-card").count();
+  await blank.getByRole("button", { name: "Add line below" }).click();
+  await expect(creator.locator(".ttml-card")).toHaveCount(lines + 1);
+  const fresh = creator.locator(".ttml-card").nth(2).getByPlaceholder("Type word here");
+  await expect(fresh).toBeFocused();
+  await page.keyboard.press("Control+z");
+  await expect(creator.locator(".ttml-card")).toHaveCount(lines);
+  await blank.getByRole("button", { name: "Add line below" }).click();
+  await expect(fresh).toBeFocused();
+  await page.keyboard.press("Backspace");
+  await expect(creator.locator(".ttml-card")).toHaveCount(lines);
 });
 
 test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({

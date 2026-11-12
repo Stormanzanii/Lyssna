@@ -2078,6 +2078,37 @@ export function TtmlCreator({
                     }
                     onKeyDown={(event) => {
                       if (event.key === "Escape") event.currentTarget.blur();
+                      const box = event.currentTarget;
+                      const key = event.key.toLowerCase();
+                      // An empty box hands undo to the creator, so a line
+                      // just added with Enter can be taken back.
+                      if (
+                        !box.value &&
+                        (IS_MAC ? event.metaKey : event.ctrlKey) &&
+                        (key === "z" || key === "y")
+                      ) {
+                        event.preventDefault();
+                        box.blur();
+                        (key === "y" || event.shiftKey ? redo : undo)();
+                        return;
+                      }
+                      if (
+                        !box.value &&
+                        event.key === "Backspace" &&
+                        !line.units.length &&
+                        lines.length > 1
+                      ) {
+                        event.preventDefault();
+                        const next = removeLine(lines, lineIndex);
+                        setLines(next);
+                        setCursor(
+                          clampCursor(next, {
+                            line: Math.max(0, lineIndex - 1),
+                            unit: 0,
+                          }),
+                        );
+                        return;
+                      }
                       if (event.key !== "Enter") return;
                       event.preventDefault();
                       event.stopPropagation();

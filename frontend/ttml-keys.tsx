@@ -116,11 +116,11 @@ const caps = (...names: string[]) =>
 const plus = <i key="+">+</i>;
 
 const or = <i key="or">or</i>;
-const modClick = (what: string) => [
+const modClick = [
   ...caps(MODIFIER),
   <i key="/">/</i>,
   ...caps("Shift"),
-  <em key="c">+ click {what}</em>,
+  <em key="c">+ click</em>,
 ];
 
 const FIXED_KEYS: [string, ReactNode][] = [
@@ -143,7 +143,7 @@ const EDIT_TIPS: [string, ReactNode][] = [
   ["Select a word", <em>Click</em>],
   ["Replay from a word", <em>Double-click</em>],
   ["Split, replace, join or move a word", <em>Right-click</em>],
-  ["Play only that word", <em>Right-click it on the spectrogram</em>],
+  ["Play only that word", <em>Right-click spectrogram</em>],
   [
     "Edit the selected word",
     [...caps("F2"), or, ...caps(MODIFIER), plus, ...caps("E")],
@@ -155,8 +155,7 @@ const EDIT_TIPS: [string, ReactNode][] = [
     IS_MAC ? [...caps("Cmd"), plus, ...caps("Backspace")] : caps("Del"),
   ],
   ["Split a word into syllables", [<em key="t">type</em>, ...caps("|")]],
-  ["Pick several words", modClick("words")],
-  ["Pick several lines", modClick("a line")],
+  ["Pick several words or lines", modClick],
   ["Move words or lines", <em>Drag</em>],
 ];
 

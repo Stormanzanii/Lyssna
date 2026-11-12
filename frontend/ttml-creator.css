@@ -1099,7 +1099,14 @@
   background: #e9142940;
 }
 .ttml-settings {
-  width: min(1040px, calc(100vw - 32px));
+  width: min(1120px, calc(100vw - 32px));
+}
+/* Every shortcut fits on one screen, so rows stay tight. */
+.ttml-settings .ttml-meta-body {
+  padding: 14px 20px 16px;
+}
+.ttml-settings.ttml-metadata > header {
+  padding-block: 14px;
 }
 .ttml-settings-body {
   columns: auto;
@@ -1136,11 +1143,11 @@
 }
 .ttml-settings-col {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 .ttml-settings-group {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 .ttml-settings-group h4 {
   margin: 0;
@@ -1163,9 +1170,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  padding: 6px 8px 6px 14px;
-  font-size: 13.5px;
+  min-height: 36px;
+  padding: 4px 8px 4px 12px;
+  font-size: 13px;
   transition: background 0.15s;
 }
 .ttml-settings-row + .ttml-settings-row {
@@ -1176,7 +1183,8 @@
 }
 .ttml-settings-combo {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
@@ -1191,8 +1199,8 @@
 .ttml-creator .ttml-settings kbd,
 .ttml-creator .ttml-keycap {
   display: inline-grid;
-  min-width: 26px;
-  height: 26px;
+  min-width: 24px;
+  height: 24px;
   place-items: center;
   padding: 0 7px;
   border: 1px solid #ffffff1f;
@@ -1206,8 +1214,8 @@
 }
 .ttml-creator .ttml-keycap {
   display: inline-flex;
-  min-width: 44px;
-  height: 30px;
+  min-width: 40px;
+  height: 26px;
   min-height: 0;
   justify-content: center;
   cursor: pointer;

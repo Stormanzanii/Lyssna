@@ -246,9 +246,12 @@ function PopoutSeek({
   state: PopoutState;
   onSeek: (ms: number) => void;
 }) {
-  const current = usePosition(state);
-  const [seeking, setSeeking] = useState<number | null>(null);
   const duration = state.playback.item?.duration_ms || 0;
+  const current = usePosition(
+    state,
+    Math.min(250, Math.max(50, duration / 1500)),
+  );
+  const [seeking, setSeeking] = useState<number | null>(null);
   const shown = seeking ?? current;
   const uri = useRef(state.playback.item?.uri);
   if (uri.current !== state.playback.item?.uri) {

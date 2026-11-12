@@ -6450,8 +6450,13 @@ function SeekRow({
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
 }) {
-  const current = usePosition(state),
-    track = state.playback.item;
+  const track = state.playback.item;
+  // Every frame would restyle and lay out the page 240 times a second on
+  // fast displays; the bar moves well under a pixel in this step.
+  const current = usePosition(
+    state,
+    Math.min(250, Math.max(50, (track?.duration_ms ?? 0) / 1500)),
+  );
   const [seeking, setSeeking] = useState<number | null>(null),
     [seekHover, setSeekHover] = useState<number | null>(null);
   const seek = () => {

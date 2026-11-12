@@ -477,13 +477,15 @@ export const TrackTitle = memo(function TrackTitle({
 export function usePosition(
   state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
     Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
+  stepMs = 0,
 ) {
-  return usePlaybackClock(state).position;
+  return usePlaybackClock(state, stepMs).position;
 }
 
 export function usePlaybackClock(
   state: Pick<AppState, "playback" | "observed_at" | "clock_revision"> &
     Partial<Pick<AppState, "local_device_name" | "playback_rate">>,
+  stepMs = 0,
 ) {
   const clock = useRef(new PlaybackClock());
   const [time, setTime] = useState(performance.now());
@@ -504,17 +506,22 @@ export function usePlaybackClock(
     setTime(performance.now());
     if (!state.playback.is_playing) return;
     let frame = 0,
-      shown = 0;
+      shown = 0,
+      step = -1;
     const tick = (time: number) => {
-      if (frameDue(shown, time)) {
+      const due = stepMs
+        ? Math.floor(clock.current.read(time) / stepMs) !== step
+        : frameDue(shown, time);
+      if (due) {
         shown = time;
+        if (stepMs) step = Math.floor(clock.current.read(time) / stepMs);
         setTime(time);
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [state.playback.is_playing]);
+  }, [state.playback.is_playing, stepMs]);
   const read = useCallback(() => clock.current.read(performance.now()), []);
   return { position: clock.current.read(Math.max(time, now)), read };
 }
@@ -1456,6 +1463,13 @@ function SongLyricsPage({
     if (landing && landed) setLanding(null);
   }, [landing, landed]);
   const seekShown = seeking ?? (landed ? songTime : landing!.to);
+  // The lyrics need every frame; the bar only needs to move once it
+  // would show, or it restyles the page on every frame.
+  const seekStepMs = Math.min(
+      250,
+      Math.max(50, (track?.duration_ms ?? 0) / 1500),
+    ),
+    seekBar = seeking ?? Math.floor(seekShown / seekStepMs) * seekStepMs;
   const commitSeek = () => {
     if (seeking === null) return;
     onPlayer({ command: "seek", positionMs: seeking });
@@ -1580,7 +1594,7 @@ function SongLyricsPage({
         className="lyrics-glass-seek"
         style={
           {
-            "--range": `${(seekShown / Math.max(1, track.duration_ms || 1)) * 100}%`,
+            "--range": `${(seekBar / Math.max(1, track.duration_ms || 1)) * 100}%`,
           } as CSSProperties
         }
       >
@@ -1590,7 +1604,7 @@ function SongLyricsPage({
           aria-label="Seek position"
           min="0"
           max={track.duration_ms || 1}
-          value={Math.min(seekShown, track.duration_ms || 1)}
+          value={Math.min(seekBar, track.duration_ms || 1)}
           onChange={(event) => setSeeking(Number(event.target.value))}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);

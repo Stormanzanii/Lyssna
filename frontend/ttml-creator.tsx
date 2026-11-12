@@ -1811,6 +1811,7 @@ export function TtmlCreator({
             <label className="ttml-field ttml-field-word">
               <span>
                 Word <kbd>{IS_MAC ? "⌘E" : "F2"}</kbd>
+                {!IS_MAC && <kbd>Ctrl+E</kbd>}
               </span>
               <input
                 ref={wordField}

@@ -1450,6 +1450,32 @@ export function TtmlCreator({
       notify(`Couldn't read ${file.name}: ${String(error)}`, true);
     }
   };
+  // A lyric file dropped anywhere while the creator is open belongs in the
+  // creator, not in the song's saved lyrics, where the app sends drops.
+  const importRef = useRef(importFile);
+  importRef.current = importFile;
+  useEffect(() => {
+    const carriesFile = (event: DragEvent) =>
+      !!event.dataTransfer?.types.includes("Files");
+    const over = (event: DragEvent) => {
+      if (!carriesFile(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const drop = (event: DragEvent) => {
+      if (!carriesFile(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const file = event.dataTransfer?.files[0];
+      if (file) void importRef.current(file);
+    };
+    window.addEventListener("dragover", over, true);
+    window.addEventListener("drop", drop, true);
+    return () => {
+      window.removeEventListener("dragover", over, true);
+      window.removeEventListener("drop", drop, true);
+    };
+  }, []);
   const importInput = (
     <input
       type="file"

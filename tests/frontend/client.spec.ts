@@ -16126,6 +16126,80 @@ test("TTML Creator spectrogram gives each vocal its own header row", async ({
   }
 });
 
+test("a lyric file dropped on the TTML Creator loads into it with word timings", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator).toBeVisible();
+  await page.evaluate(() => {
+    const word = (text: string, start_ms: number, end_ms: number) => ({
+      text,
+      start_ms,
+      end_ms,
+    });
+    (window as any).__clientTest.answers = {
+      parse_lyric_file: {
+        lines: [
+          {
+            text: "dropped words",
+            start_ms: 1000,
+            end_ms: 2400,
+            words: [word("dropped ", 1000, 1600), word("words", 1600, 2400)],
+            romanization: "",
+            translation: "",
+            background: false,
+            opposite: false,
+          },
+        ],
+        source: "file",
+        instrumental: false,
+        synced: true,
+      },
+    };
+  });
+  for (const target of [".ttml-lines", ".ttml-player-bar"]) {
+    await page.evaluate((selector) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File(["<tt></tt>"], "song.ttml", { type: "application/ttml+xml" }),
+      );
+      const at = document.querySelector(selector)!;
+      at.dispatchEvent(
+        new DragEvent("dragover", { bubbles: true, dataTransfer: transfer }),
+      );
+      at.dispatchEvent(
+        new DragEvent("drop", { bubbles: true, dataTransfer: transfer }),
+      );
+    }, target);
+    await expect(creator.locator(".ttml-unit")).toHaveText([
+      /dropped/,
+      /words/,
+    ]);
+  }
+  const commands = await page.evaluate(() =>
+    (window as any).__clientTest.commands.map((entry: any) => entry.command),
+  );
+  expect(commands).not.toContain("import_lyrics");
+  expect(commands.filter((name: string) => name === "parse_lyric_file")).toHaveLength(2);
+  await creator.locator(".ttml-unit").first().click();
+  await expect(
+    creator.locator('input[aria-label="Selected word"]'),
+  ).toHaveValue("dropped");
+  await expect(creator).toContainText("00:01.000");
+});
+
 test("line-synced lyrics show as whole lines on the TTML Creator spectrogram", async ({
   page,
 }) => {

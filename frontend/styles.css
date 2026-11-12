@@ -358,7 +358,8 @@ small {
   height: 100%;
   object-fit: cover;
 }
-.cover .cover-motion {
+.cover .cover-motion,
+.cover-viewer-art .cover-motion {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -368,10 +369,12 @@ small {
   pointer-events: none;
   transition: opacity 0.5s ease;
 }
-.cover .cover-motion.shown {
+.cover .cover-motion.shown,
+.cover-viewer-art .cover-motion.shown {
   opacity: 1;
 }
-.reduce-motion .cover .cover-motion {
+.reduce-motion .cover .cover-motion,
+.reduce-motion .cover-viewer-art .cover-motion {
   transition: none;
 }
 .cover > svg {

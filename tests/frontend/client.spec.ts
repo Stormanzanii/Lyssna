@@ -4360,6 +4360,15 @@ test("animated covers play over the artwork by default and turn off", async ({
     "src",
     "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
   );
+  await page.getByRole("button", { name: "View cover" }).click();
+  await expect(
+    page.locator(".cover-viewer-art .cover-motion"),
+  ).toHaveAttribute(
+    "src",
+    "https://mvod.itunes.apple.com/itunes-assets/a/avc.mp4",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".cover-viewer")).toHaveCount(0);
 
   await showLyrics(page);
   await expect(page.locator(".lyrics-media .cover-motion")).toHaveCount(1);

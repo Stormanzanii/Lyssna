@@ -243,7 +243,7 @@ export { Ambience };
 
 // Plays only while on screen and the window is visible, and stays hidden
 // until its first frame so the still artwork never flashes black.
-function MotionVideo({ url }: { url: string }) {
+export function MotionVideo({ url }: { url: string }) {
   const video = useRef<HTMLVideoElement>(null);
   const [shown, setShown] = useState(false);
   const [failed, setFailed] = useState(false);

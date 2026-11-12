@@ -4222,6 +4222,7 @@ function App() {
                         <CoverViewer
                           images={heroImages}
                           title={title}
+                          motion={heroMotion}
                           onClose={closeCoverView}
                         />
                       )}

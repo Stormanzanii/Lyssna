@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { artworkFor } from "./artwork";
+import { MotionVideo } from "./components";
 
 export function CoverViewer({
   images,
   title,
+  motion,
   onClose,
 }: {
   images: { url: string; width?: number | null }[];
   title: string;
+  motion?: string | null;
   onClose: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -49,12 +52,13 @@ export function CoverViewer({
       }
     >
       {src && (
-        <img
-          src={src}
-          alt={title}
-          draggable={false}
+        <div
+          className="cover-viewer-art"
           onClick={(event) => event.stopPropagation()}
-        />
+        >
+          <img src={src} alt={title} draggable={false} />
+          {motion && <MotionVideo key={motion} url={motion} />}
+        </div>
       )}
     </div>,
     document.body,

@@ -11,6 +11,7 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        mpsc,
     },
     thread,
     time::{Duration, Instant},
@@ -47,14 +48,43 @@ pub struct AudioBuffer {
     fading_generation: Arc<AtomicUsize>,
     temporary_volume: Arc<AtomicU32>,
     mixer: Arc<Mutex<Option<Arc<dyn Mixer>>>>,
-    clip: Arc<Mutex<ClipOutput>>,
+    clip: Arc<Mutex<Option<mpsc::Sender<ClipCommand>>>>,
 }
-/// A short excerpt played beside the song, on the song's own output and at
-/// its level, so Windows and the volume slider treat it as Lyssna's audio.
-#[derive(Default)]
-struct ClipOutput {
-    stream: Option<(OutputStream, u64)>,
-    sink: Option<rodio::Sink>,
+enum ClipCommand {
+    Play(QueuedPacket, mpsc::Sender<SinkResult<()>>),
+    Stop,
+}
+/// Plays short excerpts beside the song, on the song's own output and at its
+/// level, so Windows and the volume slider treat them as Lyssna's audio. The
+/// output lives on this thread: CoreAudio streams cannot move between
+/// threads, and the app's shared state must.
+fn clip_thread(output: crate::audio_output::OutputChoice, commands: mpsc::Receiver<ClipCommand>) {
+    let mut stream: Option<(OutputStream, u64)> = None;
+    let mut sink: Option<rodio::Sink> = None;
+    for command in commands {
+        if let Some(sounding) = sink.take() {
+            sounding.stop();
+        }
+        let ClipCommand::Play(packet, reply) = command else {
+            continue;
+        };
+        let start = || {
+            let applied = stream.as_ref().map(|(_, revision)| *revision);
+            if let Some(opened) = output.open(applied)? {
+                stream = Some(opened);
+                #[cfg(windows)]
+                let _ = configure_session_identity();
+            }
+            let Some((opened, _)) = &stream else {
+                return Err(SinkError::NotConnected("No audio output".into()));
+            };
+            let started = rodio::Sink::connect_new(opened.mixer());
+            started.append(packet);
+            sink = Some(started);
+            Ok(())
+        };
+        let _ = reply.send(start());
+    }
 }
 impl AudioBuffer {
     pub(crate) fn set_mixer(&self, mixer: Arc<dyn Mixer>) {
@@ -65,32 +95,33 @@ impl AudioBuffer {
     /// Plays interleaved stereo at `SAMPLE_RATE` once, replacing any clip
     /// still sounding, at the player's volume.
     pub(crate) fn play_clip(&self, stereo: Vec<f32>) -> SinkResult<()> {
-        let mut clip = self
-            .clip
-            .lock()
-            .map_err(|_| SinkError::OnWrite("Clip output unavailable".into()))?;
-        if let Some(sink) = clip.sink.take() {
-            sink.stop();
+        let unavailable = || SinkError::OnWrite("Clip output unavailable".into());
+        let mut clip = self.clip.lock().map_err(|_| unavailable())?;
+        let (reply, result) = mpsc::channel();
+        let mut command = ClipCommand::Play(self.clip_packet(stereo), reply);
+        // A thread that ended (its output panicked) is started afresh.
+        for _ in 0..2 {
+            let sender = clip.get_or_insert_with(|| {
+                let (sender, commands) = mpsc::channel();
+                let output = self.output.clone();
+                thread::spawn(move || clip_thread(output, commands));
+                sender
+            });
+            match sender.send(command) {
+                Ok(()) => return result.recv().map_err(|_| unavailable())?,
+                Err(mpsc::SendError(unsent)) => {
+                    command = unsent;
+                    *clip = None;
+                }
+            }
         }
-        let applied = clip.stream.as_ref().map(|(_, revision)| *revision);
-        if let Some(opened) = self.output.open(applied)? {
-            clip.stream = Some(opened);
-            #[cfg(windows)]
-            let _ = configure_session_identity();
-        }
-        let Some((stream, _)) = &clip.stream else {
-            return Err(SinkError::NotConnected("No audio output".into()));
-        };
-        let sink = rodio::Sink::connect_new(stream.mixer());
-        sink.append(self.clip_packet(stereo));
-        clip.sink = Some(sink);
-        Ok(())
+        Err(unavailable())
     }
     pub(crate) fn stop_clip(&self) {
-        if let Ok(mut clip) = self.clip.lock()
-            && let Some(sink) = clip.sink.take()
+        if let Ok(clip) = self.clip.lock()
+            && let Some(sender) = clip.as_ref()
         {
-            sink.stop();
+            let _ = sender.send(ClipCommand::Stop);
         }
     }
     fn clip_packet(&self, samples: Vec<f32>) -> QueuedPacket {

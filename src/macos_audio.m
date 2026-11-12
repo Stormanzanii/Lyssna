@@ -106,7 +106,7 @@ void *lyssna_audio_create(const char *name) {
             ]) {
                 id observer = [[NSNotificationCenter defaultCenter]
                     addObserverForName:notification object:output.renderer queue:nil
-                    usingBlock:^(NSNotification *note) {
+                    usingBlock:^(__unused NSNotification *note) {
                         LyssnaAudioOutput *current = weakOutput;
                         if (current) atomic_store_explicit(&current->needsReset, true, memory_order_release);
                     }];

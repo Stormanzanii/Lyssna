@@ -16925,6 +16925,24 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await expect(card.locator(".ttml-word")).toHaveText(
     "just lyric line number I am a 1".split(" "),
   );
+
+  await word("1").click();
+  const box = card.locator(".ttml-chip-add");
+  await box.fill("Ooh-ooh-ooh");
+  await box.press("Enter");
+  await expect(word("Ooh-")).toBeVisible();
+  await word("Ooh-").click();
+  await card
+    .getByRole("button", { name: "ooh-", exact: true })
+    .click({ modifiers: ["Shift"] });
+  await expect(card.locator(".ttml-unit.chosen .ttml-word")).toHaveText([
+    "Ooh-",
+    "ooh-",
+  ]);
+  await page.keyboard.press("Control+Delete");
+  await expect(card.locator(".ttml-word")).toHaveText(
+    "just lyric line number I am a 1 ooh".split(" "),
+  );
 });
 
 test("TTML Creator replaces one word or every identical word", async ({

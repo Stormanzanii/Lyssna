@@ -719,29 +719,45 @@ export function insertLines(
 }
 
 /** Deletes the picked words and Space blocks in one go. */
+/**
+ * `units` less `gone`. A syllable left behind starts its own word when the
+ * word it belonged to lost its first syllable; `joins` lose their space.
+ */
+function without(
+  units: CreatorUnit[],
+  gone: ReadonlySet<CreatorUnit>,
+  joins: ReadonlySet<CreatorUnit> = new Set(),
+) {
+  const kept: CreatorUnit[] = [];
+  let parted = false;
+  for (const unit of units) {
+    if (gone.has(unit)) {
+      if (!unit.joined) parted = true;
+      continue;
+    }
+    const joined =
+      kept.length > 0 && ((unit.joined && !parted) || joins.has(unit));
+    kept.push(joined === unit.joined ? unit : { ...unit, joined });
+    parted = false;
+  }
+  return kept;
+}
+
 export function deletePicked(
   lines: CreatorLine[],
   words: Cursor[],
   gaps: Cursor[],
 ): CreatorLine[] {
-  const gone = new Set<CreatorUnit>();
-  for (const at of words) {
-    const units = lines[at.line]?.units ?? [];
-    const { start, end } = wordBounds(units, at.unit);
-    units.slice(start, end).forEach((unit) => gone.add(unit));
-  }
+  const gone = new Set(
+    words.flatMap((at) => lines[at.line]?.units[at.unit] ?? []),
+  );
   const joins = new Set(
     gaps.flatMap((gap) => lines[gap.line]?.units[gap.unit] ?? []),
   );
   return lines
     .map((line, index): CreatorLine => {
       const { spaceAfter, ...rest } = line;
-      const units = line.units
-        .filter((unit) => !gone.has(unit))
-        .map((unit, position) =>
-          position && joins.has(unit) ? { ...unit, joined: true } : unit,
-        );
-      if (units[0]?.joined) units[0] = { ...units[0], joined: false };
+      const units = without(line.units, gone, joins);
       const next: CreatorLine = { ...rest, units };
       const trailing = gaps.some(
         (gap) => gap.line === index && gap.unit === line.units.length,
@@ -817,18 +833,28 @@ export function moveWords(
   to: Cursor,
 ): CreatorLine[] {
   if (!lines[to.line]) return lines;
+  const spots = [...new Set(from.map((at) => at.unit))].sort((a, b) => a - b);
+  if (
+    from.every((at) => at.line === to.line) &&
+    spots.at(-1)! - spots[0] === spots.length - 1 &&
+    to.unit >= spots[0] &&
+    to.unit <= spots.at(-1)! + 1
+  )
+    return lines;
   const taken = new Set<CreatorUnit>();
   const words: CreatorUnit[] = [];
+  let previous: Cursor | null = null;
   for (const at of [...from].sort(
     (a, b) => a.line - b.line || a.unit - b.unit,
   )) {
-    const units = lines[at.line]?.units;
-    if (!units?.[at.unit] || taken.has(units[at.unit])) continue;
-    const { start, end } = wordBounds(units, at.unit);
-    units.slice(start, end).forEach((unit, index) => {
-      taken.add(unit);
-      words.push(index ? unit : { ...unit, joined: false });
-    });
+    const unit = lines[at.line]?.units[at.unit];
+    if (!unit || taken.has(unit)) continue;
+    // Syllables picked side by side stay one word; anything else moves as
+    // its own word.
+    const follows = previous?.line === at.line && previous.unit === at.unit - 1;
+    taken.add(unit);
+    words.push(follows ? unit : { ...unit, joined: false });
+    previous = at;
   }
   const anchor = lines[to.line].units[to.unit];
   if (!words.length || (anchor && taken.has(anchor))) return lines;
@@ -837,7 +863,7 @@ export function moveWords(
     .filter((unit) => !taken.has(unit)).length;
   return lines
     .map((line, index) => {
-      const units = line.units.filter((unit) => !taken.has(unit));
+      const units = without(line.units, taken);
       if (index === to.line)
         units.splice(
           at,

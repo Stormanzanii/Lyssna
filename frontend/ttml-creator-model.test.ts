@@ -351,6 +351,7 @@ describe("TTML Creator card editing", () => {
           [
             { line: 0, unit: 2 },
             { line: 0, unit: 0 },
+            { line: 0, unit: 1 },
           ],
           {
             line: 1,
@@ -359,6 +360,12 @@ describe("TTML Creator card editing", () => {
         ),
       ),
     ).toEqual(["d", "e a b|c f"]);
+    expect(
+      words(moveWords(lines, [{ line: 0, unit: 2 }], { line: 1, unit: 1 })),
+    ).toEqual(["a b d", "e c f"]);
+    expect(
+      words(moveWords(lines, [{ line: 0, unit: 1 }], { line: 1, unit: 0 })),
+    ).toEqual(["a c d", "b e f"]);
     expect(
       words(moveWords(lines, [{ line: 0, unit: 0 }], { line: 0, unit: 4 })),
     ).toEqual(["b|c d a", "e f"]);

@@ -487,21 +487,15 @@ export function TtmlCreator({
     setGroup([]);
     setSpaces([]);
   }, [lines]);
-  const wordStart = (at: Cursor) => ({
-    line: at.line,
-    unit: wordBounds(lines[at.line]?.units ?? [], at.unit).start,
-  });
-  const inGroup = (at: Cursor) => {
-    const start = wordStart(at);
-    return group.some(
-      (each) => each.line === start.line && each.unit === start.unit,
-    );
-  };
+  // Picks are single syllables, so one syllable of a word can be picked
+  // without the rest.
+  const inGroup = (at: Cursor) =>
+    group.some((each) => each.line === at.line && each.unit === at.unit);
   const pickWord = (at: Cursor, range: boolean) => {
-    const start = wordStart(at);
-    const base = group.length ? group : [wordStart(cursor)];
+    const start = at;
+    const base = group.length ? group : [cursor];
     if (range) {
-      const from = wordStart(cursor);
+      const from = cursor;
       const [first, last] =
         from.line < start.line ||
         (from.line === start.line && from.unit <= start.unit)
@@ -510,13 +504,18 @@ export function TtmlCreator({
       const picked: Cursor[] = [];
       for (let line = first.line; line <= last.line; line++)
         lines[line]?.units.forEach((unit, index) => {
-          if (unit.joined && index) return;
           if (line === first.line && index < first.unit) return;
           if (line === last.line && index > last.unit) return;
           picked.push({ line, unit: index });
         });
       setGroup(picked);
-      setSpaces(picked.slice(1).filter((at) => at.unit > 0));
+      setSpaces(
+        picked
+          .slice(1)
+          .filter(
+            (at) => at.unit > 0 && !lines[at.line]?.units[at.unit]?.joined,
+          ),
+      );
       return;
     }
     const has = base.some(
@@ -812,17 +811,17 @@ export function TtmlCreator({
     event.dataTransfer.setData("text/plain", "");
     if (next.kind === "word") {
       // Shows every word being moved, not just the block under the pointer.
-      const text = [...(next.group ?? [next.at])]
-        .sort((a, b) => a.line - b.line || a.unit - b.unit)
-        .map((at) => {
-          const units = lines[at.line]?.units ?? [];
-          const { start, end } = wordBounds(units, at.unit);
-          return units
+      const units = lines[next.at.line]?.units ?? [];
+      const { start, end } = wordBounds(units, next.at.unit);
+      const text = next.group
+        ? [...next.group]
+            .sort((a, b) => a.line - b.line || a.unit - b.unit)
+            .map((at) => lines[at.line]?.units[at.unit]?.text ?? "")
+            .join(" ")
+        : units
             .slice(start, end)
             .map((unit) => unit.text)
             .join("");
-        })
-        .join(" ");
       const ghost = document.createElement("div");
       ghost.className = "ttml-drag-ghost";
       ghost.textContent = text;
@@ -833,11 +832,11 @@ export function TtmlCreator({
     setDrag(next);
   };
   // The picked words, or the selected word when none are picked.
-  const pickedWords = () => (group.length ? group : [wordStart(cursor)]);
+  const pickedWords = () => (group.length ? group : [cursor]);
   const dragWords = (event: ReactDragEvent, at: Cursor) => {
     const words = pickedWords();
     const carry = words.some(
-      (each) => each.line === at.line && each.unit === wordStart(at).unit,
+      (each) => each.line === at.line && each.unit === at.unit,
     );
     startDrag(
       event,

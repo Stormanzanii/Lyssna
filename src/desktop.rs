@@ -2504,6 +2504,31 @@ fn player(
                 snapshot.playback.progress_ms.unwrap_or(0),
             )
         });
+        // After a restart the saved song is only shown, not loaded, and the
+        // player drops seeks until it plays. Play resumes from the shown
+        // position, so moving that is the seek.
+        if let PlayerAction::Seek(position) = action
+            && (local || on_soloist)
+            && !state.0.controls.has_track()
+            && !lock(&state.0.soloist_link)?
+                .as_ref()
+                .is_some_and(|link| link.active() && link.loaded())
+            && let Some(track) = snapshot.playback.item.as_ref()
+        {
+            snapshot.playback.progress_ms = Some(position.min(track.duration_ms));
+            snapshot.playback.is_playing = false;
+            snapshot.observed_at = now_ms();
+            let _ = app.emit(
+                "lyssna",
+                json!({
+                    "type": "playback",
+                    "playback": snapshot.playback,
+                    "observed_at": snapshot.observed_at,
+                    "changed": false,
+                }),
+            );
+            return Ok(());
+        }
         if soloist
             && lock(&state.0.soloist_link)?.as_ref().is_some_and(|link| {
                 if link.active() && link.loaded() || on_soloist && link.live() {

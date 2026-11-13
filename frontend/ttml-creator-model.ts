@@ -823,6 +823,50 @@ export function wordBounds(units: CreatorUnit[], index: number) {
   return { start, end };
 }
 
+const capitalised = (unit?: CreatorUnit) =>
+  !!unit && /^\P{L}*\p{Lu}/u.test(unit.text);
+
+function cased(unit: CreatorUnit, upper: boolean): CreatorUnit {
+  // "I" and acronyms keep their capitals in the middle of a line.
+  if (
+    !upper &&
+    (/^\P{L}*I(?!\p{L})/u.test(unit.text) ||
+      (unit.text.match(/\p{Lu}/gu)?.length ?? 0) > 1)
+  )
+    return unit;
+  const text = unit.text.replace(/\p{L}/u, (letter) =>
+    upper ? letter.toUpperCase() : letter.toLowerCase(),
+  );
+  return text === unit.text ? unit : { ...unit, text };
+}
+
+/**
+ * Keeps sentence case after `moved` words land at `at` in `units`, a line
+ * that was `before`. Lines written in lower case stay that way.
+ */
+function recase(
+  before: CreatorUnit[],
+  units: CreatorUnit[],
+  at: number,
+  moved: { unit: CreatorUnit; first: boolean }[],
+) {
+  const lost = moved.some((each) => each.unit === before[0]);
+  if (at === 0 && moved.length) {
+    const displaced = units[moved.length];
+    if (!lost && capitalised(displaced)) {
+      units[0] = cased(units[0], true);
+      units[moved.length] = cased(displaced, false);
+    }
+  } else if (lost && units.length && capitalised(before[0]))
+    units[0] = cased(units[0], true);
+  if (at >= 0)
+    moved.forEach((each, index) => {
+      const spot = at + index;
+      if (spot > 0 && each.first && units[spot])
+        units[spot] = cased(units[spot], false);
+    });
+}
+
 /** `to.unit` is a word boundary in the target line, counted before the move. */
 export function moveWord(
   lines: CreatorLine[],
@@ -845,6 +889,11 @@ export function moveWord(
   // Dropped between two syllables, it becomes a syllable of that word.
   if (into[at]?.joined) word[0] = { ...word[0], joined: true };
   const placed = [...into.slice(0, at), ...word, ...into.slice(at)];
+  const moved = source.units
+    .slice(start, end)
+    .map((unit, index) => ({ unit, first: start === 0 && index === 0 }));
+  if (!same) recase(source.units, kept, -1, moved);
+  recase(same ? source.units : target.units, placed, at, moved);
   return lines
     .map((line, index) =>
       index === to.line
@@ -873,6 +922,7 @@ export function moveWords(
     return lines;
   const taken = new Set<CreatorUnit>();
   const words: CreatorUnit[] = [];
+  const moved: { unit: CreatorUnit; first: boolean }[] = [];
   let previous: Cursor | null = null;
   for (const at of [...from].sort(
     (a, b) => a.line - b.line || a.unit - b.unit,
@@ -884,6 +934,7 @@ export function moveWords(
     const follows = previous?.line === at.line && previous.unit === at.unit - 1;
     taken.add(unit);
     words.push(follows ? unit : { ...unit, joined: false });
+    moved.push({ unit, first: at.unit === 0 });
     previous = at;
   }
   const anchor = lines[to.line].units[to.unit];
@@ -903,6 +954,8 @@ export function moveWords(
             : words),
         );
       if (units[0]?.joined) units[0] = { ...units[0], joined: false };
+      if (index === to.line) recase(line.units, units, at, moved);
+      else recase(line.units, units, -1, moved);
       return units.length === line.units.length &&
         units.every((unit, position) => unit === line.units[position])
         ? line

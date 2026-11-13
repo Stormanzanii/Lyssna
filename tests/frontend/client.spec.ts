@@ -17059,7 +17059,7 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   ]);
   await word("just").dragTo(word("I"), { targetPosition: { x: 2, y: 10 } });
   await expect(card.locator(".ttml-word")).toHaveText(
-    "just lyric I am a line number 1".split(" "),
+    "Just lyric I am a line number 1".split(" "),
   );
   await word("I").click();
   await word("a").click({ modifiers: ["Shift"] });
@@ -17072,17 +17072,17 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   await word("am").click({ modifiers: ["Control"] });
   await page.keyboard.press("Control+Delete");
   await expect(card.locator(".ttml-word")).toHaveText(
-    "just lyric a line number 1".split(" "),
+    "Just lyric a line number 1".split(" "),
   );
   await page.keyboard.press("Control+z");
   await expect(card.locator(".ttml-word")).toHaveText(
-    "just lyric I am a line number 1".split(" "),
+    "Just lyric I am a line number 1".split(" "),
   );
   await word("I").click();
   await word("a").click({ modifiers: ["Shift"] });
   await word("I").dragTo(word("1"));
   await expect(card.locator(".ttml-word")).toHaveText(
-    "just lyric line number I am a 1".split(" "),
+    "Just lyric line number I am a 1".split(" "),
   );
 
   await word("1").click();
@@ -17100,7 +17100,7 @@ test("TTML Creator moves Ctrl or Shift picked words as a bunch", async ({
   ]);
   await page.keyboard.press("Control+Delete");
   await expect(card.locator(".ttml-word")).toHaveText(
-    "just lyric line number I am a 1 ooh".split(" "),
+    "Just lyric line number I am a 1 ooh".split(" "),
   );
 });
 
@@ -17227,7 +17227,7 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
       targetPosition: { x: 2, y: 10 },
     });
   await expect(card.locator(".ttml-word")).toHaveText(
-    "am I just a ly ric".split(" "),
+    "Am I just a ly ric".split(" "),
   );
 
   const moved = creator.locator(".ttml-card").nth(1);

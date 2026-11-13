@@ -366,6 +366,36 @@ describe("TTML Creator card editing", () => {
     expect(words(replaceMatching(lines, "hey", "", false))).toEqual(["you"]);
   });
 
+  it("recases words moved to or from the start of a line", () => {
+    const lines = parseText("Hello there friend\nNext line here");
+    expect(
+      words(moveWords(lines, [{ line: 0, unit: 2 }], { line: 1, unit: 0 })),
+    ).toEqual(["Hello there", "Friend next line here"]);
+    expect(
+      words(moveWords(lines, [{ line: 1, unit: 0 }], { line: 0, unit: 3 })),
+    ).toEqual(["Hello there friend next", "Line here"]);
+    expect(
+      words(moveWord(lines, { line: 0, unit: 2 }, { line: 1, unit: 0 })),
+    ).toEqual(["Hello there", "Friend next line here"]);
+    expect(
+      words(moveWord(lines, { line: 1, unit: 0 }, { line: 0, unit: 3 })),
+    ).toEqual(["Hello there friend next", "Line here"]);
+    expect(
+      words(moveWord(lines, { line: 0, unit: 0 }, { line: 0, unit: 3 })),
+    ).toEqual(["There friend hello", "Next line here"]);
+    const mine = parseText("Hold on\nI'm OK now");
+    expect(
+      words(moveWords(mine, [{ line: 1, unit: 0 }], { line: 0, unit: 2 })),
+    ).toEqual(["Hold on I'm", "OK now"]);
+    expect(
+      words(moveWords(mine, [{ line: 1, unit: 1 }], { line: 0, unit: 0 })),
+    ).toEqual(["OK hold on", "I'm now"]);
+    const quiet = parseText("hello there\nnext");
+    expect(
+      words(moveWords(quiet, [{ line: 0, unit: 1 }], { line: 1, unit: 0 })),
+    ).toEqual(["hello", "there next"]);
+  });
+
   it("moves several picked words together in reading order", () => {
     const lines = parseText("a b|c d\ne f");
     expect(
@@ -652,7 +682,7 @@ describe("TTML Creator word menu", () => {
     ).toBe("Eigh-|oh|eigh-|eighty in");
     expect(
       toText(moveWord(lines, { line: 0, unit: 3 }, { line: 0, unit: 0 })),
-    ).toBe("oh Eigh-|eigh-|eighty in");
+    ).toBe("Oh eigh-|eigh-|eighty in");
     expect(
       toText(moveWords(lines, [{ line: 0, unit: 4 }], { line: 0, unit: 2 })),
     ).toBe("Eigh-|eigh-|in|eighty oh");

@@ -573,7 +573,12 @@ export function usePlaybackClock(
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [state.playback.is_playing, stepMs]);
-  const read = useCallback(() => clock.current.read(performance.now()), []);
+  const read = useCallback((at?: number) => {
+    const now = performance.now();
+    return at === undefined
+      ? clock.current.read(now)
+      : clock.current.readAgo(now, now - at);
+  }, []);
   return { position: clock.current.read(Math.max(time, now)), read };
 }
 

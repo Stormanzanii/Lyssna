@@ -1072,7 +1072,10 @@ export function TtmlCreator({
     setCursor({ line: 0, unit: 0 });
   };
 
-  const tap = useCallback(() => Math.round(read() + offset), [read, offset]);
+  const tap = useCallback(
+    (at?: number) => Math.round(read(at) + offset),
+    [read, offset],
+  );
   const seek = useCallback(
     (ms: number) =>
       onPlayer({ command: "seek", positionMs: Math.max(0, Math.round(ms)) }),
@@ -1311,13 +1314,14 @@ export function TtmlCreator({
           const start = lines[to.line]?.units[to.unit]?.start;
           if (start !== undefined) seek(start);
         } else if (event.repeat && timing) handled = true;
-        else if (action === "start") setLines(markStart(lines, cursor, tap()));
+        else if (action === "start")
+          setLines(markStart(lines, cursor, tap(event.timeStamp)));
         else if (action === "next") {
-          const result = markNext(lines, cursor, tap());
+          const result = markNext(lines, cursor, tap(event.timeStamp));
           setLines(result.lines);
           setCursor(result.cursor);
         } else if (action === "end") {
-          const result = markEnd(lines, cursor, tap());
+          const result = markEnd(lines, cursor, tap(event.timeStamp));
           setLines(result.lines);
           setCursor(result.cursor);
         } else if (action === "replay") {

@@ -110,3 +110,18 @@ it("does not jump back for a slightly late position report", () => {
   clock.observe({ ...playback, progress_ms: 49700 }, 300, 0, 300, 300);
   expect(clock.read(300)).toBeGreaterThan(50000);
 });
+it("dates input to when it happened, not when it was handled", () => {
+  const clock = new PlaybackClock();
+  clock.observe({ ...playback, progress_ms: 10000 }, 0, 0, 0, 0);
+  expect(clock.readAgo(200, 80)).toBe(10120);
+  expect(clock.readAgo(200, 5000)).toBe(10000 - 50);
+  const paused = new PlaybackClock();
+  paused.observe(
+    { ...playback, is_playing: false, progress_ms: 10000 },
+    0,
+    0,
+    0,
+    0,
+  );
+  expect(paused.readAgo(200, 80)).toBe(10000);
+});

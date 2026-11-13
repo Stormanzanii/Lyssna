@@ -80,6 +80,13 @@ export class PlaybackClock {
     this.correctionDuration = Math.max(600, Math.abs(this.correction) * 4);
   }
 
+  /** The position `ago` ms before `time`; a key press handled late, after
+   *  a long render, still lands on the beat it was pressed on. */
+  readAgo(time: number, ago: number) {
+    const back = this.advancing ? Math.min(250, Math.max(0, ago)) : 0;
+    return Math.max(0, this.read(time) - back * this.rate);
+  }
+
   read(time: number) {
     const elapsed = this.advancing
       ? Math.min(

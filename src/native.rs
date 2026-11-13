@@ -1966,10 +1966,42 @@ pub fn device_name() -> String {
         return named_device(host);
     }
 
+    #[cfg(windows)]
+    if let Some(host) = windows_computer_name() {
+        return named_device(host);
+    }
+
     let host = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_default();
     named_device(&host)
+}
+
+/// COMPUTERNAME is the upper-case NetBIOS name; the DNS host name keeps the
+/// casing shown in Windows Settings, e.g. "Arashii-PC".
+#[cfg(windows)]
+fn windows_computer_name() -> Option<&'static str> {
+    use windows::{
+        Win32::System::SystemInformation::{ComputerNamePhysicalDnsHostname, GetComputerNameExW},
+        core::PWSTR,
+    };
+
+    static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        let mut buffer = [0u16; 256];
+        let mut size = buffer.len() as u32;
+        unsafe {
+            GetComputerNameExW(
+                ComputerNamePhysicalDnsHostname,
+                Some(PWSTR(buffer.as_mut_ptr())),
+                &mut size,
+            )
+        }
+        .ok()?;
+        let name = String::from_utf16_lossy(&buffer[..size as usize]);
+        (!name.trim().is_empty()).then_some(name)
+    })
+    .as_deref()
 }
 
 #[cfg(target_os = "macos")]

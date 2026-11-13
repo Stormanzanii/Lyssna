@@ -17658,6 +17658,16 @@ test("TTML Creator changes several selected lines at once", async ({
     await expect(cards.nth(index)).toHaveClass(/\bbackground\b/);
   await expect(cards.nth(0)).not.toHaveClass(/\bbackground\b/);
   await expect(cards.nth(4)).not.toHaveClass(/\bbackground\b/);
+  await cards.nth(2).hover();
+  await cards.nth(2).getByTitle("Second singer").click();
+  for (const index of [1, 2, 3])
+    await expect(cards.nth(index)).toHaveClass(/\bopposite\b/);
+  await expect(cards.nth(4)).not.toHaveClass(/\bopposite\b/);
+  await cards.nth(3).hover();
+  await cards.nth(3).getByTitle("Background vocal").click();
+  for (const index of [1, 2, 3])
+    await expect(cards.nth(index)).not.toHaveClass(/\bbackground\b/);
+  await expect(bar).toContainText("3 lines selected");
   await bar.getByRole("button", { name: "Delete" }).click();
   await expect(cards).toHaveCount(total - 3);
   await expect(bar).toHaveCount(0);

@@ -702,6 +702,12 @@ export function TtmlCreator({
         setPicked(new Set());
     },
   });
+  const flagLine = (index: number, key: "background" | "opposite") =>
+    setLines(
+      picked.has(index)
+        ? setLineFlag(lines, picked, key, !lines[index][key])
+        : toggleLine(lines, index, key),
+    );
   const [shiftBy, setShiftBy] = useState(0);
   const allPicked = (key: "background" | "opposite") =>
     [...picked].every((index) => lines[index]?.[key]);
@@ -917,12 +923,12 @@ export function TtmlCreator({
         {
           label: "Background vocal",
           checked: line.background,
-          run: () => setLines(toggleLine(lines, index, "background")),
+          run: () => flagLine(index, "background"),
         },
         {
           label: "Second singer",
           checked: line.opposite,
-          run: () => setLines(toggleLine(lines, index, "opposite")),
+          run: () => flagLine(index, "opposite"),
         },
       ],
       [
@@ -2419,9 +2425,7 @@ export function TtmlCreator({
                     className={line.background ? "active" : ""}
                     aria-pressed={line.background}
                     title="Background vocal"
-                    onClick={() =>
-                      setLines(toggleLine(lines, lineIndex, "background"))
-                    }
+                    onClick={() => flagLine(lineIndex, "background")}
                   >
                     BG
                   </button>
@@ -2429,9 +2433,7 @@ export function TtmlCreator({
                     className={line.opposite ? "active" : ""}
                     aria-pressed={line.opposite}
                     title="Second singer"
-                    onClick={() =>
-                      setLines(toggleLine(lines, lineIndex, "opposite"))
-                    }
+                    onClick={() => flagLine(lineIndex, "opposite")}
                   >
                     v2
                   </button>

@@ -619,6 +619,8 @@ export function TtmlCreator({
     setText(toText(lines));
     setTextMode(true);
   };
+  // The word being retyped in its own box after a double-click.
+  const [inline, setInline] = useState<Cursor | null>(null);
   const commitWord = (at: Cursor, value: string) => {
     const next = editUnit(lines, at, value);
     if (next === lines) return;
@@ -2243,6 +2245,45 @@ export function TtmlCreator({
                       // The lit word's own line keeps its steadied pick.
                       (liveWord?.line !== lineIndex &&
                         liveWords.live.has(`${lineIndex}:${unitIndex}`));
+                    if (inline?.line === lineIndex && inline.unit === unitIndex)
+                      return (
+                        <div
+                          key={unitIndex}
+                          className={`ttml-unit selected editing${unit.joined ? " joined" : ""}${timed(unit) ? " timed" : ""}`}
+                        >
+                          <TimePill ms={unit.start} />
+                          <input
+                            className="ttml-inline-word"
+                            aria-label={`Edit ${unit.text}`}
+                            defaultValue={unit.text}
+                            size={Math.max(2, unit.text.length + 1)}
+                            spellCheck={false}
+                            autoFocus
+                            onFocus={(event) => event.currentTarget.select()}
+                            onInput={(event) => {
+                              const box = event.currentTarget;
+                              box.size = Math.max(2, box.value.length + 1);
+                            }}
+                            onBlur={(event) => {
+                              const value = event.currentTarget.value.trim();
+                              setInline(null);
+                              if (value !== unit.text) commitWord(at, value);
+                            }}
+                            onKeyDown={(event) => {
+                              event.stopPropagation();
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                event.currentTarget.value = unit.text;
+                                event.currentTarget.blur();
+                              } else if (event.key === "Enter") {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                              }
+                            }}
+                          />
+                          <TimePill ms={unit.end} end />
+                        </div>
+                      );
                     return (
                       <button
                         key={unitIndex}
@@ -2283,10 +2324,7 @@ export function TtmlCreator({
                         onDoubleClick={() => {
                           if (!state.playback.is_playing) {
                             setCursor(at);
-                            requestAnimationFrame(() => {
-                              wordField.current?.focus();
-                              wordField.current?.select();
-                            });
+                            setInline(at);
                             return;
                           }
                           if (unit.start === undefined) return;

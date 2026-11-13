@@ -17333,17 +17333,33 @@ test("double-clicking a TTML Creator word edits it when paused and replays while
         ).length,
     );
   const field = creator.locator('input[aria-label="Selected word"]');
+  const inline = creator.locator(".ttml-unit .ttml-inline-word");
   const before = await seeks();
   await creator.locator(".ttml-unit").nth(1).dblclick();
-  await expect(field).toBeFocused();
-  await expect(field).toHaveValue("there");
+  await expect(inline).toBeFocused();
+  await expect(inline).toHaveValue("there");
+  await expect(field).not.toBeFocused();
   expect(await seeks()).toBe(before);
+  await page.keyboard.type("world");
+  await page.keyboard.press("Enter");
+  await expect(inline).toHaveCount(0);
+  await expect(creator.locator(".ttml-unit .ttml-word").nth(1)).toHaveText(
+    "world",
+  );
+  await expect(
+    creator.locator(".ttml-unit").nth(1).locator(".ttml-pill").first(),
+  ).toHaveText("00:05.500");
+  await creator.locator(".ttml-unit").nth(1).dblclick();
+  await page.keyboard.type("nope");
   await page.keyboard.press("Escape");
+  await expect(creator.locator(".ttml-unit .ttml-word").nth(1)).toHaveText(
+    "world",
+  );
 
   await playLyricTrack(page, true);
   await creator.locator(".ttml-unit").nth(1).dblclick();
   await expect.poll(seeks).toBe(before + 1);
-  await expect(field).not.toBeFocused();
+  await expect(inline).toHaveCount(0);
 });
 
 test("clicking away from Type word here leaves the box", async ({ page }) => {

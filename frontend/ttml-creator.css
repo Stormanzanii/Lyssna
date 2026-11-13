@@ -410,6 +410,19 @@
     background: #1ed76066;
   }
 }
+.ttml-inline-word {
+  min-width: 2ch;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  outline: 1px solid #ffffff80;
+  background: #ffffff14;
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.2;
+  text-align: center;
+}
 .ttml-word {
   color: #ffffff8c;
   font-size: 17px;

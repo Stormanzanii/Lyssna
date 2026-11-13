@@ -744,4 +744,4 @@ Apache License
 
 ## Simple Icons
 
-The Apple, Android and Linux marks on device icons in `frontend/device-logos.ts` are path data from [Simple Icons](https://github.com/simple-icons/simple-icons) 13.21.0, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The marks remain trademarks of their owners and only identify which kind of device is listed.
+The Apple, Android, Linux and PlayStation marks on device icons in `frontend/device-logos.ts` are path data from [Simple Icons](https://github.com/simple-icons/simple-icons) 13.21.0, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The marks remain trademarks of their owners and only identify which kind of device is listed.

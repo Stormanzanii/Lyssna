@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ANDROID, APPLE, LINUX } from "./device-logos";
+import { ANDROID, APPLE, LINUX, PLAYSTATION } from "./device-logos";
 
 export type DeviceKind =
   | "computer"
@@ -24,6 +24,7 @@ const WINDOWS =
 const LOGOS: Partial<Record<Platform, string>> = {
   windows: WINDOWS,
   mac: APPLE,
+  playstation: PLAYSTATION,
   linux: LINUX,
   android: ANDROID,
 };
@@ -119,15 +120,15 @@ function Phone({ platform }: { platform: Platform }) {
       return (
         <>
           {/* Galaxy S24 Ultra: square corners and free-standing lenses. */}
-          <rect x="6.5" y="2.5" width="11" height="19" rx="1.3" />
-          <g strokeWidth={1}>
-            <circle cx="9.2" cy="5.1" r="0.9" />
-            <circle cx="9.2" cy="8.1" r="0.9" />
-            <circle cx="9.2" cy="11.1" r="0.9" />
-            <circle cx="11.9" cy="8.1" r="0.6" />
+          <rect x="6.6" y="2.5" width="10.8" height="19" rx="1.1" />
+          <g strokeWidth={1.1}>
+            <circle cx="9.3" cy="5.3" r="1.1" />
+            <circle cx="9.3" cy="8.9" r="1.1" />
+            <circle cx="9.3" cy="12.5" r="1.1" />
+            <circle cx="12.5" cy="5.3" r="0.75" />
           </g>
-          <Lens x={11.9} y={5.1} r={0.35} />
-          <Logo platform="android" x={12} y={16.6} size={4} />
+          <Lens x={12.4} y={8} r={0.4} />
+          <Lens x={12.4} y={9.6} r={0.3} />
         </>
       );
     default:
@@ -143,26 +144,18 @@ function Phone({ platform }: { platform: Platform }) {
 function Console({ platform }: { platform: Platform }) {
   switch (platform) {
     case "playstation":
-      // PS5 standing: black core between two curved white plates.
-      return (
-        <>
-          <path d="M10.6 2.5H6.8c-.9 0-1.5.8-1.3 1.6l2 15.8c.1.9.8 1.6 1.7 1.6h1.4z" />
-          <path d="M13.4 2.5h3.8c.9 0 1.5.8 1.3 1.6l-2 15.8c-.1.9-.8 1.6-1.7 1.6h-1.4z" />
-          <path d="M10.6 2.5h2.8v19h-2.8z" fill="currentColor" stroke="none" />
-        </>
-      );
+      return <Logo platform="playstation" x={12} y={12} size={19} />;
     case "xbox":
-      // Series X: a tower with its vented top in view.
+      // Series X from above and to the side: the tower and its round vent.
       return (
         <>
-          <rect x="7" y="2.5" width="10" height="19" rx="1.2" />
-          <path d="M7 6.2h10" />
-          <Lens x={9.2} y={4.35} r={0.45} />
-          <Lens x={11.2} y={4.35} r={0.45} />
-          <Lens x={13.2} y={4.35} r={0.45} />
-          <Lens x={15.2} y={4.35} r={0.45} />
-          <path d="M11 9.5h4" strokeWidth={1.1} />
-          <circle cx="9.2" cy="9.5" r="0.7" strokeWidth={1} />
+          <path d="M6.5 5.4 12 2.9l5.5 2.5v13L12 20.9l-5.5-2.5z" />
+          <path d="M6.5 5.4 12 7.9l5.5-2.5M12 7.9v13" />
+          <ellipse cx="12" cy="5.4" rx="3" ry="1.35" strokeWidth={1} />
+          <Lens x={10.7} y={5.4} r={0.3} />
+          <Lens x={12} y={5.4} r={0.3} />
+          <Lens x={13.3} y={5.4} r={0.3} />
+          <circle cx="8.3" cy="9.6" r="0.55" strokeWidth={0.9} />
         </>
       );
     default:

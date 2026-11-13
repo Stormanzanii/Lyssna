@@ -94,6 +94,8 @@ pub struct ConnectConfig {
     pub volume_steps: u16,
     /// Emit `SetQueue` player events when the queue changes (default: false)
     pub emit_set_queue_events: bool,
+    /// Model reported to other devices (default: the operating system)
+    pub model: String,
 }
 
 impl Default for ConnectConfig {
@@ -103,6 +105,7 @@ impl Default for ConnectConfig {
             name: "librespot".to_string(),
             device_type: DeviceType::Speaker,
             is_group: false,
+            model: std::env::consts::OS.into(),
             initial_volume: u16::MAX / 2,
             disable_volume: false,
             volume_steps: 64,
@@ -152,7 +155,7 @@ impl ConnectState {
             device_software_version: version::SEMVER.to_string(),
             // Lets other Lyssna installs show which kind of computer this is.
             brand: "Lyssna".into(),
-            model: std::env::consts::OS.into(),
+            model: cfg.model,
             spirc_version: version::SPOTIFY_SPIRC_VERSION.to_string(),
             client_id: session.client_id(),
             is_group: cfg.is_group,

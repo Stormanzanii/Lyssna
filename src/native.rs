@@ -2037,6 +2037,39 @@ fn macos_computer_name() -> Option<&'static str> {
     .as_deref()
 }
 
+/// A computer without a battery is a desktop.
+pub fn is_desktop() -> bool {
+    static DESKTOP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DESKTOP.get_or_init(|| !has_battery())
+}
+
+#[cfg(windows)]
+fn has_battery() -> bool {
+    use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    let mut status = SYSTEM_POWER_STATUS::default();
+    // 128 means "no system battery"; 255 is unknown, so assume a laptop.
+    unsafe { GetSystemPowerStatus(&mut status) }.is_err() || status.BatteryFlag != 128
+}
+
+#[cfg(target_os = "macos")]
+fn has_battery() -> bool {
+    std::process::Command::new("pmset")
+        .args(["-g", "batt"])
+        .output()
+        .map_or(true, |output| {
+            String::from_utf8_lossy(&output.stdout).contains("InternalBattery")
+        })
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn has_battery() -> bool {
+    std::fs::read_dir("/sys/class/power_supply").map_or(true, |entries| {
+        entries
+            .flatten()
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("BAT"))
+    })
+}
+
 fn named_device(host: &str) -> String {
     match host.trim() {
         "" => "Lyssna".into(),
@@ -2654,6 +2687,11 @@ async fn run(
         // A desktop client is a computer to Spotify, as the official app is.
         // Discord's listen-along only plays on computers.
         device_type: librespot_core::config::DeviceType::Computer,
+        model: format!(
+            "{} {}",
+            std::env::consts::OS,
+            if is_desktop() { "desktop" } else { "laptop" }
+        ),
         initial_volume: crate::config::Settings::load()
             .ok()
             .map(|settings| {

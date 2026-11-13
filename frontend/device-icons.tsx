@@ -3,6 +3,7 @@ import { ANDROID, APPLE, LINUX, PLAYSTATION } from "./device-logos";
 
 export type DeviceKind =
   | "computer"
+  | "desktop"
   | "phone"
   | "tablet"
   | "tv"
@@ -94,6 +95,17 @@ function Laptop({ platform }: { platform: Platform }) {
         </>
       );
   }
+}
+
+// A desktop shows its monitor, with the system's mark on screen.
+function Desktop({ platform }: { platform: Platform }) {
+  return (
+    <>
+      <rect x="2.5" y="3.5" width="19" height="13" rx="1.2" />
+      <path d="M12 16.5v3.5M8 20.5h8" />
+      <Logo platform={platform} x={12} y={10} size={5.4} />
+    </>
+  );
 }
 
 function Phone({ platform }: { platform: Platform }) {
@@ -213,6 +225,12 @@ export function DeviceIcon({
       return (
         <Svg size={size}>
           <Laptop platform={platform} />
+        </Svg>
+      );
+    case "desktop":
+      return (
+        <Svg size={size}>
+          <Desktop platform={platform} />
         </Svg>
       );
     case "phone":

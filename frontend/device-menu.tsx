@@ -29,6 +29,7 @@ export function deviceKind(device: Pick<Device, "name" | "kind">): Kind {
   if (KINDS[kind]) return KINDS[kind];
   const known: Kind[] = [
     "computer",
+    "desktop",
     "phone",
     "tablet",
     "tv",
@@ -64,6 +65,7 @@ const LOCAL_PLATFORM: Platform = IS_MAC
 
 const LABELS: Record<Kind, string> = {
   computer: "Computer",
+  desktop: "Computer",
   phone: "Phone",
   tablet: "Tablet",
   tv: "TV",
@@ -90,6 +92,7 @@ interface Row {
 export function DeviceMenu({
   devices,
   localName,
+  localDesktop,
   target,
   nativeStatus,
   playing,
@@ -97,6 +100,7 @@ export function DeviceMenu({
 }: {
   devices: Device[];
   localName: string;
+  localDesktop?: boolean;
   target: string;
   nativeStatus: string;
   playing: boolean;
@@ -105,7 +109,7 @@ export function DeviceMenu({
   const local: Row = {
     key: "native",
     name: "This computer",
-    kind: "computer",
+    kind: localDesktop ? "desktop" : "computer",
     platform: LOCAL_PLATFORM,
     status: nativeStatus,
     pick: () => onPick("native"),

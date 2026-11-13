@@ -247,6 +247,11 @@ fn device_kind(id: &str, device: &librespot_protocol::connect::DeviceInfo) -> &'
     if device.is_group {
         return "group";
     }
+    // Other Lyssna installs say whether they are desktops; Spotify's own
+    // apps don't, and its "PC desktop" means the desktop app, not the case.
+    if device.brand == "Lyssna" && device.model.ends_with(" desktop") {
+        return "desktop";
+    }
     match device.device_type.enum_value() {
         Ok(DeviceType::COMPUTER | DeviceType::CHROMEBOOK) => "computer",
         Ok(DeviceType::SMARTPHONE) => "phone",
@@ -316,6 +321,13 @@ mod display_name_tests {
         assert_eq!(device_kind("everywhere", &device), "alexa");
         device.brand = "Sonos".into();
         assert_eq!(device_kind("sonos", &device), "group");
+        let mut pc = DeviceInfo::new();
+        pc.device_type = DeviceType::COMPUTER.into();
+        pc.brand = "Lyssna".into();
+        pc.model = "windows desktop".into();
+        assert_eq!(device_kind("pc", &pc), "desktop");
+        pc.model = "windows laptop".into();
+        assert_eq!(device_kind("pc", &pc), "computer");
     }
 
     #[test]

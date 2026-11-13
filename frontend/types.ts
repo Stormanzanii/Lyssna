@@ -355,6 +355,7 @@ export interface Snapshot {
   settings: Settings;
   native_ready: boolean;
   local_device_name: string;
+  local_desktop?: boolean;
   native_status: string;
   /** Spotify Soloist's state while it is switched on. */
   soloist?: SoloistStatus | null;

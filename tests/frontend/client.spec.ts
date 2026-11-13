@@ -446,6 +446,9 @@ test("device menu shows each device with an icon for its kind", async ({
   await expect(menu.locator(".device-row.current")).toContainText(
     "This computer",
   );
+  await expect(menu.locator(".device-row.current rect[height='13']")).toHaveCount(
+    0,
+  );
   await expect(menu.getByRole("button", { name: /Pixel/ })).toContainText(
     "Phone",
   );
@@ -466,6 +469,23 @@ test("device menu shows each device with an icon for its kind", async ({
   await menu.getByRole("button", { name: /Pixel/ }).click();
   await page.getByTitle("Devices", { exact: true }).click();
   await expect(menu.locator(".device-row.current")).toContainText("Pixel");
+});
+
+test("a computer without a battery shows a monitor", async ({ page }) => {
+  await page.addInitScript(() => {
+    const clone = window.structuredClone;
+    window.structuredClone = ((value: any, options?: any) => {
+      const copy = clone(value, options);
+      if (copy && typeof copy === "object" && "local_device_name" in copy)
+        copy.local_desktop = true;
+      return copy;
+    }) as typeof structuredClone;
+  });
+  await startClient(page);
+  await page.getByTitle("Devices", { exact: true }).click();
+  await expect(
+    page.locator(".device-menu .device-row.current rect[height='13']"),
+  ).toHaveCount(1);
 });
 
 test("playing bars follow this computer's audio levels", async ({ page }) => {

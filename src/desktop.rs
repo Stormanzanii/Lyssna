@@ -52,6 +52,7 @@ pub struct Snapshot {
     settings: Settings,
     native_ready: bool,
     local_device_name: String,
+    local_desktop: bool,
     native_status: String,
     /// Spotify Soloist's state while it is switched on.
     soloist: Option<crate::soloist::Status>,
@@ -518,6 +519,7 @@ impl Desktop {
                 settings: settings.clone(),
                 native_ready: false,
                 local_device_name: native::device_name(),
+                local_desktop: native::is_desktop(),
                 native_status: "Waiting for sign-in".into(),
                 soloist: None,
                 keys_refused: false,

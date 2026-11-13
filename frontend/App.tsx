@@ -5404,6 +5404,7 @@ function App() {
         <DeviceMenu
           devices={state.devices}
           localName={state.local_device_name}
+          localDesktop={state.local_desktop}
           target={target}
           playing={state.playback.is_playing}
           nativeStatus={

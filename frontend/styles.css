@@ -7040,7 +7040,21 @@ input[type="range"]:hover {
 .discography-track > span:nth-child(4) {
   text-align: right;
 }
-button.discography-track:hover {
+.discography-track-number {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.discography-track:not(.discography-track-head):hover
+  .discography-track-number
+  > span {
+  visibility: hidden;
+}
+.discography-track:not(.discography-track-head):hover .row-play {
+  display: flex;
+  color: light-dark(#000, #fff);
+}
+.discography-track:not(.discography-track-head):hover {
   background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
 }
 .discography-track-head {

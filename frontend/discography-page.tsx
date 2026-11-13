@@ -204,13 +204,23 @@ function DiscographyRelease({
           <span>Time</span>
         </div>
         {songs?.tracks.map((track, index) => (
-          <button
+          <div
             key={track.uri}
             className="discography-track"
             role="row"
             onDoubleClick={() => onPlay(track.uri)}
           >
-            <span>{index + 1}</span>
+            <span className="discography-track-number">
+              <span>{index + 1}</span>
+              <button
+                className="row-play"
+                aria-label={`Play ${track.name}`}
+                title="Play"
+                onClick={() => onPlay(track.uri)}
+              >
+                <Play size={17} fill="currentColor" />
+              </button>
+            </span>
             <span className="discography-track-title">
               <strong>{track.name}</strong>
               <small>
@@ -219,7 +229,7 @@ function DiscographyRelease({
             </span>
             <span>{songs.streams[track.uri]?.toLocaleString() ?? ""}</span>
             <span>{formatTime(track.duration_ms)}</span>
-          </button>
+          </div>
         ))}
       </div>
     </section>

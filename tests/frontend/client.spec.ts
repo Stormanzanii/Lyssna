@@ -14423,6 +14423,22 @@ test("the discography page lists each release with its songs", async ({
     "Vampire Bat",
   );
   await expect(first).toContainText("16,051,998");
+  await first.locator(".discography-track").nth(1).hover();
+  await first.getByRole("button", { name: "Play Vampire Bat" }).last().click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__clientTest.commands
+            .filter((entry: any) => entry.command === "player")
+            .at(-1)?.args.request,
+      ),
+    )
+    .toMatchObject({
+      command: "play_home",
+      context: "spotify:album:aaaaaaaaaaaaaaaaaaaaaa",
+      uri: "spotify:track:vampire",
+    });
   // The filter narrows to one kind of release.
   await discography.getByRole("button", { name: "All" }).click();
   await page.getByRole("menuitemradio", { name: "Albums" }).click();

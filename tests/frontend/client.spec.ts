@@ -17269,7 +17269,7 @@ test("TTML Creator word menu splits words and moves them to new lines", async ({
     .click();
   await expect(
     creator.locator(".ttml-card").nth(1).locator(".ttml-word"),
-  ).toHaveText("line num ber 1".split(" "));
+  ).toHaveText("Line num ber 1".split(" "));
   await expect(creator.locator(".ttml-card-number").nth(1)).toHaveText("2");
 
   await card
@@ -18299,4 +18299,40 @@ test("TTML Creator follows the lyrics timing offset", async ({ page }) => {
   await expect(
     page.getByRole("region", { name: "TTML Creator" }).locator(".ttml-time"),
   ).toHaveText("00:10.500");
+});
+
+test("TTML Creator moves selected words to a new line", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-card");
+  const card = cards.first();
+  const word = (name: string) =>
+    card.getByRole("button", { name, exact: true });
+  await expect(card.locator(".ttml-word")).toHaveText(
+    "I am just a lyric line number 1".split(" "),
+  );
+  await word("just").click();
+  await word("line").click({ modifiers: ["Control"] });
+  await word("line").click({ button: "right" });
+  await page
+    .getByRole("menuitem", { name: "Move selected words to new line" })
+    .click();
+  await expect(card.locator(".ttml-word")).toHaveText(
+    "I am a lyric number 1".split(" "),
+  );
+  await expect(cards.nth(1).locator(".ttml-word")).toHaveText([
+    "Just",
+    "line",
+  ]);
 });

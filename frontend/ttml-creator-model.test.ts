@@ -661,6 +661,44 @@ describe("TTML Creator word menu", () => {
       "(one two|x)\n(three)",
     );
     expect(breakLine(lines, { line: 0, unit: 0 }, false)).toBe(lines);
+    const song = parseText("Hello there my friend\nNext line");
+    expect(toText(breakLine(song, { line: 0, unit: 2 }, false))).toBe(
+      "Hello there\nMy friend\nNext line",
+    );
+    expect(toText(breakLine(song, { line: 0, unit: 0 }, true))).toBe(
+      "There my friend\nHello\nNext line",
+    );
+    const picks = [
+      { line: 0, unit: 1 },
+      { line: 0, unit: 3 },
+    ];
+    expect(toText(breakLine(song, { line: 0, unit: 3 }, true, picks))).toBe(
+      "Hello my\nThere friend\nNext line",
+    );
+    expect(toText(breakLine(song, { line: 0, unit: 3 }, false, picks))).toBe(
+      "Hello\nThere my friend\nNext line",
+    );
+    expect(
+      toText(
+        breakLine(song, { line: 0, unit: 1 }, true, [
+          { line: 0, unit: 0 },
+          { line: 0, unit: 1 },
+          { line: 1, unit: 0 },
+        ]),
+      ),
+    ).toBe("My friend\nHello there next\nLine");
+    const blank = insertBlankLine(song, 1);
+    expect(
+      toText(moveWords(blank, [{ line: 0, unit: 3 }], { line: 2, unit: 0 })),
+    ).toBe("Hello there my\nNext line\nFriend");
+    expect(
+      toText(moveWord(blank, { line: 0, unit: 3 }, { line: 2, unit: 0 })),
+    ).toBe("Hello there my\nNext line\nFriend");
+    expect(
+      toText(
+        breakLine(parseText("hey you"), { line: 0, unit: 1 }, false),
+      ),
+    ).toBe("hey\nyou");
     expect(toText(duplicateLine(parseText("a\nb"), 0))).toBe("a\na\nb");
   });
 

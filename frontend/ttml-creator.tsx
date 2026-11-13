@@ -965,6 +965,12 @@ export function TtmlCreator({
     const unit = line?.units[at.unit];
     if (!line || !unit) return [];
     const suggestion = suggestSplit(unit.text, learned);
+    const chosen =
+      group.length > 1 &&
+      group.some((each) => each.line === at.line && each.unit === at.unit);
+    const firstChosen = Math.min(
+      ...group.filter((each) => each.line === at.line).map((each) => each.unit),
+    );
     return [
       [
         { label: "Split word…", run: () => setSplitting(at) },
@@ -993,13 +999,15 @@ export function TtmlCreator({
       [
         {
           label: "Move following words to new line",
-          disabled: at.unit === 0,
-          run: () => restructure(breakLine(lines, at, false)),
+          disabled: (chosen ? firstChosen : at.unit) === 0,
+          run: () => restructure(breakLine(lines, at, false, group)),
         },
         {
-          label: "Move this word to new line",
-          disabled: line.units.length < 2,
-          run: () => restructure(breakLine(lines, at, true)),
+          label: chosen
+            ? "Move selected words to new line"
+            : "Move this word to new line",
+          disabled: !chosen && line.units.length < 2,
+          run: () => restructure(breakLine(lines, at, true, group)),
         },
       ],
       [

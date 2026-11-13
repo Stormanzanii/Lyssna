@@ -663,9 +663,23 @@ export function breakLine(
   lines: CreatorLine[],
   at: Cursor,
   onlyThisWord: boolean,
+  picked: Cursor[] = [],
 ): CreatorLine[] {
   const line = lines[at.line];
   if (!line?.units[at.unit]) return lines;
+  const chosen =
+    picked.length > 1 &&
+    picked.some((each) => each.line === at.line && each.unit === at.unit);
+  if (chosen && onlyThisWord) return picksToNewLine(lines, picked, at.line);
+  if (chosen)
+    at = {
+      line: at.line,
+      unit: Math.min(
+        ...picked
+          .filter((each) => each.line === at.line)
+          .map((each) => each.unit),
+      ),
+    };
   const moved = onlyThisWord
     ? [line.units[at.unit]]
     : line.units.slice(at.unit);
@@ -673,8 +687,15 @@ export function breakLine(
     ? line.units.filter((_, index) => index !== at.unit)
     : line.units.slice(0, at.unit);
   if (!stay.length) return lines;
+  const capital = capitalised(line.units[0]);
   const fresh = (units: CreatorUnit[]) =>
-    units.map((unit, index) => (index ? unit : { ...unit, joined: false }));
+    units.map((unit, index) =>
+      index
+        ? unit
+        : capital
+          ? cased({ ...unit, joined: false }, true)
+          : { ...unit, joined: false },
+    );
   return [
     ...lines.slice(0, at.line),
     { ...line, units: fresh(stay) },
@@ -685,6 +706,40 @@ export function breakLine(
     },
     ...lines.slice(at.line + 1),
   ];
+}
+
+function picksToNewLine(
+  lines: CreatorLine[],
+  picked: Cursor[],
+  after: number,
+): CreatorLine[] {
+  const { taken, words, moved } = gather(lines, picked);
+  if (!words.length) return lines;
+  const fresh: CreatorUnit[] = words.map((unit, index) =>
+    index === 0
+      ? capitalised(lines[after].units[0])
+        ? cased(unit, true)
+        : unit
+      : moved[index].first
+        ? cased(unit, false)
+        : unit,
+  );
+  return lines.flatMap((line, index) => {
+    const units = without(line.units, taken);
+    if (units[0]?.joined) units[0] = { ...units[0], joined: false };
+    recase(line.units, units, -1, moved);
+    const kept = units.length || !line.units.length ? [{ ...line, units }] : [];
+    return index === after
+      ? [
+          ...kept,
+          {
+            units: fresh,
+            background: line.background,
+            opposite: line.opposite,
+          },
+        ]
+      : kept;
+  });
 }
 
 // Picked words are found by identity, so the copy needs its own words or
@@ -848,10 +903,12 @@ function recase(
   before: CreatorUnit[],
   units: CreatorUnit[],
   at: number,
-  moved: { unit: CreatorUnit; first: boolean }[],
+  moved: { unit: CreatorUnit; first: boolean; capital: boolean }[],
 ) {
   const lost = moved.some((each) => each.unit === before[0]);
-  if (at === 0 && moved.length) {
+  if (at === 0 && moved.length && !before.length) {
+    if (moved[0].capital) units[0] = cased(units[0], true);
+  } else if (at === 0 && moved.length) {
     const displaced = units[moved.length];
     if (!lost && capitalised(displaced)) {
       units[0] = cased(units[0], true);
@@ -889,9 +946,11 @@ export function moveWord(
   // Dropped between two syllables, it becomes a syllable of that word.
   if (into[at]?.joined) word[0] = { ...word[0], joined: true };
   const placed = [...into.slice(0, at), ...word, ...into.slice(at)];
-  const moved = source.units
-    .slice(start, end)
-    .map((unit, index) => ({ unit, first: start === 0 && index === 0 }));
+  const moved = source.units.slice(start, end).map((unit, index) => ({
+    unit,
+    first: start === 0 && index === 0,
+    capital: capitalised(source.units[0]),
+  }));
   if (!same) recase(source.units, kept, -1, moved);
   recase(same ? source.units : target.units, placed, at, moved);
   return lines
@@ -903,6 +962,31 @@ export function moveWord(
           : line,
     )
     .filter((line) => line.units.length);
+}
+
+function gather(lines: CreatorLine[], from: Cursor[]) {
+  const taken = new Set<CreatorUnit>();
+  const words: CreatorUnit[] = [];
+  const moved: { unit: CreatorUnit; first: boolean; capital: boolean }[] = [];
+  let previous: Cursor | null = null;
+  for (const at of [...from].sort(
+    (a, b) => a.line - b.line || a.unit - b.unit,
+  )) {
+    const unit = lines[at.line]?.units[at.unit];
+    if (!unit || taken.has(unit)) continue;
+    // Syllables picked side by side stay one word; anything else moves as
+    // its own word.
+    const follows = previous?.line === at.line && previous.unit === at.unit - 1;
+    taken.add(unit);
+    words.push(follows ? unit : { ...unit, joined: false });
+    moved.push({
+      unit,
+      first: at.unit === 0,
+      capital: capitalised(lines[at.line].units[0]),
+    });
+    previous = at;
+  }
+  return { taken, words, moved };
 }
 
 /** Moves several words, kept in reading order, to before `to.unit`. */
@@ -920,23 +1004,7 @@ export function moveWords(
     to.unit <= spots.at(-1)! + 1
   )
     return lines;
-  const taken = new Set<CreatorUnit>();
-  const words: CreatorUnit[] = [];
-  const moved: { unit: CreatorUnit; first: boolean }[] = [];
-  let previous: Cursor | null = null;
-  for (const at of [...from].sort(
-    (a, b) => a.line - b.line || a.unit - b.unit,
-  )) {
-    const unit = lines[at.line]?.units[at.unit];
-    if (!unit || taken.has(unit)) continue;
-    // Syllables picked side by side stay one word; anything else moves as
-    // its own word.
-    const follows = previous?.line === at.line && previous.unit === at.unit - 1;
-    taken.add(unit);
-    words.push(follows ? unit : { ...unit, joined: false });
-    moved.push({ unit, first: at.unit === 0 });
-    previous = at;
-  }
+  const { taken, words, moved } = gather(lines, from);
   const anchor = lines[to.line].units[to.unit];
   if (!words.length || (anchor && taken.has(anchor))) return lines;
   const at = lines[to.line].units

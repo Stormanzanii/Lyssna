@@ -4492,6 +4492,7 @@ input[type="range"]:hover {
   z-index: 45;
 }
 .device-menu {
+  --device-body: light-dark(#dcdcdc, #232323);
   position: fixed;
   bottom: 94px;
   right: 28px;

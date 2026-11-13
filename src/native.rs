@@ -645,6 +645,7 @@ impl NativeControls {
                 volume_percent: device.volume_percent,
                 is_offline: device.is_offline,
                 kind: device.kind.into(),
+                platform: device.platform.into(),
             })
             .collect())
     }

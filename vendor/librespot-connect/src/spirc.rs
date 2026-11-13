@@ -154,6 +154,8 @@ pub struct ConnectedDevice {
     pub volume_percent: Option<u8>,
     /// What sort of device this is, for picking its icon.
     pub kind: &'static str,
+    /// Operating system, when Spotify's report gives it away.
+    pub platform: &'static str,
 }
 
 /// The device a Connect identifier belongs to. The put-state response lists
@@ -259,9 +261,29 @@ fn device_kind(id: &str, device: &librespot_protocol::connect::DeviceInfo) -> &'
     }
 }
 
+fn device_platform(device: &librespot_protocol::connect::DeviceInfo) -> &'static str {
+    let report = format!(
+        "{} {} {}",
+        device.device_software_version, device.brand, device.model
+    )
+    .to_ascii_lowercase();
+    let has = |words: &[&str]| words.iter().any(|word| report.contains(word));
+    if has(&["android"]) {
+        "android"
+    } else if has(&["win32", "win64", "windows"]) {
+        "windows"
+    } else if has(&["osx", "macos", "darwin", "iphone", "ipad", "ios", "apple"]) {
+        "mac"
+    } else if has(&["linux"]) {
+        "linux"
+    } else {
+        ""
+    }
+}
+
 #[cfg(test)]
 mod display_name_tests {
-    use super::{device_display_name, device_kind, looks_like_id};
+    use super::{device_display_name, device_kind, device_platform, looks_like_id};
     use librespot_protocol::{
         connect::DeviceInfo,
         devices::{DeviceAlias, DeviceType},
@@ -282,6 +304,24 @@ mod display_name_tests {
         assert_eq!(device_kind("everywhere", &device), "alexa");
         device.brand = "Sonos".into();
         assert_eq!(device_kind("sonos", &device), "group");
+    }
+
+    #[test]
+    fn platforms_come_from_the_software_report() {
+        let platform = |software: &str, brand: &str| {
+            let mut device = DeviceInfo::new();
+            device.device_software_version = software.into();
+            device.brand = brand.into();
+            device_platform(&device)
+        };
+        assert_eq!(
+            platform("Spotify/1.2.52 Win32_x86_64/0 (PC desktop)", ""),
+            "windows"
+        );
+        assert_eq!(platform("Spotify/1.2.52 OSX_ARM64/0", ""), "mac");
+        assert_eq!(platform("8.9.96 iOS 18.1", "Apple"), "mac");
+        assert_eq!(platform("Android-34", "Google"), "android");
+        assert_eq!(platform("0.8.0", "Lyssna"), "");
     }
 
     #[test]
@@ -389,6 +429,7 @@ impl ConnectedDevices {
                 volume_percent: (!device.capabilities.disable_volume)
                     .then_some((device.volume.min(65535) * 100 / 65535) as u8),
                 kind: device_kind(id, device),
+                platform: device_platform(device),
             })
             .collect();
         if let Ok(current) = self.0.lock() {

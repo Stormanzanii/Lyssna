@@ -150,6 +150,9 @@ impl ConnectState {
             device_id: session.device_id().to_string(),
             device_type: EnumOrUnknown::new(cfg.device_type.into()),
             device_software_version: version::SEMVER.to_string(),
+            // Lets other Lyssna installs show which kind of computer this is.
+            brand: "Lyssna".into(),
+            model: std::env::consts::OS.into(),
             spirc_version: version::SPOTIFY_SPIRC_VERSION.to_string(),
             client_id: session.client_id(),
             is_group: cfg.is_group,

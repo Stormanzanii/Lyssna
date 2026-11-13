@@ -194,6 +194,8 @@ pub struct Device {
     /// The Web API sends this as `type`, e.g. "Smartphone".
     #[serde(default, alias = "type")]
     pub kind: String,
+    #[serde(default)]
+    pub platform: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

@@ -431,6 +431,13 @@ test("device menu shows each device with an icon for its kind", async ({
         { id: "tv", name: "Lounge", is_active: false, kind: "tv" },
         { id: "echo", name: "Everywhere", is_active: false, kind: "alexa" },
         { id: "box", name: "Gameroom", is_active: false, is_offline: true },
+        {
+          id: "pc",
+          name: "Study PC",
+          is_active: false,
+          kind: "computer",
+          platform: "windows",
+        },
       ],
     }),
   );
@@ -451,6 +458,11 @@ test("device menu shows each device with an icon for its kind", async ({
   await expect(menu.getByRole("button", { name: /Gameroom/ })).toContainText(
     "Standby",
   );
+  await expect(
+    menu
+      .getByRole("button", { name: /Study PC/ })
+      .locator('path[d^="M0 0h11.4"]'),
+  ).toHaveCount(1);
   await menu.getByRole("button", { name: /Pixel/ }).click();
   await page.getByTitle("Devices", { exact: true }).click();
   await expect(menu.locator(".device-row.current")).toContainText("Pixel");

@@ -1,32 +1,12 @@
+import { Check } from "lucide-react";
 import {
-  Car,
-  Cast,
-  Check,
-  Gamepad2,
-  Monitor,
-  Radio,
-  Smartphone,
-  Speaker,
-  Tablet,
-  Tv,
-  Watch,
-} from "lucide-react";
+  DeviceIcon,
+  type DeviceKind as Kind,
+  type Platform,
+} from "./device-icons";
 import { LevelBars } from "./level-bars";
+import { IS_MAC } from "./platform";
 import type { Device } from "./types";
-
-type Kind =
-  | "computer"
-  | "phone"
-  | "tablet"
-  | "tv"
-  | "receiver"
-  | "console"
-  | "car"
-  | "watch"
-  | "cast"
-  | "alexa"
-  | "group"
-  | "speaker";
 
 // The native list sends Lyssna's own kinds; the Web API sends Spotify's
 // device type names.
@@ -62,6 +42,19 @@ export function deviceKind(device: Pick<Device, "name" | "kind">): Kind {
   return known.includes(kind as Kind) ? (kind as Kind) : "speaker";
 }
 
+const PLATFORMS: Platform[] = ["windows", "mac", "linux", "android"];
+
+function devicePlatform(device: Pick<Device, "platform">): Platform {
+  const platform = (device.platform ?? "") as Platform;
+  return PLATFORMS.includes(platform) ? platform : "";
+}
+
+const LOCAL_PLATFORM: Platform = IS_MAC
+  ? "mac"
+  : __APP_PLATFORM__ === "linux"
+    ? "linux"
+    : "windows";
+
 const LABELS: Record<Kind, string> = {
   computer: "Computer",
   phone: "Phone",
@@ -77,56 +70,11 @@ const LABELS: Record<Kind, string> = {
   speaker: "Speaker",
 };
 
-function SmartSpeaker({ size }: { size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 6.5v10c0 1.7 3.1 3 7 3s7-1.3 7-3v-10" />
-      <ellipse className="device-ring" cx="12" cy="6.5" rx="7" ry="2.6" />
-      <path d="M9 13h.01M12 13.5h.01M15 13h.01" />
-    </svg>
-  );
-}
-
-export function DeviceIcon({ kind, size = 20 }: { kind: Kind; size?: number }) {
-  switch (kind) {
-    case "computer":
-      return <Monitor size={size} />;
-    case "phone":
-      return <Smartphone size={size} />;
-    case "tablet":
-      return <Tablet size={size} />;
-    case "tv":
-      return <Tv size={size} />;
-    case "receiver":
-      return <Radio size={size} />;
-    case "console":
-      return <Gamepad2 size={size} />;
-    case "car":
-      return <Car size={size} />;
-    case "watch":
-      return <Watch size={size} />;
-    case "cast":
-      return <Cast size={size} />;
-    case "alexa":
-      return <SmartSpeaker size={size} />;
-    default:
-      return <Speaker size={size} />;
-  }
-}
-
 interface Row {
   key: string;
   name: string;
   kind: Kind;
+  platform: Platform;
   status: string;
   standby?: boolean;
   pick: () => void;
@@ -151,6 +99,7 @@ export function DeviceMenu({
     key: "native",
     name: "This computer",
     kind: "computer",
+    platform: LOCAL_PLATFORM,
     status: nativeStatus,
     pick: () => onPick("native"),
   };
@@ -162,6 +111,7 @@ export function DeviceMenu({
         key: device.id || device.name,
         name: device.name,
         kind,
+        platform: devicePlatform(device),
         standby: !device.is_active && !!device.is_offline,
         status: device.is_active
           ? "Active device"
@@ -179,7 +129,7 @@ export function DeviceMenu({
     <div className="device-menu popover">
       <h3>Connect to a device</h3>
       <button className="device-row current selected" onClick={current.pick}>
-        <DeviceIcon kind={current.kind} size={26} />
+        <DeviceIcon kind={current.kind} platform={current.platform} size={26} />
         <div>
           <small>Current device</small>
           <strong>{current.name}</strong>
@@ -198,7 +148,7 @@ export function DeviceMenu({
           title={row.standby ? "Start Spotify on the speaker first" : undefined}
           onClick={row.pick}
         >
-          <DeviceIcon kind={row.kind} size={22} />
+          <DeviceIcon kind={row.kind} platform={row.platform} size={22} />
           <div>
             <strong>{row.name}</strong>
             <small>{row.status}</small>

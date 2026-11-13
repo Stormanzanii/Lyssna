@@ -741,3 +741,7 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+## Simple Icons
+
+The Apple, Android and Linux marks on device icons in `frontend/device-logos.ts` are path data from [Simple Icons](https://github.com/simple-icons/simple-icons) 13.21.0, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The marks remain trademarks of their owners and only identify which kind of device is listed.

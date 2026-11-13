@@ -191,6 +191,9 @@ pub struct Device {
     /// Spotify Connect lists the speaker on standby.
     #[serde(default)]
     pub is_offline: bool,
+    /// The Web API sends this as `type`, e.g. "Smartphone".
+    #[serde(default, alias = "type")]
+    pub kind: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]

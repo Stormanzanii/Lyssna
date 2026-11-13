@@ -4490,42 +4490,152 @@ input[type="range"]:hover {
   position: fixed;
   bottom: 94px;
   right: 28px;
-  width: 330px;
-  max-height: 60vh;
+  width: 360px;
+  max-height: 64vh;
   overflow: auto;
+  padding: 10px;
+  border-radius: 14px;
 }
 .device-menu h3 {
-  padding: 14px 12px 15px;
-  font-size: 16px;
+  padding: 8px 10px 4px;
+  font-size: 17px;
+  letter-spacing: -0.01em;
 }
-.device-menu > button {
+.device-section {
+  margin: 12px 10px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.device-row {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
   width: 100%;
-  padding: 13px;
-  border-radius: 5px;
+  padding: 8px 10px;
+  border-radius: 10px;
   text-align: left;
+  transition: background 0.15s ease;
 }
-.device-menu > button:hover {
-  background: light-dark(#00000009, #ffffff09);
+.device-row:hover {
+  background: light-dark(#0000000c, #ffffff0d);
 }
-.device-menu > button.selected {
-  color: var(--accent);
-}
-.device-menu > button > div {
+.device-row > div {
   flex: 1;
   min-width: 0;
 }
-.device-menu strong {
+.device-row strong {
   display: block;
-  font-size: 13px;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.device-menu small {
+.device-row small {
   display: block;
+  overflow: hidden;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 11px;
-  margin-top: 5px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: light-dark(#0000000f, #ffffff12);
+  color: light-dark(#222, #e8e8e8);
+}
+.device-ring {
+  stroke: #2fc6f0;
+}
+.device-row.current {
+  padding: 12px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--accent);
+}
+.device-row.current:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.device-row.current .device-tile {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #000;
+}
+.device-row.current .device-ring {
+  stroke: currentColor;
+}
+.device-row.current small {
+  color: light-dark(#333, #d6d6d6);
+}
+.device-row.standby .device-tile,
+.device-row.standby strong {
+  opacity: 0.6;
+}
+.device-pill {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: light-dark(#0000000f, #ffffff14);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.device-bars {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 2px;
+  width: 16px;
+  height: 14px;
+}
+.device-bars i {
+  flex: 1;
+  height: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: device-bars 0.9s ease-in-out infinite alternate;
+}
+.device-bars i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.device-bars i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+@keyframes device-bars {
+  from {
+    transform: scaleY(0.25);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.reduce-motion .device-bars i {
+  animation: none;
+  transform: scaleY(0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .device-bars i {
+    animation: none;
+    transform: scaleY(0.6);
+  }
+}
+.device-empty {
+  margin: 4px 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 .song-menu {
   position: fixed;

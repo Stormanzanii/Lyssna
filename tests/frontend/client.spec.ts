@@ -419,6 +419,43 @@ test("Connect retains registered speakers and transfers back to this computer", 
   ]);
 });
 
+test("device menu shows each device with an icon for its kind", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "devices",
+      devices: [
+        { id: "phone", name: "Pixel", is_active: false, kind: "Smartphone" },
+        { id: "tv", name: "Lounge", is_active: false, kind: "tv" },
+        { id: "echo", name: "Everywhere", is_active: false, kind: "alexa" },
+        { id: "box", name: "Gameroom", is_active: false, is_offline: true },
+      ],
+    }),
+  );
+  await page.getByTitle("Devices", { exact: true }).click();
+  const menu = page.locator(".device-menu");
+  await expect(menu.locator(".device-row.current")).toContainText(
+    "This computer",
+  );
+  await expect(menu.getByRole("button", { name: /Pixel/ })).toContainText(
+    "Phone · Spotify Connect",
+  );
+  await expect(menu.getByRole("button", { name: /Lounge/ })).toContainText(
+    "TV",
+  );
+  await expect(
+    menu.getByRole("button", { name: /Everywhere/ }).locator(".device-ring"),
+  ).toHaveCount(1);
+  await expect(menu.getByRole("button", { name: /Gameroom/ })).toContainText(
+    "Standby",
+  );
+  await menu.getByRole("button", { name: /Pixel/ }).click();
+  await page.getByTitle("Devices", { exact: true }).click();
+  await expect(menu.locator(".device-row.current")).toContainText("Pixel");
+});
+
 test("standby speakers are labelled and a failed transfer keeps controls on the active device", async ({
   page,
 }) => {

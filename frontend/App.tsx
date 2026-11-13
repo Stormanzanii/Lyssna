@@ -64,6 +64,7 @@ import {
   FilePenLine,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
+import { DeviceMenu } from "./device-menu";
 import { isJamLink } from "./jam-link";
 import { listen } from "@tauri-apps/api/event";
 import type { CinemaRequest } from "./cinema";
@@ -5400,61 +5401,26 @@ function App() {
         />
       )}
       {deviceMenu && (
-        <div className="device-menu popover">
-          <h3>Connect to a device</h3>
-          <button
-            className={target === "native" ? "selected" : ""}
-            onClick={() => {
-              if (target !== "native")
-                void call("player", {
-                  request: { command: "transfer", uri: "native" },
-                  target: "native",
-                });
-              setTarget("native");
-              setDeviceMenu(false);
-            }}
-          >
-            <Speaker size={21} />
-            <div>
-              <strong>This computer</strong>
-              <small>
-                {state.native_ready && !offline
-                  ? "Ready for native playback"
-                  : state.native_status}
-              </small>
-            </div>
-            {target === "native" && <Check size={18} />}
-          </button>
-          {state.devices
-            .filter((device) => device.name !== state.local_device_name)
-            .map((device) => (
-              <button
-                key={device.id}
-                className={target === device.id ? "selected" : ""}
-                onClick={() => {
-                  setTarget(device.id || "native");
-                  setDeviceMenu(false);
-                  if (device.id)
-                    void call("player", {
-                      request: { command: "transfer", uri: device.id },
-                      target: device.id,
-                    });
-                }}
-              >
-                <Speaker size={20} />
-                <div>
-                  <strong>{device.name}</strong>
-                  <small>
-                    {device.is_active
-                      ? "Active device"
-                      : device.is_offline
-                        ? "Standby · start Spotify on the speaker first"
-                        : "Spotify Connect"}
-                  </small>
-                </div>
-              </button>
-            ))}
-        </div>
+        <DeviceMenu
+          devices={state.devices}
+          localName={state.local_device_name}
+          target={target}
+          playing={state.playback.is_playing}
+          nativeStatus={
+            state.native_ready && !offline
+              ? "Ready for native playback"
+              : state.native_status
+          }
+          onPick={(next) => {
+            setDeviceMenu(false);
+            if (next === target) return;
+            setTarget(next);
+            void call("player", {
+              request: { command: "transfer", uri: next },
+              target: next,
+            });
+          }}
+        />
       )}
       {songMenu && (
         <>

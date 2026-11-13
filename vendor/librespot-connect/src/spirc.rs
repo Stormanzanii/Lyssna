@@ -152,6 +152,8 @@ pub struct ConnectedDevice {
     pub is_active: bool,
     /// Adjustable volume, or None for fixed-volume destinations.
     pub volume_percent: Option<u8>,
+    /// What sort of device this is, for picking its icon.
+    pub kind: &'static str,
 }
 
 /// The device a Connect identifier belongs to. The put-state response lists
@@ -231,10 +233,56 @@ pub fn device_display_name(device: &librespot_protocol::connect::DeviceInfo) -> 
     device.name.trim().to_owned()
 }
 
+fn device_kind(id: &str, device: &librespot_protocol::connect::DeviceInfo) -> &'static str {
+    use librespot_protocol::devices::DeviceType;
+    let amazon = |text: &str| {
+        let text = text.to_ascii_lowercase();
+        text.contains("amazon") || text.contains("echo") || text.contains("alexa")
+    };
+    if id.contains("_amzn") || amazon(&device.brand) || amazon(&device.model) {
+        return "alexa";
+    }
+    if device.is_group {
+        return "group";
+    }
+    match device.device_type.enum_value() {
+        Ok(DeviceType::COMPUTER | DeviceType::CHROMEBOOK) => "computer",
+        Ok(DeviceType::SMARTPHONE) => "phone",
+        Ok(DeviceType::TABLET) => "tablet",
+        Ok(DeviceType::TV | DeviceType::STB | DeviceType::CAST_VIDEO) => "tv",
+        Ok(DeviceType::AVR) => "receiver",
+        Ok(DeviceType::GAME_CONSOLE) => "console",
+        Ok(DeviceType::AUTOMOBILE | DeviceType::CAR_THING) => "car",
+        Ok(DeviceType::SMARTWATCH) => "watch",
+        Ok(DeviceType::CAST_AUDIO | DeviceType::AUDIO_DONGLE) => "cast",
+        _ => "speaker",
+    }
+}
+
 #[cfg(test)]
 mod display_name_tests {
-    use super::{device_display_name, looks_like_id};
-    use librespot_protocol::{connect::DeviceInfo, devices::DeviceAlias};
+    use super::{device_display_name, device_kind, looks_like_id};
+    use librespot_protocol::{
+        connect::DeviceInfo,
+        devices::{DeviceAlias, DeviceType},
+    };
+
+    #[test]
+    fn kinds_follow_spotify_device_types_and_spot_alexa() {
+        let mut device = DeviceInfo::new();
+        device.device_type = DeviceType::SMARTPHONE.into();
+        assert_eq!(device_kind("phone", &device), "phone");
+        device.device_type = DeviceType::TV.into();
+        assert_eq!(device_kind("tv", &device), "tv");
+        device.device_type = DeviceType::SPEAKER.into();
+        assert_eq!(device_kind("speaker", &device), "speaker");
+        assert_eq!(device_kind("echo_amzn_1", &device), "alexa");
+        device.brand = "Amazon".into();
+        device.is_group = true;
+        assert_eq!(device_kind("everywhere", &device), "alexa");
+        device.brand = "Sonos".into();
+        assert_eq!(device_kind("sonos", &device), "group");
+    }
 
     #[test]
     fn readable_names_are_kept_and_ids_are_replaced() {
@@ -340,6 +388,7 @@ impl ConnectedDevices {
                 is_active: id == &cluster.active_device_id,
                 volume_percent: (!device.capabilities.disable_volume)
                     .then_some((device.volume.min(65535) * 100 / 65535) as u8),
+                kind: device_kind(id, device),
             })
             .collect();
         if let Ok(current) = self.0.lock() {

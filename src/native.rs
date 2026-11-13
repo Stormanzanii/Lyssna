@@ -644,6 +644,7 @@ impl NativeControls {
                 is_active: device.is_active,
                 volume_percent: device.volume_percent,
                 is_offline: device.is_offline,
+                kind: device.kind.into(),
             })
             .collect())
     }
@@ -1991,7 +1992,8 @@ fn macos_computer_name() -> Option<&'static str> {
     static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     NAME.get_or_init(|| {
         // Null arguments request a temporary session and omit the encoding.
-        let name = unsafe { SCDynamicStoreCopyComputerName(std::ptr::null(), std::ptr::null_mut()) };
+        let name =
+            unsafe { SCDynamicStoreCopyComputerName(std::ptr::null(), std::ptr::null_mut()) };
         if name.is_null() {
             return None;
         }

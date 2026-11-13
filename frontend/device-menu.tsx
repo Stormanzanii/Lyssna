@@ -11,6 +11,7 @@ import {
   Tv,
   Watch,
 } from "lucide-react";
+import { LevelBars } from "./level-bars";
 import type { Device } from "./types";
 
 type Kind =
@@ -184,11 +185,7 @@ export function DeviceMenu({
           <strong>{current.name}</strong>
         </div>
         {playing ? (
-          <span className="device-bars" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
+          <LevelBars className="device-bars" live={current === local} />
         ) : (
           <Check size={18} />
         )}

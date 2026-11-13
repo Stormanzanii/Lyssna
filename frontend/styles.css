@@ -2299,6 +2299,11 @@ small {
   animation-delay: -0.5s;
   height: 8px;
 }
+.equalizer.live i {
+  height: calc(4px + var(--level, 0) * 13px);
+  animation: none;
+  transition: height 0.05s linear;
+}
 @keyframes equalize {
   to {
     height: 4px;
@@ -4585,6 +4590,11 @@ input[type="range"]:hover {
   to {
     transform: scaleY(1);
   }
+}
+.device-bars.live i {
+  animation: none;
+  transform: scaleY(calc(0.2 + var(--level, 0) * 0.8));
+  transition: transform 0.05s linear;
 }
 .reduce-motion .device-bars i {
   animation: none;

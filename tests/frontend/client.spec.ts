@@ -456,6 +456,41 @@ test("device menu shows each device with an icon for its kind", async ({
   await expect(menu.locator(".device-row.current")).toContainText("Pixel");
 });
 
+test("playing bars follow this computer's audio levels", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const test = (window as any).__clientTest;
+    test.answers = { ...test.answers, audio_levels: [255, 0, 128] };
+  });
+  await page.evaluate(
+    ({ base, track }) =>
+      (window as any).__clientTest.emit({
+        type: "playback",
+        playback: {
+          ...base,
+          item: track,
+          is_playing: true,
+          device: { id: "local-device", name: "Lyssna (test)", is_active: true },
+        },
+        observed_at: Date.now(),
+        changed: false,
+      }),
+    { base: emptyState.playback, track },
+  );
+  await page.getByTitle("Devices", { exact: true }).click();
+  const bars = page.locator(".device-bars.live i");
+  await expect(bars).toHaveCount(3);
+  await expect
+    .poll(() =>
+      bars.evaluateAll((items) =>
+        items.map((item) =>
+          (item as HTMLElement).style.getPropertyValue("--level"),
+        ),
+      ),
+    )
+    .toEqual(["1.000", "0.000", "0.502"]);
+});
+
 test("standby speakers are labelled and a failed transfer keeps controls on the active device", async ({
   page,
 }) => {

@@ -65,6 +65,7 @@ import {
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { DeviceMenu } from "./device-menu";
+import { LevelBars } from "./level-bars";
 import { isJamLink } from "./jam-link";
 import { listen } from "@tauri-apps/api/event";
 import type { CinemaRequest } from "./cinema";
@@ -4618,11 +4619,10 @@ function App() {
                                 <div className="track-number">
                                   <span>
                                     {current && state.playback.is_playing ? (
-                                      <span className="equalizer">
-                                        <i />
-                                        <i />
-                                        <i />
-                                      </span>
+                                      <LevelBars
+                                        className="equalizer"
+                                        live={playingHere}
+                                      />
                                     ) : (
                                       index + 1
                                     )}

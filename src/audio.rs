@@ -603,7 +603,54 @@ impl AudioSink {
     }
 }
 
+/// Bass, mid and treble loudness of the chunk now leaving the speakers,
+/// one byte each.
+static LEVELS: AtomicU32 = AtomicU32::new(0);
+
+pub fn levels() -> [u8; 3] {
+    let [low, mid, high, _] = LEVELS.load(Ordering::Relaxed).to_le_bytes();
+    [low, mid, high]
+}
+
+fn band_levels(samples: &[f32]) -> u32 {
+    let frames = samples.len() / usize::from(CHANNELS);
+    if frames == 0 {
+        return 0;
+    }
+    let pole = |hz: f32| 1.0 - (-std::f32::consts::TAU * hz / SAMPLE_RATE as f32).exp();
+    let (bass_pole, treble_pole) = (pole(200.0), pole(2_500.0));
+    // Two poles per edge; a single pole leaks so much that a bass note
+    // lights the treble bar.
+    let mut low = [0.0f32; 2];
+    let mut high = [0.0f32; 2];
+    let mut power = [0.0f32; 3];
+    for frame in samples.chunks_exact(usize::from(CHANNELS)) {
+        let mono = frame.iter().sum::<f32>() / f32::from(CHANNELS);
+        low[0] += bass_pole * (mono - low[0]);
+        low[1] += bass_pole * (low[0] - low[1]);
+        high[0] += treble_pole * (mono - high[0]);
+        let first = mono - high[0];
+        high[1] += treble_pole * (first - high[1]);
+        let treble = first - high[1];
+        let bands = [low[1], mono - low[1] - treble, treble];
+        for (sum, band) in power.iter_mut().zip(bands) {
+            *sum += band * band;
+        }
+    }
+    // Treble carries far less energy than bass in most music, so lift the
+    // upper bands until all three bars move about as much.
+    let lift = [0.0, 6.0, 14.0];
+    let mut bytes = [0u8; 4];
+    for ((byte, sum), lift) in bytes.iter_mut().zip(power).zip(lift) {
+        let rms = (sum / frames as f32).sqrt().max(1e-6);
+        let level = (20.0 * rms.log10() + lift + 48.0) / 40.0;
+        *byte = (level.clamp(0.0, 1.0) * 255.0) as u8;
+    }
+    u32::from_le_bytes(bytes)
+}
+
 struct QueuedPacket {
+    levels: u32,
     #[cfg(test)]
     output_started: Option<Arc<Mutex<Option<std::time::Instant>>>>,
     generation: usize,
@@ -624,7 +671,9 @@ impl QueuedPacket {
         narration: bool,
         volume: Box<dyn VolumeGetter + Send>,
     ) -> Self {
+        let levels = if narration { 0 } else { band_levels(&samples) };
         let mut packet = Self::new(samples, buffer.queued);
+        packet.levels = levels;
         packet.generation = buffer.generation.load(Ordering::Acquire);
         packet.active_generation = Some(buffer.generation);
         packet.fading_generation = Some(buffer.fading_generation);
@@ -643,6 +692,7 @@ impl QueuedPacket {
         );
         queued.fetch_add(samples.len(), Ordering::Relaxed);
         Self {
+            levels: 0,
             #[cfg(test)]
             output_started: None,
             generation: 0,
@@ -680,6 +730,7 @@ impl Iterator for QueuedPacket {
                 if let Some((marker, narration)) = &self.marker {
                     marker.store(*narration, Ordering::Release);
                 }
+                LEVELS.store(self.levels, Ordering::Relaxed);
                 self.marker_applied = true;
             }
             self.queued.fetch_sub(1, Ordering::Relaxed);
@@ -1386,6 +1437,24 @@ mod tests {
         sink.append(QueuedPacket::new(vec![0.75; 100], queued.clone()));
         assert!((0..1024).any(|_| output.next() == Some(0.75)));
     }
+    #[test]
+    fn band_levels_follow_the_loud_band() {
+        let tone = |hz: f32| -> Vec<f32> {
+            (0..4096)
+                .flat_map(|i| {
+                    let value =
+                        0.5 * (std::f32::consts::TAU * hz * i as f32 / SAMPLE_RATE as f32).sin();
+                    [value, value]
+                })
+                .collect()
+        };
+        let [low, _, high, _] = band_levels(&tone(60.0)).to_le_bytes();
+        assert!(low > 200 && high < 60, "{low} {high}");
+        let [low, _, high, _] = band_levels(&tone(8_000.0)).to_le_bytes();
+        assert!(high > 200 && low < 60, "{low} {high}");
+        assert_eq!(band_levels(&[0.0; 512]), 0);
+    }
+
     #[test]
     fn queued_samples_account_for_playback_and_dropped_packets() {
         let queued = Arc::new(AtomicUsize::new(0));

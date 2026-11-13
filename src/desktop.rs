@@ -2948,6 +2948,10 @@ async fn track_waveform(
     .map_err(error)
 }
 #[tauri::command]
+fn audio_levels() -> [u8; 3] {
+    crate::audio::levels()
+}
+#[tauri::command]
 async fn track_spectrogram(
     uri: String,
     from_ms: f64,
@@ -5874,6 +5878,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             retry_audio,
             playback_speed,
             track_waveform,
+            audio_levels,
             track_spectrogram,
             play_clip,
             stop_clip,

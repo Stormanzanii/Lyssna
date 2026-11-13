@@ -2299,9 +2299,6 @@ small {
   animation-delay: -0.5s;
   height: 8px;
 }
-.equalizer.live {
-  align-items: flex-end;
-}
 .equalizer.live i {
   height: 3px;
   animation: none;

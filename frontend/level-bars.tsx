@@ -59,13 +59,16 @@ export function LevelBars({
     let frame = requestAnimationFrame(function draw() {
       const box = element.current;
       if (box) {
-        // Whole-pixel heights from the bottom; scaling or half pixels blur
-        // the bars and make them look like they change width.
+        // Whole-pixel heights; centred bars grow two pixels at a time so
+        // both ends stay on the pixel grid. Scaling or half pixels blur the
+        // bars and make them look like they change width.
         const tallest = box.clientHeight;
+        const step = getComputedStyle(box).alignItems === "center" ? 2 : 1;
         Array.from(box.children).forEach((bar, index) => {
           const gap = targets[index] - shown[index];
           shown[index] += gap * (gap > 0 ? 0.55 : 0.2);
-          const height = Math.round(3 + shown[index] * (tallest - 3));
+          const height =
+            3 + step * Math.round((shown[index] * (tallest - 3)) / step);
           (bar as HTMLElement).style.height = `${height}px`;
           bar.setAttribute("data-level", shown[index].toFixed(3));
         });

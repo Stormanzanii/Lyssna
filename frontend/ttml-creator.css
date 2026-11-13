@@ -1659,6 +1659,20 @@
   background: #fff;
   pointer-events: none;
 }
+.ttml-spectrum-playhead {
+  z-index: 3;
+  background: #ff5f8f;
+  box-shadow: 0 0 6px 1px #ff5f8fa6;
+}
+.ttml-spectrum-playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -5px;
+  border: 6px solid transparent;
+  border-top: 8px solid #ff5f8f;
+  border-bottom: 0;
+}
 .ttml-spectrum-hover {
   width: 1px;
   margin-left: 0;

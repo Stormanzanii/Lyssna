@@ -1960,10 +1960,46 @@ fn playing_position(decoded_ms: u32, queued_ms: u64, resumed: Option<u64>) -> u6
 /// The Spotify Connect name: the computer first, as Spotify's own client
 /// names itself, then the app, e.g. "ARASHII-PC (Lyssna)".
 pub fn device_name() -> String {
+    #[cfg(target_os = "macos")]
+    if let Some(host) = macos_computer_name() {
+        return named_device(host);
+    }
+
     let host = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_default();
     named_device(&host)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_computer_name() -> Option<&'static str> {
+    use core_foundation::{
+        base::TCFType,
+        string::{CFString, CFStringEncoding, CFStringRef},
+    };
+
+    #[link(name = "SystemConfiguration", kind = "framework")]
+    unsafe extern "C" {
+        fn SCDynamicStoreCopyComputerName(
+            store: *const std::ffi::c_void,
+            encoding: *mut CFStringEncoding,
+        ) -> CFStringRef;
+    }
+
+    // Connect keeps its advertised name for the session. Cache it so playback
+    // updates don't repeatedly contact the system configuration service.
+    static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        // Null arguments request a temporary session and omit the encoding.
+        let name = unsafe { SCDynamicStoreCopyComputerName(std::ptr::null(), std::ptr::null_mut()) };
+        if name.is_null() {
+            return None;
+        }
+        // The Copy rule transfers ownership; CFString releases it on drop.
+        let name = unsafe { CFString::wrap_under_create_rule(name) }.to_string();
+        (!name.trim().is_empty()).then_some(name)
+    })
+    .as_deref()
 }
 
 fn named_device(host: &str) -> String {

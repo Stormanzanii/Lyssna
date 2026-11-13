@@ -15,12 +15,13 @@ export type DeviceKind =
   | "group"
   | "speaker";
 
-export type Platform = "windows" | "mac" | "linux" | "android" | "";
+export type Platform =
+  "windows" | "mac" | "linux" | "android" | "playstation" | "xbox" | "";
 
 const WINDOWS =
   "M0 0h11.4v11.4H0zM12.6 0H24v11.4H12.6zM0 12.6h11.4V24H0zM12.6 12.6H24V24H12.6z";
 
-const LOGOS: Record<Exclude<Platform, "">, string> = {
+const LOGOS: Partial<Record<Platform, string>> = {
   windows: WINDOWS,
   mac: APPLE,
   linux: LINUX,
@@ -38,11 +39,12 @@ function Logo({
   y: number;
   size: number;
 }) {
-  if (!platform) return null;
+  const path = LOGOS[platform];
+  if (!path) return null;
   const scale = size / 24;
   return (
     <path
-      d={LOGOS[platform]}
+      d={path}
       fill="currentColor"
       stroke="none"
       transform={`translate(${x - size / 2} ${y - size / 2}) scale(${scale})`}
@@ -116,11 +118,16 @@ function Phone({ platform }: { platform: Platform }) {
     case "android":
       return (
         <>
-          <rect x="6.5" y="2.5" width="11" height="19" rx="2.4" />
-          <path d="M6.5 5.2h11M6.5 8h11" strokeWidth={1.1} />
-          <Lens x={9.4} y={6.6} />
-          <Lens x={11.4} y={6.6} />
-          <Logo platform="android" x={12} y={14} size={5.4} />
+          {/* Galaxy S24 Ultra: square corners and free-standing lenses. */}
+          <rect x="6.5" y="2.5" width="11" height="19" rx="1.3" />
+          <g strokeWidth={1}>
+            <circle cx="9.2" cy="5.1" r="0.9" />
+            <circle cx="9.2" cy="8.1" r="0.9" />
+            <circle cx="9.2" cy="11.1" r="0.9" />
+            <circle cx="11.9" cy="8.1" r="0.6" />
+          </g>
+          <Lens x={11.9} y={5.1} r={0.35} />
+          <Logo platform="android" x={12} y={16.6} size={4} />
         </>
       );
     default:
@@ -129,6 +136,43 @@ function Phone({ platform }: { platform: Platform }) {
           <rect x="6.5" y="2.5" width="11" height="19" rx="2.6" />
           <circle cx="9.3" cy="5.3" r="0.9" strokeWidth={1.1} />
         </>
+      );
+  }
+}
+
+function Console({ platform }: { platform: Platform }) {
+  switch (platform) {
+    case "playstation":
+      // PS5 standing: black core between two curved white plates.
+      return (
+        <>
+          <path d="M10.6 2.5H6.8c-.9 0-1.5.8-1.3 1.6l2 15.8c.1.9.8 1.6 1.7 1.6h1.4z" />
+          <path d="M13.4 2.5h3.8c.9 0 1.5.8 1.3 1.6l-2 15.8c-.1.9-.8 1.6-1.7 1.6h-1.4z" />
+          <path d="M10.6 2.5h2.8v19h-2.8z" fill="currentColor" stroke="none" />
+        </>
+      );
+    case "xbox":
+      // Series X: a tower with its vented top in view.
+      return (
+        <>
+          <rect x="7" y="2.5" width="10" height="19" rx="1.2" />
+          <path d="M7 6.2h10" />
+          <Lens x={9.2} y={4.35} r={0.45} />
+          <Lens x={11.2} y={4.35} r={0.45} />
+          <Lens x={13.2} y={4.35} r={0.45} />
+          <Lens x={15.2} y={4.35} r={0.45} />
+          <path d="M11 9.5h4" strokeWidth={1.1} />
+          <circle cx="9.2" cy="9.5" r="0.7" strokeWidth={1} />
+        </>
+      );
+    default:
+      return (
+        <g transform="translate(12 12) scale(0.88) translate(-12 -12.8)">
+          <path d="M7 7h10a4.5 4.5 0 0 1 4.4 3.6l.9 5a2.6 2.6 0 0 1-4.6 2.1L15.6 16H8.4l-2.1 1.7a2.6 2.6 0 0 1-4.6-2.1l.9-5A4.5 4.5 0 0 1 7 7z" />
+          <path d="M7.5 10v3.5M5.75 11.75h3.5" />
+          <Lens x={16} y={10.6} r={0.6} />
+          <Lens x={17.8} y={12.6} r={0.6} />
+        </g>
       );
   }
 }
@@ -221,24 +265,7 @@ export function DeviceIcon({
     case "console":
       return (
         <Svg size={size}>
-          <g transform="translate(12 12) scale(0.88) translate(-12 -12.8)">
-            <path d="M7 7h10a4.5 4.5 0 0 1 4.4 3.6l.9 5a2.6 2.6 0 0 1-4.6 2.1L15.6 16H8.4l-2.1 1.7a2.6 2.6 0 0 1-4.6-2.1l.9-5A4.5 4.5 0 0 1 7 7z" />
-            <path d="M7.5 10v3.5M5.75 11.75h3.5" />
-            <circle
-              cx="16"
-              cy="10.6"
-              r="0.6"
-              fill="currentColor"
-              stroke="none"
-            />
-            <circle
-              cx="17.8"
-              cy="12.6"
-              r="0.6"
-              fill="currentColor"
-              stroke="none"
-            />
-          </g>
+          <Console platform={platform} />
         </Svg>
       );
     case "car":

@@ -268,7 +268,19 @@ fn device_platform(device: &librespot_protocol::connect::DeviceInfo) -> &'static
     )
     .to_ascii_lowercase();
     let has = |words: &[&str]| words.iter().any(|word| report.contains(word));
-    if has(&["android"]) {
+    let console = device.device_type.enum_value()
+        == Ok(librespot_protocol::devices::DeviceType::GAME_CONSOLE);
+    let named = |words: &[&str]| {
+        let name = device.name.to_ascii_lowercase();
+        words.iter().any(|word| name.contains(word))
+    };
+    if has(&["playstation", "ps4", "ps5"])
+        || console && (has(&["sony"]) || named(&["ps4", "ps5", "playstation"]))
+    {
+        "playstation"
+    } else if has(&["xbox"]) || console && (has(&["microsoft"]) || named(&["xbox"])) {
+        "xbox"
+    } else if has(&["android"]) {
         "android"
     } else if has(&["win32", "win64", "windows"]) {
         "windows"
@@ -322,6 +334,19 @@ mod display_name_tests {
         assert_eq!(platform("8.9.96 iOS 18.1", "Apple"), "mac");
         assert_eq!(platform("Android-34", "Google"), "android");
         assert_eq!(platform("0.8.0", "Lyssna"), "");
+        let mut ps5 = DeviceInfo::new();
+        ps5.device_type = DeviceType::GAME_CONSOLE.into();
+        ps5.brand = "Sony".into();
+        assert_eq!(device_platform(&ps5), "playstation");
+        let mut xbox = DeviceInfo::new();
+        xbox.device_type = DeviceType::GAME_CONSOLE.into();
+        xbox.name = "Xbox Series X".into();
+        xbox.device_software_version = "Windows 10".into();
+        assert_eq!(device_platform(&xbox), "xbox");
+        let mut tv = DeviceInfo::new();
+        tv.device_type = DeviceType::TV.into();
+        tv.brand = "Sony".into();
+        assert_eq!(device_platform(&tv), "");
     }
 
     #[test]

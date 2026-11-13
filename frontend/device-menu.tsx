@@ -42,7 +42,14 @@ export function deviceKind(device: Pick<Device, "name" | "kind">): Kind {
   return known.includes(kind as Kind) ? (kind as Kind) : "speaker";
 }
 
-const PLATFORMS: Platform[] = ["windows", "mac", "linux", "android"];
+const PLATFORMS: Platform[] = [
+  "windows",
+  "mac",
+  "linux",
+  "android",
+  "playstation",
+  "xbox",
+];
 
 function devicePlatform(device: Pick<Device, "platform">): Platform {
   const platform = (device.platform ?? "") as Platform;

@@ -4543,6 +4543,57 @@ test("compact lyrics centre the title and artists against cover and Canvas thumb
   await expect.poll(alignment).toBeLessThan(1);
 });
 
+test("long hyphenated words wrap at their hyphens", async ({ page }) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.evaluate((uri) => {
+    const oh = Array.from({ length: 24 }, (_, index) => ({
+      text: index === 23 ? "oh" : "oh-",
+      start_ms: 3000 + index * 100,
+      end_ms: 3100 + index * 100,
+    }));
+    const words = [
+      { text: "Bringing ", start_ms: 1000, end_ms: 1500 },
+      { text: "me ", start_ms: 1500, end_ms: 1800 },
+      { text: "and ", start_ms: 1800, end_ms: 2500 },
+      { text: "no-", start_ms: 2500, end_ms: 3000 },
+      ...oh,
+    ];
+    const host = (window as any).__clientTest;
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          {
+            text: words.map((word) => word.text).join(""),
+            start_ms: 1000,
+            end_ms: 5500,
+            translation: "",
+            romanization: "",
+            background: false,
+            opposite: false,
+            words,
+          },
+        ],
+      },
+    });
+  }, track.uri);
+  const line = page.locator(".lyrics-page .lyric-line").first();
+  const syllables = line.locator(".lyric-syllable");
+  await expect(syllables).toHaveCount(28);
+  const tops = await syllables.evaluateAll((elements) =>
+    elements.map((element) => Math.round(element.getBoundingClientRect().top)),
+  );
+  expect(Math.abs(tops[3] - tops[2])).toBeLessThan(4);
+  expect(tops.at(-1)!).toBeGreaterThan(tops[3] + 10);
+  await expect(line.locator(".lyric-syllable.joined-start")).toHaveText("no-");
+  await expect(line.locator(".lyric-syllable.joined-end")).toHaveText("oh");
+});
+
 test("unsung split words keep their syllables together", async ({ page }) => {
   await startClient(page);
   await page.getByTitle("Lyrics", { exact: true }).click();

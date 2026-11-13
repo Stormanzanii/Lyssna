@@ -4,8 +4,13 @@ import { isEmphasis, type AnimatedWord } from "./lyric-motion";
 /** Shared static text; LyricAnimator drives its syllables and held letters. */
 export const LyricWord = memo(function LyricWord({
   words,
+  offset = 0,
+  total = words.length,
 }: {
   words: AnimatedWord[];
+  /** Where these syllables sit in a word split over several boxes. */
+  offset?: number;
+  total?: number;
 }) {
   const whitespace = words[0]?.text.match(/^\s+/u)?.[0] ?? "";
   return (
@@ -17,12 +22,13 @@ export const LyricWord = memo(function LyricWord({
             part === 0 ? word.text.slice(whitespace.length) : word.text;
           const emphasis = isEmphasis(word, text);
           // Split syllables scale away from their joints so no seam opens.
+          const at = offset + part;
           const joined =
-            words.length === 1
+            total === 1
               ? ""
-              : part === 0
+              : at === 0
                 ? "joined-start"
-                : part === words.length - 1
+                : at === total - 1
                   ? "joined-end"
                   : "joined-middle";
           return (

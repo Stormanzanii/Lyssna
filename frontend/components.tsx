@@ -1259,9 +1259,29 @@ const LyricWords = memo(function LyricWords({ line }: { line: Line }) {
     return <span className="lyric-plain">{line.text}</span>;
   return (
     <>
-      {groups.map((group, index) => (
-        <LyricWord key={index} words={group} />
-      ))}
+      {groups.flatMap((group, index) => {
+        // A long hyphenated run like "no-oh-oh-oh" wraps at its hyphens
+        // instead of moving to a line of its own.
+        const runs: (typeof group)[] = [[]];
+        group.forEach((word, part) => {
+          runs.at(-1)!.push(word);
+          if (part < group.length - 1 && /[-‐]$/u.test(word.text))
+            runs.push([]);
+        });
+        let offset = 0;
+        return runs.map((run, piece) => {
+          const at = offset;
+          offset += run.length;
+          return (
+            <LyricWord
+              key={`${index}-${piece}`}
+              words={run}
+              offset={at}
+              total={group.length}
+            />
+          );
+        });
+      })}
     </>
   );
 });

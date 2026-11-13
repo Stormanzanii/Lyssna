@@ -15985,6 +15985,44 @@ test("TTML Creator times words on the playing song, slows it and saves TTML", as
   await expect(banner).toHaveCount(0);
 });
 
+test("TTML Creator previews an untouched draft until Show preview is off", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator.locator(".ttml-line").first()).toBeVisible();
+  const toggle = creator.getByRole("button", { name: "Show preview" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const tools = creator.locator(".ttml-edit-tools > button");
+  await expect(tools.nth(0)).toHaveText("Show preview");
+  await expect(tools.nth(1)).toHaveText("Start from current lyrics");
+
+  await page.getByRole("button", { name: "Show the player bar" }).click();
+  await bar.getByTitle("Lyrics", { exact: true }).click();
+  const banner = page.locator(".ttml-draft-banner");
+  await expect(banner).toContainText("Showing your TTML draft");
+  await banner.getByRole("button", { name: "Back to Creator" }).click();
+  await creator.getByRole("button", { name: "Show preview" }).click();
+  await expect(
+    creator.getByRole("button", { name: "Show preview" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  const show = page.getByRole("button", { name: "Show the player bar" });
+  if (await show.isVisible()) await show.click();
+  await bar.getByTitle("Lyrics", { exact: true }).click();
+  await expect(creator).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "Lyrics" })).toBeVisible();
+  await expect(banner).toHaveCount(0);
+});
+
 test("TTML Creator spectrogram zooms, scrolls, reads out and seeks", async ({
   page,
 }) => {

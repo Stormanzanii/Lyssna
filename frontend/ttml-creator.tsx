@@ -13,6 +13,8 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   History,
   Pause,
   Play,
@@ -33,7 +35,13 @@ import {
 import { Cover, usePlaybackClock } from "./components";
 import type { AppState } from "./state";
 import type { Lyrics, PlayerRequest, Track } from "./types";
-import { forgetWorking, markWorking } from "./ttml-working";
+import {
+  forgetWorking,
+  markWorking,
+  setShowsPreview,
+  showLive,
+  showsPreview,
+} from "./ttml-working";
 import { IS_MAC, MODIFIER } from "./platform";
 import { TOUR_KEY, TtmlTour } from "./ttml-tour";
 import {
@@ -467,6 +475,24 @@ export function TtmlCreator({
   }, []);
 
   const [textMode, setTextMode] = useState(false);
+  const [previewOn, setPreviewOn] = useState(showsPreview);
+  useEffect(() => {
+    if (track) showLive(track.uri, lines);
+  }, [track, lines]);
+  const previewToggle = (
+    <button
+      aria-pressed={previewOn}
+      className={previewOn ? "active" : ""}
+      title="Show this draft on the Lyrics page, even before anything is saved"
+      onClick={() => {
+        setShowsPreview(!previewOn);
+        setPreviewOn(!previewOn);
+      }}
+    >
+      {previewOn ? <Eye size={15} /> : <EyeOff size={15} />}
+      Show preview
+    </button>
+  );
   const [classic, setClassic] = useState(
     () => readStorage(CLASSIC_KEY) === "1",
   );
@@ -1885,6 +1911,7 @@ export function TtmlCreator({
             }}
           />
           <div className="ttml-write-actions">
+            {previewToggle}
             <button
               onClick={startFromLyrics}
               disabled={!here || !state.lyrics?.lines.length}
@@ -2083,6 +2110,7 @@ export function TtmlCreator({
                 </label>
               ))}
               <span className="ttml-edit-tools">
+                {previewToggle}
                 <button
                   onClick={startFromLyrics}
                   disabled={!here || !state.lyrics?.lines.length}

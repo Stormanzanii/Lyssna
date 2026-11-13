@@ -165,8 +165,8 @@ export function DeviceMenu({
         status: device.is_active
           ? "Active device"
           : device.is_offline
-            ? "Standby · start Spotify on the speaker first"
-            : `${LABELS[kind]} · Spotify Connect`,
+            ? "Standby"
+            : LABELS[kind],
         pick: () => onPick(device.id || "native"),
       };
     });
@@ -177,14 +177,11 @@ export function DeviceMenu({
   return (
     <div className="device-menu popover">
       <h3>Connect to a device</h3>
-      <p className="device-section">Current device</p>
       <button className="device-row current selected" onClick={current.pick}>
-        <span className="device-tile">
-          <DeviceIcon kind={current.kind} size={22} />
-        </span>
+        <DeviceIcon kind={current.kind} size={26} />
         <div>
+          <small>Current device</small>
           <strong>{current.name}</strong>
-          <small>{current.status}</small>
         </div>
         {playing ? (
           <span className="device-bars" aria-hidden="true">
@@ -196,21 +193,19 @@ export function DeviceMenu({
           <Check size={18} />
         )}
       </button>
-      <p className="device-section">Select another device</p>
+      <h4 className="device-section">Select another device</h4>
       {others.map((row) => (
         <button
           key={row.key}
           className={`device-row${row.standby ? " standby" : ""}`}
+          title={row.standby ? "Start Spotify on the speaker first" : undefined}
           onClick={row.pick}
         >
-          <span className="device-tile">
-            <DeviceIcon kind={row.kind} />
-          </span>
+          <DeviceIcon kind={row.kind} size={22} />
           <div>
             <strong>{row.name}</strong>
             <small>{row.status}</small>
           </div>
-          {row.standby && <span className="device-pill">Standby</span>}
         </button>
       ))}
       {others.length === 0 && (

@@ -4490,37 +4490,41 @@ input[type="range"]:hover {
   position: fixed;
   bottom: 94px;
   right: 28px;
-  width: 360px;
+  width: 320px;
   max-height: 64vh;
   overflow: auto;
-  padding: 10px;
-  border-radius: 14px;
+  padding: 8px;
+  border-radius: 10px;
 }
 .device-menu h3 {
-  padding: 8px 10px 4px;
-  font-size: 17px;
-  letter-spacing: -0.01em;
+  padding: 10px 10px 6px;
+  font-size: 16px;
 }
 .device-section {
-  margin: 12px 10px 6px;
-  color: var(--muted);
-  font-size: 11px;
+  margin: 6px 10px 2px;
+  padding-top: 12px;
+  border-top: 1px solid light-dark(#00000014, #ffffff14);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .device-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 10px;
+  border-radius: 6px;
   text-align: left;
-  transition: background 0.15s ease;
+}
+.device-row > svg {
+  flex: none;
+  color: var(--muted);
 }
 .device-row:hover {
-  background: light-dark(#0000000c, #ffffff0d);
+  background: light-dark(#0000000a, #ffffff0a);
+}
+.device-row:hover > svg {
+  color: inherit;
 }
 .device-row > div {
   flex: 1;
@@ -4535,61 +4539,22 @@ input[type="range"]:hover {
 }
 .device-row small {
   display: block;
-  overflow: hidden;
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.device-tile {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: light-dark(#0000000f, #ffffff12);
-  color: light-dark(#222, #e8e8e8);
-}
-.device-ring {
-  stroke: #2fc6f0;
 }
 .device-row.current {
-  padding: 12px;
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  padding: 12px 10px;
+}
+.device-row.current > svg,
+.device-row.current strong {
   color: var(--accent);
 }
-.device-row.current:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-.device-row.current .device-tile {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: #000;
-}
-.device-row.current .device-ring {
-  stroke: currentColor;
-}
 .device-row.current small {
-  color: light-dark(#333, #d6d6d6);
+  margin: 0 0 2px;
 }
-.device-row.standby .device-tile,
 .device-row.standby strong {
-  opacity: 0.6;
-}
-.device-pill {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: light-dark(#0000000f, #ffffff14);
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
 }
 .device-bars {
   display: flex;

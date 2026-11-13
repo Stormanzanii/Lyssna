@@ -440,7 +440,7 @@ test("device menu shows each device with an icon for its kind", async ({
     "This computer",
   );
   await expect(menu.getByRole("button", { name: /Pixel/ })).toContainText(
-    "Phone · Spotify Connect",
+    "Phone",
   );
   await expect(menu.getByRole("button", { name: /Lounge/ })).toContainText(
     "TV",
@@ -477,8 +477,8 @@ test("standby speakers are labelled and a failed transfer keeps controls on the 
   await page.getByTitle("Devices", { exact: true }).click();
   const echo = page.getByRole("button", { name: /Test Echo/ });
   await expect(echo).toContainText("Standby");
-  await expect(page.getByRole("button", { name: /Test Phone/ })).toContainText(
-    "Active device",
+  await expect(page.locator(".device-row.current")).toContainText(
+    "Test Phone",
   );
   await echo.click();
   // The backend re-sends the device list after Spotify rejects the transfer.

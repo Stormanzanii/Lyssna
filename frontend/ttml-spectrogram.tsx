@@ -371,10 +371,12 @@ export function TtmlSpectrogram({
     };
   }, []);
 
+  const placed = useRef(false);
   useEffect(() => {
     target.current = { zoom: target.current.zoom, scroll: 0 };
     setScroll(0);
     setFailed(null);
+    placed.current = false;
   }, [uri]);
 
   const shown = position;
@@ -390,7 +392,10 @@ export function TtmlSpectrogram({
     const view = target.current.scroll;
     const outside = x < view || x > view + width - 24;
     const resting = performance.now() - browsed.current >= FOLLOW_AFTER_MS;
-    if (outside && ((follow && playing && resting) || jumped))
+    // Reopening the creator while paused starts the view at the playhead.
+    const opening = !placed.current;
+    placed.current = true;
+    if (outside && ((follow && playing && resting) || jumped || opening))
       jump(x - width * 0.1);
   }, [shown, width, follow, playing]);
 

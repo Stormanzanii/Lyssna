@@ -976,6 +976,20 @@ export function setLineText(
   );
 }
 
+export function cursorAt(lines: CreatorLine[], ms: number): Cursor {
+  let line = -1;
+  lines.forEach((each, index) => {
+    const span = lineSpan(each);
+    if (span && span.start <= ms) line = index;
+  });
+  if (line < 0) return { line: 0, unit: 0 };
+  let unit = 0;
+  lines[line].units.forEach((each, index) => {
+    if (each.start !== undefined && each.start <= ms) unit = index;
+  });
+  return { line, unit };
+}
+
 export function lineSpan(line: CreatorLine) {
   const starts = line.units.flatMap((unit) =>
     unit.start === undefined ? [] : [unit.start],

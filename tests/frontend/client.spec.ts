@@ -18108,3 +18108,98 @@ test("typing shows Spotify's suggestions; only Enter opens the search page", asy
     )
     .toBe(true);
 });
+
+test("TTML Creator reopens at the paused song position", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const emit = host.emit;
+    host.emit = (payload: any) => {
+      if (payload.type === "playback") host.lastPlayback = payload;
+      return emit(payload);
+    };
+  });
+  await playLyricTrack(page, false);
+  const pauseAt = (progress_ms: number) =>
+    page.evaluate((progress_ms) => {
+      const host = (window as any).__clientTest;
+      const last = host.lastPlayback;
+      host.emit({
+        ...last,
+        observed_at: Date.now(),
+        playback: { ...last.playback, is_playing: false, progress_ms },
+      });
+    }, progress_ms);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  const bar = page.locator(".player-extras");
+  await bar.getByTitle("TTML Creator", { exact: true }).click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  await expect(creator).toBeVisible();
+  await page.evaluate(() => {
+    const line = (text: string, start_ms: number) => ({
+      text,
+      start_ms,
+      end_ms: start_ms + 2000,
+      words: [{ text, start_ms, end_ms: start_ms + 2000 }],
+      romanization: "",
+      translation: "",
+      background: false,
+      opposite: false,
+    });
+    (window as any).__clientTest.answers = {
+      parse_lyric_file: {
+        lines: [line("one", 1000), line("two", 30_000), line("three", 60_000)],
+        source: "file",
+        instrumental: false,
+        synced: true,
+      },
+    };
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(["<tt></tt>"], "song.ttml", { type: "application/ttml+xml" }),
+    );
+    const at = document.querySelector(".ttml-lines")!;
+    at.dispatchEvent(
+      new DragEvent("dragover", { bubbles: true, dataTransfer: transfer }),
+    );
+    at.dispatchEvent(
+      new DragEvent("drop", { bubbles: true, dataTransfer: transfer }),
+    );
+  });
+  await expect(creator.locator(".ttml-unit")).toHaveText([
+    /one/,
+    /two/,
+    /three/,
+  ]);
+  await page.getByRole("button", { name: "Spectrogram", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Spectrogram" });
+  await expect(panel).toBeVisible();
+
+  await page.getByRole("button", { name: "Show the player bar" }).click();
+  await bar.getByTitle("Lyrics", { exact: true }).click();
+  await pauseAt(60_500);
+  await page
+    .locator(".ttml-draft-banner")
+    .getByRole("button", { name: "Back to Creator" })
+    .click();
+  await expect(creator.locator(".ttml-line.current")).toHaveAttribute(
+    "data-line",
+    "2",
+  );
+  await page.getByRole("button", { name: "Show the TTML bar" }).click();
+  await expect(panel).toBeVisible();
+  await expect
+    .poll(() =>
+      panel
+        .locator(".ttml-spectrum-content")
+        .evaluate((element) =>
+          Math.round(-new DOMMatrix(getComputedStyle(element).transform).m41),
+        ),
+    )
+    .toBeGreaterThan(1000);
+});

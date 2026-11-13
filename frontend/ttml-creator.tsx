@@ -65,6 +65,7 @@ import {
   fromLyrics,
   insertBlankLine,
   joinHyphenated,
+  cursorAt,
   keepTimings,
   lineSpan,
   singingAt,
@@ -319,7 +320,8 @@ export function TtmlCreator({
   useEffect(() => {
     if (!track) return;
     const draft = loadDraft(track.uri);
-    setLinesRaw(joinHyphenated(draft?.lines ?? []));
+    const loaded = joinHyphenated(draft?.lines ?? []);
+    setLinesRaw(loaded);
     setText(draft?.text ?? "");
     setMetadata(draft?.metadata);
     setSavedAt(draft?.savedAt);
@@ -333,7 +335,9 @@ export function TtmlCreator({
       loading: true,
     };
     versions.current = { changed: false };
-    setCursor({ line: 0, unit: 0 });
+    // Opening at the song's position keeps a line picked elsewhere, such
+    // as one clicked in the Lyrics page preview.
+    setCursor(cursorAt(loaded, read()));
     history.current = { past: [], future: [] };
     setTextMode(false);
     return () => snapshot(true);
@@ -361,6 +365,7 @@ export function TtmlCreator({
     const seeded = joinHyphenated(fromLyrics(lyrics));
     if (!seeded.length) return;
     setLinesRaw(seeded);
+    setCursor(cursorAt(seeded, read()));
     setText(toText(seeded));
     saved.current.content = contentOf(seeded, toText(seeded), metadata);
   }, [
@@ -1470,13 +1475,7 @@ export function TtmlCreator({
   // Clicking a line in the preview seeks there, so coming back from it
   // picks up at the line and word the song is on.
   const selectPlaying = () => {
-    const line = lines[playingLine];
-    if (!line) return;
-    let unit = 0;
-    line.units.forEach((each, index) => {
-      if (each.start !== undefined && each.start <= position) unit = index;
-    });
-    setCursor({ line: playingLine, unit });
+    if (playingLine >= 0) setCursor(cursorAt(lines, position));
   };
   const scrolledAt = useRef(0);
   // A double-click replays from just before a word, which can start in the

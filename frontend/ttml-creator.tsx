@@ -288,7 +288,16 @@ export function TtmlCreator({
   const [offset, setOffset] = useState(
     () => Number(readStorage(OFFSET_KEY)) || 0,
   );
-  const { position, read } = usePlaybackClock(state);
+  const clock = usePlaybackClock(state);
+  // The Lyrics page shifts by the listener's timing offset to match what
+  // they hear; the creator follows suit so taps and its preview agree.
+  const heard = state.settings.lyric_offset_ms ?? 0;
+  const position = clock.position + heard;
+  const readClock = clock.read;
+  const read = useCallback(
+    (at?: number) => readClock(at) + heard,
+    [readClock, heard],
+  );
   const native = state.playback.device.name === state.local_device_name;
   const here = !!track && playing?.uri === track.uri;
   const rate = state.playback_rate ?? 1;

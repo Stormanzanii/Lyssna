@@ -18264,3 +18264,39 @@ test("TTML Creator reopens at the paused song position", async ({ page }) => {
     )
     .toBeGreaterThan(1000);
 });
+
+test("TTML Creator follows the lyrics timing offset", async ({ page }) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const emit = host.emit;
+    host.emit = (payload: any) => {
+      if (payload.type === "playback") host.lastPlayback = payload;
+      return emit(payload);
+    };
+  });
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page.getByLabel("Timing offset").fill("500");
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  await page.evaluate(() => {
+    const host = (window as any).__clientTest;
+    const last = host.lastPlayback;
+    host.emit({
+      ...last,
+      observed_at: Date.now(),
+      playback: { ...last.playback, is_playing: false, progress_ms: 10_000 },
+    });
+  });
+  await expect(
+    page.getByRole("region", { name: "TTML Creator" }).locator(".ttml-time"),
+  ).toHaveText("00:10.500");
+});

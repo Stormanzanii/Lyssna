@@ -516,7 +516,7 @@ test("playing bars follow this computer's audio levels", async ({ page }) => {
     .poll(() =>
       bars.evaluateAll((items) =>
         items.map((item) =>
-          (item as HTMLElement).style.getPropertyValue("--level"),
+          (item as HTMLElement).getAttribute("data-level"),
         ),
       ),
     )

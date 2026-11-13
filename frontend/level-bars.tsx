@@ -41,32 +41,41 @@ export function LevelBars({
   const element = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!live) return;
+    const targets = [0, 0, 0];
     const shown = [0, 0, 0];
     const peaks = [0.5, 0.5, 0.5];
-    return listen((levels) => {
-      const bars = element.current?.children;
-      if (!bars) return;
+    const stop = listen((levels) =>
       levels.forEach((level, index) => {
         // Loud, compressed songs sit near the top all the time; scale each
         // bar to its band's recent peak and stretch the upper range so beats
         // still show.
         peaks[index] = Math.max(level, peaks[index] * 0.995, 0.5);
-        const target = Math.min(
+        targets[index] = Math.min(
           1,
           Math.max(0, (level / peaks[index] - 0.35) / 0.65),
         );
-        // Rise at once, fall gently, so beats read without flicker.
-        const eased =
-          target > shown[index]
-            ? target
-            : shown[index] + (target - shown[index]) * 0.35;
-        shown[index] = eased;
-        (bars[index] as HTMLElement | undefined)?.style.setProperty(
-          "--level",
-          eased.toFixed(3),
-        );
-      });
+      }),
+    );
+    let frame = requestAnimationFrame(function draw() {
+      const box = element.current;
+      if (box) {
+        // Whole-pixel heights from the bottom; scaling or half pixels blur
+        // the bars and make them look like they change width.
+        const tallest = box.clientHeight;
+        Array.from(box.children).forEach((bar, index) => {
+          const gap = targets[index] - shown[index];
+          shown[index] += gap * (gap > 0 ? 0.55 : 0.2);
+          const height = Math.round(3 + shown[index] * (tallest - 3));
+          (bar as HTMLElement).style.height = `${height}px`;
+          bar.setAttribute("data-level", shown[index].toFixed(3));
+        });
+      }
+      frame = requestAnimationFrame(draw);
     });
+    return () => {
+      stop();
+      cancelAnimationFrame(frame);
+    };
   }, [live]);
   return (
     <span

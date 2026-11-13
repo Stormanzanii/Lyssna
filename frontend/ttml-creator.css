@@ -1732,13 +1732,14 @@
   gap: 2px;
   min-width: 1px;
   padding: 5px 4px 0;
-  color: #ffffffe6;
+  color: #fff;
   font-size: 15px;
+  font-weight: 600;
   white-space: nowrap;
   cursor: grab;
   box-shadow:
-    inset 1px 0 0 #ffffff40,
-    inset -1px 0 0 #ffffff40;
+    inset 2px 0 0 #ffffffb3,
+    inset -1px 0 0 #ffffff73;
 }
 /* Each vocal's header takes its own row; the word still spans the height. */
 /* A word starts at its own row, and lower rows stack on top, so a press
@@ -1760,30 +1761,36 @@
   width: 100%;
   padding: 2px 0 3px;
   border-radius: 3px;
-  background: #ffffff1a;
-  box-shadow: inset 0 -2px 0 #ffffff59;
+  background: #0d0d14cc;
+  box-shadow:
+    inset 0 0 0 1px #ffffff59,
+    inset 0 -3px 0 #ffffffcc;
 }
 .ttml-spectrum-word.overlap {
-  color: #ffd29a;
+  color: #ffe0b8;
   box-shadow:
-    inset 1px 0 0 #ffb34059,
-    inset -1px 0 0 #ffb34059;
+    inset 2px 0 0 #ffb340e6,
+    inset -1px 0 0 #ffb34099;
 }
 .ttml-spectrum-word.overlap .ttml-spectrum-head {
-  background: #ffb34029;
-  box-shadow: inset 0 -2px 0 #ffb340;
+  background: #2a1a05d9;
+  box-shadow:
+    inset 0 0 0 1px #ffb34099,
+    inset 0 -3px 0 #ffb340;
 }
 .ttml-spectrum-word.background {
-  color: #bfe0ff;
+  color: #d3eaff;
   font-size: 13px;
   font-style: italic;
   box-shadow:
-    inset 1px 0 0 #6cb6ff40,
-    inset -1px 0 0 #6cb6ff40;
+    inset 2px 0 0 #6cb6ffe6,
+    inset -1px 0 0 #6cb6ff99;
 }
 .ttml-spectrum-word.background .ttml-spectrum-head {
-  background: #4aa3ff24;
-  box-shadow: inset 0 -2px 0 #6cb6ffb3;
+  background: #061a30d9;
+  box-shadow:
+    inset 0 0 0 1px #6cb6ff99,
+    inset 0 -3px 0 #6cb6ff;
 }
 .ttml-spectrum-word.whole {
   cursor: pointer;
@@ -1802,10 +1809,13 @@
   text-align: center;
   text-overflow: ellipsis;
   line-height: 1.1;
-  text-shadow: 0 1px 3px #000;
+  text-shadow:
+    0 0 2px #000,
+    0 1px 3px #000;
 }
 .ttml-spectrum-word small {
-  color: #ffffffa6;
+  color: #ffffffcc;
+  font-weight: 500;
   font-size: 11px;
 }
 .ttml-spectrum-word:hover {

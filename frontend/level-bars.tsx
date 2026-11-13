@@ -42,15 +42,24 @@ export function LevelBars({
   useEffect(() => {
     if (!live) return;
     const shown = [0, 0, 0];
+    const peaks = [0.5, 0.5, 0.5];
     return listen((levels) => {
       const bars = element.current?.children;
       if (!bars) return;
       levels.forEach((level, index) => {
+        // Loud, compressed songs sit near the top all the time; scale each
+        // bar to its band's recent peak and stretch the upper range so beats
+        // still show.
+        peaks[index] = Math.max(level, peaks[index] * 0.995, 0.5);
+        const target = Math.min(
+          1,
+          Math.max(0, (level / peaks[index] - 0.35) / 0.65),
+        );
         // Rise at once, fall gently, so beats read without flicker.
         const eased =
-          level > shown[index]
-            ? level
-            : shown[index] + (level - shown[index]) * 0.35;
+          target > shown[index]
+            ? target
+            : shown[index] + (target - shown[index]) * 0.35;
         shown[index] = eased;
         (bars[index] as HTMLElement | undefined)?.style.setProperty(
           "--level",

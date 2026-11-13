@@ -643,7 +643,7 @@ fn band_levels(samples: &[f32]) -> u32 {
     let mut bytes = [0u8; 4];
     for ((byte, sum), lift) in bytes.iter_mut().zip(power).zip(lift) {
         let rms = (sum / frames as f32).sqrt().max(1e-6);
-        let level = (20.0 * rms.log10() + lift + 48.0) / 40.0;
+        let level = (20.0 * rms.log10() + lift + 36.0) / 32.0;
         *byte = (level.clamp(0.0, 1.0) * 255.0) as u8;
     }
     u32::from_le_bytes(bytes)

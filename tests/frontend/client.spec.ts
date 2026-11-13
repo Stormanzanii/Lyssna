@@ -460,7 +460,7 @@ test("playing bars follow this computer's audio levels", async ({ page }) => {
   await startClient(page);
   await page.evaluate(() => {
     const test = (window as any).__clientTest;
-    test.answers = { ...test.answers, audio_levels: [255, 0, 128] };
+    test.answers = { ...test.answers, audio_levels: [255, 0, 96] };
   });
   await page.evaluate(
     ({ base, track }) =>
@@ -488,7 +488,7 @@ test("playing bars follow this computer's audio levels", async ({ page }) => {
         ),
       ),
     )
-    .toEqual(["1.000", "0.000", "0.502"]);
+    .toEqual(["1.000", "0.000", "0.620"]);
 });
 
 test("standby speakers are labelled and a failed transfer keeps controls on the active device", async ({

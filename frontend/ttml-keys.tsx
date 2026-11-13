@@ -129,6 +129,7 @@ const FIXED_KEYS: [string, ReactNode][] = [
   ["Move around", caps("←", "→", "↑", "↓")],
   ["Seek 3 seconds", [...caps("Shift"), plus, ...caps("←", "→")]],
   ["Clear the word's timing", caps("Backspace")],
+  ["Save a version now", [...caps(MODIFIER), plus, ...caps("S")]],
   ["Undo", [...caps(MODIFIER), plus, ...caps("Z")]],
   [
     "Redo",
@@ -158,6 +159,11 @@ const EDIT_TIPS: [string, ReactNode][] = [
   ["Split a word into syllables", [<em key="t">type</em>, ...caps("|")]],
   ["Pick several words", modClick("words")],
   ["Pick several lines", modClick("a line")],
+  [
+    "Select the line's words, then every line",
+    [...caps(MODIFIER), plus, ...caps("A")],
+  ],
+  ["Duplicate the line", [...caps(MODIFIER), plus, ...caps("D")]],
   ["Move words or lines", <em>Drag</em>],
 ];
 

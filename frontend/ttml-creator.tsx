@@ -1215,6 +1215,14 @@ export function TtmlCreator({
     setKeys(next);
     saveKeys(next);
   }, []);
+  // Drafts already save on every edit; Ctrl+S keeps a version now and
+  // confirms it.
+  const saveNow = useRef(() => {});
+  saveNow.current = () => {
+    if (!current.current.uri || !savedAt) return;
+    snapshot(true);
+    setSavedAt(Date.now());
+  };
   const stateRef = useRef({ lines, cursor });
   stateRef.current = { lines, cursor };
   const wordField = useRef<HTMLInputElement>(null);
@@ -1246,6 +1254,16 @@ export function TtmlCreator({
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (document.querySelector(".ttml-menu, .ttml-dialog")) return;
+      if (
+        (IS_MAC ? event.metaKey : event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "s"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        saveNow.current();
+        return;
+      }
       // Shortcuts take Cmd on macOS, where Ctrl is no modifier of ours.
       if (
         target?.closest("input, textarea, select, [contenteditable=true]") ||
@@ -1276,7 +1294,29 @@ export function TtmlCreator({
         setGroup([]);
         setSpaces([]);
       } else if (ctrl && key === "e") wordField.current?.focus();
-      else if (ctrl) handled = false;
+      else if (ctrl && key === "a") {
+        // First the current line's words, then every line.
+        const all =
+          lines[cursor.line]?.units.map((_, unit) => ({
+            line: cursor.line,
+            unit,
+          })) ?? [];
+        const whole =
+          all.length > 0 &&
+          words.length === all.length &&
+          words.every((each) => each.line === cursor.line);
+        setSpaces([]);
+        if (whole || !all.length) {
+          setGroup([]);
+          setPicked(new Set(lines.map((_, index) => index)));
+        } else {
+          setPicked(new Set());
+          setGroup(all);
+        }
+      } else if (ctrl && key === "d" && lines[cursor.line]) {
+        setLines(duplicateLine(lines, cursor.line));
+        setCursor({ line: cursor.line + 1, unit: cursor.unit });
+      } else if (ctrl) handled = false;
       else if (erase && linesPicked) {
         const next = removeLines(lines, pickedRef.current);
         setLines(next);
@@ -1693,8 +1733,9 @@ export function TtmlCreator({
           </button>
         </header>
         <p className="ttml-hint">
-          Drafts save on every change. A dated version is kept every 10 minutes
-          and whenever you leave a song, up to 10 per song.
+          Drafts save on every change. A dated version is kept every 10 minutes,
+          whenever you leave a song and when you press {IS_MAC ? "Cmd" : "Ctrl"}
+          +S, up to 10 per song.
         </p>
         {track && (
           <section>

@@ -18352,3 +18352,50 @@ test("TTML Creator moves selected words to a new line", async ({ page }) => {
     "line",
   ]);
 });
+
+test("TTML Creator keyboard shortcuts select, duplicate and save", async ({
+  page,
+}) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  await openSettings(page, "Lyrics");
+  await page.getByRole("switch", { name: "TTML Creator", exact: true }).check();
+  await page
+    .getByRole("dialog", { name: "Lyssna settings" })
+    .getByRole("button", { name: "Close settings" })
+    .click();
+  await page
+    .locator(".player-extras")
+    .getByTitle("TTML Creator", { exact: true })
+    .click();
+  const creator = page.getByRole("region", { name: "TTML Creator" });
+  const cards = creator.locator(".ttml-card");
+  const total = await cards.count();
+  const card = cards.first();
+  await card.getByRole("button", { name: "am", exact: true }).click();
+  await page.keyboard.press("Control+a");
+  await expect(card.locator(".ttml-unit.chosen")).toHaveCount(
+    await card.locator(".ttml-unit").count(),
+  );
+  await page.keyboard.press("Control+a");
+  await expect(
+    creator.getByRole("toolbar", { name: "Selected lines" }),
+  ).toContainText(`${total} lines selected`);
+  await page.keyboard.press("Escape");
+  await expect(creator.locator(".ttml-saved")).toHaveText("Not saved yet");
+  await page.keyboard.press("Control+s");
+  await expect(creator.locator(".ttml-saved")).toHaveText("Not saved yet");
+  await page.keyboard.press("Control+d");
+  await expect(cards).toHaveCount(total + 1);
+  await expect(cards.nth(1).locator(".ttml-word")).toHaveText(
+    await card.locator(".ttml-word").allTextContents(),
+  );
+  await expect(creator.locator(".ttml-saved")).toContainText("Saved");
+  await page.keyboard.press("Control+d");
+  await expect(cards).toHaveCount(total + 2);
+  await page.keyboard.press("Control+s");
+  await creator.getByTitle("Saves and earlier versions").click();
+  await expect(
+    page.locator(".ttml-dialog").getByRole("button", { name: "Restore" }),
+  ).toHaveCount(2);
+});

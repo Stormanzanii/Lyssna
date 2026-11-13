@@ -121,14 +121,14 @@ function Phone({ platform }: { platform: Platform }) {
         <>
           {/* Galaxy S24 Ultra: square corners and free-standing lenses. */}
           <rect x="6.6" y="2.5" width="10.8" height="19" rx="1.1" />
-          <g strokeWidth={1.1}>
-            <circle cx="9.3" cy="5.3" r="1.1" />
-            <circle cx="9.3" cy="8.9" r="1.1" />
-            <circle cx="9.3" cy="12.5" r="1.1" />
-            <circle cx="12.5" cy="5.3" r="0.75" />
+          <g strokeWidth={0.75}>
+            <circle cx="8.9" cy="4.7" r="0.62" />
+            <circle cx="8.9" cy="6.8" r="0.62" />
+            <circle cx="8.9" cy="8.9" r="0.62" />
+            <circle cx="11" cy="4.7" r="0.45" />
           </g>
-          <Lens x={12.4} y={8} r={0.4} />
-          <Lens x={12.4} y={9.6} r={0.3} />
+          <Lens x={11} y={6.4} r={0.3} />
+          <Lens x={11} y={7.5} r={0.22} />
         </>
       );
     default:

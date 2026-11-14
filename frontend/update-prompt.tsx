@@ -38,6 +38,10 @@ export function UpdatePrompt({
     status.startsWith("Downloading update") ||
     status.startsWith("Building update") ||
     (status === "Update available" && state.settings.auto_download_updates);
+  const fetched = /^Downloading update(?:\D+(\d{1,3})%)?/.exec(status);
+  const fetchedPercent = fetched?.[1]
+    ? Math.min(100, Number(fetched[1]))
+    : undefined;
   // A background Nightly build's progress, while it runs.
   const report = nightly && state.nightly?.running ? state.nightly : undefined;
   const step = report?.steps.find((item) => item.state === "running");
@@ -69,7 +73,10 @@ export function UpdatePrompt({
   }, [status, version]);
   useEffect(() => {
     const element = dialog.current;
-    if (open && element && !element.open) element.showModal();
+    if (open && element && !element.open) {
+      element.showModal();
+      element.focus();
+    }
     if (!open && element?.open) element.close();
   }, [open]);
   const apply = async () => {
@@ -94,6 +101,7 @@ export function UpdatePrompt({
     <dialog
       ref={dialog}
       className="dialog update-dialog"
+      tabIndex={-1}
       aria-labelledby="update-title"
       aria-describedby="update-description"
       // Clicking outside it hides it, as Settings and creator profiles do.
@@ -130,7 +138,9 @@ export function UpdatePrompt({
         }
       }}
     >
-      <h2 id="update-title">Lyssna {version} is available</h2>
+      <h2 id="update-title">
+        Lyssna {version} {ready ? "is ready to install" : "is available"}
+      </h2>
       <p id="update-description">
         You're using{" "}
         {nightly && current
@@ -146,11 +156,32 @@ export function UpdatePrompt({
             latest={version?.replace(/^Nightly /, "")}
           />
         ) : (
-          <section aria-label="Release notes">
-            <h3>What changed</h3>
-            <p className="update-notes">{state.update_notes}</p>
-          </section>
+          <ReleaseNotes notes={state.update_notes} />
         ))}
+      {fetched && !nightly && !ready && (
+        <div className="update-progress">
+          <div className="update-progress-label">
+            <span>Downloading</span>
+            {fetchedPercent !== undefined && <span>{fetchedPercent}%</span>}
+          </div>
+          <div
+            className={`nightly-bar nightly-total${fetchedPercent === undefined ? " moving" : ""}`}
+            role="progressbar"
+            aria-label="Downloading update"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={fetchedPercent}
+          >
+            <span
+              style={
+                fetchedPercent === undefined
+                  ? undefined
+                  : { width: `${fetchedPercent}%` }
+              }
+            />
+          </div>
+        </div>
+      )}
       {report && (
         <div className="update-progress">
           <div className="update-progress-label">
@@ -172,7 +203,19 @@ export function UpdatePrompt({
           )}
         </div>
       )}
-      <p role="status" aria-live="polite" hidden={!!report && !error}>
+      <p
+        role="status"
+        aria-live="polite"
+        className="update-status"
+        // The title and progress bar already say these.
+        hidden={
+          !error &&
+          requested !== "install" &&
+          (!!report ||
+            (!!fetched && !nightly && !ready) ||
+            status === "Update available")
+        }
+      >
         {requested === "install"
           ? "Installing update…"
           : error ||
@@ -222,6 +265,28 @@ export function UpdatePrompt({
         </button>
       </div>
     </dialog>
+  );
+}
+
+/** Release notes, one change per line, as a list. */
+function ReleaseNotes({ notes }: { notes: string }) {
+  const lines = notes
+    .split(NEWLINE)
+    .map((line) => line.replace(/^\s*(?:[-*•]\s+)?/u, "").trim())
+    .filter(Boolean);
+  return (
+    <section aria-label="Release notes" className="update-release">
+      <h3>What's new</h3>
+      {lines.length > 1 ? (
+        <ul className="update-list">
+          {lines.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="update-notes">{lines[0] ?? notes}</p>
+      )}
+    </section>
   );
 }
 

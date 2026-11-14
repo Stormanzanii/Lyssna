@@ -9087,10 +9087,58 @@ test("updates can be downloaded manually before installing and restarting", asyn
     }),
   );
   await page
-    .getByRole("dialog", { name: "Lyssna 0.2.0 is available" })
+    .getByRole("dialog", { name: "Lyssna 0.2.0 is ready to install" })
     .getByRole("button", { name: "Install and restart", exact: true })
     .click();
   await expect.poll(action).toBe("install");
+});
+
+test("update prompt lists each change and shows download progress", async ({
+  page,
+}) => {
+  await startClient(page);
+  await openSettings(page);
+  await page
+    .getByRole("switch", {
+      name: "Download updates automatically",
+      exact: true,
+    })
+    .uncheck();
+  await page.keyboard.press("Escape");
+  const emit = (status: string) =>
+    page.evaluate(
+      (status) =>
+        (window as any).__clientTest.emit({
+          type: "update",
+          status,
+          version: "0.5.0",
+          notes: ["- First change.", "Second change.", "", "• Third change."].join(
+            String.fromCharCode(10),
+          ),
+        }),
+      status,
+    );
+  await emit("Update available");
+  const dialog = page.getByRole("dialog", { name: "Lyssna 0.5.0 is available" });
+  await expect(dialog.getByRole("listitem")).toHaveText([
+    "First change.",
+    "Second change.",
+    "Third change.",
+  ]);
+  // The title already says it is available, and nothing is ringed on open.
+  await expect(dialog.getByRole("status")).toBeHidden();
+  expect(
+    await dialog.evaluate((element) => document.activeElement === element),
+  ).toBe(true);
+  await emit("Downloading update · 42%");
+  const bar = dialog.getByRole("progressbar", { name: "Downloading update" });
+  await expect(bar).toHaveAttribute("aria-valuenow", "42");
+  await expect(dialog.getByRole("status")).toBeHidden();
+  await emit("Ready to install");
+  await expect(
+    page.getByRole("dialog", { name: "Lyssna 0.5.0 is ready to install" }),
+  ).toContainText("Download verified. Ready to install.");
+  await expect(bar).toHaveCount(0);
 });
 
 test("startup updates prompt automatically, keep notes inert and respect Not now", async ({

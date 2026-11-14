@@ -163,6 +163,7 @@ export interface Settings {
   lyrics_highlighter?: boolean;
   /** Your Library's order. */
   library_sort?: LibrarySort;
+  library_folder_sorts?: Record<string, LibrarySort>;
   /** Your Library's rows. */
   library_view?: LibraryView;
   /** The marker colour: "#rrggbb", or "cover" for the artwork's colour. */

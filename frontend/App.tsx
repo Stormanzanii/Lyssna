@@ -2853,6 +2853,11 @@ function App() {
       if (!next) break;
       openFolder = next;
     }
+  // Spotify remembers each folder's sort; a folder starts in its own order.
+  const folderSort = openFolder
+    ? (state.settings.library_folder_sorts?.[openFolder.folder.id] ??
+      "custom")
+    : librarySort;
   const collectionEntry = ({
     kind,
     item,
@@ -3644,9 +3649,20 @@ function App() {
               />
             </label>
             <LibrarySortMenu
-              sort={librarySort}
+              sort={folderSort}
               view={libraryView}
-              onSort={(library_sort) => updateSettings({ library_sort })}
+              onSort={(sort) =>
+                updateSettings(
+                  openFolder
+                    ? {
+                        library_folder_sorts: {
+                          ...state.settings.library_folder_sorts,
+                          [openFolder.folder.id]: sort,
+                        },
+                      }
+                    : { library_sort: sort },
+                )
+              }
               onView={(library_view) => updateSettings({ library_view })}
             />
           </div>
@@ -3723,7 +3739,7 @@ function App() {
             )}
             {openFolder ? (
               <>
-                {sortLibrary(openFolder.entries, librarySort, entryFacts).map(
+                {sortLibrary(openFolder.entries, folderSort, entryFacts).map(
                   libraryEntry,
                 )}
                 {!openFolder.entries.length && (

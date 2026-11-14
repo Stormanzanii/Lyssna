@@ -10224,6 +10224,56 @@ test("library sort menu orders playlists and switches views", async ({
   expect(Math.abs(box.width - box.height)).toBeLessThan(2);
 });
 
+test("each library folder remembers its own sort", async ({ page }) => {
+  await startClient(page);
+  const mine = { id: "mine", name: "My Playlists" };
+  const playlist = (id: string, name: string, folders: object[] = []) => ({
+    id,
+    name,
+    images: [],
+    owner: { id: "test-user", display_name: "test-user" },
+    collaborative: false,
+    folders,
+  });
+  await page.evaluate(
+    (playlists) =>
+      (window as any).__clientTest.emit({ type: "library", playlists }),
+    [
+      playlist("pl-z", "Zebra", [mine]),
+      playlist("pl-a", "Apple", [mine]),
+      playlist("pl-m", "Mango"),
+    ],
+  );
+  const sortButton = page.getByTitle("Sort and view");
+  const pick = async (name: string) => {
+    await sortButton.click();
+    await page
+      .getByRole("dialog", { name: "Sort and view" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  };
+  const names = () =>
+    page
+      .locator(".library-list [data-playlist-id^='pl-'] strong")
+      .allTextContents();
+  await expect(sortButton).toContainText("Recents");
+  const sidebar = page.locator(".library-list");
+  await sidebar.locator(".spotify-folder").first().click();
+  // Like Spotify, a folder keeps its own order instead of the outside sort.
+  await expect(sortButton).toContainText("Custom order");
+  await expect.poll(names).toEqual(["Zebra", "Apple"]);
+  await pick("Alphabetical");
+  await expect.poll(names).toEqual(["Apple", "Zebra"]);
+  const back = sidebar
+    .locator(".library-folder-header")
+    .getByRole("button", { name: "Back" });
+  await back.click();
+  await expect(sortButton).toContainText("Recents");
+  await sidebar.locator(".spotify-folder").first().click();
+  await expect(sortButton).toContainText("Alphabetical");
+  await expect.poll(names).toEqual(["Apple", "Zebra"]);
+});
+
 test("compact library rows open instead of playing, covers centred", async ({
   page,
 }) => {

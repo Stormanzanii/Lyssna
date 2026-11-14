@@ -159,6 +159,14 @@ impl LyricsAnimator {
     }
 }
 
+const LIBRARY_SORTS: [&str; 5] = [
+    "recents",
+    "recently_added",
+    "alphabetical",
+    "creator",
+    "custom",
+];
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -178,6 +186,8 @@ pub struct Settings {
     /// Your Library's order: recents, recently_added, alphabetical,
     /// creator or custom (Spotify's own order, folders included).
     pub library_sort: String,
+    /// Each Spotify folder's own order by folder ID, like Spotify keeps it.
+    pub library_folder_sorts: std::collections::BTreeMap<String, String>,
     /// Your Library's rows: compact, list, grid or large_grid.
     pub library_view: String,
     pub lyric_size: f32,
@@ -367,6 +377,7 @@ impl Default for Settings {
             library_width: None,
             now_playing_width: None,
             library_sort: "recents".into(),
+            library_folder_sorts: Default::default(),
             library_view: "list".into(),
             lyric_size: 36.0,
             lyric_offset_ms: 0,
@@ -543,16 +554,14 @@ impl Settings {
         while self.lyric_song_offsets.len() > 5_000 {
             self.lyric_song_offsets.pop_first();
         }
-        if ![
-            "recents",
-            "recently_added",
-            "alphabetical",
-            "creator",
-            "custom",
-        ]
-        .contains(&self.library_sort.as_str())
-        {
+        if !LIBRARY_SORTS.contains(&self.library_sort.as_str()) {
             self.library_sort = "recents".into();
+        }
+        self.library_folder_sorts.retain(|id, sort| {
+            !id.is_empty() && id.len() <= 128 && LIBRARY_SORTS.contains(&sort.as_str())
+        });
+        while self.library_folder_sorts.len() > 1000 {
+            self.library_folder_sorts.pop_last();
         }
         if !["dark", "light", "system"].contains(&self.theme.as_str()) {
             self.theme = "dark".into();

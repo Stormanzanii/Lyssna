@@ -6458,6 +6458,9 @@ test("romanization shows under each line by default and in place in the preview"
   expect(reading.y).toBeGreaterThanOrEqual(main.y + main.height - 1);
   expect(reading.height).toBeLessThan(main.height);
   await first.screenshot({ path: "target/diagnostics/romanization-below.png" });
+  await page.screenshot({
+    path: "target/diagnostics/romanization-below-page.png",
+  });
   await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
   await expect(page.locator(".lyric-preview .lyric-main").first()).toHaveText(
     "Annyeonghaseyo",

@@ -1271,7 +1271,10 @@ const LyricRow = memo(function LyricRow({
       {/* Lyrics can carry translations, such as Chinese under English; like
           Spicy Lyrics they stay hidden unless asked for. */}
       {line.reading && (
-        <span className="lyric-romanization">{line.reading}</span>
+        // Sung like the line above it, with calmer motion.
+        <span className="lyric-romanization sung">
+          <LyricWords line={line.reading} />
+        </span>
       )}
       {translation && line.translation && (
         <span className="lyric-translation">{line.translation}</span>

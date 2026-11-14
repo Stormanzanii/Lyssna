@@ -6433,7 +6433,16 @@ test("romanization shows under each line by default and in place in the preview"
         source: "Test",
         synced: true,
         instrumental: false,
-        lines: [line("안녕하세요", 1000), line("Hello", 3000)],
+        lines: [
+          {
+            ...line("안녕하세요", 1000),
+            words: [
+              { text: "안녕", start_ms: 1000, end_ms: 1600 },
+              { text: "하세요", start_ms: 1600, end_ms: 2900 },
+            ],
+          },
+          line("Hello", 3000),
+        ],
       },
     });
     (window as any).__clientTest.emit({
@@ -6449,6 +6458,19 @@ test("romanization shows under each line by default and in place in the preview"
     "Annyeonghaseyo",
   );
   await expect(first.locator(".lyric-main")).toHaveText("안녕하세요");
+  // The reading is sung with the line: each romanized syllable keeps its
+  // timing and fills like the words above it.
+  const sung = first.locator(".lyric-romanization .lyric-syllable");
+  await expect(sung).toHaveCount(2);
+  await expect(sung.first()).toHaveAttribute("data-start", "1000");
+  await expect(sung.nth(1)).toHaveAttribute("data-start", "1600");
+  await expect
+    .poll(() =>
+      sung
+        .first()
+        .evaluate((node) => node.style.getPropertyValue("--gradient-position")),
+    )
+    .not.toBe("");
   // A line already in Latin letters gets no second row.
   await expect(
     page.locator(".lyrics-page .lyric-line").nth(1).locator(".lyric-romanization"),

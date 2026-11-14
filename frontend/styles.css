@@ -3571,6 +3571,12 @@ small {
   line-height: 1.5;
   margin-top: 9px;
 }
+/* The reading under a line paints its words as they are sung. */
+.lyric-romanization.sung {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  opacity: 0.85;
+}
 .follow-lyrics {
   display: grid;
   place-items: center;

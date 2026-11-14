@@ -260,8 +260,8 @@ export interface Line {
   text: string;
   translation: string;
   romanization: string;
-  /** Romanized reading shown under the line. */
-  reading?: string;
+  /** Romanized reading shown under the line, timed like the line. */
+  reading?: Line;
   words: Word[];
   background: boolean;
   opposite: boolean;

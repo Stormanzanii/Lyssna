@@ -450,8 +450,10 @@ export function withReadings(lyrics: Lyrics, romanized: Lyrics): Lyrics {
     done = {
       ...lyrics,
       lines: lyrics.lines.map((line, index) => {
-        const reading = romanized.lines[index]?.text;
-        return reading && reading !== line.text ? { ...line, reading } : line;
+        const reading = romanized.lines[index];
+        return reading && reading.text !== line.text
+          ? { ...line, reading }
+          : line;
       }),
     };
     readings.set(romanized, done);

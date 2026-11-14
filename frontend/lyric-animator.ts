@@ -29,6 +29,8 @@ export function simpleGoal(
 interface Piece {
   element: HTMLElement;
   springs: SyllableSprings;
+  /** Share of the motion shown: the reading under a line moves less. */
+  calm: number;
   /** Last value written per style property, to skip redundant writes. */
   written: Map<string, string>;
 }
@@ -48,6 +50,7 @@ const STYLES = [
 ];
 const piece = (element: HTMLElement, letter = false): Piece => ({
   element,
+  calm: element.closest(".lyric-romanization") ? 0.35 : 1,
   springs: letter
     ? new SyllableSprings(MOTION.letterScale(0), MOTION.letterLift(0))
     : new SyllableSprings(),
@@ -180,11 +183,12 @@ export class LyricAnimator {
     }
     if (this.reduceMotion) return;
     const motion = target.springs.step(goal, seconds);
-    write(target, "scale", motion.scale.toFixed(4));
-    write(target, "translate", `0 ${motion.lift.toFixed(4)}em`);
+    const calm = target.calm;
+    write(target, "scale", (1 + (motion.scale - 1) * calm).toFixed(4));
+    write(target, "translate", `0 ${(motion.lift * calm).toFixed(4)}em`);
     if (!glow) return;
-    const radius = 4 + glow[0] * motion.glow,
-      opacity = Math.min(100, Math.max(0, motion.glow * glow[1]));
+    const radius = 4 + glow[0] * motion.glow * calm,
+      opacity = Math.min(100, Math.max(0, motion.glow * glow[1] * calm));
     write(
       target,
       "--glow",

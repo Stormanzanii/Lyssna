@@ -1270,6 +1270,9 @@ const LyricRow = memo(function LyricRow({
       </span>
       {/* Lyrics can carry translations, such as Chinese under English; like
           Spicy Lyrics they stay hidden unless asked for. */}
+      {line.reading && (
+        <span className="lyric-romanization">{line.reading}</span>
+      )}
       {translation && line.translation && (
         <span className="lyric-translation">{line.translation}</span>
       )}
@@ -1325,7 +1328,7 @@ function TimedLyricsPreview({
     displayLyrics(
       state.lyrics,
       !!state.settings.experimental_word_sync,
-      romanizeFor(state.settings),
+      romanizeFor(state.settings, false),
       state.playback.item?.duration_ms,
     ),
     state.settings.lyrics_word_filter,
@@ -1661,7 +1664,7 @@ function SongLyricsPage({
     displayLyrics(
       state.lyrics,
       !!state.settings.experimental_word_sync || gravity,
-      romanizeFor(state.settings),
+      romanizeFor(state.settings, !gravity),
       track?.duration_ms,
     ),
     state.settings.lyrics_word_filter,

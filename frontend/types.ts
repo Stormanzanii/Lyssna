@@ -147,6 +147,7 @@ export interface Settings {
   lyric_song_offsets?: Record<string, number>;
   romanized: boolean;
   romaji_as_written?: boolean;
+  romanization_below?: boolean;
   reduce_motion: boolean;
   animation_fps_cap_enabled?: boolean;
   animation_fps_cap?: number;
@@ -259,6 +260,8 @@ export interface Line {
   text: string;
   translation: string;
   romanization: string;
+  /** Romanized reading shown under the line. */
+  reading?: string;
   words: Word[];
   background: boolean;
   opposite: boolean;

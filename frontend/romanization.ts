@@ -96,6 +96,8 @@ export function romanizeGreek(text: string) {
 }
 
 export interface RomanizeOptions {
+  /** Keep the line as written and show the reading under it. */
+  below?: boolean;
   /** Japanese spelled as romanized lyrics usually are: kyou, koohii, wa. */
   romajiAsWritten?: boolean;
 }
@@ -423,13 +425,38 @@ export function romanizedLyrics(
 }
 
 /** What `displayLyrics` needs to romanize, or false when it is off. */
-export function romanizeFor(settings: {
-  romanized?: boolean;
-  romaji_as_written?: boolean;
-}): RomanizeOptions | false {
+export function romanizeFor(
+  settings: {
+    romanized?: boolean;
+    romaji_as_written?: boolean;
+    romanization_below?: boolean;
+  },
+  below = true,
+): RomanizeOptions | false {
   return settings.romanized
-    ? { romajiAsWritten: settings.romaji_as_written !== false }
+    ? {
+        romajiAsWritten: settings.romaji_as_written !== false,
+        below: below && settings.romanization_below !== false,
+      }
     : false;
+}
+
+const readings = new WeakMap<Lyrics, Lyrics>();
+/** The lyrics as written, each line carrying its romanized reading. */
+export function withReadings(lyrics: Lyrics, romanized: Lyrics): Lyrics {
+  if (romanized === lyrics) return lyrics;
+  let done = readings.get(romanized);
+  if (!done) {
+    done = {
+      ...lyrics,
+      lines: lyrics.lines.map((line, index) => {
+        const reading = romanized.lines[index]?.text;
+        return reading && reading !== line.text ? { ...line, reading } : line;
+      }),
+    };
+    readings.set(romanized, done);
+  }
+  return done;
 }
 
 /** Re-renders the caller when romanized lyrics finish converting. */

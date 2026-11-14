@@ -6290,6 +6290,15 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
   page,
 }) => {
   await startClient(page);
+  // Romanization in place of the line, rather than under it.
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, romanization_below: false },
+      }),
+    emptyState.settings,
+  );
   await page.getByTitle("Lyrics", { exact: true }).click();
   const romanization = page
     .getByRole("toolbar", { name: "Lyrics" })
@@ -6348,7 +6357,12 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
     (settings) =>
       (window as any).__clientTest.emit({
         type: "settings",
-        settings: { ...settings, romanized: true, romaji_as_written: false },
+        settings: {
+          ...settings,
+          romanized: true,
+          romaji_as_written: false,
+          romanization_below: false,
+        },
       }),
     emptyState.settings,
   );
@@ -6360,7 +6374,12 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
     (settings) =>
       (window as any).__clientTest.emit({
         type: "settings",
-        settings: { ...settings, romanized: true, romaji_as_written: true },
+        settings: {
+          ...settings,
+          romanized: true,
+          romaji_as_written: true,
+          romanization_below: false,
+        },
       }),
     emptyState.settings,
   );
@@ -6387,8 +6406,75 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
   await expect(page.locator(".lyric-preview .lyric-main")).toHaveText("Tokyo");
 });
 
+test("romanization shows under each line by default and in place in the preview", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Lyrics" })
+    .getByTitle("Romanization", { exact: true })
+    .click();
+  await page.evaluate((uri) => {
+    const line = (text: string, start_ms: number) => ({
+      text,
+      romanization: "",
+      translation: "",
+      start_ms,
+      end_ms: start_ms + 1900,
+      words: [],
+      background: false,
+      opposite: false,
+    });
+    (window as any).__clientTest.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Test",
+        synced: true,
+        instrumental: false,
+        lines: [line("안녕하세요", 1000), line("Hello", 3000)],
+      },
+    });
+    (window as any).__clientTest.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1500,
+      playing: false,
+      observed_at: Date.now(),
+    });
+  }, track.uri);
+  const first = page.locator(".lyrics-page .lyric-line").first();
+  await expect(first.locator(".lyric-romanization")).toHaveText(
+    "Annyeonghaseyo",
+  );
+  await expect(first.locator(".lyric-main")).toHaveText("안녕하세요");
+  // A line already in Latin letters gets no second row.
+  await expect(
+    page.locator(".lyrics-page .lyric-line").nth(1).locator(".lyric-romanization"),
+  ).toHaveCount(0);
+  const main = (await first.locator(".lyric-main").boundingBox())!;
+  const reading = (await first.locator(".lyric-romanization").boundingBox())!;
+  expect(reading.y).toBeGreaterThanOrEqual(main.y + main.height - 1);
+  expect(reading.height).toBeLessThan(main.height);
+  await first.screenshot({ path: "target/diagnostics/romanization-below.png" });
+  await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
+  await expect(page.locator(".lyric-preview .lyric-main").first()).toHaveText(
+    "Annyeonghaseyo",
+  );
+});
+
 test("turning romanization on keeps the lyrics in place", async ({ page }) => {
   await startClient(page);
+  // Romanization in place of the line, rather than under it.
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, romanization_below: false },
+      }),
+    emptyState.settings,
+  );
   await page.getByTitle("Lyrics", { exact: true }).click();
   await page.evaluate((uri) => {
     const host = (window as any).__clientTest;

@@ -1150,6 +1150,15 @@ export function SettingsWindow({
           "romanization transliteration",
         ),
         flag(
+          "romanization_below",
+          "Romanization under each line",
+          "Show the reading as a smaller row under the lyrics as written. Off puts it in place of the line. Space Gravity always shows it in place.",
+          "romanization under below line reading row in place replace",
+          settings.romanized
+            ? undefined
+            : "Turn on Show romanized lyrics first",
+        ),
+        flag(
           "romaji_as_written",
           "Romaji as written",
           "Spell Japanese the way romanized lyrics usually are: long vowels as written (kyou, koohii) and particles as said (wa, e, wo). Off uses kyō and tōkyō.",

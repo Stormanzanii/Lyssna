@@ -187,6 +187,8 @@ pub struct Settings {
     pub romanized: bool,
     /// Japanese romaji spelled as lyrics usually are (kyou, wa, wo).
     pub romaji_as_written: bool,
+    /// Romanized reading as a row under each line instead of in its place.
+    pub romanization_below: bool,
     pub reduce_motion: bool,
     /// Limit Animation Frame Rate: animations stay at or under
     /// `animation_fps_cap`, 15 to 240.
@@ -369,6 +371,7 @@ impl Default for Settings {
             lyric_size: 36.0,
             lyric_offset_ms: 0,
             romaji_as_written: true,
+            romanization_below: true,
             lyric_song_offsets: Default::default(),
             romanized: false,
             reduce_motion: false,

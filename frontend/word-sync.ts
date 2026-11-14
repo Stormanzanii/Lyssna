@@ -1,5 +1,9 @@
 import type { Line, Lyrics, Word } from "./types";
-import { romanizedLyrics, type RomanizeOptions } from "./romanization";
+import {
+  romanizedLyrics,
+  withReadings,
+  type RomanizeOptions,
+} from "./romanization";
 
 /*
  * Experimental word sync: estimated timing for line-synced and static lyrics.
@@ -409,8 +413,11 @@ export function displayLyrics<T extends Lyrics | null | undefined>(
   romanized: boolean | RomanizeOptions = false,
   durationMs = 0,
 ): T {
-  if (lyrics && romanized)
-    lyrics = romanizedLyrics(lyrics, romanized === true ? {} : romanized) as T;
+  if (lyrics && romanized) {
+    const options = romanized === true ? {} : romanized;
+    const read = romanizedLyrics(lyrics, options);
+    lyrics = (options.below ? withReadings(lyrics, read) : read) as T;
+  }
   if (!lyrics || !wordSync) return lyrics;
   if (!needsWordSync(lyrics, durationMs)) {
     let split = merged.get(lyrics);

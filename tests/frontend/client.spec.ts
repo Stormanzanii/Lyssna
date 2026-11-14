@@ -10274,6 +10274,46 @@ test("each library folder remembers its own sort", async ({ page }) => {
   await expect.poll(names).toEqual(["Apple", "Zebra"]);
 });
 
+test.describe("search box text", () => {
+  test.use({ deviceScaleFactor: 2 });
+  test("sits centred in the search box", async ({ page }) => {
+    await startClient(page);
+    const box = page.locator(".search-box").first();
+    await box.locator("input").fill("HHHH");
+    await page.locator("body").click({ position: { x: 5, y: 300 } });
+    const b = (await box.boundingBox())!;
+    const input = (await box.locator("input").boundingBox())!;
+    const shot = (await box.screenshot()).toString("base64");
+    const rows = await page.evaluate(
+      async ({ shot, from }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${shot}`;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const context = canvas.getContext("2d")!;
+        context.drawImage(img, 0, 0);
+        const data = context.getImageData(0, 0, img.width, img.height).data;
+        const x0 = Math.round(from * img.width);
+        const ink: number[] = [];
+        for (let y = 4; y < img.height - 4; y++)
+          for (let x = x0; x < x0 + 40; x++)
+            if (data[(y * img.width + x) * 4] > 90) {
+              ink.push(y);
+              break;
+            }
+        return { top: ink[0], bottom: ink[ink.length - 1] + 1, height: img.height };
+      },
+      { shot, from: (input.x - b.x) / b.width },
+    );
+    // Metropolis sets capitals high in their line, which reads as off-centre.
+    const text = (rows.top + rows.bottom) / 2;
+    expect(text).toBeGreaterThanOrEqual(rows.height / 2);
+    expect(text).toBeLessThanOrEqual(rows.height / 2 + 2);
+  });
+});
+
 test("compact library rows open instead of playing, covers centred", async ({
   page,
 }) => {

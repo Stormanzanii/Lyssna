@@ -881,6 +881,9 @@ small {
   width: 100%;
   font-size: 14px;
   height: 100%;
+  /* Metropolis sits about a pixel high; this centres its capitals. */
+  padding-top: 2px;
+  padding-bottom: 0;
 }
 .search-box > input::placeholder {
   color: light-dark(#565656, #a9a9a9);

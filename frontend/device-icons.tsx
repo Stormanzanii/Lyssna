@@ -192,10 +192,19 @@ function Tablet({ platform }: { platform: Platform }) {
   );
 }
 
-function Svg({ children, size }: { children: ReactNode; size: number }) {
+function Svg({
+  children,
+  size,
+  kind,
+}: {
+  children: ReactNode;
+  size: number;
+  kind: DeviceKind;
+}) {
   return (
     <svg
       className="device-icon"
+      data-kind={kind}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -223,38 +232,38 @@ export function DeviceIcon({
   switch (kind) {
     case "computer":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <Laptop platform={platform} />
         </Svg>
       );
     case "desktop":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <Desktop platform={platform} />
         </Svg>
       );
     case "phone":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <Phone platform={platform} />
         </Svg>
       );
     case "tablet":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <Tablet platform={platform} />
         </Svg>
       );
     case "tv":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <rect x="2.5" y="4.5" width="19" height="12.5" rx="1.2" />
           <path d="M6 17 5 19.5M18 17l1 2.5" />
         </Svg>
       );
     case "receiver":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <g transform="translate(12 12) scale(0.92) translate(-12 -12.8)">
             <rect x="2" y="7" width="20" height="10" rx="1.6" />
             <rect
@@ -275,13 +284,13 @@ export function DeviceIcon({
       );
     case "console":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <Console platform={platform} />
         </Svg>
       );
     case "car":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <path d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11" />
           <rect x="3" y="11" width="18" height="6" rx="1.8" />
           <path d="M5.5 17v2M18.5 17v2" />
@@ -291,7 +300,7 @@ export function DeviceIcon({
       );
     case "watch":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <path d="M8.5 6.5 9.3 2.5h5.4l.8 4M8.5 17.5l.8 4h5.4l.8-4" />
           <rect x="6.5" y="6.5" width="11" height="11" rx="3" />
           <path d="M12 9.5V12l1.6 1.2" strokeWidth={1.3} />
@@ -299,7 +308,7 @@ export function DeviceIcon({
       );
     case "cast":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <circle cx="12" cy="12" r="8.5" />
           <circle cx="12" cy="12" r="2" />
           <path d="M12 3.5v3" />
@@ -307,7 +316,7 @@ export function DeviceIcon({
       );
     case "alexa":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <path d="M5 7v9.5c0 1.9 3.1 3.5 7 3.5s7-1.6 7-3.5V7" />
           <ellipse className="device-ring" cx="12" cy="7" rx="7" ry="2.8" />
           <path
@@ -318,7 +327,7 @@ export function DeviceIcon({
       );
     case "group":
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <rect x="2.5" y="4.5" width="9" height="15" rx="2" />
           <circle cx="7" cy="14" r="2.3" />
           <circle cx="7" cy="8" r="0.6" fill="currentColor" stroke="none" />
@@ -328,7 +337,7 @@ export function DeviceIcon({
       );
     default:
       return (
-        <Svg size={size}>
+        <Svg size={size} kind={kind}>
           <rect x="5.5" y="2.5" width="13" height="19" rx="2.4" />
           <circle cx="12" cy="14.5" r="3.6" />
           <circle cx="12" cy="14.5" r="0.9" fill="currentColor" stroke="none" />

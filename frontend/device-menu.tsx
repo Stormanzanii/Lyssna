@@ -52,7 +52,7 @@ const PLATFORMS: Platform[] = [
   "xbox",
 ];
 
-function devicePlatform(device: Pick<Device, "platform">): Platform {
+export function devicePlatform(device: Pick<Device, "platform">): Platform {
   const platform = (device.platform ?? "") as Platform;
   return PLATFORMS.includes(platform) ? platform : "";
 }

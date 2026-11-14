@@ -64,7 +64,8 @@ import {
   FilePenLine,
 } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
-import { DeviceMenu } from "./device-menu";
+import { DeviceIcon } from "./device-icons";
+import { DeviceMenu, deviceKind, devicePlatform } from "./device-menu";
 import { LevelBars } from "./level-bars";
 import { isJamLink } from "./jam-link";
 import { listen } from "@tauri-apps/api/event";
@@ -6584,6 +6585,13 @@ function PlayerBar({
     state.playback.device.is_active &&
     state.playback.device.name !== state.local_device_name &&
     !(state.settings.soloist && state.playback.device.name === SOLOIST_DEVICE);
+  // The playback state lacks the platform; the device list has it.
+  const playingOn =
+    state.devices.find((device) =>
+      state.playback.device.id
+        ? device.id === state.playback.device.id
+        : device.name === state.playback.device.name,
+    ) ?? state.playback.device;
   useEffect(() => {
     volumeControl.observe(
       state.playback.device.volume_percent ??
@@ -6836,7 +6844,11 @@ function PlayerBar({
           onClick={onDevices}
           title="Connect to a device"
         >
-          <Speaker size={14} />
+          <DeviceIcon
+            kind={deviceKind(playingOn)}
+            platform={devicePlatform(playingOn)}
+            size={16}
+          />
           Playing on {state.playback.device.name}
         </button>
       )}

@@ -10583,6 +10583,34 @@ test("a green bar names the other device playing and opens the device list", asy
     );
   await playOn("ARASHII-PC");
   await expect(bar).toHaveText("Playing on ARASHII-PC");
+  await expect(bar.locator(".device-icon")).toHaveAttribute(
+    "data-kind",
+    "speaker",
+  );
+  // The icon matches the device: an iPhone from the device list.
+  await page.evaluate(() =>
+    (window as any).__clientTest.emit({
+      type: "devices",
+      devices: [
+        {
+          id: "remote",
+          name: "iPhone",
+          is_active: true,
+          kind: "phone",
+          platform: "mac",
+        },
+      ],
+    }),
+  );
+  await playOn("iPhone");
+  await expect(bar.locator(".device-icon")).toHaveAttribute(
+    "data-kind",
+    "phone",
+  );
+  await expect(bar.locator(".device-icon rect").nth(1)).toHaveAttribute(
+    "rx",
+    "1.3",
+  );
   await expect(bar).toHaveCSS("background-color", "rgb(30, 215, 96)");
   await page.locator("footer.player-bar").screenshot({
     path: "target/diagnostics/playing-elsewhere.png",

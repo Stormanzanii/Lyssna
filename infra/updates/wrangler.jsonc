@@ -27,7 +27,7 @@
       "pattern": "updates.clypdat.xyz"
     },
     {
-      "pattern": "clypdat.xyz/lyssna-latest/*",
+      "pattern": "clypdat.xyz/lyssna.exe",
       "zone_name": "clypdat.xyz"
     }
   ],

@@ -10,7 +10,7 @@ const channels = new Map([
 // Fixed links that always download the current stable release.
 const latest = new Map([
   ["latest/lyssna.exe", "lyssna.exe"],
-  ["lyssna-latest/lyssna-setup.exe", "lyssna-setup.exe"],
+  ["lyssna.exe", "lyssna.exe"],
 ]);
 const stable = "channels/stable/lyssna-windows-x86_64.json";
 

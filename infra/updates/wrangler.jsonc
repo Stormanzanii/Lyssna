@@ -25,6 +25,10 @@
     {
       "custom_domain": true,
       "pattern": "updates.clypdat.xyz"
+    },
+    {
+      "pattern": "clypdat.xyz/lyssna-latest/*",
+      "zone_name": "clypdat.xyz"
     }
   ],
   "secrets": {

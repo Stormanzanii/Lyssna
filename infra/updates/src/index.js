@@ -7,6 +7,13 @@ const channels = new Map([
   ["channels/stable/windows-x86_64.json", "spotiflex.exe"],
 ]);
 
+// Fixed links that always download the current stable release.
+const latest = new Map([
+  ["latest/lyssna.exe", "lyssna.exe"],
+  ["lyssna-latest/lyssna-setup.exe", "lyssna-setup.exe"],
+]);
+const stable = "channels/stable/lyssna-windows-x86_64.json";
+
 /** @param {string} value */
 function decode(value) {
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
@@ -58,11 +65,51 @@ async function publish(request, env, key) {
   return new Response(null, { status: 201 });
 }
 
+/** The executable the stable channel names, checked against its signature
+ * again so a bad manifest in the bucket never decides what is served.
+ * @param {Request} request @param {Env} env @param {string} filename */
+async function latestRelease(request, env, filename) {
+  const missing = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  const channel = await env.RELEASES.get(stable);
+  if (!channel) return missing();
+  let artifactKey;
+  try {
+    const envelope = JSON.parse(await new Response(channel.body).text());
+    const payload = decode(envelope.payload);
+    const verificationKey = await crypto.subtle.importKey("raw", decode(env.UPDATE_PUBLIC_KEY), "Ed25519", false, ["verify"]);
+    if (!(await crypto.subtle.verify("Ed25519", verificationKey, decode(envelope.signature), payload))) return missing();
+    artifactKey = JSON.parse(new TextDecoder().decode(payload)).artifact;
+  } catch {
+    return missing();
+  }
+  if (typeof artifactKey !== "string" || !artifact.test(artifactKey) || !artifactKey.endsWith("/lyssna.exe")) return missing();
+  const object = request.method === "HEAD" ? await env.RELEASES.head(artifactKey) : await env.RELEASES.get(artifactKey);
+  if (!object) return missing();
+  const headers = new Headers({
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'",
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Content-Length": String(object.size),
+    ETag: object.httpEtag,
+    // Short, so a new release reaches the fixed link within a minute.
+    "Cache-Control": "public, max-age=60",
+    "X-Lyssna-Version": artifactKey.split("/")[1],
+  });
+  if (request.headers.get("If-None-Match") === object.httpEtag) return new Response(null, { status: 304, headers });
+  return new Response("body" in object && object.body instanceof ReadableStream ? object.body : null, { headers });
+}
+
 export default {
   /** @param {Request} request @param {Env} env */
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") return Response.json({ service: "spotiflex-updates", status: "ok" });
+    const fixed = latest.get(url.pathname.slice(1));
+    if (fixed) {
+      if (!["GET", "HEAD"].includes(request.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      return latestRelease(request, env, fixed);
+    }
     const publishing = url.pathname.startsWith("/publish/");
     const key = url.pathname.slice(publishing ? "/publish/".length : 1);
     if (!artifact.test(key) && !channels.has(key)) return new Response("Not found", { status: 404 });

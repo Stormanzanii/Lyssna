@@ -79,3 +79,35 @@ test("each channel only activates its own executable name", async () => {
   assert.equal((await put("channels/stable/lyssna-windows-x86_64.json", release(lyssna))).status, 201);
   assert.equal((await put("channels/stable/windows-x86_64.json", release(legacy))).status, 201);
 });
+
+test("fixed links always download the current stable release", async () => {
+  const { put, request, envelope } = setup();
+  const channel = "channels/stable/lyssna-windows-x86_64.json";
+  const release = (version, bytes) => envelope({ version, target: "windows-x86_64", artifact: `releases/${version}/windows-x86_64/lyssna.exe`, size: bytes.length, sha256: "a".repeat(64), notes: "Test release" });
+  assert.equal((await request("latest/lyssna.exe")).status, 404);
+  await put("releases/0.4.0/windows-x86_64/lyssna.exe", "first");
+  await put(channel, release("0.4.0", "first"));
+  for (const [path, name] of [["latest/lyssna.exe", "lyssna.exe"], ["lyssna-latest/lyssna-setup.exe", "lyssna-setup.exe"]]) {
+    const response = await request(path);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "first");
+    assert.equal(response.headers.get("Content-Disposition"), `attachment; filename="${name}"`);
+    assert.equal(response.headers.get("Cache-Control"), "public, max-age=60");
+    assert.equal(response.headers.get("X-Lyssna-Version"), "0.4.0");
+  }
+  await put("releases/0.5.0/windows-x86_64/lyssna.exe", "second");
+  await put(channel, release("0.5.0", "second"));
+  assert.equal(await (await request("latest/lyssna.exe")).text(), "second");
+  assert.equal((await request("latest/lyssna.exe", { method: "HEAD" })).headers.get("Content-Length"), "6");
+  assert.equal((await request("latest/lyssna.exe", { method: "PUT" })).status, 405);
+  assert.equal((await request("latest/other.exe")).status, 404);
+});
+
+test("a fixed link serves nothing when the channel's signature fails", async () => {
+  const { objects, put, request, envelope } = setup();
+  await put("releases/0.4.0/windows-x86_64/lyssna.exe", "first");
+  const signed = JSON.parse(envelope({ version: "0.4.0", target: "windows-x86_64", artifact: "releases/0.4.0/windows-x86_64/lyssna.exe", size: 5, sha256: "a".repeat(64), notes: "" }));
+  signed.signature = Buffer.alloc(64).toString("base64");
+  objects.set("channels/stable/lyssna-windows-x86_64.json", { bytes: new TextEncoder().encode(JSON.stringify(signed)), type: "application/json" });
+  assert.equal((await request("latest/lyssna.exe")).status, 404);
+});

@@ -328,6 +328,8 @@ pub struct Settings {
     pub repeat: String,
     /// Community lyrics credit people by Discord username, not display name.
     pub lyrics_discord_usernames: bool,
+    /// Unofficial ID-to-username service, so it can be swapped if it closes.
+    pub discord_lookup_url: String,
     pub folders: Vec<PlaylistFolder>,
     /// Whether the Now playing panel is open, kept across restarts.
     pub now_playing_open: bool,
@@ -446,6 +448,7 @@ impl Default for Settings {
             shuffle: false,
             repeat: "off".into(),
             lyrics_discord_usernames: true,
+            discord_lookup_url: crate::discord::DEFAULT_ENDPOINT.into(),
             folders: Vec::new(),
             now_playing_open: true,
             song_sorts: Default::default(),

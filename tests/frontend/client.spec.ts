@@ -3184,6 +3184,88 @@ test("playlist toolbar stays above the track table", async ({ page }) => {
   expect(toolbar!.y + toolbar!.height).toBeLessThanOrEqual(rows!.y);
 });
 
+test("community credits show the Discord username looked up by ID", async ({
+  page,
+}) => {
+  await startClient(page);
+  await page.evaluate(() => {
+    const test = (window as any).__clientTest;
+    test.answers = { ...test.answers, discord_username: "real_uploader" };
+  });
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  const show = (uploader: string) =>
+    page.evaluate(
+      ({ uri, uploader }) => {
+        (window as any).__clientTest.emit({
+          type: "lyrics",
+          uri,
+          lyrics: {
+            source: "spicy_lyrics",
+            synced: true,
+            instrumental: false,
+            attribution: {
+              uploader: { id: uploader, username: "Display Name" },
+              maker: { id: "2", username: "" },
+            },
+            lines: [
+              {
+                text: "Only line",
+                start_ms: 1000,
+                end_ms: 3000,
+                background: false,
+                opposite: false,
+                words: [],
+                translation: "",
+                romanization: "",
+              },
+            ],
+          },
+        });
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms: 2000,
+          observed_at: Date.now(),
+          playing: false,
+        });
+      },
+      { uri: track.uri, uploader },
+    );
+  await show("155149108183695360");
+  const credits = page.locator(".lyrics-page .lyric-source.expanded");
+  await expect(credits).toContainText("Uploaded by @real_uploader");
+  // No name and no lookable ID falls back to the ID itself.
+  await expect(credits).toContainText("Made by @2");
+  const asked = await page.evaluate(() =>
+    (window as any).__clientTest.commands
+      .filter((entry: any) => entry.command === "discord_username")
+      .map((entry: any) => entry.args.id),
+  );
+  expect(asked.length).toBeGreaterThan(0);
+  expect(new Set(asked)).toEqual(new Set(["155149108183695360"]));
+  // A failed lookup keeps the name the lyrics gave.
+  await page.evaluate(() => {
+    (window as any).__clientTest.answers.discord_username = null;
+  });
+  await show("155149108183695361");
+  await expect(credits).toContainText("Uploaded by @Display Name");
+  // Turning the option off shows the lyrics' own name.
+  await page.evaluate(() => {
+    (window as any).__clientTest.answers.discord_username = "real_uploader";
+  });
+  await show("155149108183695360");
+  await expect(credits).toContainText("Uploaded by @real_uploader");
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, lyrics_discord_usernames: false },
+      }),
+    emptyState.settings,
+  );
+  await expect(credits).toContainText("Uploaded by @Display Name");
+});
+
 test("background-only vocals keep the main line anchored; long breaks show dots", async ({
   page,
 }) => {

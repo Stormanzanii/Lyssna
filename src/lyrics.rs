@@ -898,13 +898,6 @@ fn fetch_from(
                                 crate::provider::fetch(&client, &track, &access_token)
                             })
                         })
-                        // Lyrics saved before usernames were looked up get them now.
-                        .map(|mut lyrics| {
-                            if cache.network {
-                                crate::provider::resolve_contributors(&mut lyrics);
-                            }
-                            lyrics
-                        })
                         .map_err(|error| {
                             (error.to_string(), crate::lyric_sources::unreachable(&error))
                         })

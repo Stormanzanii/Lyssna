@@ -1123,6 +1123,12 @@ export function SettingsWindow({
       "Lyrics",
       "Display",
       [
+        flag(
+          "lyrics_discord_usernames",
+          "Discord usernames in credits",
+          "Credit community lyrics makers by their Discord username instead of their display name. Their Discord ID is looked up on an unofficial third-party service.",
+          "discord username display name community credits maker uploader",
+        ),
         range(
           "lyric_offset_ms",
           "Timing offset",

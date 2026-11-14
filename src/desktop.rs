@@ -2950,6 +2950,23 @@ async fn track_waveform(
     .map_err(error)
 }
 #[tauri::command]
+async fn discord_username(
+    id: String,
+    state: State<'_, Desktop>,
+) -> std::result::Result<Option<String>, String> {
+    let endpoint = state
+        .0
+        .snapshot
+        .lock()
+        .map_err(|_| "Settings unavailable".to_owned())?
+        .settings
+        .discord_lookup_url
+        .clone();
+    tauri::async_runtime::spawn_blocking(move || crate::discord::username(&endpoint, &id))
+        .await
+        .map_err(|_| "Discord lookup worker unavailable".to_owned())
+}
+#[tauri::command]
 fn audio_levels() -> [u8; 3] {
     crate::audio::levels()
 }
@@ -5881,6 +5898,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             playback_speed,
             track_waveform,
             audio_levels,
+            discord_username,
             track_spectrogram,
             play_clip,
             stop_clip,

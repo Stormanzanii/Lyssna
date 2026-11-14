@@ -21,6 +21,7 @@ pub mod config;
 pub mod credential;
 #[cfg(feature = "desktop")]
 pub mod desktop;
+pub mod discord;
 pub mod dj;
 pub mod home;
 pub mod jam;

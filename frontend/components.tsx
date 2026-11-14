@@ -88,6 +88,7 @@ import { LyricAnimator } from "./lyric-animator";
 import { HighlighterWords, markerColour } from "./highlighter";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
+import { useDiscordUsername } from "./discord";
 
 /** Artwork is HTTPS, a local JPEG preview of a cover being saved, or a
  * Local Files cover. */
@@ -1059,8 +1060,25 @@ const LyricCredits = memo(function LyricCredits({
   /** Name people by Discord username when their profile gave one. */
   discord?: boolean;
 }) {
-  const nameOf = (person: Contributor) =>
-    (discord && person.discord) || person.username;
+  const lookup = discord && lyrics.source === "spicy_lyrics";
+  const makerName = useDiscordUsername(lyrics.attribution?.maker?.id, lookup);
+  const uploaderName = useDiscordUsername(
+    lyrics.attribution?.uploader?.id,
+    lookup,
+  );
+  const nameOf = (person: Contributor) => {
+    const found = discord
+      ? (person === lyrics.attribution?.maker
+          ? makerName
+          : person === lyrics.attribution?.uploader
+            ? uploaderName
+            : undefined) || person.discord
+      : undefined;
+    // A name that only recases the username keeps the casing it was given.
+    if (found && found.toLowerCase() === person.username?.toLowerCase())
+      return person.username;
+    return found || person.username || person.id;
+  };
   const source =
     (
       {
@@ -1105,7 +1123,7 @@ const LyricCredits = memo(function LyricCredits({
     lyrics.source === "spicy_lyrics"
       ? (["maker", "uploader"] as const).flatMap((role) => {
           const person = lyrics.attribution?.[role];
-          return person?.username ? [{ role, person }] : [];
+          return person?.username || person?.id ? [{ role, person }] : [];
         })
       : [];
   // Community lyrics read like the Spicy Lyrics fork:

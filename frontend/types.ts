@@ -234,6 +234,7 @@ export interface Settings {
   crossfade_picked?: boolean;
   soloist?: boolean;
   lyrics_discord_usernames?: boolean;
+  discord_lookup_url?: string;
   audio_output?: string | null;
   folders: Folder[];
   spotify_plus?: SpotifyPlus;

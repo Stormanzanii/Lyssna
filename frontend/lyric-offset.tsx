@@ -42,9 +42,9 @@ export function OffsetSetting({
     else delete offsets[uri];
     onSettings({ lyric_song_offsets: offsets });
   };
-  const fill =
-    ((Math.max(-SLIDER, Math.min(SLIDER, value)) + SLIDER) / (2 * SLIDER)) *
-    100;
+  const shown = Math.max(-SLIDER, Math.min(SLIDER, value));
+  const at = ((shown + SLIDER) / (2 * SLIDER)) * 100;
+  const total = lyricOffset(settings, uri);
   return (
     <SettingRow
       label="Timing offset"
@@ -57,70 +57,107 @@ export function OffsetSetting({
       stacked
     >
       <div className="offset-setting">
-        <div
-          className="offset-scope"
-          role="radiogroup"
-          aria-label="Offset applies to"
-        >
-          <button
-            role="radio"
-            aria-checked={!song}
-            onClick={() => setScope("all")}
+        <div className="offset-top">
+          <div
+            className="offset-scope"
+            role="radiogroup"
+            aria-label="Offset applies to"
           >
-            All songs
-          </button>
+            <button
+              role="radio"
+              aria-checked={!song}
+              onClick={() => setScope("all")}
+            >
+              All songs
+            </button>
+            <button
+              role="radio"
+              aria-checked={song}
+              disabled={!uri}
+              title={uri ? undefined : "Play a song first"}
+              onClick={() => setScope("song")}
+            >
+              This song
+            </button>
+          </div>
+          <div className="offset-stepper">
+            {[-100, -10].map((step) => (
+              <button
+                key={step}
+                aria-label={`${step}`}
+                onClick={() => set(value + step)}
+              >
+                {`\u2212${-step}`}
+              </button>
+            ))}
+            <label className="offset-value">
+              <input
+                key={`${scope}:${value}`}
+                type="text"
+                inputMode="numeric"
+                aria-label="Offset in milliseconds"
+                defaultValue={value > 0 ? `+${value}` : `${value}`}
+                onFocus={(event) => event.currentTarget.select()}
+                onBlur={(event) => {
+                  const typed = Number(
+                    event.target.value.replace(/\u2212/g, "-").trim(),
+                  );
+                  if (Number.isFinite(typed)) set(typed);
+                  else event.target.value = `${value}`;
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                    event.preventDefault();
+                    set(value + (event.key === "ArrowUp" ? 10 : -10));
+                  }
+                }}
+              />
+              <span>ms</span>
+            </label>
+            {[10, 100].map((step) => (
+              <button
+                key={step}
+                aria-label={`+${step}`}
+                onClick={() => set(value + step)}
+              >
+                +{step}
+              </button>
+            ))}
+          </div>
           <button
-            role="radio"
-            aria-checked={song}
-            disabled={!uri}
-            title={uri ? undefined : "Play a song first"}
-            onClick={() => setScope("song")}
+            className="offset-reset"
+            disabled={!value}
+            onClick={() => set(0)}
           >
-            This song
+            Reset
           </button>
         </div>
-        <span className="settings-range">
+        <div className="offset-track">
+          <span>Later</span>
           <input
             type="range"
             aria-label="Timing offset"
             min={-SLIDER}
             max={SLIDER}
             step={10}
-            value={Math.max(-SLIDER, Math.min(SLIDER, value))}
-            style={{ "--fill": `${fill}%` } as CSSProperties}
+            value={shown}
+            style={
+              {
+                "--from": `${Math.min(at, 50)}%`,
+                "--to": `${Math.max(at, 50)}%`,
+              } as CSSProperties
+            }
             onChange={(event) => set(Number(event.target.value))}
           />
-        </span>
-        <div className="offset-steps">
-          {[-100, -10].map((step) => (
-            <button key={step} onClick={() => set(value + step)}>
-              {step}
-            </button>
-          ))}
-          <input
-            key={`${scope}:${value}`}
-            className="number-field"
-            type="number"
-            aria-label="Offset in milliseconds"
-            min={-LIMIT}
-            max={LIMIT}
-            step={10}
-            defaultValue={value}
-            onBlur={(event) => {
-              const typed = Number(event.target.value);
-              if (Number.isFinite(typed)) set(typed);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-          <span className="offset-unit">ms</span>
-          {[10, 100].map((step) => (
-            <button key={step} onClick={() => set(value + step)}>
-              +{step}
-            </button>
-          ))}
+          <span>Earlier</span>
         </div>
+        {song && (
+          <p className="offset-total">
+            With the offset for all songs, this song's lyrics shift{" "}
+            {total > 0 ? `+${total}` : total} ms.
+          </p>
+        )}
       </div>
     </SettingRow>
   );

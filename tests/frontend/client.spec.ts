@@ -18531,7 +18531,10 @@ test("per-song offsets add to the offset for all songs", async ({ page }) => {
   await expect.poll(saved).toEqual({ all: 100, songs: { [uri]: 250 } });
   // Back on All songs, the slider shows the shared offset again.
   await dialog.getByRole("radio", { name: "All songs" }).click();
-  await expect(field).toHaveValue("100");
+  await expect(field).toHaveValue("+100");
+  await dialog
+    .locator(".offset-setting")
+    .screenshot({ path: "target/diagnostics/lyric-offset.png" });
   // Zero removes the song's own offset.
   await dialog.getByRole("radio", { name: "This song" }).click();
   await field.fill("0");

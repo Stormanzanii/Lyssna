@@ -1042,61 +1042,147 @@
 }
 .offset-setting {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 600px;
+}
+.offset-top {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
+  gap: 10px 12px;
+}
+.offset-scope,
+.offset-stepper {
+  display: inline-flex;
+  height: 34px;
+  border-radius: 999px;
+  background: light-dark(#00000012, #ffffff12);
 }
 .offset-scope {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 999px;
-  background: light-dark(#00000014, #ffffff14);
+  padding: 3px;
 }
 .offset-scope button {
-  height: 28px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: none;
   color: light-dark(#4c4c4c, #b3b3b3);
   font: inherit;
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+}
+.offset-scope button:hover:not(:disabled, [aria-checked="true"]) {
+  color: light-dark(#000, #fff);
 }
 .offset-scope button[aria-checked="true"] {
   background: light-dark(#000, #fff);
   color: light-dark(#fff, #000);
 }
 .offset-scope button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
-.offset-steps {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.offset-stepper {
+  overflow: hidden;
 }
-.offset-steps button {
-  min-width: 44px;
-  height: 30px;
-  padding: 0 8px;
+.offset-stepper button {
+  min-width: 46px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 4px;
-  background: light-dark(#00000014, #ffffff14);
-  color: light-dark(#000, #fff);
+  background: none;
+  color: light-dark(#4c4c4c, #b3b3b3);
   font: inherit;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.offset-steps button:hover {
-  background: light-dark(#00000024, #ffffff24);
+.offset-stepper button:hover {
+  background: light-dark(#00000012, #ffffff14);
+  color: light-dark(#000, #fff);
 }
-.offset-steps .number-field {
-  width: 80px;
-  height: 30px;
-}
-.offset-unit {
-  font-size: 13px;
+.offset-value {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 12px;
+  border-inline: 1px solid light-dark(#00000014, #ffffff14);
   color: light-dark(#4c4c4c, #b3b3b3);
+  font-size: 13px;
+  cursor: text;
+}
+.offset-value:focus-within {
+  background: light-dark(#00000010, #ffffff10);
+}
+.offset-value input {
+  width: 52px;
+  border: 0;
+  background: none;
+  color: light-dark(#000, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.offset-reset {
+  height: 34px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: light-dark(#4c4c4c, #b3b3b3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.offset-reset:hover:not(:disabled) {
+  color: light-dark(#000, #fff);
+  text-decoration: underline;
+}
+.offset-reset:disabled {
+  visibility: hidden;
+}
+.offset-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: light-dark(#6a6a6a, #8f8f8f);
+}
+.offset-track input {
+  --rest: light-dark(#b2b2b2, #4d4d4d);
+  --mark: light-dark(#00000059, #ffffff59);
+  --lit: light-dark(#000, #fff);
+  appearance: none;
+  flex: 1;
+  min-width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) center / 2px 12px no-repeat,
+    linear-gradient(
+      to right,
+      var(--rest) var(--from),
+      var(--lit) var(--from) var(--to),
+      var(--rest) var(--to)
+    );
+  cursor: pointer;
+}
+.offset-track input:hover {
+  --lit: #1ed760;
+}
+.offset-track input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: light-dark(#000, #fff);
+  box-shadow: 0 2px 4px #0006;
+}
+.offset-total {
+  margin: 0;
+  font-size: 12px;
+  color: light-dark(#6a6a6a, #8f8f8f);
 }

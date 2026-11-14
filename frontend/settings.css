@@ -1040,3 +1040,63 @@
   color: var(--text, light-dark(#000, #fff));
   font-weight: 600;
 }
+.offset-setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+.offset-scope {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: light-dark(#00000014, #ffffff14);
+}
+.offset-scope button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: light-dark(#4c4c4c, #b3b3b3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.offset-scope button[aria-checked="true"] {
+  background: light-dark(#000, #fff);
+  color: light-dark(#fff, #000);
+}
+.offset-scope button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.offset-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.offset-steps button {
+  min-width: 44px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: light-dark(#00000014, #ffffff14);
+  color: light-dark(#000, #fff);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.offset-steps button:hover {
+  background: light-dark(#00000024, #ffffff24);
+}
+.offset-steps .number-field {
+  width: 80px;
+  height: 30px;
+}
+.offset-unit {
+  font-size: 13px;
+  color: light-dark(#4c4c4c, #b3b3b3);
+}

@@ -13431,9 +13431,7 @@ test("settings slider values stay inside their rows", async ({ page }) => {
   await openSettings(page, "Lyrics");
   const offset = page.getByRole("slider", { name: "Timing offset" });
   await offset.fill("-2000");
-  await expect(
-    page.locator(".setting-row").filter({ has: offset }).locator("output"),
-  ).toHaveText("-2000 ms");
+  await expect(page.getByLabel("Offset in milliseconds")).toHaveValue("-2000");
   await openSettings(page, "Appearance");
   await page
     .getByRole("switch", { name: "Limit animation frame rate" })
@@ -13442,7 +13440,7 @@ test("settings slider values stay inside their rows", async ({ page }) => {
   for (const tab of ["Appearance", "Lyrics", "Effects"]) {
     await openSettings(page, tab);
     const overflow = await page
-      .locator(".lyrics-settings .settings-range")
+      .locator(".lyrics-settings .settings-range:has(output)")
       .evaluateAll((ranges) =>
         ranges.map((range) => {
           const row = range.closest(".setting-row")!.getBoundingClientRect();
@@ -18501,6 +18499,44 @@ test("TTML Creator reopens at the paused song position", async ({ page }) => {
         ),
     )
     .toBeGreaterThan(1000);
+});
+
+test("per-song offsets add to the offset for all songs", async ({ page }) => {
+  await startClient(page);
+  await playLyricTrack(page, false);
+  const saved = () =>
+    page.evaluate(() => {
+      const saves = (window as any).__clientTest.commands.filter(
+        (entry: any) => entry.command === "save_settings",
+      );
+      const last = saves[saves.length - 1]?.args.settings;
+      return {
+        all: last?.lyric_offset_ms,
+        songs: last?.lyric_song_offsets ?? {},
+      };
+    });
+  await openSettings(page, "Lyrics");
+  const dialog = page.getByRole("dialog", { name: "Lyssna settings" });
+  await dialog.getByRole("button", { name: "+100", exact: true }).click();
+  await expect.poll(saved).toEqual({ all: 100, songs: {} });
+  await dialog.getByRole("radio", { name: "This song" }).click();
+  const field = dialog.getByLabel("Offset in milliseconds");
+  await expect(field).toHaveValue("0");
+  await dialog.getByRole("button", { name: "-10", exact: true }).click();
+  await dialog.getByRole("button", { name: "-10", exact: true }).click();
+  const uri = "spotify:track:0123456789abcdefghijkl";
+  await expect.poll(saved).toEqual({ all: 100, songs: { [uri]: -20 } });
+  await field.fill("250");
+  await field.press("Enter");
+  await expect.poll(saved).toEqual({ all: 100, songs: { [uri]: 250 } });
+  // Back on All songs, the slider shows the shared offset again.
+  await dialog.getByRole("radio", { name: "All songs" }).click();
+  await expect(field).toHaveValue("100");
+  // Zero removes the song's own offset.
+  await dialog.getByRole("radio", { name: "This song" }).click();
+  await field.fill("0");
+  await field.press("Enter");
+  await expect.poll(saved).toEqual({ all: 100, songs: {} });
 });
 
 test("TTML Creator follows the lyrics timing offset", async ({ page }) => {

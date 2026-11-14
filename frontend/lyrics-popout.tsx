@@ -18,6 +18,7 @@ import { LyricsDisplay, usePosition } from "./components";
 import { displayLyrics } from "./word-sync";
 import { useRomanization } from "./romanization";
 import { filterWords } from "./word-filter";
+import { lyricOffset } from "./lyric-offset";
 import { emptyState, formatTime } from "./state";
 import type { PlayerRequest } from "./types";
 
@@ -226,7 +227,8 @@ function PopoutLyrics({
   lyrics: NonNullable<typeof emptyState.lyrics>;
   onSeek: (ms: number) => void;
 }) {
-  const current = usePosition(state) + state.settings.lyric_offset_ms;
+  const current =
+    usePosition(state) + lyricOffset(state.settings, state.playback.item?.uri);
   return (
     <LyricsDisplay
       lyrics={lyrics}

@@ -182,6 +182,8 @@ pub struct Settings {
     pub library_view: String,
     pub lyric_size: f32,
     pub lyric_offset_ms: i64,
+    /// Per-song lyric offsets by track URI, added to `lyric_offset_ms`.
+    pub lyric_song_offsets: std::collections::BTreeMap<String, i64>,
     pub romanized: bool,
     pub reduce_motion: bool,
     /// Limit Animation Frame Rate: animations stay at or under
@@ -364,6 +366,7 @@ impl Default for Settings {
             library_view: "list".into(),
             lyric_size: 36.0,
             lyric_offset_ms: 0,
+            lyric_song_offsets: Default::default(),
             romanized: false,
             reduce_motion: false,
             animation_fps_cap_enabled: false,
@@ -527,6 +530,13 @@ impl Settings {
                 && seen.insert(id.clone())
         });
         self.hidden_settings.truncate(200);
+        self.lyric_song_offsets.retain(|uri, offset| {
+            *offset = (*offset).clamp(-10_000, 10_000);
+            *offset != 0 && !uri.is_empty() && uri.len() <= 512
+        });
+        while self.lyric_song_offsets.len() > 5_000 {
+            self.lyric_song_offsets.pop_first();
+        }
         if ![
             "recents",
             "recently_added",
@@ -800,6 +810,29 @@ mod tests {
         let settings: Settings = serde_json::from_str("{}").unwrap();
         assert!(settings.now_playing_open);
         assert!(settings.song_sorts.is_empty());
+    }
+
+    #[test]
+    fn song_offsets_drop_zeroes_and_stay_in_range() {
+        let mut settings = Settings {
+            lyric_song_offsets: std::collections::BTreeMap::from([
+                ("spotify:track:a".to_owned(), 50_000),
+                ("spotify:track:b".to_owned(), 0),
+                ("spotify:track:c".to_owned(), -120),
+                (String::new(), 10),
+            ]),
+            ..Settings::default()
+        };
+        settings.clean_lyrics_options();
+        assert_eq!(
+            settings.lyric_song_offsets,
+            std::collections::BTreeMap::from([
+                ("spotify:track:a".to_owned(), 10_000),
+                ("spotify:track:c".to_owned(), -120),
+            ])
+        );
+        let older: Settings = serde_json::from_str("{}").unwrap();
+        assert!(older.lyric_song_offsets.is_empty());
     }
 
     #[test]

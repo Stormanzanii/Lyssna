@@ -144,6 +144,7 @@ export interface Settings {
   now_playing_width?: number | null;
   lyric_size: number;
   lyric_offset_ms: number;
+  lyric_song_offsets?: Record<string, number>;
   romanized: boolean;
   reduce_motion: boolean;
   animation_fps_cap_enabled?: boolean;

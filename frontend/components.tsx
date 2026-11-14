@@ -89,6 +89,7 @@ import { HighlighterWords, markerColour } from "./highlighter";
 import { LyricWord } from "./lyric-word";
 import { LyricCountdown } from "./lyric-countdown";
 import { useDiscordUsername } from "./discord";
+import { lyricOffset } from "./lyric-offset";
 
 /** Artwork is HTTPS, a local JPEG preview of a cover being saved, or a
  * Local Files cover. */
@@ -1316,7 +1317,8 @@ function TimedLyricsPreview({
   state: AppState;
   onPlayer: (request: PlayerRequest) => void;
 }) {
-  const current = usePosition(state) + state.settings.lyric_offset_ms;
+  const current =
+    usePosition(state) + lyricOffset(state.settings, state.playback.item?.uri);
   // Re-render when romanized lyrics finish converting.
   useRomanization();
   const lyrics = filterWords(
@@ -1540,7 +1542,7 @@ function SongLyricsPage({
   children?: ReactNode;
 } & Links) {
   const songTime = usePosition(state),
-    current = songTime + state.settings.lyric_offset_ms,
+    current = songTime + lyricOffset(state.settings, state.playback.item?.uri),
     track = state.playback.item;
   // Full screen seek: preview while dragging, seek once on release.
   const [seeking, setSeeking] = useState<number | null>(null);

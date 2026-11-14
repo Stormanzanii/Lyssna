@@ -37,6 +37,7 @@ import { IS_MAC } from "./platform";
 import { CREDITS, Credits } from "./credits";
 import { FontSettings } from "./custom-fonts";
 import { DEFAULT_MARKER, MARKER_COLOURS } from "./highlighter";
+import { OffsetSetting } from "./lyric-offset";
 import { LyricsProvider } from "./lyrics-provider";
 import { MusixmatchToken } from "./musixmatch-token";
 import { AnimatorPresetRow } from "./animator-settings";
@@ -1129,15 +1130,13 @@ export function SettingsWindow({
           "Credit community lyrics makers by their Discord username instead of their display name. Their Discord ID is looked up on an unofficial third-party service.",
           "discord username display name community credits maker uploader",
         ),
-        range(
-          "lyric_offset_ms",
-          "Timing offset",
-          "Shift lyrics earlier or later to match what you hear.",
-          "lyrics sync delay offset milliseconds",
-          [-2000, 2000, 10],
-          0,
-          " ms",
-        ),
+        <OffsetSetting
+          key="offset"
+          settings={settings}
+          uri={state.playback.item?.uri}
+          title={state.playback.item?.name}
+          onSettings={onSettings}
+        />,
         flag(
           "lyrics_seek_compensation",
           "Seek fade-in compensation",

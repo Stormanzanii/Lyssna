@@ -16,7 +16,7 @@ import {
 import { Ambience } from "./ambience";
 import { LyricsDisplay, usePosition } from "./components";
 import { displayLyrics } from "./word-sync";
-import { useRomanization } from "./romanization";
+import { romanizeFor, useRomanization } from "./romanization";
 import { filterWords } from "./word-filter";
 import { lyricOffset } from "./lyric-offset";
 import { emptyState, formatTime } from "./state";
@@ -57,7 +57,7 @@ export function LyricsPopout() {
       displayLyrics(
         state.lyrics,
         !!state.settings.experimental_word_sync,
-        state.settings.romanized,
+        romanizeFor(state.settings),
         track?.duration_ms,
       ),
       state.settings.lyrics_word_filter,

@@ -6296,12 +6296,13 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
     .getByTitle("Romanization", { exact: true });
   await romanization.click();
   const samples = [
-    ["안녕하세요", "", "annyeonghaseyo"],
+    ["안녕하세요", "", "Annyeonghaseyo"],
     ["Привет", "", "Privet"],
     ["مرحبا", "", "mrHb"],
-    ["你好", "", "nǐ-hǎo"],
-    // Kana makes the song Japanese, so its kanji read as Japanese too.
-    ["東京へ行く", "", "tōkyō e iku"],
+    ["你好", "", "Nǐ hǎo"],
+    // Kana makes the song Japanese, so its kanji read as Japanese too,
+    // spelled as written.
+    ["東京へ行く", "", "Toukyou e iku"],
     ["東京", "Tokyo", "Tokyo"],
   ];
   const emit = async (text: string, reading: string) => {
@@ -6343,6 +6344,27 @@ test("romanization replaces non-Latin lyrics in normal, floating and preview vie
     await emit(text, reading);
     await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(expected);
   }
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, romanized: true, romaji_as_written: false },
+      }),
+    emptyState.settings,
+  );
+  await emit("東京へ行く", "");
+  await expect(page.locator(".lyrics-page .lyric-main")).toHaveText(
+    "Tōkyō e iku",
+  );
+  await page.evaluate(
+    (settings) =>
+      (window as any).__clientTest.emit({
+        type: "settings",
+        settings: { ...settings, romanized: true, romaji_as_written: true },
+      }),
+    emptyState.settings,
+  );
+  await emit("東京", "Tokyo");
   await romanization.click();
   await expect(page.locator(".lyrics-page .lyric-main")).toHaveText("東京");
   await romanization.click();
@@ -6414,7 +6436,7 @@ test("turning romanization on keeps the lyrics in place", async ({ page }) => {
     .getByTitle("Romanization", { exact: true })
     .click();
   await expect(page.locator(".lyrics-page .lyric-main").first()).toContainText(
-    "saranghaeyo",
+    "Saranghaeyo",
   );
   // Settled by the next frame: no slide to the rewrapped line.
   await page.evaluate(

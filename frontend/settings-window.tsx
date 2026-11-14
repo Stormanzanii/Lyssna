@@ -1150,6 +1150,15 @@ export function SettingsWindow({
           "romanization transliteration",
         ),
         flag(
+          "romaji_as_written",
+          "Romaji as written",
+          "Spell Japanese the way romanized lyrics usually are: long vowels as written (kyou, koohii) and particles as said (wa, e, wo). Off uses kyō and tōkyō.",
+          "romaji japanese long vowels macron particles wa wo hepburn",
+          settings.romanized
+            ? undefined
+            : "Turn on Show romanized lyrics first",
+        ),
+        flag(
           "lyrics_translations",
           "Show translations",
           "Show translations that come with the lyrics under each line.",

@@ -185,6 +185,8 @@ pub struct Settings {
     /// Per-song lyric offsets by track URI, added to `lyric_offset_ms`.
     pub lyric_song_offsets: std::collections::BTreeMap<String, i64>,
     pub romanized: bool,
+    /// Japanese romaji spelled as lyrics usually are (kyou, wa, wo).
+    pub romaji_as_written: bool,
     pub reduce_motion: bool,
     /// Limit Animation Frame Rate: animations stay at or under
     /// `animation_fps_cap`, 15 to 240.
@@ -366,6 +368,7 @@ impl Default for Settings {
             library_view: "list".into(),
             lyric_size: 36.0,
             lyric_offset_ms: 0,
+            romaji_as_written: true,
             lyric_song_offsets: Default::default(),
             romanized: false,
             reduce_motion: false,

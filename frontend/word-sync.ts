@@ -1,5 +1,5 @@
 import type { Line, Lyrics, Word } from "./types";
-import { romanizedLyrics } from "./romanization";
+import { romanizedLyrics, type RomanizeOptions } from "./romanization";
 
 /*
  * Experimental word sync: estimated timing for line-synced and static lyrics.
@@ -406,10 +406,11 @@ const cache = new WeakMap<Lyrics, { durationMs: number; lyrics: Lyrics }>();
 export function displayLyrics<T extends Lyrics | null | undefined>(
   lyrics: T,
   wordSync: boolean,
-  romanized = false,
+  romanized: boolean | RomanizeOptions = false,
   durationMs = 0,
 ): T {
-  if (lyrics && romanized) lyrics = romanizedLyrics(lyrics) as T;
+  if (lyrics && romanized)
+    lyrics = romanizedLyrics(lyrics, romanized === true ? {} : romanized) as T;
   if (!lyrics || !wordSync) return lyrics;
   if (!needsWordSync(lyrics, durationMs)) {
     let split = merged.get(lyrics);

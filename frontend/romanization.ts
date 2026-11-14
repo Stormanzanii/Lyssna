@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { transliterate } from "transliteration";
 import { wordGroups } from "./lyric-motion";
+import {
+  koreanSyllables,
+  romanizePieces,
+  type JapaneseToken,
+  type Readers,
+} from "./romanize-line";
 import type { Line, Lyrics, Word } from "./types";
 
 /* Romanization as Spicy Lyrics does it (iPixelGalaxy/spicy-lyrics,
@@ -18,9 +24,7 @@ type Script = "japanese" | "chinese" | "korean" | "cyrillic" | "greek";
 const KANA = /[ぁ-ゖァ-ヺ]/u;
 const HAN = /\p{Script=Han}/u;
 const KOREAN = /[가-힯ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿]/u;
-const CYRILLIC = /[Ѐ-ԯⷠ-ⷿꙀ-ꚟ]/u;
 const GREEK = /[Ͱ-Ͽἀ-῿]/u;
-const JAPANESE_ITEM = /[぀-ヿ\p{Script=Han}]/u;
 const FOREIGN = /(?:(?!\p{Script=Latin})[\p{L}\p{M}‌‍])+/gu;
 
 /** The scripts present across the song, in conversion order. */
@@ -37,26 +41,8 @@ export function songScripts(texts: string[]): Script[] {
   return scripts;
 }
 
-/* Korean: Revised Romanization, letter by letter, from aromanize's tables.
- * ㄹ starts a syllable as r and ends one as l; ㄹㄹ is ll. */
-const CHO = "g kk n d tt r m b pp s ss  j jj ch k t p h".split(" ");
-const JUNG =
-  "a ae ya yae eo e yeo ye o wa wae oe yo u wo we wi yu eu ui i".split(" ");
-const JONG =
-  " g kk gs n nj nh d l lg lm lb ls lt lp lh m b bs s ss ng j ch k t p h".split(
-    " ",
-  );
 export function romanizeKorean(text: string) {
-  return text
-    .replace(/[가-힣]/gu, (syllable) => {
-      const code = syllable.charCodeAt(0) - 0xac00;
-      return (
-        CHO[Math.floor(code / 588)] +
-        JUNG[Math.floor((code % 588) / 28)] +
-        JONG[code % 28]
-      );
-    })
-    .replace(/lr/g, "ll");
+  return text.replace(/[가-힣]+/gu, (run) => koreanSyllables(run).join(""));
 }
 
 /* Greek: ELOT 743 letters, with the common two-letter sounds. */
@@ -109,14 +95,18 @@ export function romanizeGreek(text: string) {
   });
 }
 
-interface Converters {
-  japanese?: (text: string) => Promise<string>;
-  pinyin?: (text: string) => string;
-  cyrillic?: (text: string) => string;
+export interface RomanizeOptions {
+  /** Japanese spelled as romanized lyrics usually are: kyou, koohii, wa. */
+  romajiAsWritten?: boolean;
 }
 
-let japanese: Promise<(text: string) => Promise<string>> | undefined;
-/** Kuroshiro over the Kuromoji dictionary, loaded on first need. */
+let japanese:
+  | Promise<{
+      tokenize: (text: string) => Promise<JapaneseToken[]>;
+      kanaToRomaji: (kana: string) => string;
+    }>
+  | undefined;
+/** The Kuromoji dictionary, loaded on first need. */
 function loadJapanese() {
   japanese ??= (async () => {
     const [{ default: Kuroshiro }, { default: Analyzer }, loader] =
@@ -151,61 +141,63 @@ function loadJapanese() {
           (error) => done(error, null),
         );
     };
-    const converter = new Kuroshiro();
-    await converter.init(new Analyzer({ dictPath: "/kuromoji-dict/" }));
-    return (text: string) =>
-      converter.convert(text, { to: "romaji", mode: "spaced" });
+    const analyzer = new Analyzer({ dictPath: "/kuromoji-dict/" });
+    await analyzer.init();
+    return {
+      tokenize: (text: string) => analyzer.parse(text),
+      kanaToRomaji: (kana: string) =>
+        Kuroshiro.Util.kanaToRomaji(kana, "hepburn"),
+    };
   })();
   return japanese;
 }
 
-async function converters(scripts: Script[]): Promise<Converters> {
-  const found: Converters = {};
+async function readers(
+  scripts: Script[],
+  texts: string[],
+  options: RomanizeOptions,
+): Promise<Readers> {
+  const found: Readers = {
+    ukrainian: /[іїєґІЇЄҐ]/u.test(texts.join("\n")),
+  };
   await Promise.all([
     scripts.includes("japanese")
-      ? loadJapanese().then((convert) => (found.japanese = convert))
+      ? loadJapanese().then(
+          (reader) =>
+            (found.japanese = {
+              ...reader,
+              asWritten: options.romajiAsWritten !== false,
+            }),
+        )
       : undefined,
     scripts.includes("chinese")
       ? import("pinyin-pro").then(({ pinyin }) => {
           found.pinyin = (text) =>
-            text.replace(/\p{Script=Han}+/gu, (run) =>
-              pinyin(run, { type: "array" }).join("-"),
+            pinyin(text, { type: "all" }).map((item) =>
+              item.isZh ? item.pinyin : "",
             );
         })
-      : undefined,
-    scripts.includes("cyrillic")
-      ? import("cyrillic-romanization").then(
-          ({ default: cyrillicToLatin }) =>
-            (found.cyrillic = (text) => cyrillicToLatin(text) ?? text),
-        )
       : undefined,
   ]);
   return found;
 }
 
-/** One word or line through every converter whose letters it holds,
- *  keeping its surrounding spaces. */
-async function romanizeItem(
-  text: string,
-  scripts: Script[],
-  convert: Converters,
-): Promise<string> {
-  const [, before, core, after] = /^(\s*)([\s\S]*?)(\s*)$/u.exec(text)!;
-  let out = core;
-  for (const script of scripts) {
-    if (script === "japanese" && convert.japanese && JAPANESE_ITEM.test(out))
-      out = (await convert.japanese(out)).trim();
-    else if (script === "chinese" && convert.pinyin && HAN.test(out))
-      out = convert.pinyin(out);
-    else if (script === "korean" && KOREAN.test(out)) out = romanizeKorean(out);
-    else if (script === "cyrillic" && convert.cyrillic && CYRILLIC.test(out))
-      out = convert.cyrillic(out);
-    else if (script === "greek" && GREEK.test(out)) out = romanizeGreek(out);
-  }
-  out = out.replace(FOREIGN, (run) =>
-    /\p{L}/u.test(run) ? transliterate(run.normalize("NFC")) || run : run,
+/** Pieces of one line through the song's readers, then any other
+ *  non-Latin letters through a general transliteration. */
+async function romanizeLine(
+  pieces: string[],
+  read: Readers,
+): Promise<string[]> {
+  const out = await romanizePieces(pieces, read, romanizeGreek);
+  return out.map((text) =>
+    text.replace(FOREIGN, (run) =>
+      /\p{L}/u.test(run) ? transliterate(run.normalize("NFC")) || run : run,
+    ),
   );
-  return before + out + after;
+}
+
+async function romanizeItem(text: string, read: Readers) {
+  return (await romanizeLine([text], read))[0];
 }
 
 /** The provider reads each syllable separately and joins the readings with
@@ -254,17 +246,19 @@ function suppliedWords(line: Line, text: string): Word[] {
 
 /** Lyrics romanized: supplied romanization first, then the song's
  *  converters over each word (or each line without word timing). */
-export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
-  const scripts = songScripts(
-    lyrics.lines.flatMap((line) => [
-      line.text,
-      ...line.words.map((word) => word.text),
-    ]),
-  );
+export async function romanizeLyrics(
+  lyrics: Lyrics,
+  options: RomanizeOptions = {},
+): Promise<Lyrics> {
+  const texts = lyrics.lines.flatMap((line) => [
+    line.text,
+    ...line.words.map((word) => word.text),
+  ]);
+  const scripts = songScripts(texts);
   // As in the fork, nothing loads when the lyrics bring every reading.
-  const convert = lyrics.lines.every((line) => line.romanization.trim())
+  const read = lyrics.lines.every((line) => line.romanization.trim())
     ? {}
-    : await converters(scripts);
+    : await readers(scripts, texts, options);
   let changed = false;
   let estimated = !!lyrics.estimated_words;
   const lines = await Promise.all(
@@ -274,11 +268,7 @@ export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
       if (syllables) {
         const texts = await Promise.all(
           line.words.map((word, index) =>
-            romanizeItem(
-              syllables[index].trim() || word.text.trim(),
-              scripts,
-              convert,
-            ),
+            romanizeItem(syllables[index].trim() || word.text.trim(), read),
           ),
         );
         const words = line.words.map((word, index) => {
@@ -301,21 +291,24 @@ export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
         };
       }
       if (authored) {
-        const supplied = await romanizeItem(authored, scripts, convert);
+        const supplied = await romanizeItem(authored, read);
         const words = suppliedWords(line, supplied);
         changed = true;
         estimated ||= words.some((word) => word.estimated);
         return { ...line, text: supplied, words, romanization: "" };
       }
-      const words = await Promise.all(
-        line.words.map(async (word) => {
-          const text = await romanizeItem(word.text, scripts, convert);
-          return text === word.text ? word : { ...word, text };
-        }),
+      // The whole line is read at once so a word split over syllables
+      // keeps its reading.
+      const texts = await romanizeLine(
+        line.words.length ? line.words.map((word) => word.text) : [line.text],
+        read,
+      );
+      const words = line.words.map((word, index) =>
+        texts[index] === word.text ? word : { ...word, text: texts[index] },
       );
       const text = words.length
         ? words.map((word) => word.text).join("")
-        : await romanizeItem(line.text, scripts, convert);
+        : texts[0];
       if (
         text === line.text &&
         words.every((word, index) => word === line.words[index])
@@ -328,7 +321,11 @@ export async function romanizeLyrics(lyrics: Lyrics): Promise<Lyrics> {
   return changed ? { ...lyrics, lines, estimated_words: estimated } : lyrics;
 }
 
-type Waiting = { lyrics: Lyrics; done: (result: Lyrics) => void };
+type Waiting = {
+  lyrics: Lyrics;
+  options: RomanizeOptions;
+  done: (result: Lyrics) => void;
+};
 let worker: Worker | null | undefined;
 let nextJob = 0;
 const jobs = new Map<number, Waiting>();
@@ -359,7 +356,7 @@ function romanizer() {
     const waiting = [...jobs.values()];
     jobs.clear();
     for (const job of waiting)
-      void romanizeLyrics(job.lyrics)
+      void romanizeLyrics(job.lyrics, job.options)
         .catch(() => job.lyrics)
         .then(job.done);
   });
@@ -381,40 +378,58 @@ function settle() {
   }, IDLE_MS);
 }
 /** Converts in the worker when there is one, else on this thread. */
-export function romanizeAway(lyrics: Lyrics): Promise<Lyrics> {
+export function romanizeAway(
+  lyrics: Lyrics,
+  options: RomanizeOptions = {},
+): Promise<Lyrics> {
   const thread = romanizer();
-  if (!thread) return romanizeLyrics(lyrics);
+  if (!thread) return romanizeLyrics(lyrics, options);
   clearTimeout(idle);
   return new Promise<Lyrics>((done) => {
     const id = ++nextJob;
-    jobs.set(id, { lyrics, done });
-    thread.postMessage({ id, lyrics });
+    jobs.set(id, { lyrics, options, done });
+    thread.postMessage({ id, lyrics, options });
   }).finally(settle);
 }
 
-const ready = new WeakMap<Lyrics, Lyrics>();
-const started = new WeakSet<Lyrics>();
+// One cache per spelling, so switching Romaji as Written converts again.
+const ready = [new WeakMap<Lyrics, Lyrics>(), new WeakMap<Lyrics, Lyrics>()];
+const started = [new WeakSet<Lyrics>(), new WeakSet<Lyrics>()];
 const listeners = new Set<() => void>();
 let version = 0;
 
 /** Romanized lyrics once ready; until then the lyrics as they are, and the
  *  views re-render through `useRomanization` when the result lands. Each
  *  lyrics object is converted once and the result reused. */
-export function romanizedLyrics(lyrics: Lyrics): Lyrics {
-  const done = ready.get(lyrics);
+export function romanizedLyrics(
+  lyrics: Lyrics,
+  options: RomanizeOptions = {},
+): Lyrics {
+  const slot = options.romajiAsWritten === false ? 1 : 0;
+  const done = ready[slot].get(lyrics);
   if (done) return done;
-  if (!started.has(lyrics)) {
-    started.add(lyrics);
-    void romanizeAway(lyrics)
+  if (!started[slot].has(lyrics)) {
+    started[slot].add(lyrics);
+    void romanizeAway(lyrics, options)
       .catch(() => lyrics)
       .then((result) => {
-        ready.set(lyrics, result);
+        ready[slot].set(lyrics, result);
         if (result === lyrics) return;
         version += 1;
         listeners.forEach((listener) => listener());
       });
   }
   return lyrics;
+}
+
+/** What `displayLyrics` needs to romanize, or false when it is off. */
+export function romanizeFor(settings: {
+  romanized?: boolean;
+  romaji_as_written?: boolean;
+}): RomanizeOptions | false {
+  return settings.romanized
+    ? { romajiAsWritten: settings.romaji_as_written !== false }
+    : false;
 }
 
 /** Re-renders the caller when romanized lyrics finish converting. */

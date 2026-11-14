@@ -146,6 +146,7 @@ export interface Settings {
   lyric_offset_ms: number;
   lyric_song_offsets?: Record<string, number>;
   romanized: boolean;
+  romaji_as_written?: boolean;
   reduce_motion: boolean;
   animation_fps_cap_enabled?: boolean;
   animation_fps_cap?: number;

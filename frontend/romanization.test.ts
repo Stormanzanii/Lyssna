@@ -87,7 +87,7 @@ it("keeps Latin text, punctuation and unsupported symbols intact", async () => {
 it("reads each script the way Spicy Lyrics does", async () => {
   expect(romanizeKorean("안녕하세요")).toBe("annyeonghaseyo");
   expect(romanizeGreek("Γεια σου")).toBe("Geia sou");
-  expect((await romanizeLyrics(sample("你好"))).lines[0].text).toBe("nǐ-hǎo");
+  expect((await romanizeLyrics(sample("你好"))).lines[0].text).toBe("Nǐ hǎo");
   expect((await romanizeLyrics(sample("Привет"))).lines[0].text).toBe("Privet");
 });
 

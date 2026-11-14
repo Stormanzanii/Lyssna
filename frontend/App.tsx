@@ -6765,7 +6765,15 @@ function PlayerBar({
           <ListMusic size={21} />
         </button>
         <button className="icon-button" title="Devices" onClick={onDevices}>
-          <Speaker size={20} />
+          {elsewhere ? (
+            <DeviceIcon
+              kind={deviceKind(playingOn)}
+              platform={devicePlatform(playingOn)}
+              size={21}
+            />
+          ) : (
+            <Speaker size={20} />
+          )}
         </button>
         <button
           className={`icon-button ${sidebarActive ? "active" : ""}`}

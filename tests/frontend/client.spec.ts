@@ -10611,6 +10611,12 @@ test("a green bar names the other device playing and opens the device list", asy
     "rx",
     "1.3",
   );
+  // The Devices button shows it too, and a speaker again for this computer.
+  const devicesButton = page.locator('footer [title="Devices"]');
+  await expect(devicesButton.locator(".device-icon")).toHaveAttribute(
+    "data-kind",
+    "phone",
+  );
   await expect(bar).toHaveCSS("background-color", "rgb(30, 215, 96)");
   await page.locator("footer.player-bar").screenshot({
     path: "target/diagnostics/playing-elsewhere.png",
@@ -10646,6 +10652,8 @@ test("a green bar names the other device playing and opens the device list", asy
   // This computer playing shows no bar.
   await playOn("Lyssna (test)");
   await expect(bar).toHaveCount(0);
+  await expect(devicesButton.locator(".device-icon")).toHaveCount(0);
+  await expect(devicesButton.locator("svg")).toHaveCount(1);
   // Soloist plays for this computer, so it shows no bar while it is on.
   await playOn("Lyssna Player");
   await expect(bar).toHaveText("Playing on Lyssna Player");

@@ -41,6 +41,7 @@ interface Syllable extends Piece {
   letterOffset: number;
   letterCount: number;
 }
+const LAYERED_LINES = 4;
 const STYLES = [
   "scale",
   "translate",
@@ -71,6 +72,8 @@ function clear(target: Piece) {
  * straight to the DOM. Other lines rest on static styles. */
 export class LyricAnimator {
   private live = new Map<number, Syllable[]>();
+  /** Finished lines whose words still hold their layers. */
+  private layered = new Set<number>();
   private wiping = new Map<number, string>();
   private ends: number[];
   private time = 0;
@@ -94,6 +97,7 @@ export class LyricAnimator {
    * in song time. */
   reset() {
     for (const [index, syllables] of this.live) this.release(index, syllables);
+    for (const index of this.layered) this.unlayer(index);
     for (const index of [...this.wiping.keys()]) this.wipe(index, undefined);
   }
   /** A line without word timing fills top to bottom while it is sung. It
@@ -127,13 +131,31 @@ export class LyricAnimator {
     this.last = now;
     this.frame = this.step(seconds) ? requestAnimationFrame(this.run) : 0;
   };
-  private release(index: number, syllables: Syllable[]) {
-    this.line(index)?.removeAttribute("data-settling");
+  /** Rests a line's words. A finished line keeps their layers: dropping
+   * them redraws the text a fraction of a pixel off, so its words visibly
+   * snap. They go once the line is a few lines back. */
+  private release(index: number, syllables: Syllable[], finished = false) {
+    if (finished) this.layered.add(index);
+    else this.unlayer(index);
     for (const syllable of syllables) {
       clear(syllable);
       syllable.letters.forEach(clear);
     }
     this.live.delete(index);
+  }
+  private unlayer(index: number) {
+    this.line(index)?.removeAttribute("data-settling");
+    this.layered.delete(index);
+  }
+  private dropOldLayers() {
+    if (!this.layered.size) return;
+    let reached = -1;
+    this.lyrics.lines.forEach((line, index) => {
+      if (line.start_ms <= this.time) reached = index;
+    });
+    for (const index of this.layered)
+      if (index < reached - LAYERED_LINES || index > reached)
+        this.unlayer(index);
   }
   private build(index: number): Syllable[] | undefined {
     const element = this.line(index),
@@ -254,6 +276,7 @@ export class LyricAnimator {
       });
       return moving;
     }
+    this.dropOldLayers();
     this.lyrics.lines.forEach((line, index) => {
       if (!line.words.length) return;
       const active = line.start_ms <= time && time < this.ends[index];
@@ -269,6 +292,7 @@ export class LyricAnimator {
         syllables = this.build(index);
         if (!syllables) return;
         this.live.set(index, syllables);
+        this.layered.delete(index);
         // Its text keeps its own layer until it rests, as a line ending
         // otherwise redraws mid-spring and its words jump.
         this.line(index)?.setAttribute("data-settling", "");
@@ -300,7 +324,7 @@ export class LyricAnimator {
             syllable.letters.some((letter) => !letter.springs.asleep));
       }
       moving ||= awake;
-      if (!awake && !active) this.release(index, syllables);
+      if (!awake && !active) this.release(index, syllables, true);
     });
     return moving;
   }

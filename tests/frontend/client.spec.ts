@@ -18931,3 +18931,123 @@ test("TTML Creator keyboard shortcuts select, duplicate and save", async ({
     page.locator(".ttml-dialog").getByRole("button", { name: "Restore" }),
   ).toHaveCount(2);
 });
+
+// Song time holds between the first two lines, so only the first line's
+// words come to rest and nothing scrolls.
+async function finishedLineRest(page: Page, view: string) {
+  await startClient(page);
+  await page.getByTitle("Lyrics", { exact: true }).click();
+  await page.mouse.move(2, 2);
+  const start = await page.evaluate((uri) => {
+    const host = (window as any).__clientTest;
+    const line = (text: string, at: number) => {
+      const words = text.split(" ").map((word, index, all) => ({
+        text: index < all.length - 1 ? word + " " : word,
+        start_ms: at + index * 300,
+        end_ms: at + (index + 1) * 300,
+      }));
+      return {
+        text,
+        start_ms: at,
+        end_ms: at + words.length * 300,
+        translation: "",
+        romanization: "",
+        background: false,
+        opposite: false,
+        words,
+      };
+    };
+    host.emit({
+      type: "lyrics",
+      uri,
+      lyrics: {
+        source: "Imported TTML",
+        synced: true,
+        instrumental: false,
+        lines: [
+          line("Hello there my old friend", 1000),
+          line("Second line comes after it", 3000),
+          line("Third line stays waiting", 6000),
+        ],
+      },
+    });
+    host.emit({
+      type: "native_position",
+      uri,
+      position_ms: 1000,
+      playing: true,
+      observed_at: Date.now(),
+    });
+    return Date.now();
+  }, track.uri);
+  if (view === ".lyric-preview")
+    await page.locator("footer").getByTitle("Lyrics", { exact: true }).click();
+  const first = page.locator(`${view} .lyric-line`).first();
+  await expect(first.locator(".lyric-syllable")).toHaveCount(5);
+  const frames: {
+    moving: boolean;
+    x: number;
+    y: number;
+    ink: number;
+  }[] = [];
+  while (Date.now() - start < 8000) {
+    await page.evaluate(
+      ({ uri, at }) =>
+        (window as any).__clientTest.emit({
+          type: "native_position",
+          uri,
+          position_ms: at,
+          playing: false,
+          observed_at: Date.now(),
+        }),
+      { uri: track.uri, at: Math.min(2800, 1000 + Date.now() - start) },
+    );
+    const shot = (await first.screenshot({ animations: "allow" })).toString("base64");
+    const info = await first.evaluate(
+      async (element, shot) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${shot}`;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const context = canvas.getContext("2d")!;
+        context.drawImage(img, 0, 0);
+        const data = context.getImageData(0, 0, img.width, img.height).data;
+        let sx = 0, sy = 0, sw = 0;
+        for (let y = 0; y < img.height; y++)
+          for (let x = 0; x < img.width; x++) {
+            const v = data[(y * img.width + x) * 4];
+            if (v > 60) { sx += x * v; sy += y * v; sw += v; }
+          }
+        return {
+          moving: !!element.querySelector<HTMLElement>(".lyric-syllable")!
+            .style.length,
+          x: sx / sw,
+          y: sy / sw,
+          ink: sw,
+        };
+      },
+      shot,
+    );
+    frames.push(info);
+    if (frames.length > 1 && !info.moving && frames.at(-2)!.moving) break;
+  }
+  // The last frame of motion and the first at rest match.
+  const [before, after] = frames.slice(-2);
+  expect(before.moving && !after.moving).toBe(true);
+  expect(Math.abs(after.x - before.x)).toBeLessThan(0.15);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(0.15);
+  expect(Math.abs(after.ink / before.ink - 1)).toBeLessThan(0.005);
+}
+
+for (const [name, view] of [
+  ["lyrics page", ".lyrics-page"],
+  ["Now Playing lyrics", ".lyric-preview"],
+])
+  test(`finished lines in the ${name} stay put when their words rest`, async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    await finishedLineRest(page, view);
+  });

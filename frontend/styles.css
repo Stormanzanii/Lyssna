@@ -3396,7 +3396,9 @@ small {
   transform-origin: right 75%;
 }
 /* Lines still springing after they end keep their layers too: dropped
-   mid-spring, the text is redrawn and its words jump. */
+   mid-spring, the text is redrawn and its words jump. The animator keeps
+   them a few lines longer, as dropping them at rest still shifts the text
+   by a fraction of a pixel. */
 .lyric-line:is(.active, [data-settling]) .lyric-syllable,
 .lyric-line:is(.active, [data-settling]) .lyric-letter {
   will-change: transform;

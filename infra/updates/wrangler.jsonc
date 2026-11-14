@@ -29,6 +29,10 @@
     {
       "pattern": "clypdat.xyz/lyssna.exe",
       "zone_name": "clypdat.xyz"
+    },
+    {
+      "pattern": "www.clypdat.xyz/lyssna.exe",
+      "zone_name": "clypdat.xyz"
     }
   ],
   "secrets": {
